@@ -38,6 +38,9 @@ final class ConversationView
     private const string READY_STATUS =
         'ready · Enter sends · Shift+Enter adds a line · /exit exits';
 
+    private const string WORKING_STATUS =
+        'Enter sends · Shift+Enter adds a line · /exit exits';
+
     private readonly Tui $tui;
 
     private readonly ContainerWidget $history;
@@ -53,6 +56,10 @@ final class ConversationView
     private ?MarkdownWidget $activeAgentMessage = null;
 
     private int $activeAgentMessageHeight = 0;
+
+    private ?TextWidget $loading = null;
+
+    private int $loadingHeight = 0;
 
     public function __construct(
         private readonly TerminalInterface $terminal,
@@ -109,6 +116,11 @@ final class ConversationView
     public function stop(): void
     {
         $this->tui->stop();
+    }
+
+    public function paintPendingChanges(): void
+    {
+        $this->tui->processRender();
     }
 
     /**
@@ -227,19 +239,42 @@ final class ConversationView
 
     public function startWorking(string $frame): void
     {
-        $this->status->setText($frame . ' working…');
+        $this->status->setText(self::WORKING_STATUS);
+        $this->loading = new TextWidget($frame . ' working…');
+        $this->loading->addStyleClass('loading');
+        $this->loadingHeight = 1
+            + ($this->historyItemCount === 0 ? 0 : 1);
+        $this->addHistoryWidget($this->loading, 1);
         $this->tui->setFocus(null);
         $this->followLatest();
     }
 
     public function updateWorkingFrame(string $frame): void
     {
-        $this->status->setText($frame . ' working…');
+        if (!$this->loading instanceof TextWidget) {
+            return;
+        }
+
+        $this->loading->setText($frame . ' working…');
         $this->tui->requestRender();
+    }
+
+    public function stopWorking(): void
+    {
+        if (!$this->loading instanceof TextWidget) {
+            return;
+        }
+
+        $this->history->remove($this->loading);
+        $this->historyItemCount = max(0, $this->historyItemCount - 1);
+        $this->historyHeightChanged(-$this->loadingHeight);
+        $this->loading = null;
+        $this->loadingHeight = 0;
     }
 
     public function ready(): void
     {
+        $this->stopWorking();
         $this->status->setText(self::READY_STATUS);
         $this->tui->setFocus($this->editor);
         $this->followLatest();

@@ -50,6 +50,7 @@ final class ConversationStyleSheet
             '.status' => new Style(color: 'gray', dim: true),
             '.user' => new Style(color: 'magenta', bold: true),
             '.agent' => new Style(color: 'magenta', bold: true),
+            '.loading' => new Style(color: 'gray', dim: true),
             '.tool' => new Style(color: 'cyan', dim: true),
             '.error' => new Style(color: 'red', bold: true),
         ]);

@@ -6,6 +6,7 @@
     "require": {
         "php": "^8.4.1",
         "amphp/amp": "^3.1",
+        "amphp/http-client": "^5.3",
         "league/commonmark": "^2.7",
         "neuron-core/neuron-ai": "^3.15.26",
         "symfony/tui": "^8.1",

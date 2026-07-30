@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use NeuronAI\Agent\Agent;
+use NeuronAI\HttpClient\AmpHttpClient;
 use NeuronAI\Providers\OpenAI\Responses\OpenAIResponses;
 use NeuronCli\NeuronCli;
 
@@ -64,6 +65,7 @@ $agent = new Agent();
 $agent->setAiProvider(new OpenAIResponses(
     key: $key,
     model: $model,
+    httpClient: new AmpHttpClient(),
 ));
 
 (new NeuronCli(

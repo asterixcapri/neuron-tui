@@ -117,12 +117,14 @@ final class NeuronCli
             as $event
         ) {
             if ($event instanceof ToolCallChunk) {
+                $this->view->stopWorking();
                 $tools->start($event->tool);
 
                 continue;
             }
 
             if ($event instanceof ToolResultChunk) {
+                $this->view->stopWorking();
                 $tools->finish($event->tool);
 
                 continue;
@@ -132,8 +134,10 @@ final class NeuronCli
                 continue;
             }
 
+            $this->view->stopWorking();
             $contents .= $event->content;
             $this->view->appendAgentText($event->content);
+            $this->view->paintPendingChanges();
         }
 
         $visibleContents = StringUtils::stripControlBytes(
@@ -141,6 +145,7 @@ final class NeuronCli
         );
 
         if (trim($visibleContents) === '' && !$tools->hasActivity()) {
+            $this->view->stopWorking();
             $this->view->showEmptyResponse();
         }
     }

@@ -216,7 +216,7 @@ MARKDOWN;
         );
     }
 
-    public function testAcceptedSubmissionLeavesComposerAndRendersBeforeProviderStarts(): void
+    public function testAcceptedSubmissionRendersInlineLoadingBeforeProviderStarts(): void
     {
         $displayAtProviderBoundary = null;
         $terminal = new VirtualTerminal();
@@ -277,6 +277,137 @@ MARKDOWN;
         self::assertStringContainsString(
             'working…',
             $displayAtProviderBoundary,
+        );
+        $userPosition = strpos(
+            $displayAtProviderBoundary,
+            '❯ Pending text',
+        );
+        $loadingPosition = strpos(
+            $displayAtProviderBoundary,
+            'working…',
+        );
+        $composerPosition = strrpos(
+            $displayAtProviderBoundary,
+            "\n❯",
+        );
+        self::assertNotFalse($userPosition);
+        self::assertNotFalse($loadingPosition);
+        self::assertNotFalse($composerPosition);
+        self::assertGreaterThan($userPosition, $loadingPosition);
+        self::assertLessThan($composerPosition, $loadingPosition);
+    }
+
+    public function testBlockingProviderChunksArePaintedIncrementally(): void
+    {
+        $displayBeforeSecondChunk = null;
+        $terminal = new VirtualTerminal();
+        $probe = static function () use (
+            &$displayBeforeSecondChunk,
+            $terminal,
+        ): void {
+            $displayBeforeSecondChunk = AnsiUtils::stripAnsiCodes(
+                $terminal->getOutput(),
+            );
+        };
+        $provider = new class(
+            new AssistantMessage('first chunk second chunk'),
+            $probe,
+        ) extends FakeAIProvider {
+            public function __construct(
+                AssistantMessage $response,
+                private readonly Closure $probe,
+            ) {
+                parent::__construct($response);
+            }
+
+            protected function streamChunks(Message $response): Generator
+            {
+                yield new TextChunk('blocking-stream', 'first chunk');
+                ($this->probe)();
+                yield new TextChunk(
+                    'blocking-stream',
+                    ' second chunk',
+                );
+
+                return $response;
+            }
+        };
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("Stream it\r"),
+        );
+        EventLoop::delay(
+            0.15,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli($agent, terminal: $terminal))->run();
+
+        self::assertIsString($displayBeforeSecondChunk);
+        self::assertStringContainsString(
+            '● first chunk',
+            $displayBeforeSecondChunk,
+        );
+        self::assertStringNotContainsString(
+            'second chunk',
+            $displayBeforeSecondChunk,
+        );
+    }
+
+    public function testInlineWorkingIndicatorAnimatesBeforeFirstChunk(): void
+    {
+        $provider = new class(
+            new AssistantMessage('Response started.'),
+        ) extends FakeAIProvider {
+            protected function streamChunks(Message $response): Generator
+            {
+                \Amp\delay(0.28);
+                yield new TextChunk(
+                    'delayed-stream',
+                    'Response started.',
+                );
+
+                return $response;
+            }
+        };
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        $terminal = new VirtualTerminal();
+        $animatedDisplay = null;
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("Wait for it\r"),
+        );
+        EventLoop::delay(
+            0.06,
+            static fn () => $terminal->clearOutput(),
+        );
+        EventLoop::delay(
+            0.22,
+            static function () use (
+                &$animatedDisplay,
+                $terminal,
+            ): void {
+                $animatedDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+            },
+        );
+        EventLoop::delay(
+            0.4,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli($agent, terminal: $terminal))->run();
+
+        self::assertIsString($animatedDisplay);
+        self::assertMatchesRegularExpression(
+            '/[✸✹✺✷] working…/u',
+            $animatedDisplay,
+        );
+        self::assertStringNotContainsString(
+            'Response started.',
+            $animatedDisplay,
         );
     }
 
