@@ -11,18 +11,17 @@ require_once __DIR__ . '/../vendor/autoload.php';
 
 function environmentValue(string $name): string
 {
-    static $values = null;
     $value = getenv($name);
 
-    if (!is_string($value) || trim($value) === '') {
-        $path = __DIR__ . '/.env';
-        $values ??= is_readable($path)
-            ? parse_ini_file($path, scanner_mode: INI_SCANNER_RAW)
-            : false;
-        $value = is_array($values) ? ($values[$name] ?? null) : null;
+    if ($value === false) {
+        $values = parse_ini_file(
+            __DIR__ . '/.env',
+            scanner_mode: INI_SCANNER_RAW,
+        );
+        $value = is_array($values) ? ($values[$name] ?? false) : false;
     }
 
-    if (!is_string($value) || ($value = trim($value)) === '') {
+    if (!is_string($value) || $value === '') {
         throw new RuntimeException("Missing environment value: {$name}");
     }
 
