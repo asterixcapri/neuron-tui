@@ -37,6 +37,7 @@ final class ConversationStyleSheet
             '.speaker' => new Style(flex: 0),
             '.message-content' => new Style(flex: 1),
             '.composer-row' => new Style(
+                border: new Border(1, 0, 1, 0, 'normal', 'gray'),
                 direction: Direction::Horizontal,
                 gap: 1,
                 verticalAlign: VerticalAlign::Center,

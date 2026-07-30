@@ -63,6 +63,35 @@ final class NeuronCliTest extends TestCase
         );
     }
 
+    public function testComposerFrameIncludesPromptFromLeftEdge(): void
+    {
+        $terminal = new VirtualTerminal();
+        EventLoop::delay(
+            0.05,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(new Agent(), terminal: $terminal))->run();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+        $lines = preg_split('/\r\n|\r|\n/', $display);
+        self::assertIsArray($lines);
+        $composerLine = null;
+
+        foreach ($lines as $index => $line) {
+            if (trim($line) === '❯') {
+                $composerLine = $index;
+                break;
+            }
+        }
+
+        self::assertNotNull($composerLine);
+        self::assertGreaterThan(0, $composerLine);
+        self::assertArrayHasKey($composerLine + 1, $lines);
+        self::assertStringStartsWith('─', $lines[$composerLine - 1]);
+        self::assertStringStartsWith('─', $lines[$composerLine + 1]);
+    }
+
     public function testConversationOpensAtSafeExistingHistory(): void
     {
         $agent = new Agent();

@@ -23,7 +23,6 @@ use Symfony\Component\Tui\Terminal\TerminalInterface;
 use Symfony\Component\Tui\Tui;
 use Symfony\Component\Tui\Widget\AbstractWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
-use Symfony\Component\Tui\Widget\EditorWidget;
 use Symfony\Component\Tui\Widget\MarkdownWidget;
 use Symfony\Component\Tui\Widget\TextWidget;
 use Symfony\Component\Tui\Widget\Util\StringUtils;
@@ -45,7 +44,7 @@ final class ConversationView
 
     private readonly ContainerWidget $history;
 
-    private readonly EditorWidget $editor;
+    private readonly ComposerEditor $editor;
 
     private readonly TextWidget $status;
 
@@ -73,7 +72,7 @@ final class ConversationView
         $this->history = new ContainerWidget();
         $this->history->addStyleClass('history');
         $this->history->expandVertically(true);
-        $this->editor = new EditorWidget();
+        $this->editor = new ComposerEditor();
         $this->editor->addStyleClass('composer');
         $this->editor->setMinVisibleLines(1);
         $this->editor->setMaxVisibleLines(5);
