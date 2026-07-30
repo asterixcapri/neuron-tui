@@ -158,8 +158,9 @@ final class ConversationView
         }
     }
 
-    public function showUserMessage(string $contents): void
+    public function acceptUserMessage(string $contents): void
     {
+        $this->editor->setText('');
         $this->addMessage('❯', $contents, 'user');
     }
 

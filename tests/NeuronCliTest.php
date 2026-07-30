@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronCli\Tests;
 
+use Closure;
 use Generator;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Agent\Middleware\ToolApproval;
@@ -212,6 +213,70 @@ MARKDOWN;
         self::assertSame(
             "   First line\nsecond line",
             $provider->getRecorded()[0]->messages[0]->getContent(),
+        );
+    }
+
+    public function testAcceptedSubmissionLeavesComposerAndRendersBeforeProviderStarts(): void
+    {
+        $displayAtProviderBoundary = null;
+        $terminal = new VirtualTerminal();
+        $probe = static function () use (
+            &$displayAtProviderBoundary,
+            $terminal,
+        ): void {
+            $displayAtProviderBoundary = AnsiUtils::stripAnsiCodes(
+                $terminal->getOutput(),
+            );
+        };
+        $provider = new class(
+            new AssistantMessage('Done.'),
+            $probe,
+        ) extends FakeAIProvider {
+            public function __construct(
+                AssistantMessage $response,
+                private readonly Closure $probe,
+            ) {
+                parent::__construct($response);
+            }
+
+            public function stream(Message ...$messages): Generator
+            {
+                ($this->probe)();
+
+                return parent::stream(...$messages);
+            }
+        };
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput('Pending text'),
+        );
+        EventLoop::delay(
+            0.04,
+            static function () use ($terminal): void {
+                $terminal->clearOutput();
+                $terminal->simulateInput("\r");
+            },
+        );
+        EventLoop::delay(
+            0.15,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli($agent, terminal: $terminal))->run();
+
+        self::assertIsString($displayAtProviderBoundary);
+        self::assertStringContainsString(
+            '❯ Pending text',
+            $displayAtProviderBoundary,
+        );
+        self::assertSame(
+            1,
+            substr_count($displayAtProviderBoundary, 'Pending text'),
+        );
+        self::assertStringContainsString(
+            'working…',
+            $displayAtProviderBoundary,
         );
     }
 

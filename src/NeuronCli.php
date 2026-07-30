@@ -34,6 +34,8 @@ final class NeuronCli
     /** @var Future<mixed>|null */
     private ?Future $response = null;
 
+    private ?string $pendingInput = null;
+
     private int $workingFrame = 0;
 
     private float $lastAnimationAt = 0.0;
@@ -77,7 +79,11 @@ final class NeuronCli
 
     private function submit(SubmitEvent $event): void
     {
-        if ($this->response instanceof Future || $event->isBlank()) {
+        if (
+            $this->response instanceof Future
+            || $this->pendingInput !== null
+            || $event->isBlank()
+        ) {
             return;
         }
 
@@ -96,11 +102,9 @@ final class NeuronCli
             return;
         }
 
-        $this->view->showUserMessage($input);
+        $this->view->acceptUserMessage($input);
         $this->startWorking();
-        $this->response = async(function () use ($input): void {
-            $this->respond($input);
-        });
+        $this->pendingInput = $input;
     }
 
     private function respond(string $input): void
@@ -143,6 +147,16 @@ final class NeuronCli
 
     private function tick(): bool
     {
+        if ($this->pendingInput !== null) {
+            $input = $this->pendingInput;
+            $this->pendingInput = null;
+            $this->response = async(function () use ($input): void {
+                $this->respond($input);
+            });
+
+            return true;
+        }
+
         if (!$this->response instanceof Future) {
             return false;
         }
