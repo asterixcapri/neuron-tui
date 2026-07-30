@@ -41,7 +41,21 @@ be supplied when the terminal should identify a particular Agent or product:
 The Host Application remains responsible for constructing the Agent,
 providers, credentials, tools, History persistence, and the script or
 framework command that launches the interaction. Neuron CLI does not provide
-an executable or Symfony Console command.
+a production executable or Symfony Console command.
+
+## Demo
+
+The included demo connects the Conversation TUI to OpenAI's Responses API.
+Export the credentials and model in the shell, then start it:
+
+```bash
+export OPENAI_API_KEY="your-api-key"
+export OPENAI_MODEL="your-model"
+composer demo
+```
+
+The demo reads the variables from the process environment; it does not load a
+`.env` file. Use `/exit` or Ctrl+C to close it.
 
 ## Controls
 
