@@ -8,13 +8,52 @@ use NeuronCli\NeuronCli;
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-$key = trim((string) getenv('OPENAI_API_KEY'));
-$model = trim((string) getenv('OPENAI_MODEL'));
+function environmentValue(string $name): string
+{
+    $processValue = getenv($name);
 
-if ($key === '' || $model === '') {
+    if (is_string($processValue) && trim($processValue) !== '') {
+        return trim($processValue);
+    }
+
+    /** @var array<string, string>|null $values */
+    static $values = null;
+
+    if ($values === null) {
+        $path = __DIR__ . '/../.env';
+
+        if (!is_readable($path)) {
+            throw new RuntimeException(
+                'Missing readable .env file. Copy .env.example to .env.',
+            );
+        }
+
+        $values = parse_ini_file(
+            $path,
+            scanner_mode: INI_SCANNER_RAW,
+        );
+
+        if ($values === false) {
+            throw new RuntimeException('Unable to parse the .env file.');
+        }
+    }
+
+    $value = $values[$name] ?? null;
+
+    if (!is_string($value) || trim($value) === '') {
+        throw new RuntimeException("Missing environment value: {$name}");
+    }
+
+    return trim($value);
+}
+
+try {
+    $key = environmentValue('OPENAI_API_KEY');
+    $model = environmentValue('OPENAI_MODEL');
+} catch (RuntimeException $exception) {
     fwrite(
         STDERR,
-        "Set OPENAI_API_KEY and OPENAI_MODEL before starting the demo.\n",
+        $exception->getMessage() . "\n",
     );
 
     exit(1);

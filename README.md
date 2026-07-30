@@ -46,16 +46,18 @@ a production executable or Symfony Console command.
 ## Demo
 
 The included demo connects the Conversation TUI to OpenAI's Responses API.
-Export the credentials and model in the shell, then start it:
+Create the local environment file, add your credentials and model, then start
+it:
 
 ```bash
-export OPENAI_API_KEY="your-api-key"
-export OPENAI_MODEL="your-model"
+cp .env.example .env
+# Edit .env
 composer demo
 ```
 
-The demo reads the variables from the process environment; it does not load a
-`.env` file. Use `/exit` or Ctrl+C to close it.
+The demo supports simple `KEY="VALUE"` entries. Existing process environment
+variables take precedence over values from `.env`. Use `/exit` or Ctrl+C to
+close it.
 
 ## Controls
 
