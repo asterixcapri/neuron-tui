@@ -1,4 +1,4 @@
 .scratch/
-/.env
+/examples/.env
 /vendor/
 /.phpunit.cache/

@@ -50,14 +50,14 @@ Create the local environment file, add your credentials and model, then start
 it:
 
 ```bash
-cp .env.example .env
-# Edit .env
+cp examples/.env.example examples/.env
+# Edit examples/.env
 composer demo
 ```
 
 The demo supports simple `KEY="VALUE"` entries. Existing process environment
-variables take precedence over values from `.env`. Use `/exit` or Ctrl+C to
-close it.
+variables take precedence over values from `examples/.env`. Use `/exit` or
+Ctrl+C to close it.
 
 ## Controls
 

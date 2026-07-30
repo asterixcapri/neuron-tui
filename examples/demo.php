@@ -20,11 +20,12 @@ function environmentValue(string $name): string
     static $values = null;
 
     if ($values === null) {
-        $path = __DIR__ . '/../.env';
+        $path = __DIR__ . '/.env';
 
         if (!is_readable($path)) {
             throw new RuntimeException(
-                'Missing readable .env file. Copy .env.example to .env.',
+                'Missing readable examples/.env file. '
+                . 'Copy examples/.env.example to examples/.env.',
             );
         }
 
