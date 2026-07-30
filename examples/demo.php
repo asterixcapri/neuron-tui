@@ -11,11 +11,10 @@ require_once __DIR__ . '/../vendor/autoload.php';
 
 function environmentValue(string $name): string
 {
-    static $values = null;
     $value = getenv($name);
 
     if (empty($value)) {
-        $values ??= parse_ini_file(
+        $values = parse_ini_file(
             __DIR__ . '/.env',
             scanner_mode: INI_SCANNER_RAW,
         );
