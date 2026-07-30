@@ -14,10 +14,7 @@ function environmentValue(string $name): string
     $value = getenv($name);
 
     if (empty($value)) {
-        $values = parse_ini_file(
-            __DIR__ . '/.env',
-            scanner_mode: INI_SCANNER_RAW,
-        );
+        $values = parse_ini_file(__DIR__ . '/.env', scanner_mode: INI_SCANNER_RAW);
         $value = $values[$name] ?? null;
     }
 
