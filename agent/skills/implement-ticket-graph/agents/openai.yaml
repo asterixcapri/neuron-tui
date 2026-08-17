@@ -1,0 +1,4 @@
+interface:
+  display_name: "Implement Ticket Graph"
+  short_description: "Implement ticket graphs with parallel subagents"
+  default_prompt: "Use $implement-ticket-graph to read this to-tickets graph and implement each ticket in a subagent, in dependency order."

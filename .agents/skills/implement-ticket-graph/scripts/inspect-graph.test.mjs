@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 
 const script = new URL("./inspect-graph.mjs", import.meta.url);
-const directory = mkdtempSync(join(tmpdir(), "execute-ticket-graph-"));
+const directory = mkdtempSync(join(tmpdir(), "implement-ticket-graph-"));
 
 function run(name, nodes, args = ["--rounds"]) {
   const path = join(directory, `${name}.json`);
