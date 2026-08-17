@@ -13,8 +13,8 @@ use NeuronCli\Conversation\SlashCommand;
 use NeuronCli\Conversation\Submission;
 use NeuronCli\Conversation\TurnQueue;
 use NeuronCli\Conversation\UnknownSlashCommand;
-use NeuronCli\Session\FileSessionStore;
-use NeuronCli\Session\SessionStore;
+use NeuronCli\Session\FileSessionProvider;
+use NeuronCli\Session\SessionProvider;
 use NeuronCli\Tui\ConversationView;
 use NeuronCli\Tui\WorkingIndicator;
 use Symfony\Component\Tui\Event\InputEvent;
@@ -35,7 +35,7 @@ final class NeuronCli
 
     private readonly WorkingIndicator $workingIndicator;
 
-    private readonly SessionStore $sessionStore;
+    private readonly SessionProvider $sessionProvider;
 
     private readonly TurnQueue $turns;
 
@@ -49,10 +49,11 @@ final class NeuronCli
         string $title = 'Neuron AI',
         string $subtitle = 'Agent conversation',
         ?TerminalInterface $terminal = null,
-        ?SessionStore $sessionStore = null,
+        ?SessionProvider $sessionProvider = null,
     ) {
         $this->terminal = $terminal ?? new Terminal();
-        $this->sessionStore = $sessionStore ?? new FileSessionStore();
+        $this->sessionProvider = $sessionProvider
+            ?? new FileSessionProvider();
         $this->view = new ConversationView(
             $this->terminal,
             $title,
@@ -147,7 +148,7 @@ final class NeuronCli
         }
 
         match ($command) {
-            SlashCommand::Clear => $this->openSession(),
+            SlashCommand::Clear => $this->startSession(),
             SlashCommand::Sessions => $this->chooseSession(),
         };
     }
@@ -160,7 +161,7 @@ final class NeuronCli
      */
     private function chooseSession(): void
     {
-        $sessions = $this->sessionStore->list();
+        $sessions = $this->sessionProvider->list();
 
         if ($sessions === []) {
             $this->view->showError(
@@ -174,15 +175,28 @@ final class NeuronCli
     }
 
     /**
-     * Puts a Session on the Agent and shows it, screen and composer both.
+     * Puts a freshly minted Session on the Agent.
      *
-     * With a key it is the Session a person chose; without one it is a newly
-     * minted Session. The conversation it replaces is left where the store
-     * keeps it: nothing here ever deletes a stored Session.
+     * Minting one and opening it are the provider's two separate operations,
+     * and a new Session is both: the key comes back from the provider and
+     * goes straight back to it.
      */
-    private function openSession(?string $key = null): void
+    private function startSession(): void
     {
-        $session = $this->sessionStore->open($key);
+        $this->openSession($this->sessionProvider->create()->key);
+    }
+
+    /**
+     * Puts the Session with the given key on the Agent and shows it, screen
+     * and composer both.
+     *
+     * The key is one the provider minted, because no other origin exists.
+     * The conversation it replaces is left where the provider keeps it:
+     * nothing here ever deletes a stored Session.
+     */
+    private function openSession(string $key): void
+    {
+        $session = $this->sessionProvider->open($key);
         $this->agent->setChatHistory($session);
         $this->view->showHistory($session->getMessages());
         $this->view->emptyComposer();

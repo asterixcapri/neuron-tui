@@ -4,15 +4,16 @@ declare(strict_types=1);
 
 namespace NeuronCli\Tests\Session;
 
+use NeuronAI\Chat\History\ChatHistoryInterface;
 use NeuronAI\Chat\History\FileChatHistory;
 use NeuronAI\Chat\Messages\AssistantMessage;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\UserMessage;
-use NeuronCli\Session\FileSessionStore;
-use NeuronCli\Session\SessionSummary;
+use NeuronCli\Session\FileSessionProvider;
+use NeuronCli\Session\Session;
 use PHPUnit\Framework\TestCase;
 
-final class FileSessionStoreTest extends TestCase
+final class FileSessionProviderTest extends TestCase
 {
     private string $directory;
 
@@ -30,20 +31,20 @@ final class FileSessionStoreTest extends TestCase
 
     public function testANewSessionStartsEmpty(): void
     {
-        $store = new FileSessionStore($this->directory);
+        $provider = new FileSessionProvider($this->directory);
 
-        self::assertSame([], $store->open()->getMessages());
+        self::assertSame([], $this->start($provider)->getMessages());
     }
 
     public function testStartingANewSessionLeavesThePreviousOneStored(): void
     {
-        $store = new FileSessionStore($this->directory);
+        $provider = new FileSessionProvider($this->directory);
 
-        $first = $store->open();
+        $first = $this->start($provider);
         $first->addMessage(new UserMessage('The first subject'));
         $first->addMessage(new AssistantMessage('An answer.'));
 
-        $second = $store->open();
+        $second = $this->start($provider);
         $second->addMessage(new UserMessage('The second subject'));
 
         self::assertCount(2, $this->storedFiles());
@@ -62,7 +63,7 @@ final class FileSessionStoreTest extends TestCase
         $stored = new FileChatHistory($this->directory, 'known-key');
         $stored->addMessage(new UserMessage('Written earlier'));
 
-        $reopened = (new FileSessionStore($this->directory))
+        $reopened = (new FileSessionProvider($this->directory))
             ->open('known-key');
 
         self::assertSame(
@@ -73,9 +74,9 @@ final class FileSessionStoreTest extends TestCase
 
     public function testTheDirectoryIsCreatedWhenItDoesNotExist(): void
     {
-        $store = new FileSessionStore($this->directory . '/deeper');
+        $provider = new FileSessionProvider($this->directory . '/deeper');
 
-        $store->open()->addMessage(new UserMessage('Anything'));
+        $this->start($provider)->addMessage(new UserMessage('Anything'));
 
         self::assertDirectoryExists($this->directory . '/deeper');
     }
@@ -89,8 +90,7 @@ final class FileSessionStoreTest extends TestCase
         chdir($project);
 
         try {
-            (new FileSessionStore())
-                ->open()
+            $this->start(new FileSessionProvider())
                 ->addMessage(new UserMessage('Anything'));
         } finally {
             chdir($previous);
@@ -104,21 +104,24 @@ final class FileSessionStoreTest extends TestCase
 
     public function testNothingIsListedBeforeASessionIsStored(): void
     {
-        self::assertSame([], (new FileSessionStore($this->directory))->list());
+        self::assertSame(
+            [],
+            (new FileSessionProvider($this->directory))->list(),
+        );
     }
 
     public function testStoredSessionsAreListedMostRecentlyUsedFirst(): void
     {
-        $store = new FileSessionStore($this->directory);
+        $provider = new FileSessionProvider($this->directory);
         $this->storeSession('older', 'The older subject', 1_700_000_000);
         $this->storeSession('newer', 'The newer subject', 1_700_003_600);
 
-        $listed = $store->list();
+        $listed = $provider->list();
 
         self::assertSame(
             ['The newer subject', 'The older subject'],
             array_map(
-                static fn (SessionSummary $summary): string => $summary->title,
+                static fn (Session $session): string => $session->title,
                 $listed,
             ),
         );
@@ -136,7 +139,7 @@ final class FileSessionStoreTest extends TestCase
         $stored->addMessage(new AssistantMessage('An answer.'));
         $stored->addMessage(new UserMessage('A later question'));
 
-        $listed = (new FileSessionStore($this->directory))->list();
+        $listed = (new FileSessionProvider($this->directory))->list();
 
         self::assertCount(1, $listed);
         self::assertSame('What the person asked', $listed[0]->title);
@@ -144,15 +147,25 @@ final class FileSessionStoreTest extends TestCase
 
     public function testASessionThatReceivedNoMessageIsNotListed(): void
     {
-        $store = new FileSessionStore($this->directory);
-        $store->open();
+        $provider = new FileSessionProvider($this->directory);
+        $this->start($provider);
         file_put_contents($this->directory . '/neuron_empty.chat', '[]');
         $this->storeSession('asked', 'A question', 1_700_000_000);
 
-        $listed = $store->list();
+        $listed = $provider->list();
 
         self::assertCount(1, $listed);
         self::assertSame('asked', $listed[0]->key);
+    }
+
+    /**
+     * A Session as Neuron CLI starts one: minted by the provider, then
+     * opened by the key the provider minted for it.
+     */
+    private function start(
+        FileSessionProvider $provider,
+    ): ChatHistoryInterface {
+        return $provider->open($provider->create()->key);
     }
 
     private function storeSession(

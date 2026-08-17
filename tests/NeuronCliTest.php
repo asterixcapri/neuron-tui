@@ -28,7 +28,7 @@ use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Testing\RequestRecord;
 use NeuronAI\Tools\Tool;
 use NeuronCli\NeuronCli;
-use NeuronCli\Tests\Session\InMemorySessionStore;
+use NeuronCli\Tests\Session\InMemorySessionProvider;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
@@ -872,7 +872,7 @@ MARKDOWN;
         ]);
         $agent = new Agent();
         $agent->setChatHistory($earlier);
-        $sessions = new InMemorySessionStore();
+        $sessions = new InMemorySessionProvider();
         $terminal = new VirtualTerminal(rows: 24);
         $clearedDisplay = null;
         EventLoop::delay(
@@ -899,7 +899,7 @@ MARKDOWN;
         (new NeuronCli(
             $agent,
             terminal: $terminal,
-            sessionStore: $sessions,
+            sessionProvider: $sessions,
         ))->run();
 
         self::assertIsString($clearedDisplay);
@@ -927,7 +927,7 @@ MARKDOWN;
         $provider = new FakeAIProvider(new AssistantMessage('An answer.'));
         $agent = new Agent();
         $agent->setAiProvider($provider);
-        $sessions = new InMemorySessionStore();
+        $sessions = new InMemorySessionProvider();
         $terminal = new VirtualTerminal(rows: 24);
         EventLoop::delay(
             0.03,
@@ -949,7 +949,7 @@ MARKDOWN;
         (new NeuronCli(
             $agent,
             terminal: $terminal,
-            sessionStore: $sessions,
+            sessionProvider: $sessions,
         ))->run();
 
         self::assertCount(2, $sessions->sessions());
@@ -985,7 +985,7 @@ MARKDOWN;
         };
         $agent = new Agent();
         $agent->setAiProvider($provider);
-        $sessions = new InMemorySessionStore();
+        $sessions = new InMemorySessionProvider();
         $terminal = new VirtualTerminal(rows: 24);
         EventLoop::queue(
             static fn () => $terminal->simulateInput("A question\r"),
@@ -1017,7 +1017,7 @@ MARKDOWN;
         (new NeuronCli(
             $agent,
             terminal: $terminal,
-            sessionStore: $sessions,
+            sessionProvider: $sessions,
         ))->run();
 
         self::assertIsString($refusedDisplay);
@@ -1037,7 +1037,7 @@ MARKDOWN;
         );
         $agent = new Agent();
         $agent->setAiProvider($provider);
-        $sessions = new InMemorySessionStore();
+        $sessions = new InMemorySessionProvider();
         $earlier = $sessions->open('earlier');
         $earlier->addMessage(new UserMessage('The earlier subject'));
         $earlier->addMessage(new Message(MessageRole::ASSISTANT, [
@@ -1072,7 +1072,7 @@ MARKDOWN;
         (new NeuronCli(
             $agent,
             terminal: $terminal,
-            sessionStore: $sessions,
+            sessionProvider: $sessions,
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -1103,7 +1103,7 @@ MARKDOWN;
     {
         $agent = new Agent();
         $ongoing = $agent->getChatHistory();
-        $sessions = new InMemorySessionStore();
+        $sessions = new InMemorySessionProvider();
         $sessions->open('earlier')->addMessage(
             new UserMessage('The earlier subject'),
         );
@@ -1140,7 +1140,7 @@ MARKDOWN;
         (new NeuronCli(
             $agent,
             terminal: $terminal,
-            sessionStore: $sessions,
+            sessionProvider: $sessions,
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -1173,7 +1173,7 @@ MARKDOWN;
         (new NeuronCli(
             $agent,
             terminal: $terminal,
-            sessionStore: new InMemorySessionStore(),
+            sessionProvider: new InMemorySessionProvider(),
         ))->run();
 
         self::assertStringContainsString(
@@ -1185,7 +1185,7 @@ MARKDOWN;
     public function testTypingNarrowsThePickerInsteadOfTheComposer(): void
     {
         $agent = new Agent();
-        $sessions = new InMemorySessionStore();
+        $sessions = new InMemorySessionProvider();
         $sessions->open('alpha')->addMessage(new UserMessage('Alpha subject'));
         $beta = $sessions->open('beta');
         $beta->addMessage(new UserMessage('Beta subject'));
@@ -1219,7 +1219,7 @@ MARKDOWN;
         (new NeuronCli(
             $agent,
             terminal: $terminal,
-            sessionStore: $sessions,
+            sessionProvider: $sessions,
         ))->run();
 
         self::assertIsString($narrowedDisplay);
@@ -1231,7 +1231,7 @@ MARKDOWN;
     public function testArrowKeysChooseAnotherSessionInThePicker(): void
     {
         $agent = new Agent();
-        $sessions = new InMemorySessionStore();
+        $sessions = new InMemorySessionProvider();
         $older = $sessions->open('older');
         $older->addMessage(new UserMessage('The older subject'));
         $sessions->open('newer')->addMessage(
@@ -1258,7 +1258,7 @@ MARKDOWN;
         (new NeuronCli(
             $agent,
             terminal: $terminal,
-            sessionStore: $sessions,
+            sessionProvider: $sessions,
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -1283,7 +1283,7 @@ MARKDOWN;
         };
         $agent = new Agent();
         $agent->setAiProvider($provider);
-        $sessions = new InMemorySessionStore();
+        $sessions = new InMemorySessionProvider();
         $sessions->open('earlier')->addMessage(
             new UserMessage('The earlier subject'),
         );
@@ -1308,7 +1308,7 @@ MARKDOWN;
         (new NeuronCli(
             $agent,
             terminal: $terminal,
-            sessionStore: $sessions,
+            sessionProvider: $sessions,
         ))->run();
 
         self::assertIsString($refusedDisplay);

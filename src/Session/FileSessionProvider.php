@@ -11,7 +11,7 @@ use NeuronAI\Chat\History\FileChatHistory;
 use NeuronCli\History\HistoryProjection;
 
 /**
- * Keeps the Sessions of an Agent in a directory, one file per Session.
+ * Provides the Sessions of an Agent from a directory, one file per Session.
  *
  * This is what a Host Application that configures nothing gets. The files and
  * their format belong to Neuron AI's `FileChatHistory`; the only decision
@@ -22,7 +22,7 @@ use NeuronCli\History\HistoryProjection;
  * itself is asked one thing only — when it was last written — because that is
  * the one fact the conversation does not carry.
  */
-final readonly class FileSessionStore implements SessionStore
+final readonly class FileSessionProvider implements SessionProvider
 {
     /**
      * Relative to the working directory of the Host Application, so Sessions
@@ -47,19 +47,18 @@ final readonly class FileSessionStore implements SessionStore
             . '/' . self::DEFAULT_DIRECTORY;
     }
 
-    public function open(?string $key = null): ChatHistoryInterface
+    /**
+     * Nothing is written until the conversation receives a message, so a
+     * minted Session is a key and the moment it was minted, and no file.
+     */
+    public function create(): Session
     {
-        return new FileChatHistory(
-            $this->directory,
-            $key ?? $this->mintKey(),
-            prefix: self::FILE_PREFIX,
-            ext: self::FILE_EXTENSION,
-        );
+        return new Session($this->mintKey(), new DateTimeImmutable(), '');
     }
 
     public function list(): array
     {
-        $summaries = [];
+        $sessions = [];
 
         foreach ($this->storedFiles() as $path) {
             $key = $this->keyOf($path);
@@ -73,7 +72,7 @@ final readonly class FileSessionStore implements SessionStore
                 continue;
             }
 
-            $summaries[] = new SessionSummary(
+            $sessions[] = new Session(
                 $key,
                 $this->lastWrittenTo($path),
                 $title,
@@ -81,14 +80,24 @@ final readonly class FileSessionStore implements SessionStore
         }
 
         usort(
-            $summaries,
+            $sessions,
             static fn (
-                SessionSummary $one,
-                SessionSummary $other,
+                Session $one,
+                Session $other,
             ): int => $other->lastUsedAt <=> $one->lastUsedAt,
         );
 
-        return $summaries;
+        return $sessions;
+    }
+
+    public function open(string $key): ChatHistoryInterface
+    {
+        return new FileChatHistory(
+            $this->directory,
+            $key,
+            prefix: self::FILE_PREFIX,
+            ext: self::FILE_EXTENSION,
+        );
     }
 
     /**

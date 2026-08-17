@@ -7,13 +7,13 @@ namespace NeuronCli\PHPStan;
 /**
  * Decides which class names a Host Application is allowed to write down.
  *
- * `NeuronCli\NeuronCli` is the interface of Neuron CLI, and the Session store
- * seam is the one dependency a Host Application may supply: the interface to
- * implement, the summary its listing is made of, and the file-based adapter
- * to point at another directory. Every
- * other name under the `NeuronCli` namespace — the internal modules, the test
- * suite, this tooling — carries no stability promise and may be reshaped
- * without notice, so a Host Application may not name any of them.
+ * `NeuronCli\NeuronCli` is the interface of Neuron CLI, and the Session
+ * provider seam is the one dependency a Host Application may supply: the
+ * interface to implement, the Session its listing is made of, and the
+ * file-based adapter to point at another directory. Every other name under
+ * the `NeuronCli` namespace — the internal modules, the test suite, this
+ * tooling — carries no stability promise and may be reshaped without notice,
+ * so a Host Application may not name any of them.
  *
  * @internal
  */
@@ -24,9 +24,9 @@ final class PublicModulePolicy
     /** @var list<string> */
     private const array PUBLIC_MODULES = [
         'NeuronCli\NeuronCli',
-        'NeuronCli\Session\SessionStore',
-        'NeuronCli\Session\FileSessionStore',
-        'NeuronCli\Session\SessionSummary',
+        'NeuronCli\Session\SessionProvider',
+        'NeuronCli\Session\FileSessionProvider',
+        'NeuronCli\Session\Session',
     ];
 
     private const string PREFIX = 'NeuronCli\\';
