@@ -45,7 +45,7 @@ Prefer modifying an existing authoritative document over creating a new one. Avo
 
 After explicit approval:
 
-1. Invoke `writing-for-agents` and apply its writing discipline throughout this
+1. Use /writing-for-agents and apply its writing discipline throughout this
    phase. If it is unavailable, stop and ask the user to install it with
    `npx skills@latest add mattpocock/skills --skill writing-for-agents`.
 2. Re-read every affected document before editing it.
