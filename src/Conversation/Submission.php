@@ -17,8 +17,9 @@ namespace NeuronCli\Conversation;
 final class Submission
 {
     /**
-     * A command is the whole of the input: `/exit now` is not `/exit`, and a
-     * person who meant to write a message keeps the leading slash they typed.
+     * A command is the whole of the input, give or take the whitespace around
+     * it: `/exit now` is not `/exit`, while `/exit ` is. A message keeps every
+     * character the person typed, leading slash and spacing included.
      */
     public static function interpret(
         string $input,
@@ -27,7 +28,7 @@ final class Submission
             return new MessageForAgent($input);
         }
 
-        $command = SlashCommand::tryFrom($input);
+        $command = SlashCommand::tryFrom(trim($input));
 
         if ($command instanceof SlashCommand) {
             return $command;

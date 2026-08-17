@@ -148,13 +148,12 @@ final class NeuronCli
             return;
         }
 
-        if ($command === SlashCommand::Clear) {
-            $this->openSession();
-
-            return;
-        }
-
-        $this->view->showError('The Session picker is not available yet.');
+        match ($command) {
+            SlashCommand::Clear => $this->openSession(),
+            SlashCommand::Sessions => $this->view->showError(
+                'The Session picker is not available yet.',
+            ),
+        };
     }
 
     /**

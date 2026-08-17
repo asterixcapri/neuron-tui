@@ -36,6 +36,14 @@ final class SubmissionTest extends TestCase
         );
     }
 
+    public function testWhitespaceAroundACommandIsNotAnArgument(): void
+    {
+        self::assertSame(
+            SlashCommand::Clear,
+            Submission::interpret("/clear \n"),
+        );
+    }
+
     public function testAnythingElseBeginningWithASlashIsUnknown(): void
     {
         $submission = Submission::interpret('/unknown');
