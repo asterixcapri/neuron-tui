@@ -18,7 +18,7 @@ terminal.
 
 **Blocked by:** 02 — One module for unsafe text
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] One module turns the Agent's messages into one ordered stream of entries
 - [ ] A tool call is paired with its result inside the module, including when

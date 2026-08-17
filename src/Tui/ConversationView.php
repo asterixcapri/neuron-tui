@@ -5,16 +5,9 @@ declare(strict_types=1);
 namespace NeuronCli\Tui;
 
 use Closure;
-use NeuronAI\Chat\Enums\MessageRole;
-use NeuronAI\Chat\Messages\ContentBlocks\AudioContent;
-use NeuronAI\Chat\Messages\ContentBlocks\FileContent;
-use NeuronAI\Chat\Messages\ContentBlocks\ImageContent;
-use NeuronAI\Chat\Messages\ContentBlocks\ReasoningContent;
-use NeuronAI\Chat\Messages\ContentBlocks\TextContent;
-use NeuronAI\Chat\Messages\ContentBlocks\VideoContent;
 use NeuronAI\Chat\Messages\Message;
-use NeuronAI\Chat\Messages\ToolCallMessage;
-use NeuronAI\Chat\Messages\ToolResultMessage;
+use NeuronCli\History\EntryKind;
+use NeuronCli\History\HistoryProjection;
 use Symfony\Component\Tui\Event\CancelEvent;
 use Symfony\Component\Tui\Event\InputEvent;
 use Symfony\Component\Tui\Event\SubmitEvent;
@@ -35,8 +28,6 @@ final class ConversationView
 
     private const string WORKING_STATUS =
         'Enter queues · Shift+Enter adds a line';
-
-    private const int FILENAME_WIDTH = 80;
 
     private readonly Tui $tui;
 
@@ -115,49 +106,33 @@ final class ConversationView
     }
 
     /**
+     * Paints the given History, replacing whatever is on screen.
+     *
+     * Runnable at any moment: opening the TUI paints the History the Agent
+     * arrived with, and changing Session paints the new one over it.
+     *
      * @param array<Message> $messages
      */
-    public function showExistingHistory(array $messages): void
+    public function showHistory(array $messages): void
     {
-        $tools = $this->newToolActivity();
+        $this->history->clear();
+        $this->activeAgentMessage = null;
+        $this->loading = null;
 
-        foreach ($messages as $message) {
-            $role = $message->getRole();
+        foreach (HistoryProjection::of($messages) as $entry) {
+            if ($entry->kind === EntryKind::Tool) {
+                $this->history->addNote($entry->text, 'tool');
 
-            if (
-                $role !== MessageRole::USER->value
-                && $role !== MessageRole::ASSISTANT->value
-            ) {
                 continue;
             }
 
-            if ($message instanceof ToolCallMessage) {
-                $contents = self::messageContents($message);
+            $spokenByPerson = $entry->kind === EntryKind::Person;
 
-                if ($contents !== '') {
-                    $this->history->addMessage('●', $contents, 'agent');
-                }
-
-                foreach ($message->getTools() as $tool) {
-                    $tools->start($tool);
-                }
-            } elseif ($message instanceof ToolResultMessage) {
-                foreach ($message->getTools() as $tool) {
-                    $tools->finish($tool);
-                }
-            } elseif ($role === MessageRole::USER->value) {
-                $contents = self::messageContents($message);
-
-                if ($contents !== '') {
-                    $this->history->addMessage('❯', $contents, 'user');
-                }
-            } else {
-                $contents = self::messageContents($message);
-
-                if ($contents !== '') {
-                    $this->history->addMessage('●', $contents, 'agent');
-                }
-            }
+            $this->history->addMessage(
+                $spokenByPerson ? '❯' : '●',
+                $entry->text,
+                $spokenByPerson ? 'user' : 'agent',
+            );
         }
     }
 
@@ -333,43 +308,5 @@ final class ConversationView
             . ' Working ('
             . $elapsedSeconds
             . 's)';
-    }
-
-    private static function messageContents(Message $message): string
-    {
-        $contents = [];
-
-        foreach ($message->getContentBlocks() as $block) {
-            $content = match (true) {
-                $block instanceof ReasoningContent => null,
-                $block instanceof TextContent => $block->getContent(),
-                $block instanceof ImageContent => '[Image]',
-                $block instanceof FileContent => self::filePlaceholder($block),
-                $block instanceof AudioContent => '[Audio]',
-                $block instanceof VideoContent => '[Video]',
-                default => null,
-            };
-
-            if ($content !== null && $content !== '') {
-                $contents[] = $content;
-            }
-        }
-
-        return implode("\n\n", $contents);
-    }
-
-    private static function filePlaceholder(FileContent $file): string
-    {
-        if ($file->filename === null) {
-            return '[File]';
-        }
-
-        // Safe first, so a stripped escape sequence cannot forge the
-        // separator that basename() then splits on.
-        $filename = DisplayableText::safe($file->filename);
-        $filename = basename(str_replace('\\', '/', $filename));
-        $filename = DisplayableText::preview($filename, self::FILENAME_WIDTH);
-
-        return $filename === '' ? '[File]' : '[File: ' . $filename . ']';
     }
 }
