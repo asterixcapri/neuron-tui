@@ -126,8 +126,10 @@ final class NeuronCliTest extends TestCase
 
         (new NeuronCli($agent, terminal: $terminal))->run();
 
-        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+        $output = $terminal->getOutput();
+        $display = AnsiUtils::stripAnsiCodes($output);
 
+        self::assertStringContainsString("\x1b[48;2;52;52;52m", $output);
         self::assertStringContainsString('✦ Neuron AI', $display);
         self::assertStringContainsString('Agent conversation', $display);
         self::assertStringContainsString('❯ Review these inputs.', $display);
@@ -212,7 +214,6 @@ MARKDOWN;
                 &$intermediateDisplay,
                 $terminal,
             ): void {
-                $terminal->simulateInput("Must not queue\r");
                 $intermediateDisplay = AnsiUtils::stripAnsiCodes(
                     $terminal->getOutput(),
                 );
@@ -237,7 +238,10 @@ MARKDOWN;
         self::assertStringContainsString('State', $display);
         self::assertStringContainsString('complete', $display);
         self::assertStringContainsString('code();', $display);
-        self::assertStringContainsString('✶ working…', $display);
+        self::assertStringContainsString(
+            '✶ Working (0s)',
+            $display,
+        );
         self::assertCount(1, $provider->getRecorded());
         self::assertSame(
             "   First line\nsecond line",
@@ -304,7 +308,7 @@ MARKDOWN;
             substr_count($displayAtProviderBoundary, 'Pending text'),
         );
         self::assertStringContainsString(
-            'working…',
+            'Working (0s)',
             $displayAtProviderBoundary,
         );
         $userPosition = strpos(
@@ -313,7 +317,7 @@ MARKDOWN;
         );
         $loadingPosition = strpos(
             $displayAtProviderBoundary,
-            'working…',
+            'Working (0s)',
         );
         $composerPosition = strrpos(
             $displayAtProviderBoundary,
@@ -431,7 +435,7 @@ MARKDOWN;
 
         self::assertIsString($animatedDisplay);
         self::assertMatchesRegularExpression(
-            '/[✸✹✺✷] working…/u',
+            '/[✸✹✺✷] Working \\(0s\\)/u',
             $animatedDisplay,
         );
         self::assertStringNotContainsString(
@@ -488,12 +492,31 @@ MARKDOWN;
         self::assertStringContainsString('Empty response.', $display);
     }
 
-    public function testComposerAcceptsAnotherMessageAfterCompletion(): void
+    public function testComposerQueuesAnotherMessageWhileWorking(): void
     {
-        $provider = new FakeAIProvider(
+        $queuedDisplay = null;
+        $provider = new class(
             new AssistantMessage('First answer.'),
             new AssistantMessage('Second answer.'),
-        );
+        ) extends FakeAIProvider {
+            private int $turn = 0;
+
+            protected function streamChunks(Message $response): Generator
+            {
+                ++$this->turn;
+
+                if ($this->turn === 1) {
+                    \Amp\delay(0.2);
+                }
+
+                yield new TextChunk(
+                    'queued-stream',
+                    $response->getContent() ?? '',
+                );
+
+                return $response;
+            }
+        };
         $agent = new Agent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
@@ -501,16 +524,34 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("First question\r"),
         );
         EventLoop::delay(
-            0.1,
+            0.05,
             static fn () => $terminal->simulateInput("Second question\r"),
         );
         EventLoop::delay(
-            0.25,
+            0.12,
+            static function () use (
+                &$queuedDisplay,
+                $terminal,
+            ): void {
+                $queuedDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+            },
+        );
+        EventLoop::delay(
+            0.4,
             static fn () => $terminal->simulateInput("\x03"),
         );
 
         (new NeuronCli($agent, terminal: $terminal))->run();
 
+        self::assertIsString($queuedDisplay);
+        self::assertStringContainsString(
+            'Messages to be submitted after the current turn',
+            $queuedDisplay,
+        );
+        self::assertStringContainsString('↳ Second question', $queuedDisplay);
+        self::assertStringNotContainsString('First answer.', $queuedDisplay);
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('First answer.', $display);
         self::assertStringContainsString('Second answer.', $display);
@@ -664,6 +705,107 @@ MARKDOWN;
         );
         self::assertStringContainsString('⎿ beta result', $display);
         self::assertStringContainsString('● Both tools completed.', $display);
+    }
+
+    public function testToolCallIsPaintedBeforeExecutionBegins(): void
+    {
+        $displayAtExecution = null;
+        $terminal = new VirtualTerminal(rows: 32);
+        $tool = (new Tool('slow_lookup'))
+            ->setCallId('slow-lookup-call')
+            ->setInputs(['q' => 'alpha'])
+            ->setCallable(
+                static function () use (
+                    &$displayAtExecution,
+                    $terminal,
+                ): string {
+                    $displayAtExecution = AnsiUtils::stripAnsiCodes(
+                        $terminal->getOutput(),
+                    );
+
+                    return 'alpha result';
+                },
+            );
+        $provider = new FakeAIProvider(
+            new ToolCallMessage(tools: [$tool]),
+            new AssistantMessage('Tool completed.'),
+        );
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("Run tool\r"),
+        );
+        EventLoop::delay(
+            0.2,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli($agent, terminal: $terminal))->run();
+
+        self::assertIsString($displayAtExecution);
+        self::assertStringContainsString(
+            '● slow_lookup {"q":"alpha"}',
+            $displayAtExecution,
+        );
+        self::assertStringContainsString('⎿ Running…', $displayAtExecution);
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+        self::assertStringContainsString('⎿ alpha result', $display);
+        self::assertMatchesRegularExpression(
+            '/Done in (?:<1|\d+)s/',
+            $display,
+        );
+    }
+
+    public function testWorkingIndicatorRemainsAnimatedDuringToolExecution(): void
+    {
+        $displayDuringExecution = null;
+        $terminal = new VirtualTerminal(rows: 32);
+        $tool = (new Tool('slow_write'))
+            ->setCallId('slow-write-call')
+            ->setInputs(['file_path' => 'example.txt'])
+            ->setCallable(
+                static function (): string {
+                    \Amp\delay(0.3);
+
+                    return 'written';
+                },
+            );
+        $provider = new FakeAIProvider(
+            new ToolCallMessage(tools: [$tool]),
+            new AssistantMessage('File written.'),
+        );
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("Write file\r"),
+        );
+        EventLoop::delay(
+            0.06,
+            static fn () => $terminal->clearOutput(),
+        );
+        EventLoop::delay(
+            0.2,
+            static function () use (
+                &$displayDuringExecution,
+                $terminal,
+            ): void {
+                $displayDuringExecution = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+            },
+        );
+        EventLoop::delay(
+            0.45,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli($agent, terminal: $terminal))->run();
+
+        self::assertIsString($displayDuringExecution);
+        self::assertMatchesRegularExpression(
+            '/[✸✹✺✷] Working \\(0s\\)/u',
+            $displayDuringExecution,
+        );
     }
 
     public function testSlashCommandsAndEscapeRemainLocal(): void

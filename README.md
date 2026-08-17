@@ -45,17 +45,28 @@ a production executable or Symfony Console command.
 
 ## Demo
 
-The included demo connects the Conversation TUI to OpenAI's Responses API.
-Create the local environment file, add your credentials and model, then start
-it:
+`examples/` is a standalone Composer project acting as a Host Application. It
+connects the Conversation TUI to OpenAI's Responses API and consumes this
+library through a local path repository. Install its dependencies, create the
+local environment file, add your credentials and model, then start it:
 
 ```bash
-cp examples/.env.example examples/.env
-# Edit examples/.env
+cd examples
+composer install
+cp .env.example .env
+# Edit .env
 composer demo
 ```
 
-The demo supports simple `KEY="VALUE"` entries. Existing process environment
+Packagist only publishes metadata: the archives themselves are served by
+GitHub. Anonymous downloads are throttled, so a fresh install may report HTTP
+429. Store a personal access token once to raise the limit:
+
+```bash
+composer config --global github-oauth.github.com <token>
+```
+
+The demo reads `examples/.env` through Symfony Dotenv. Existing process environment
 variables take precedence over values from `examples/.env`. Use `/exit` or
 Ctrl+C to close it.
 

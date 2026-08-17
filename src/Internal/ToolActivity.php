@@ -28,6 +28,9 @@ final class ToolActivity
     /** @var array<int, int> */
     private array $activityHeights = [];
 
+    /** @var array<int, float> */
+    private array $activityStartedAt = [];
+
     private int $activityCount = 0;
 
     /**
@@ -43,10 +46,14 @@ final class ToolActivity
 
     public function start(ToolInterface $tool): void
     {
-        $activity = new TextWidget(self::callPreview($tool));
+        $activity = new TextWidget(
+            self::callPreview($tool) . "\n  ⎿ Running…",
+        );
         $activity->addStyleClass('tool');
         $height = $this->height($activity);
-        $this->activityHeights[spl_object_id($activity)] = $height;
+        $id = spl_object_id($activity);
+        $this->activityHeights[$id] = $height;
+        $this->activityStartedAt[$id] = microtime(true);
         ($this->addToHistory)($activity, $height);
         $this->activityCount++;
 
@@ -74,10 +81,16 @@ final class ToolActivity
 
         $id = spl_object_id($activity);
         $previousHeight = $this->activityHeights[$id] ?? 0;
+        $elapsed = microtime(true) - $this->activityStartedAt[$id];
+        $duration = $elapsed < 1
+            ? '<1s'
+            : round($elapsed) . 's';
         $activity->setText(
             self::callPreview($tool)
             . "\n  ⎿ "
-            . self::safePreview($tool->getResult()),
+            . self::safePreview($tool->getResult())
+            . "\n  Done in "
+            . $duration,
         );
         $height = $this->height($activity);
         $this->activityHeights[$id] = $height;

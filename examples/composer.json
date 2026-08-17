@@ -1,0 +1,27 @@
+{
+    "name": "asterixcapri/neuron-cli-demo",
+    "description": "Demo Host Application for the Neuron CLI Conversation TUI.",
+    "type": "project",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4.1",
+        "asterixcapri/neuron-cli": "dev-main",
+        "neuron-core/neuron-ai": "^3.15.26",
+        "symfony/dotenv": "^8.1"
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "..",
+            "options": {
+                "symlink": true
+            }
+        }
+    ],
+    "scripts": {
+        "demo": "php demo.php"
+    },
+    "config": {
+        "sort-packages": true
+    }
+}

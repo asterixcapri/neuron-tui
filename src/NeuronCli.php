@@ -36,7 +36,12 @@ final class NeuronCli
 
     private ?string $pendingInput = null;
 
+    /** @var list<string> */
+    private array $queuedInputs = [];
+
     private int $workingFrame = 0;
+
+    private float $workingStartedAt = 0.0;
 
     private float $lastAnimationAt = 0.0;
 
@@ -79,11 +84,7 @@ final class NeuronCli
 
     private function submit(SubmitEvent $event): void
     {
-        if (
-            $this->response instanceof Future
-            || $this->pendingInput !== null
-            || $event->isBlank()
-        ) {
+        if ($event->isBlank()) {
             return;
         }
 
@@ -102,6 +103,16 @@ final class NeuronCli
             return;
         }
 
+        if (
+            $this->response instanceof Future
+            || $this->pendingInput !== null
+        ) {
+            $this->queuedInputs[] = $input;
+            $this->view->showQueuedMessages($this->queuedInputs);
+
+            return;
+        }
+
         $this->view->acceptUserMessage($input);
         $this->startWorking();
         $this->pendingInput = $input;
@@ -112,13 +123,14 @@ final class NeuronCli
         $tools = $this->view->beginAgentResponse();
         $contents = '';
 
-        foreach (
-            $this->agent->stream(new UserMessage($input))->events()
-            as $event
-        ) {
+        $events = $this->agent
+            ->stream(new UserMessage($input))
+            ->events();
+
+        foreach ($events as $event) {
             if ($event instanceof ToolCallChunk) {
-                $this->view->stopWorking();
                 $tools->start($event->tool);
+                $this->view->paintPendingChanges();
 
                 continue;
             }
@@ -126,6 +138,8 @@ final class NeuronCli
             if ($event instanceof ToolResultChunk) {
                 $this->view->stopWorking();
                 $tools->finish($event->tool);
+                $this->resumeWorking();
+                $this->view->paintPendingChanges();
 
                 continue;
             }
@@ -188,15 +202,35 @@ final class NeuronCli
         $this->response = null;
         $this->view->ready();
 
+        if ($this->queuedInputs !== []) {
+            $input = array_shift($this->queuedInputs);
+            $this->view->showQueuedMessages($this->queuedInputs);
+            $this->view->acceptUserMessage($input);
+            $this->startWorking();
+            $this->pendingInput = $input;
+
+            return true;
+        }
+
         return false;
     }
 
     private function startWorking(): void
     {
         $this->workingFrame = 0;
-        $this->lastAnimationAt = microtime(true);
+        $this->workingStartedAt = microtime(true);
+        $this->lastAnimationAt = $this->workingStartedAt;
         $this->view->startWorking(
             self::WORKING_FRAMES[$this->workingFrame],
+            0,
+        );
+    }
+
+    private function resumeWorking(): void
+    {
+        $this->view->startWorking(
+            self::WORKING_FRAMES[$this->workingFrame],
+            $this->elapsedWorkingSeconds(),
         );
     }
 
@@ -213,7 +247,13 @@ final class NeuronCli
         $this->lastAnimationAt = $now;
         $this->view->updateWorkingFrame(
             self::WORKING_FRAMES[$this->workingFrame],
+            $this->elapsedWorkingSeconds(),
         );
+    }
+
+    private function elapsedWorkingSeconds(): int
+    {
+        return (int) floor(microtime(true) - $this->workingStartedAt);
     }
 
     private function handleInput(InputEvent $event): void
