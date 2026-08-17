@@ -12,6 +12,7 @@ use NeuronAI\Tools\Toolkits\Calendar\CalendarToolkit;
 use NeuronAI\Tools\Toolkits\FileSystem\FileSystemToolkit;
 use NeuronAI\Tools\Toolkits\Jina\JinaToolkit;
 use NeuronCli\NeuronCli;
+use NeuronCli\Session\FileSessionProvider;
 use Symfony\Component\Dotenv\Dotenv;
 
 require_once __DIR__ . '/vendor/autoload.php';
@@ -52,4 +53,5 @@ if ($jinaKey !== '') {
     agent: $agent,
     title: 'Neuron CLI Demo',
     subtitle: "OpenAI Responses · {$model}",
+    sessionProvider: new FileSessionProvider(__DIR__ . '/sessions'),
 ))->run();
