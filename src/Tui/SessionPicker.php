@@ -87,8 +87,6 @@ final class SessionPicker
         $this->list = new SelectListWidget([], self::VISIBLE_SESSIONS);
         $this->list->addStyleClass('session-list');
         $this->list->onInput($this->type(...));
-        $this->list->onSelect($this->choose(...));
-        $this->list->onCancel($this->abandon(...));
     }
 
     public function widget(): ContainerWidget
@@ -132,6 +130,14 @@ final class SessionPicker
         $this->widget->clear();
         $this->widget->add($this->instructions);
         $this->widget->add($this->list);
+        // Taking the list off screen detaches it, and a detached widget is
+        // left without the listeners it was given: Enter and Escape would
+        // reach a list with nobody listening for what they mean. So the
+        // answers to them are given here, once per opening, after the list
+        // is back on screen — which is also the only place a second opening
+        // passes through. Typing is not a listener and survives the detach.
+        $this->list->onSelect($this->choose(...));
+        $this->list->onCancel($this->abandon(...));
         $this->open = true;
     }
 
