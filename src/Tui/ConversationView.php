@@ -18,12 +18,9 @@ use NeuronAI\Chat\Messages\ToolResultMessage;
 use Symfony\Component\Tui\Event\CancelEvent;
 use Symfony\Component\Tui\Event\InputEvent;
 use Symfony\Component\Tui\Event\SubmitEvent;
-use Symfony\Component\Tui\Render\RenderContext;
 use Symfony\Component\Tui\Terminal\TerminalInterface;
 use Symfony\Component\Tui\Tui;
-use Symfony\Component\Tui\Widget\AbstractWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
-use Symfony\Component\Tui\Widget\MarkdownWidget;
 use Symfony\Component\Tui\Widget\TextWidget;
 
 /**
@@ -43,7 +40,7 @@ final class ConversationView
 
     private readonly Tui $tui;
 
-    private readonly ContainerWidget $history;
+    private readonly HistoryPane $history;
 
     private readonly ContainerWidget $queuedMessages;
 
@@ -51,17 +48,9 @@ final class ConversationView
 
     private readonly TextWidget $status;
 
-    private int $historyItemCount = 0;
+    private ?HistoryEntry $activeAgentMessage = null;
 
-    private int $scrollOffset = 0;
-
-    private ?MarkdownWidget $activeAgentMessage = null;
-
-    private int $activeAgentMessageHeight = 0;
-
-    private ?TextWidget $loading = null;
-
-    private int $loadingHeight = 0;
+    private ?HistoryEntry $loading = null;
 
     public function __construct(
         private readonly TerminalInterface $terminal,
@@ -72,9 +61,7 @@ final class ConversationView
             ConversationStyleSheet::create(),
             $this->terminal,
         );
-        $this->history = new ContainerWidget();
-        $this->history->addStyleClass('history');
-        $this->history->expandVertically(true);
+        $this->history = new HistoryPane($this->tui, $this->terminal);
         $this->queuedMessages = new ContainerWidget();
         $this->queuedMessages->addStyleClass('queued-messages');
         $this->editor = new ComposerEditor();
@@ -148,7 +135,7 @@ final class ConversationView
                 $contents = self::messageContents($message);
 
                 if ($contents !== '') {
-                    $this->addMessage('●', $contents, 'agent');
+                    $this->history->addMessage('●', $contents, 'agent');
                 }
 
                 foreach ($message->getTools() as $tool) {
@@ -162,13 +149,13 @@ final class ConversationView
                 $contents = self::messageContents($message);
 
                 if ($contents !== '') {
-                    $this->addMessage('❯', $contents, 'user');
+                    $this->history->addMessage('❯', $contents, 'user');
                 }
             } else {
                 $contents = self::messageContents($message);
 
                 if ($contents !== '') {
-                    $this->addMessage('●', $contents, 'agent');
+                    $this->history->addMessage('●', $contents, 'agent');
                 }
             }
         }
@@ -177,63 +164,43 @@ final class ConversationView
     public function acceptUserMessage(string $contents): void
     {
         $this->editor->setText('');
-        $this->addMessage('❯', $contents, 'user');
+        $this->history->addMessage('❯', $contents, 'user');
     }
 
     public function beginAgentResponse(): ToolActivity
     {
         $this->activeAgentMessage = null;
-        $this->activeAgentMessageHeight = 0;
 
         return $this->newToolActivity();
     }
 
     public function appendAgentText(string $chunk): void
     {
-        if (!$this->activeAgentMessage instanceof MarkdownWidget) {
-            $this->activeAgentMessage = $this->addMessage(
+        if (!$this->activeAgentMessage instanceof HistoryEntry) {
+            $this->activeAgentMessage = $this->history->addMessage(
                 '●',
                 '',
                 'agent',
             );
-            $this->activeAgentMessageHeight = 1;
         }
 
-        $this->activeAgentMessage->setText(
-            $this->activeAgentMessage->getText() . $chunk,
-        );
-        $height = max(1, $this->markdownHeight(
-            $this->activeAgentMessage,
-            1,
-        ));
-        $this->historyHeightChanged(
-            $height - $this->activeAgentMessageHeight,
-        );
-        $this->activeAgentMessageHeight = $height;
+        $this->activeAgentMessage->appendText($chunk);
     }
 
     public function showEmptyResponse(): void
     {
-        if (!$this->activeAgentMessage instanceof MarkdownWidget) {
-            $this->addMessage('●', '_Empty response._', 'agent');
+        if (!$this->activeAgentMessage instanceof HistoryEntry) {
+            $this->history->addMessage('●', '_Empty response._', 'agent');
 
             return;
         }
 
         $this->activeAgentMessage->setText('_Empty response._');
-        $height = max(1, $this->markdownHeight(
-            $this->activeAgentMessage,
-            1,
-        ));
-        $this->historyHeightChanged(
-            $height - $this->activeAgentMessageHeight,
-        );
-        $this->activeAgentMessageHeight = $height;
     }
 
     public function showError(string $message): void
     {
-        $this->addMessage('Error', $message, 'error');
+        $this->history->addMessage('Error', $message, 'error');
     }
 
     public function showUnknownSlashCommand(string $command): void
@@ -244,28 +211,24 @@ final class ConversationView
     public function startWorking(string $frame, int $elapsedSeconds): void
     {
         $this->status->setText(self::WORKING_STATUS);
-        $this->loading = new TextWidget(
+        $this->loading = $this->history->addNote(
             self::workingText($frame, $elapsedSeconds),
+            'loading',
         );
-        $this->loading->addStyleClass('loading');
-        $this->loadingHeight = 1
-            + ($this->historyItemCount === 0 ? 0 : 1);
-        $this->addHistoryWidget($this->loading, 1);
-        $this->followLatest();
+        $this->history->followLatest();
     }
 
     public function updateWorkingFrame(
         string $frame,
         int $elapsedSeconds,
     ): void {
-        if (!$this->loading instanceof TextWidget) {
+        if (!$this->loading instanceof HistoryEntry) {
             return;
         }
 
         $this->loading->setText(
             self::workingText($frame, $elapsedSeconds),
         );
-        $this->tui->requestRender();
     }
 
     /**
@@ -300,15 +263,12 @@ final class ConversationView
 
     public function stopWorking(): void
     {
-        if (!$this->loading instanceof TextWidget) {
+        if (!$this->loading instanceof HistoryEntry) {
             return;
         }
 
         $this->history->remove($this->loading);
-        $this->historyItemCount = max(0, $this->historyItemCount - 1);
-        $this->historyHeightChanged(-$this->loadingHeight);
         $this->loading = null;
-        $this->loadingHeight = 0;
     }
 
     public function ready(): void
@@ -316,19 +276,17 @@ final class ConversationView
         $this->stopWorking();
         $this->status->setText(self::READY_STATUS);
         $this->tui->setFocus($this->editor);
-        $this->followLatest();
+        $this->history->followLatest();
     }
 
     public function scrollUp(): void
     {
-        $this->scrollOffset += 5;
-        $this->applyScrollOffset();
+        $this->history->scrollUp();
     }
 
     public function scrollDown(): void
     {
-        $this->scrollOffset = max(0, $this->scrollOffset - 5);
-        $this->applyScrollOffset();
+        $this->history->scrollDown();
     }
 
     private function build(string $titleText, string $subtitleText): void
@@ -350,7 +308,7 @@ final class ConversationView
         $composer->add($this->editor);
 
         $this->tui->add($header);
-        $this->tui->add($this->history);
+        $this->tui->add($this->history->widget());
         $this->tui->add($this->queuedMessages);
         $this->tui->add($composer);
         $this->tui->add($this->status);
@@ -364,16 +322,7 @@ final class ConversationView
 
     private function newToolActivity(): ToolActivity
     {
-        return new ToolActivity(
-            max(1, $this->terminal->getColumns() - 2),
-            $this->addToolActivity(...),
-            $this->historyHeightChanged(...),
-        );
-    }
-
-    private function addToolActivity(TextWidget $activity, int $height): void
-    {
-        $this->addHistoryWidget($activity, $height);
+        return new ToolActivity($this->history);
     }
 
     private static function workingText(
@@ -384,89 +333,6 @@ final class ConversationView
             . ' Working ('
             . $elapsedSeconds
             . 's)';
-    }
-
-    private function addMessage(
-        string $speaker,
-        string $contents,
-        string $style,
-    ): MarkdownWidget {
-        $message = new ContainerWidget();
-        $message->addStyleClass('message');
-
-        if ($style === 'user') {
-            $message->addStyleClass('user-message');
-        }
-
-        $label = new TextWidget($speaker);
-        $label->addStyleClass('speaker');
-        $label->addStyleClass($style);
-        $markdown = new MarkdownWidget($contents);
-        $markdown->addStyleClass('message-content');
-        $message->add($label);
-        $message->add($markdown);
-        $this->addHistoryWidget(
-            $message,
-            max(1, $this->markdownHeight(
-                $markdown,
-                mb_strwidth($speaker, 'UTF-8'),
-            )),
-        );
-
-        return $markdown;
-    }
-
-    private function markdownHeight(
-        MarkdownWidget $markdown,
-        int $speakerWidth,
-    ): int {
-        $columns = max(
-            1,
-            $this->terminal->getColumns() - 3 - $speakerWidth,
-        );
-
-        return count($markdown->render(new RenderContext(
-            $columns,
-            PHP_INT_MAX,
-        )));
-    }
-
-    private function addHistoryWidget(
-        AbstractWidget $widget,
-        int $height,
-    ): void {
-        $gap = $this->historyItemCount === 0 ? 0 : 1;
-        $this->history->add($widget);
-        $this->historyItemCount++;
-        $this->historyHeightChanged($height + $gap);
-    }
-
-    private function historyHeightChanged(int $difference): void
-    {
-        if ($this->scrollOffset > 0 && $difference !== 0) {
-            $this->scrollOffset = max(
-                0,
-                $this->scrollOffset + $difference,
-            );
-            $this->tui->setScrollOffset($this->scrollOffset);
-        }
-
-        $this->tui->requestRender();
-    }
-
-    private function followLatest(): void
-    {
-        if ($this->scrollOffset === 0) {
-            $this->tui->setScrollOffset(0);
-        }
-
-        $this->tui->requestRender();
-    }
-
-    private function applyScrollOffset(): void
-    {
-        $this->tui->setScrollOffset($this->scrollOffset);
-        $this->tui->requestRender();
     }
 
     private static function messageContents(Message $message): string
