@@ -13,7 +13,7 @@ use NeuronCli\Conversation\SlashCommand;
 use NeuronCli\Conversation\Submission;
 use NeuronCli\Conversation\TurnQueue;
 use NeuronCli\Conversation\UnknownSlashCommand;
-use NeuronCli\Session\FileSessionProvider;
+use NeuronCli\Session\InMemorySessionProvider;
 use NeuronCli\Session\SessionProvider;
 use NeuronCli\Tui\ConversationView;
 use NeuronCli\Tui\WorkingIndicator;
@@ -52,8 +52,11 @@ final class NeuronCli
         ?SessionProvider $sessionProvider = null,
     ) {
         $this->terminal = $terminal ?? new Terminal();
+        // A Host Application that named no provider named no place for its
+        // conversations either, so they are kept in memory and nothing is
+        // written anywhere.
         $this->sessionProvider = $sessionProvider
-            ?? new FileSessionProvider();
+            ?? new InMemorySessionProvider();
         $this->view = new ConversationView(
             $this->terminal,
             $title,
