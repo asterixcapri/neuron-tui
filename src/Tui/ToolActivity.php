@@ -5,16 +5,19 @@ declare(strict_types=1);
 namespace NeuronCli\Tui;
 
 use NeuronAI\Tools\ToolInterface;
+use NeuronCli\History\ToolActivityText;
 
 /**
- * Correlates and safely renders one group of tool calls and results.
+ * Correlates and paints one group of tool calls and results as they happen.
+ *
+ * What a person is told about a call is not decided here: the text comes from
+ * the History projection, so live activity and activity read back out of a
+ * stored Session read the same.
  *
  * @internal
  */
 final class ToolActivity
 {
-    private const int DETAIL_WIDTH = 120;
-
     /** @var array<string, HistoryEntry> */
     private array $activitiesByCallId = [];
 
@@ -33,7 +36,7 @@ final class ToolActivity
     public function start(ToolInterface $tool): void
     {
         $activity = $this->pane->addNote(
-            self::callPreview($tool) . "\n  ⎿ Running…",
+            ToolActivityText::pending($tool),
             'tool',
         );
         $this->activityStartedAt[spl_object_id($activity)] = microtime(true);
@@ -64,20 +67,11 @@ final class ToolActivity
         $id = spl_object_id($activity);
         $startedAt = $this->activityStartedAt[$id] ?? microtime(true);
         unset($this->activityStartedAt[$id]);
-        $elapsed = microtime(true) - $startedAt;
-        $duration = $elapsed < 1
-            ? '<1s'
-            : round($elapsed) . 's';
-        $activity->setText(
-            self::callPreview($tool)
-            . "\n  ⎿ "
-            . DisplayableText::preview(
-                $tool->getResult(),
-                self::DETAIL_WIDTH,
-            )
-            . "\n  Done in "
-            . $duration,
-        );
+
+        $activity->setText(ToolActivityText::completed(
+            $tool,
+            microtime(true) - $startedAt,
+        ));
     }
 
     public function hasActivity(): bool
@@ -100,21 +94,5 @@ final class ToolActivity
         }
 
         return array_shift($this->fallbackActivities[$name]);
-    }
-
-    private static function callPreview(ToolInterface $tool): string
-    {
-        $inputs = json_encode(
-            $tool->getInputs(),
-            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
-        );
-
-        return '● '
-            . DisplayableText::preview($tool->getName(), self::DETAIL_WIDTH)
-            . ' '
-            . DisplayableText::preview(
-                $inputs === false ? '{}' : $inputs,
-                self::DETAIL_WIDTH,
-            );
     }
 }
