@@ -139,6 +139,17 @@ final class ConversationView
         }
     }
 
+    /**
+     * Throws away whatever is in the composer.
+     *
+     * A draft belongs to the Session it was written in, so changing Session
+     * takes it away rather than carrying it over.
+     */
+    public function emptyComposer(): void
+    {
+        $this->editor->setText('');
+    }
+
     public function acceptUserMessage(string $contents): void
     {
         $this->editor->setText('');

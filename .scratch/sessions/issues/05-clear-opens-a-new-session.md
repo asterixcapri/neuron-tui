@@ -23,7 +23,7 @@ $agent->setChatHistory(new FileChatHistory($directory, $key));
 **Blocked by:** 03 — A History projection that can run at any moment; 04 — The
 History pane owns heights and scrolling
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] A Session store seam opens a Session — by key, or a newly minted one when
       no key is given — and returns a Neuron AI chat history
