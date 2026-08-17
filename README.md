@@ -38,6 +38,11 @@ be supplied when the terminal should identify a particular Agent or product:
 ))->run();
 ```
 
+`NeuronCli\NeuronCli` is the only public module. Every other class under the
+`NeuronCli` namespace is annotated `@internal`, carries no stability promise,
+and may be renamed, split, or removed in any release. Static analysis enforces
+this on the examples, which are the reference Host Application.
+
 The Host Application remains responsible for constructing the Agent,
 providers, credentials, tools, History persistence, and the script or
 framework command that launches the interaction. Neuron CLI does not provide

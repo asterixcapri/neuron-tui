@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Internal;
+namespace NeuronCli\Tui;
 
 use Symfony\Component\Tui\Style\Border;
 use Symfony\Component\Tui\Style\Direction;

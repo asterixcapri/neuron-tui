@@ -11,7 +11,7 @@ use NeuronAI\Chat\Messages\Stream\Chunks\ToolCallChunk;
 use NeuronAI\Chat\Messages\Stream\Chunks\ToolResultChunk;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
-use NeuronCli\Internal\ConversationView;
+use NeuronCli\Tui\ConversationView;
 use Symfony\Component\Tui\Event\InputEvent;
 use Symfony\Component\Tui\Event\SubmitEvent;
 use Symfony\Component\Tui\Input\Key;
