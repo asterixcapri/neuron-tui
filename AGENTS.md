@@ -14,3 +14,9 @@ Triage uses the five default canonical labels. See `docs/agents/triage-labels.md
 ### Domain docs
 
 Domain documentation uses the single-context layout. See `docs/agents/domain.md`.
+
+## Authorship
+
+Commits, pull requests and comments credit the human author alone. Write the
+message and stop there: no `Co-Authored-By` trailer, no "generated with" footer,
+no coding-agent attribution in any form.
