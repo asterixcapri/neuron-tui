@@ -11,10 +11,10 @@ use PHPStan\Rules\RestrictedUsage\RestrictedClassNameUsageExtension;
 use PHPStan\Rules\RestrictedUsage\RestrictedUsage;
 
 /**
- * Catches internal classes reached without an import statement.
+ * Reports internal classes reached without an import statement.
  *
- * `PublicModuleOnlyRule` covers `use` statements; this covers every other way
- * a class name can appear — a fully qualified `new`, a static call, a type
+ * `PublicModuleOnlyRule` covers imports; this covers every other way a class
+ * name can appear — a fully qualified `new`, a static call, a type
  * declaration.
  *
  * @internal
@@ -29,13 +29,13 @@ final class PublicModuleOnlyExtension implements
     ): ?RestrictedUsage {
         $name = $classReflection->getName();
 
-        if (!PublicModule::isInternal($name)) {
+        if (!PublicModulePolicy::isInternal($name)) {
             return null;
         }
 
         return RestrictedUsage::create(
-            PublicModule::message($name),
-            PublicModule::IDENTIFIER,
+            PublicModulePolicy::violationMessage($name),
+            PublicModulePolicy::IDENTIFIER,
         );
     }
 }

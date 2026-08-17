@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace NeuronCli\PHPStan;
 
 use PhpParser\Node;
-use PhpParser\Node\Name;
+use PhpParser\Node\Stmt;
 use PhpParser\Node\Stmt\GroupUse;
 use PhpParser\Node\Stmt\Use_;
 use PHPStan\Analyser\Scope;
@@ -14,13 +14,18 @@ use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
 
 /**
- * A Host Application may only reach Neuron CLI through its public module.
+ * Reports import statements naming anything but the public module.
  *
- * This covers import statements, including ones for a class that is never
- * used afterwards. `PublicModuleOnlyExtension` covers every other mention of
- * a class name.
+ * It reads the import statement itself rather than the class behind it, so
+ * it also catches an import that is never used afterwards — the way an
+ * internal class most easily ends up looking like part of the interface —
+ * and it keeps working when the analysed project cannot resolve the class.
+ * `PublicModuleOnlyExtension` covers every other mention of a class name.
  *
- * @implements Rule<Node>
+ * The node type is `Stmt` because the two statements that import a name,
+ * `Use_` and `GroupUse`, share no closer ancestor.
+ *
+ * @implements Rule<Stmt>
  *
  * @internal
  */
@@ -28,10 +33,12 @@ final class PublicModuleOnlyRule implements Rule
 {
     public function getNodeType(): string
     {
-        return Node::class;
+        return Stmt::class;
     }
 
     /**
+     * @param Stmt $node
+     *
      * @return list<IdentifierRuleError>
      */
     public function processNode(Node $node, Scope $scope): array
@@ -39,14 +46,14 @@ final class PublicModuleOnlyRule implements Rule
         $errors = [];
 
         foreach ($this->importedNames($node) as [$line, $name]) {
-            if (!PublicModule::isInternal($name)) {
+            if (!PublicModulePolicy::isInternal($name)) {
                 continue;
             }
 
             $errors[] = RuleErrorBuilder::message(
-                PublicModule::message($name),
+                PublicModulePolicy::violationMessage($name),
             )
-                ->identifier(PublicModule::IDENTIFIER)
+                ->identifier(PublicModulePolicy::IDENTIFIER)
                 ->line($line)
                 ->build();
         }
@@ -57,7 +64,7 @@ final class PublicModuleOnlyRule implements Rule
     /**
      * @return iterable<int, array{int, string}>
      */
-    private function importedNames(Node $node): iterable
+    private function importedNames(Stmt $node): iterable
     {
         if ($node instanceof Use_) {
             foreach ($node->uses as $use) {
@@ -71,8 +78,7 @@ final class PublicModuleOnlyRule implements Rule
             foreach ($node->uses as $use) {
                 yield [
                     $use->getStartLine(),
-                    Name::concat($node->prefix, $use->name)?->toString()
-                        ?? $use->name->toString(),
+                    $node->prefix->toString() . '\\' . $use->name->toString(),
                 ];
             }
         }
