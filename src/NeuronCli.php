@@ -12,13 +12,13 @@ use NeuronAI\Chat\Messages\Stream\Chunks\ToolResultChunk;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
 use NeuronCli\Tui\ConversationView;
+use NeuronCli\Tui\DisplayableText;
 use Symfony\Component\Tui\Event\InputEvent;
 use Symfony\Component\Tui\Event\SubmitEvent;
 use Symfony\Component\Tui\Input\Key;
 use Symfony\Component\Tui\Input\Keybindings;
 use Symfony\Component\Tui\Terminal\Terminal;
 use Symfony\Component\Tui\Terminal\TerminalInterface;
-use Symfony\Component\Tui\Widget\Util\StringUtils;
 use Throwable;
 
 use function Amp\async;
@@ -154,9 +154,7 @@ final class NeuronCli
             $this->view->paintPendingChanges();
         }
 
-        $visibleContents = StringUtils::stripControlBytes(
-            StringUtils::sanitizeUtf8($contents),
-        );
+        $visibleContents = DisplayableText::safe($contents);
 
         if (trim($visibleContents) === '' && !$tools->hasActivity()) {
             $this->view->stopWorking();

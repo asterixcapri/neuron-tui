@@ -8,7 +8,6 @@ use Closure;
 use NeuronAI\Tools\ToolInterface;
 use Symfony\Component\Tui\Render\RenderContext;
 use Symfony\Component\Tui\Widget\TextWidget;
-use Symfony\Component\Tui\Widget\Util\StringUtils;
 
 /**
  * Correlates and safely renders one group of tool calls and results.
@@ -88,7 +87,10 @@ final class ToolActivity
         $activity->setText(
             self::callPreview($tool)
             . "\n  ⎿ "
-            . self::safePreview($tool->getResult())
+            . DisplayableText::preview(
+                $tool->getResult(),
+                self::DETAIL_WIDTH,
+            )
             . "\n  Done in "
             . $duration,
         );
@@ -135,24 +137,11 @@ final class ToolActivity
         );
 
         return '● '
-            . self::safePreview($tool->getName())
+            . DisplayableText::preview($tool->getName(), self::DETAIL_WIDTH)
             . ' '
-            . self::safePreview($inputs === false ? '{}' : $inputs);
-    }
-
-    private static function safePreview(string $value): string
-    {
-        $value = StringUtils::stripControlBytes(
-            StringUtils::sanitizeUtf8($value),
-        );
-        $value = preg_replace('/\s+/u', ' ', trim($value)) ?? '';
-
-        return mb_strimwidth(
-            $value,
-            0,
-            self::DETAIL_WIDTH,
-            '…',
-            'UTF-8',
-        );
+            . DisplayableText::preview(
+                $inputs === false ? '{}' : $inputs,
+                self::DETAIL_WIDTH,
+            );
     }
 }
