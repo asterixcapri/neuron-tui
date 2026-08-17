@@ -25,7 +25,6 @@ use Symfony\Component\Tui\Widget\AbstractWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 use Symfony\Component\Tui\Widget\MarkdownWidget;
 use Symfony\Component\Tui\Widget\TextWidget;
-use Symfony\Component\Tui\Widget\Util\StringUtils;
 
 /**
  * Owns the visual state and terminal rendering of a Conversation TUI.
@@ -39,6 +38,8 @@ final class ConversationView
 
     private const string WORKING_STATUS =
         'Enter queues · Shift+Enter adds a line';
+
+    private const int FILENAME_WIDTH = 80;
 
     private readonly Tui $tui;
 
@@ -281,9 +282,7 @@ final class ConversationView
             ];
 
             foreach ($messages as $message) {
-                $message = StringUtils::stripControlBytes(
-                    StringUtils::sanitizeUtf8($message),
-                );
+                $message = DisplayableText::safe($message);
                 $lines[] = '  ↳ ' . str_replace(
                     "\n",
                     "\n    ",
@@ -499,18 +498,11 @@ final class ConversationView
             return '[File]';
         }
 
-        $filename = StringUtils::stripControlBytes(
-            StringUtils::sanitizeUtf8($file->filename),
-        );
+        // Safe first, so a stripped escape sequence cannot forge the
+        // separator that basename() then splits on.
+        $filename = DisplayableText::safe($file->filename);
         $filename = basename(str_replace('\\', '/', $filename));
-        $filename = preg_replace('/\s+/u', ' ', trim($filename)) ?? '';
-        $filename = mb_strimwidth(
-            $filename,
-            0,
-            80,
-            '…',
-            'UTF-8',
-        );
+        $filename = DisplayableText::preview($filename, self::FILENAME_WIDTH);
 
         return $filename === '' ? '[File]' : '[File: ' . $filename . ']';
     }
