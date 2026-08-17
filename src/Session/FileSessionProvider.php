@@ -14,9 +14,9 @@ use NeuronCli\History\HistoryProjection;
  * Provides the Sessions of an Agent from a directory, one file per Session.
  *
  * This is what a Host Application that wants its conversations kept passes,
- * having decided that they are kept in files. The files and their format
- * belong to Neuron AI's `FileChatHistory`; the only decision taken here is
- * where they live and how a key is minted.
+ * having decided that they are kept in files, and named the directory holding
+ * them. The files and their format belong to Neuron AI's `FileChatHistory`;
+ * the only decision taken here is how a key is minted.
  *
  * Listing them stays on the same footing: a Session is read by reopening the
  * conversation through Neuron AI, never by parsing what it stored. The file
@@ -26,12 +26,6 @@ use NeuronCli\History\HistoryProjection;
 final readonly class FileSessionProvider implements SessionProvider
 {
     /**
-     * Relative to the working directory of the Host Application, so Sessions
-     * follow the project rather than the machine.
-     */
-    private const string DEFAULT_DIRECTORY = '.neuron/sessions';
-
-    /**
      * `FileChatHistory` names its files itself, from a prefix and an
      * extension it takes as arguments. Passing them on both sides — opening a
      * Session and finding which ones exist — keeps the two from drifting.
@@ -40,13 +34,11 @@ final readonly class FileSessionProvider implements SessionProvider
 
     private const string FILE_EXTENSION = '.chat';
 
-    private string $directory;
-
-    public function __construct(?string $directory = null)
-    {
-        $this->directory = $directory ?? (getcwd() ?: '.')
-            . '/' . self::DEFAULT_DIRECTORY;
-    }
+    /**
+     * The directory is asked for rather than guessed, so a conversation only
+     * ever lands where the Host Application said it should.
+     */
+    public function __construct(private string $directory) {}
 
     /**
      * Nothing is written until the conversation receives a message, so a

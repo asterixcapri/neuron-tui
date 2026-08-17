@@ -12,6 +12,7 @@ use NeuronAI\Chat\Messages\UserMessage;
 use NeuronCli\Session\FileSessionProvider;
 use NeuronCli\Session\Session;
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
 
 final class FileSessionProviderTest extends TestCase
 {
@@ -81,25 +82,17 @@ final class FileSessionProviderTest extends TestCase
         self::assertDirectoryExists($this->directory . '/deeper');
     }
 
-    public function testWithoutADirectoryTheSessionsLiveUnderTheProject(): void
+    /**
+     * A Session can only land where the Host Application named, so there is
+     * no provider without a directory to construct in the first place.
+     */
+    public function testTheDirectoryIsRequired(): void
     {
-        $project = $this->directory . '/project';
-        mkdir($project, 0o755, true);
-        $previous = getcwd();
-        self::assertIsString($previous);
-        chdir($project);
+        $constructor = (new ReflectionClass(FileSessionProvider::class))
+            ->getConstructor();
 
-        try {
-            $this->start(new FileSessionProvider())
-                ->addMessage(new UserMessage('Anything'));
-        } finally {
-            chdir($previous);
-        }
-
-        self::assertCount(
-            1,
-            glob($project . '/.neuron/sessions/*') ?: [],
-        );
+        self::assertNotNull($constructor);
+        self::assertSame(1, $constructor->getNumberOfRequiredParameters());
     }
 
     public function testNothingIsListedBeforeASessionIsStored(): void
