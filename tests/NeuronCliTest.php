@@ -25,6 +25,7 @@ use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Testing\FakeAIProvider;
+use NeuronAI\Testing\RequestRecord;
 use NeuronAI\Tools\Tool;
 use NeuronCli\NeuronCli;
 use NeuronCli\Tests\Session\InMemorySessionStore;
@@ -1027,6 +1028,298 @@ MARKDOWN;
         self::assertStringContainsString('❯ A question', $refusedDisplay);
         self::assertSame([], $sessions->sessions());
         self::assertFalse($forcedExit);
+    }
+
+    public function testSessionsListsStoredConversationsAndResumesOne(): void
+    {
+        $provider = new FakeAIProvider(
+            new AssistantMessage('A later answer.'),
+        );
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        $sessions = new InMemorySessionStore();
+        $earlier = $sessions->open('earlier');
+        $earlier->addMessage(new UserMessage('The earlier subject'));
+        $earlier->addMessage(new Message(MessageRole::ASSISTANT, [
+            new ReasoningContent('Private chain of thought.'),
+            new TextContent('The earlier answer.'),
+        ]));
+        $terminal = new VirtualTerminal(rows: 30);
+        $pickerDisplay = null;
+        EventLoop::delay(
+            0.04,
+            static fn () => $terminal->simulateInput("/sessions\r"),
+        );
+        EventLoop::delay(
+            0.1,
+            static function () use (&$pickerDisplay, $terminal): void {
+                $pickerDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->clearOutput();
+                $terminal->simulateInput("\r");
+            },
+        );
+        EventLoop::delay(
+            0.16,
+            static fn () => $terminal->simulateInput("A follow-up\r"),
+        );
+        EventLoop::delay(
+            0.4,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            sessionStore: $sessions,
+        ))->run();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+
+        self::assertIsString($pickerDisplay);
+        self::assertStringContainsString(
+            'The earlier subject',
+            $pickerDisplay,
+        );
+        self::assertStringContainsString('❯ The earlier subject', $display);
+        self::assertStringContainsString('● The earlier answer.', $display);
+        self::assertStringNotContainsString(
+            'Private chain of thought.',
+            $display,
+        );
+        self::assertSame($earlier, $agent->getChatHistory());
+        $provider->assertSent(
+            static fn (RequestRecord $request): bool => array_map(
+                static fn (Message $message): string => $message->getRole(),
+                $request->messages,
+            ) === ['user', 'assistant', 'user']
+                && (string) $request->messages[0]->getContent()
+                    === 'The earlier subject',
+        );
+    }
+
+    public function testEscapeLeavesTheSessionPickerWithTheSameSession(): void
+    {
+        $agent = new Agent();
+        $ongoing = $agent->getChatHistory();
+        $sessions = new InMemorySessionStore();
+        $sessions->open('earlier')->addMessage(
+            new UserMessage('The earlier subject'),
+        );
+        $terminal = new VirtualTerminal(rows: 24);
+        $pickerDisplay = null;
+        EventLoop::delay(
+            0.04,
+            static fn () => $terminal->simulateInput("/sessions\r"),
+        );
+        EventLoop::delay(
+            0.1,
+            static function () use (&$pickerDisplay, $terminal): void {
+                $pickerDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->clearOutput();
+                // Typed at the list, not at the composer, so nothing of it
+                // is left behind once the picker closes.
+                $terminal->simulateInput('zzz');
+            },
+        );
+        EventLoop::delay(
+            0.16,
+            static function () use ($terminal): void {
+                $terminal->clearOutput();
+                $terminal->simulateInput("\x1b");
+            },
+        );
+        EventLoop::delay(
+            0.26,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            sessionStore: $sessions,
+        ))->run();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+
+        self::assertIsString($pickerDisplay);
+        self::assertStringContainsString(
+            'The earlier subject',
+            $pickerDisplay,
+        );
+        self::assertStringNotContainsString('The earlier subject', $display);
+        self::assertStringNotContainsString('/sessions', $display);
+        self::assertStringNotContainsString('zzz', $display);
+        self::assertStringContainsString('ready · Enter sends', $display);
+        self::assertSame($ongoing, $agent->getChatHistory());
+    }
+
+    public function testSessionsSaysSoWhenThereIsNothingToReturnTo(): void
+    {
+        $agent = new Agent();
+        $terminal = new VirtualTerminal(rows: 24);
+        EventLoop::delay(
+            0.04,
+            static fn () => $terminal->simulateInput("/sessions\r"),
+        );
+        EventLoop::delay(
+            0.12,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            sessionStore: new InMemorySessionStore(),
+        ))->run();
+
+        self::assertStringContainsString(
+            'There is no earlier Session to return to yet.',
+            AnsiUtils::stripAnsiCodes($terminal->getOutput()),
+        );
+    }
+
+    public function testTypingNarrowsThePickerInsteadOfTheComposer(): void
+    {
+        $agent = new Agent();
+        $sessions = new InMemorySessionStore();
+        $sessions->open('alpha')->addMessage(new UserMessage('Alpha subject'));
+        $beta = $sessions->open('beta');
+        $beta->addMessage(new UserMessage('Beta subject'));
+        $terminal = new VirtualTerminal(rows: 24);
+        $narrowedDisplay = null;
+        EventLoop::delay(
+            0.04,
+            static fn () => $terminal->simulateInput("/sessions\r"),
+        );
+        EventLoop::delay(
+            0.1,
+            static function () use ($terminal): void {
+                $terminal->clearOutput();
+                $terminal->simulateInput('Beta');
+            },
+        );
+        EventLoop::delay(
+            0.16,
+            static function () use (&$narrowedDisplay, $terminal): void {
+                $narrowedDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("\r");
+            },
+        );
+        EventLoop::delay(
+            0.26,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            sessionStore: $sessions,
+        ))->run();
+
+        self::assertIsString($narrowedDisplay);
+        self::assertStringContainsString('Beta subject', $narrowedDisplay);
+        self::assertStringNotContainsString('Alpha subject', $narrowedDisplay);
+        self::assertSame($beta, $agent->getChatHistory());
+    }
+
+    public function testArrowKeysChooseAnotherSessionInThePicker(): void
+    {
+        $agent = new Agent();
+        $sessions = new InMemorySessionStore();
+        $older = $sessions->open('older');
+        $older->addMessage(new UserMessage('The older subject'));
+        $sessions->open('newer')->addMessage(
+            new UserMessage('The newer subject'),
+        );
+        $terminal = new VirtualTerminal(rows: 24);
+        EventLoop::delay(
+            0.04,
+            static fn () => $terminal->simulateInput("/sessions\r"),
+        );
+        EventLoop::delay(
+            0.1,
+            static fn () => $terminal->simulateInput("\x1b[B"),
+        );
+        EventLoop::delay(
+            0.16,
+            static fn () => $terminal->simulateInput("\r"),
+        );
+        EventLoop::delay(
+            0.26,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            sessionStore: $sessions,
+        ))->run();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+
+        self::assertStringContainsString('❯ The older subject', $display);
+        self::assertSame($older, $agent->getChatHistory());
+    }
+
+    public function testSessionsIsRefusedWhileTheAgentIsWorking(): void
+    {
+        $refusedDisplay = null;
+        $provider = new class(
+            new AssistantMessage('A slow answer.'),
+        ) extends FakeAIProvider {
+            protected function streamChunks(Message $response): Generator
+            {
+                \Amp\delay(0.4);
+                yield new TextChunk('slow-stream', 'A slow answer.');
+
+                return $response;
+            }
+        };
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        $sessions = new InMemorySessionStore();
+        $sessions->open('earlier')->addMessage(
+            new UserMessage('The earlier subject'),
+        );
+        $terminal = new VirtualTerminal(rows: 24);
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("A question\r"),
+        );
+        EventLoop::delay(
+            0.06,
+            static fn () => $terminal->simulateInput("/sessions\r"),
+        );
+        EventLoop::delay(
+            0.12,
+            static function () use (&$refusedDisplay, $terminal): void {
+                $refusedDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("\x03");
+            },
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            sessionStore: $sessions,
+        ))->run();
+
+        self::assertIsString($refusedDisplay);
+        self::assertStringContainsString(
+            '/sessions is refused while the Agent is working',
+            $refusedDisplay,
+        );
+        self::assertStringNotContainsString(
+            'The earlier subject',
+            $refusedDisplay,
+        );
     }
 
     public function testPageKeysBrowseAConversationAndReturnToLatest(): void

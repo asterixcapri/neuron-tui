@@ -8,6 +8,7 @@ use Closure;
 use NeuronAI\Chat\Messages\Message;
 use NeuronCli\History\EntryKind;
 use NeuronCli\History\HistoryProjection;
+use NeuronCli\Session\SessionSummary;
 use Symfony\Component\Tui\Event\CancelEvent;
 use Symfony\Component\Tui\Event\InputEvent;
 use Symfony\Component\Tui\Event\SubmitEvent;
@@ -29,6 +30,9 @@ final class ConversationView
     private const string WORKING_STATUS =
         'Enter queues · Shift+Enter adds a line';
 
+    private const string CHOOSING_STATUS =
+        'choosing a Session · the composer takes no text until you choose';
+
     private readonly Tui $tui;
 
     private readonly HistoryPane $history;
@@ -41,7 +45,12 @@ final class ConversationView
 
     private readonly WorkingIndicator $workingIndicator;
 
+    private readonly SessionPicker $sessionPicker;
+
     private ?HistoryEntry $activeAgentMessage = null;
+
+    /** @var (Closure(string): void)|null */
+    private ?Closure $sessionChosen = null;
 
     public function __construct(
         private readonly TerminalInterface $terminal,
@@ -63,6 +72,10 @@ final class ConversationView
         $this->editor->onCancel($this->clearDraft(...));
         $this->status = new TextWidget(self::READY_STATUS);
         $this->status->addStyleClass('status');
+        $this->sessionPicker = new SessionPicker(
+            $this->sessionPicked(...),
+            $this->closeSessionPicker(...),
+        );
 
         $this->build($title, $subtitle);
     }
@@ -89,6 +102,16 @@ final class ConversationView
     public function onTick(Closure $listener): void
     {
         $this->tui->onTick($listener);
+    }
+
+    /**
+     * Called with the key of the Session a person picked out of the list.
+     *
+     * @param Closure(string): void $listener
+     */
+    public function onSessionChosen(Closure $listener): void
+    {
+        $this->sessionChosen = $listener;
     }
 
     public function run(): void
@@ -148,6 +171,32 @@ final class ConversationView
     public function emptyComposer(): void
     {
         $this->editor->setText('');
+    }
+
+    /**
+     * Puts the TUI in the Session picker.
+     *
+     * From here on the keys belong to the list and the composer is out of
+     * reach, which is why the draft goes now rather than when a Session is
+     * finally chosen.
+     *
+     * @param list<SessionSummary> $sessions
+     */
+    public function showSessions(array $sessions): void
+    {
+        $this->emptyComposer();
+        $this->sessionPicker->open($sessions);
+        $this->status->setText(self::CHOOSING_STATUS);
+        $this->tui->setFocus($this->sessionPicker->focusable());
+        $this->tui->requestRender();
+    }
+
+    /**
+     * Whether a person is choosing a Session rather than writing.
+     */
+    public function isChoosingSession(): bool
+    {
+        return $this->sessionPicker->isOpen();
     }
 
     public function acceptUserMessage(string $contents): void
@@ -284,6 +333,7 @@ final class ConversationView
         $this->tui->add($header);
         $this->tui->add($this->history->widget());
         $this->tui->add($this->queuedMessages);
+        $this->tui->add($this->sessionPicker->widget());
         $this->tui->add($composer);
         $this->tui->add($this->status);
         $this->tui->setFocus($this->editor);
@@ -292,6 +342,25 @@ final class ConversationView
     private function clearDraft(CancelEvent $event): void
     {
         $this->emptyComposer();
+    }
+
+    private function sessionPicked(string $key): void
+    {
+        $this->closeSessionPicker();
+
+        if ($this->sessionChosen instanceof Closure) {
+            ($this->sessionChosen)($key);
+        }
+    }
+
+    /**
+     * Leaves the picker, whatever came of it: the list goes, the keys and the
+     * status line go back to the conversation.
+     */
+    private function closeSessionPicker(): void
+    {
+        $this->sessionPicker->close();
+        $this->ready();
     }
 
     private function newToolActivity(): ToolActivity

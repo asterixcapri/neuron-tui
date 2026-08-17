@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace NeuronCli\Tests\Session;
 
+use DateTimeImmutable;
 use NeuronAI\Chat\History\ChatHistoryInterface;
 use NeuronAI\Chat\History\InMemoryChatHistory;
+use NeuronCli\History\HistoryProjection;
 use NeuronCli\Session\SessionStore;
+use NeuronCli\Session\SessionSummary;
 
 /**
  * A Session store that keeps its conversations in memory.
@@ -27,6 +30,32 @@ final class InMemorySessionStore implements SessionStore
         $key ??= 'session-' . ++$this->minted;
 
         return $this->sessions[$key] ??= new InMemoryChatHistory();
+    }
+
+    /**
+     * Nothing in memory records when a conversation was written to, so the
+     * order Sessions were opened in stands for how recently they were used:
+     * the one opened last comes first, an hour younger than the one before.
+     */
+    public function list(): array
+    {
+        $summaries = [];
+        $openedAt = new DateTimeImmutable('2026-01-01 00:00:00');
+
+        foreach ($this->sessions as $key => $session) {
+            $title = HistoryProjection::openingWords(
+                $session->getMessages(),
+            );
+
+            if ($title === null) {
+                continue;
+            }
+
+            $summaries[] = new SessionSummary($key, $openedAt, $title);
+            $openedAt = $openedAt->modify('+1 hour');
+        }
+
+        return array_reverse($summaries);
     }
 
     /**

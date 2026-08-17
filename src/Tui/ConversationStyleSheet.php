@@ -57,6 +57,21 @@ final class ConversationStyleSheet
                 color: 'gray',
                 padding: Padding::xy(1),
             ),
+            '.session-picker' => new Style(padding: Padding::xy(1)),
+            '.session-picker-instructions' => new Style(
+                color: 'gray',
+                dim: true,
+            ),
+            '.session-list::selected' => new Style(color: 'magenta'),
+            '.session-list::description' => new Style(
+                color: 'gray',
+                dim: true,
+            ),
+            '.session-list::no-match' => new Style(color: 'gray', dim: true),
+            '.session-list::scroll-info' => new Style(
+                color: 'gray',
+                dim: true,
+            ),
             '.tool' => new Style(color: 'cyan', dim: true),
             '.error' => new Style(color: 'red', bold: true),
         ]);

@@ -44,6 +44,13 @@ A Session is one conversation with the Agent. `/clear` starts a fresh one
 without leaving the terminal: the screen and the composer empty, and the
 conversation that was on screen stays where it is stored.
 
+`/sessions` lists the Sessions of this Agent, most recently used first, each
+labelled with the first thing the person wrote in it and when it was last
+used. While the list is open the composer takes no text: the arrow keys move
+through it, typing narrows it, Enter resumes the chosen Session, and Escape
+leaves the current one alone. Resuming paints that conversation and the Agent
+answers with its context. A Session nobody wrote in is not listed.
+
 Sessions live in a **Session store**. Without configuration they are files
 under `.neuron/sessions`, relative to the working directory of the Host
 Application. Another directory, or another place entirely, is one argument:
@@ -59,20 +66,21 @@ use NeuronCli\Session\FileSessionStore;
 
 An application that keeps conversations in its own storage implements
 `NeuronCli\Session\SessionStore` instead. The store decides how a Session is
-addressed and returns the Neuron AI chat history that Neuron CLI installs on
-the Agent; saving, reloading and deserializing remain Neuron AI's work. Neuron
-CLI never deletes a stored conversation.
+addressed, says which Sessions exist, and returns the Neuron AI chat history
+that Neuron CLI installs on the Agent; saving, reloading and deserializing
+remain Neuron AI's work. Neuron CLI never deletes a stored conversation.
 
 Starting a Session replaces the History configured on the Agent by the Host
 Application. An application that cares must pass a Session store reaching the
 same place. See
 [ADR 0001](docs/adr/0001-sessions-replace-the-agent-chat-history.md).
 
-`NeuronCli\NeuronCli` is the public module, and `NeuronCli\Session\SessionStore`
-with `NeuronCli\Session\FileSessionStore` the one dependency an application may
-supply. Every other class under the `NeuronCli` namespace is annotated
-`@internal`, carries no stability promise, and may be renamed, split, or
-removed in any release. Static analysis enforces this on the examples, which
+`NeuronCli\NeuronCli` is the public module, and the Session store the one
+dependency an application may supply: `NeuronCli\Session\SessionStore` to
+implement, `NeuronCli\Session\SessionSummary` to list a Session with, and
+`NeuronCli\Session\FileSessionStore` to point at another directory. Every
+other class under the `NeuronCli` namespace is annotated `@internal`, carries
+no stability promise, and may be renamed, split, or removed in any release. Static analysis enforces this on the examples, which
 are the reference Host Application.
 
 The Host Application remains responsible for constructing the Agent,
@@ -114,11 +122,13 @@ Ctrl+C to close it.
 - Escape clears the unsent draft.
 - PageUp and PageDown browse the History.
 - `/clear` starts a new Session.
+- `/sessions` lists the Sessions and resumes the one you choose.
 - `/exit` or Ctrl+C closes the Conversation TUI.
 
-`/clear` is refused while the Agent is working, so an arriving answer cannot
-land in the wrong Session; `/exit` works at any time. Unknown Slash commands
-stay in the composer so they can be corrected and are never sent to the Agent.
+`/clear` and `/sessions` are refused while the Agent is working, so an
+arriving answer cannot land in the wrong Session; `/exit` works at any time.
+Unknown Slash commands stay in the composer so they can be corrected and are
+never sent to the Agent.
 
 ## Development
 
