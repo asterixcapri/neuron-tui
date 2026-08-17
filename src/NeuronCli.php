@@ -11,6 +11,12 @@ use NeuronAI\Chat\Messages\Stream\Chunks\ToolCallChunk;
 use NeuronAI\Chat\Messages\Stream\Chunks\ToolResultChunk;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
+use NeuronCli\Conversation\MessageForAgent;
+use NeuronCli\Conversation\SlashCommand;
+use NeuronCli\Conversation\Submission;
+use NeuronCli\Conversation\UnknownSlashCommand;
+use NeuronCli\Session\FileSessionStore;
+use NeuronCli\Session\SessionStore;
 use NeuronCli\Tui\ConversationView;
 use NeuronCli\Tui\DisplayableText;
 use NeuronCli\Tui\WorkingIndicator;
@@ -32,6 +38,8 @@ final class NeuronCli
 
     private readonly WorkingIndicator $workingIndicator;
 
+    private readonly SessionStore $sessionStore;
+
     /** @var Future<mixed>|null */
     private ?Future $response = null;
 
@@ -45,8 +53,10 @@ final class NeuronCli
         string $title = 'Neuron AI',
         string $subtitle = 'Agent conversation',
         ?TerminalInterface $terminal = null,
+        ?SessionStore $sessionStore = null,
     ) {
         $this->terminal = $terminal ?? new Terminal();
+        $this->sessionStore = $sessionStore ?? new FileSessionStore();
         $this->view = new ConversationView(
             $this->terminal,
             $title,
@@ -84,34 +94,87 @@ final class NeuronCli
             return;
         }
 
-        $input = $event->getValue();
+        $submission = Submission::interpret($event->getValue());
 
-        if ($input === '/exit') {
-            $this->view->stop();
-
-            return;
-        }
-
-        if (str_starts_with($input, '/')) {
-            $command = strtok($input, " \t\n");
-            $this->view->showUnknownSlashCommand($command);
+        if ($submission instanceof SlashCommand) {
+            $this->carryOut($submission);
 
             return;
         }
 
-        if (
-            $this->response instanceof Future
-            || $this->pendingInput !== null
-        ) {
-            $this->queuedInputs[] = $input;
+        if ($submission instanceof UnknownSlashCommand) {
+            $this->view->showUnknownSlashCommand($submission->name);
+
+            return;
+        }
+
+        $this->send($submission);
+    }
+
+    private function send(MessageForAgent $message): void
+    {
+        if ($this->isWorking()) {
+            $this->queuedInputs[] = $message->contents;
             $this->view->showQueuedMessages($this->queuedInputs);
 
             return;
         }
 
-        $this->view->acceptUserMessage($input);
+        $this->view->acceptUserMessage($message->contents);
         $this->startWorking();
-        $this->pendingInput = $input;
+        $this->pendingInput = $message->contents;
+    }
+
+    /**
+     * A command that changes Session cannot run mid-turn: an answer already on
+     * its way would land in the conversation that replaced the one it belongs
+     * to. Leaving the TUI is never refused.
+     */
+    private function carryOut(SlashCommand $command): void
+    {
+        if ($command === SlashCommand::Exit) {
+            $this->view->stop();
+
+            return;
+        }
+
+        if ($this->isWorking()) {
+            $this->view->showError(
+                $command->value
+                    . ' is refused while the Agent is working. '
+                    . 'Try it again once the turn has finished.',
+            );
+
+            return;
+        }
+
+        if ($command === SlashCommand::Clear) {
+            $this->openSession();
+
+            return;
+        }
+
+        $this->view->showError('The Session picker is not available yet.');
+    }
+
+    /**
+     * Puts a Session on the Agent and shows it, screen and composer both.
+     *
+     * The conversation it replaces is left where the store keeps it: nothing
+     * here ever deletes a stored Session.
+     */
+    private function openSession(): void
+    {
+        $session = $this->sessionStore->open();
+        $this->agent->setChatHistory($session);
+        $this->view->showHistory($session->getMessages());
+        $this->view->emptyComposer();
+    }
+
+    private function isWorking(): bool
+    {
+        return $this->response instanceof Future
+            || $this->pendingInput !== null;
     }
 
     private function respond(string $input): void

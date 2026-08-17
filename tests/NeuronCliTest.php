@@ -27,6 +27,7 @@ use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Tools\Tool;
 use NeuronCli\NeuronCli;
+use NeuronCli\Tests\Session\InMemorySessionStore;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
@@ -860,6 +861,172 @@ MARKDOWN;
             $terminal->getOutput(),
         );
         $provider->assertNothingSent();
+    }
+
+    public function testClearOpensAnEmptySessionOverTheOneOnScreen(): void
+    {
+        $earlier = new ExistingChatHistory([
+            new UserMessage('Earlier question.'),
+            new AssistantMessage('Earlier answer.'),
+        ]);
+        $agent = new Agent();
+        $agent->setChatHistory($earlier);
+        $sessions = new InMemorySessionStore();
+        $terminal = new VirtualTerminal(rows: 24);
+        $clearedDisplay = null;
+        EventLoop::delay(
+            0.04,
+            static fn () => $terminal->simulateInput("/clear\r"),
+        );
+        EventLoop::delay(
+            0.09,
+            static function () use ($terminal): void {
+                $terminal->clearOutput();
+                $terminal->simulateInput('draft');
+            },
+        );
+        EventLoop::delay(
+            0.14,
+            static function () use (&$clearedDisplay, $terminal): void {
+                $clearedDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("\x03");
+            },
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            sessionStore: $sessions,
+        ))->run();
+
+        self::assertIsString($clearedDisplay);
+        self::assertStringContainsString('draft', $clearedDisplay);
+        self::assertStringNotContainsString(
+            'Earlier question.',
+            $clearedDisplay,
+        );
+        self::assertStringNotContainsString(
+            'Earlier answer.',
+            $clearedDisplay,
+        );
+        self::assertStringNotContainsString('/clear', $clearedDisplay);
+        self::assertCount(1, $sessions->sessions());
+        self::assertSame(
+            $sessions->sessions()[0],
+            $agent->getChatHistory(),
+        );
+        self::assertSame([], $agent->getChatHistory()->getMessages());
+        self::assertCount(2, $earlier->getMessages());
+    }
+
+    public function testClearLeavesTheConversationItReplacedStored(): void
+    {
+        $provider = new FakeAIProvider(new AssistantMessage('An answer.'));
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        $sessions = new InMemorySessionStore();
+        $terminal = new VirtualTerminal(rows: 24);
+        EventLoop::delay(
+            0.03,
+            static fn () => $terminal->simulateInput("/clear\r"),
+        );
+        EventLoop::delay(
+            0.08,
+            static fn () => $terminal->simulateInput("A question\r"),
+        );
+        EventLoop::delay(
+            0.25,
+            static fn () => $terminal->simulateInput("/clear\r"),
+        );
+        EventLoop::delay(
+            0.35,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            sessionStore: $sessions,
+        ))->run();
+
+        self::assertCount(2, $sessions->sessions());
+        self::assertSame(
+            ['A question', 'An answer.'],
+            array_map(
+                static fn (Message $message): string => (string) $message
+                    ->getContent(),
+                $sessions->sessions()[0]->getMessages(),
+            ),
+        );
+        self::assertSame([], $sessions->sessions()[1]->getMessages());
+        self::assertSame(
+            $sessions->sessions()[1],
+            $agent->getChatHistory(),
+        );
+    }
+
+    public function testClearIsRefusedWhileTheAgentIsWorkingButExitIsNot(): void
+    {
+        $forcedExit = false;
+        $refusedDisplay = null;
+        $provider = new class(
+            new AssistantMessage('A slow answer.'),
+        ) extends FakeAIProvider {
+            protected function streamChunks(Message $response): Generator
+            {
+                \Amp\delay(0.5);
+                yield new TextChunk('slow-stream', 'A slow answer.');
+
+                return $response;
+            }
+        };
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        $sessions = new InMemorySessionStore();
+        $terminal = new VirtualTerminal(rows: 24);
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("A question\r"),
+        );
+        EventLoop::delay(
+            0.06,
+            static fn () => $terminal->simulateInput("/clear\r"),
+        );
+        EventLoop::delay(
+            0.12,
+            static function () use (&$refusedDisplay, $terminal): void {
+                $refusedDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                // A refused command stays in the composer, the way an
+                // unknown one does, so Escape takes it away first.
+                $terminal->simulateInput("\x1b");
+                $terminal->simulateInput("/exit\r");
+            },
+        );
+        EventLoop::delay(
+            0.9,
+            static function () use (&$forcedExit, $terminal): void {
+                $forcedExit = true;
+                $terminal->simulateInput("\x03");
+            },
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            sessionStore: $sessions,
+        ))->run();
+
+        self::assertIsString($refusedDisplay);
+        self::assertStringContainsString(
+            '/clear is refused while the Agent is working',
+            $refusedDisplay,
+        );
+        self::assertStringContainsString('❯ A question', $refusedDisplay);
+        self::assertSame([], $sessions->sessions());
+        self::assertFalse($forcedExit);
     }
 
     public function testPageKeysBrowseAConversationAndReturnToLatest(): void
