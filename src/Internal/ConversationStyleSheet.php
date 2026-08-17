@@ -34,6 +34,7 @@ final class ConversationStyleSheet
                 direction: Direction::Horizontal,
                 gap: 1,
             ),
+            '.user-message' => new Style(background: '#343434'),
             '.speaker' => new Style(flex: 0),
             '.message-content' => new Style(flex: 1),
             '.composer-row' => new Style(
@@ -52,6 +53,10 @@ final class ConversationStyleSheet
             '.user' => new Style(color: 'magenta', bold: true),
             '.agent' => new Style(color: 'magenta', bold: true),
             '.loading' => new Style(color: 'gray', dim: true),
+            '.queued-message' => new Style(
+                color: 'gray',
+                padding: Padding::xy(1),
+            ),
             '.tool' => new Style(color: 'cyan', dim: true),
             '.error' => new Style(color: 'red', bold: true),
         ]);

@@ -38,11 +38,13 @@ final class ConversationView
         'ready · Enter sends · Shift+Enter adds a line · /exit exits';
 
     private const string WORKING_STATUS =
-        'Enter sends · Shift+Enter adds a line · /exit exits';
+        'Enter queues · Shift+Enter adds a line';
 
     private readonly Tui $tui;
 
     private readonly ContainerWidget $history;
+
+    private readonly ContainerWidget $queuedMessages;
 
     private readonly ComposerEditor $editor;
 
@@ -72,6 +74,8 @@ final class ConversationView
         $this->history = new ContainerWidget();
         $this->history->addStyleClass('history');
         $this->history->expandVertically(true);
+        $this->queuedMessages = new ContainerWidget();
+        $this->queuedMessages->addStyleClass('queued-messages');
         $this->editor = new ComposerEditor();
         $this->editor->addStyleClass('composer');
         $this->editor->setMinVisibleLines(1);
@@ -236,25 +240,62 @@ final class ConversationView
         $this->showError('Unknown Slash command: ' . $command);
     }
 
-    public function startWorking(string $frame): void
+    public function startWorking(string $frame, int $elapsedSeconds): void
     {
         $this->status->setText(self::WORKING_STATUS);
-        $this->loading = new TextWidget($frame . ' working…');
+        $this->loading = new TextWidget(
+            self::workingText($frame, $elapsedSeconds),
+        );
         $this->loading->addStyleClass('loading');
         $this->loadingHeight = 1
             + ($this->historyItemCount === 0 ? 0 : 1);
         $this->addHistoryWidget($this->loading, 1);
-        $this->tui->setFocus(null);
         $this->followLatest();
     }
 
-    public function updateWorkingFrame(string $frame): void
-    {
+    public function updateWorkingFrame(
+        string $frame,
+        int $elapsedSeconds,
+    ): void {
         if (!$this->loading instanceof TextWidget) {
             return;
         }
 
-        $this->loading->setText($frame . ' working…');
+        $this->loading->setText(
+            self::workingText($frame, $elapsedSeconds),
+        );
+        $this->tui->requestRender();
+    }
+
+    /**
+     * @param list<string> $messages
+     */
+    public function showQueuedMessages(array $messages): void
+    {
+        $this->editor->setText('');
+        $this->queuedMessages->clear();
+
+        if ($messages !== []) {
+            $lines = [
+                '● Messages to be submitted after the current turn',
+            ];
+
+            foreach ($messages as $message) {
+                $message = StringUtils::stripControlBytes(
+                    StringUtils::sanitizeUtf8($message),
+                );
+                $lines[] = '  ↳ ' . str_replace(
+                    "\n",
+                    "\n    ",
+                    $message,
+                );
+            }
+
+            $queued = new TextWidget(implode("\n", $lines));
+            $queued->addStyleClass('queued-message');
+            $this->queuedMessages->add($queued);
+        }
+
         $this->tui->requestRender();
     }
 
@@ -311,6 +352,7 @@ final class ConversationView
 
         $this->tui->add($header);
         $this->tui->add($this->history);
+        $this->tui->add($this->queuedMessages);
         $this->tui->add($composer);
         $this->tui->add($this->status);
         $this->tui->setFocus($this->editor);
@@ -335,6 +377,16 @@ final class ConversationView
         $this->addHistoryWidget($activity, $height);
     }
 
+    private static function workingText(
+        string $frame,
+        int $elapsedSeconds,
+    ): string {
+        return $frame
+            . ' Working ('
+            . $elapsedSeconds
+            . 's)';
+    }
+
     private function addMessage(
         string $speaker,
         string $contents,
@@ -342,6 +394,11 @@ final class ConversationView
     ): MarkdownWidget {
         $message = new ContainerWidget();
         $message->addStyleClass('message');
+
+        if ($style === 'user') {
+            $message->addStyleClass('user-message');
+        }
+
         $label = new TextWidget($speaker);
         $label->addStyleClass('speaker');
         $label->addStyleClass($style);
