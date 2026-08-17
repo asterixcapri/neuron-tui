@@ -49,7 +49,7 @@ final class ConversationView
 
     private ?HistoryEntry $activeAgentMessage = null;
 
-    /** @var (Closure(string): void)|null */
+    /** @var (Closure(Session): void)|null */
     private ?Closure $sessionChosen = null;
 
     public function __construct(
@@ -105,9 +105,9 @@ final class ConversationView
     }
 
     /**
-     * Called with the key of the Session a person picked out of the list.
+     * Called with the Session a person picked out of the list.
      *
-     * @param Closure(string): void $listener
+     * @param Closure(Session): void $listener
      */
     public function onSessionChosen(Closure $listener): void
     {
@@ -344,12 +344,12 @@ final class ConversationView
         $this->emptyComposer();
     }
 
-    private function sessionPicked(string $key): void
+    private function sessionPicked(Session $session): void
     {
         $this->closeSessionPicker();
 
         if ($this->sessionChosen instanceof Closure) {
-            ($this->sessionChosen)($key);
+            ($this->sessionChosen)($session);
         }
     }
 

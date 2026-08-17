@@ -14,6 +14,7 @@ use NeuronCli\Conversation\Submission;
 use NeuronCli\Conversation\TurnQueue;
 use NeuronCli\Conversation\UnknownSlashCommand;
 use NeuronCli\Session\FileSessionProvider;
+use NeuronCli\Session\Session;
 use NeuronCli\Session\SessionProvider;
 use NeuronCli\Tui\ConversationView;
 use NeuronCli\Tui\WorkingIndicator;
@@ -66,7 +67,7 @@ final class NeuronCli
             $this->agent->getChatHistory()->getMessages(),
         );
         $this->view->onSubmit($this->submit(...));
-        $this->view->onSessionChosen($this->openSession(...));
+        $this->view->onSessionChosen($this->resumeSession(...));
         $this->view->onInput($this->handleInput(...));
         $this->view->onTick($this->tick(...));
     }
@@ -184,6 +185,18 @@ final class NeuronCli
     private function startSession(): void
     {
         $this->openSession($this->sessionProvider->create()->key);
+    }
+
+    /**
+     * Puts the Session a person chose out of the picker on the Agent.
+     *
+     * The picker hands back the Session, key and all, so the key goes from
+     * the provider's own description of a Session straight back to the
+     * provider.
+     */
+    private function resumeSession(Session $session): void
+    {
+        $this->openSession($session->key);
     }
 
     /**
