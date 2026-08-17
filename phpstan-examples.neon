@@ -1,13 +1,16 @@
 parameters:
     level: 0
+    # The example scripts are named one by one rather than as a directory.
+    # The examples are a separate Composer project whose vendor directory,
+    # when installed, links asterixcapri/neuron-cli back to this repository —
+    # a cycle any directory walk follows until it exhausts memory.
     paths:
-        - examples
-    excludePaths:
-        - examples/vendor (?)
-    # The examples are a separate Composer project with its own vendor
-    # directory, which is not installed when this suite runs. This analysis
-    # exists for the public-module services below and for nothing else, so
-    # the errors that follow from the missing dependencies are ignored.
+        - examples/demo.php
+        - examples/prototype-sessions.php
+    # That vendor directory is not installed when this suite runs on a fresh
+    # checkout. This analysis exists for the public-module services below and
+    # for nothing else, so the errors that follow from the missing
+    # dependencies are ignored.
     # PublicModuleOnlyRule reads import statements rather than resolved
     # classes, so it keeps reporting even when nothing resolves.
     reportUnmatchedIgnoredErrors: false
