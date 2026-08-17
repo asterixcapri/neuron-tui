@@ -24,4 +24,15 @@ interface SessionStore
      * Opens the Session with the given key, or a newly minted one.
      */
     public function open(?string $key = null): ChatHistoryInterface;
+
+    /**
+     * The Sessions a person can return to, most recently used first.
+     *
+     * Ordering is the store's own, because only it knows when a Session was
+     * last written to. A Session that never received a message is not one a
+     * person can return to, so it is left out.
+     *
+     * @return list<SessionSummary>
+     */
+    public function list(): array;
 }

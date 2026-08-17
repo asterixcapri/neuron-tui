@@ -9,6 +9,7 @@ use NeuronAI\Chat\Messages\AssistantMessage;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronCli\Session\FileSessionStore;
+use NeuronCli\Session\SessionSummary;
 use PHPUnit\Framework\TestCase;
 
 final class FileSessionStoreTest extends TestCase
@@ -99,6 +100,70 @@ final class FileSessionStoreTest extends TestCase
             1,
             glob($project . '/.neuron/sessions/*') ?: [],
         );
+    }
+
+    public function testNothingIsListedBeforeASessionIsStored(): void
+    {
+        self::assertSame([], (new FileSessionStore($this->directory))->list());
+    }
+
+    public function testStoredSessionsAreListedMostRecentlyUsedFirst(): void
+    {
+        $store = new FileSessionStore($this->directory);
+        $this->storeSession('older', 'The older subject', 1_700_000_000);
+        $this->storeSession('newer', 'The newer subject', 1_700_003_600);
+
+        $listed = $store->list();
+
+        self::assertSame(
+            ['The newer subject', 'The older subject'],
+            array_map(
+                static fn (SessionSummary $summary): string => $summary->title,
+                $listed,
+            ),
+        );
+        self::assertSame('newer', $listed[0]->key);
+        self::assertSame(
+            1_700_003_600,
+            $listed[0]->lastUsedAt->getTimestamp(),
+        );
+    }
+
+    public function testASessionIsTitledByTheFirstThingThePersonWrote(): void
+    {
+        $stored = new FileChatHistory($this->directory, 'titled');
+        $stored->addMessage(new UserMessage('What the person asked'));
+        $stored->addMessage(new AssistantMessage('An answer.'));
+        $stored->addMessage(new UserMessage('A later question'));
+
+        $listed = (new FileSessionStore($this->directory))->list();
+
+        self::assertCount(1, $listed);
+        self::assertSame('What the person asked', $listed[0]->title);
+    }
+
+    public function testASessionThatReceivedNoMessageIsNotListed(): void
+    {
+        $store = new FileSessionStore($this->directory);
+        $store->open();
+        file_put_contents($this->directory . '/neuron_empty.chat', '[]');
+        $this->storeSession('asked', 'A question', 1_700_000_000);
+
+        $listed = $store->list();
+
+        self::assertCount(1, $listed);
+        self::assertSame('asked', $listed[0]->key);
+    }
+
+    private function storeSession(
+        string $key,
+        string $question,
+        int $lastUsedAt,
+    ): void {
+        $session = new FileChatHistory($this->directory, $key);
+        $session->addMessage(new UserMessage($question));
+        $session->addMessage(new AssistantMessage('An answer.'));
+        touch($this->directory . '/neuron_' . $key . '.chat', $lastUsedAt);
     }
 
     /**

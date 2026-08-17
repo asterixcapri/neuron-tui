@@ -65,6 +65,7 @@ final class NeuronCli
             $this->agent->getChatHistory()->getMessages(),
         );
         $this->view->onSubmit($this->submit(...));
+        $this->view->onSessionChosen($this->openSession(...));
         $this->view->onInput($this->handleInput(...));
         $this->view->onTick($this->tick(...));
     }
@@ -147,21 +148,41 @@ final class NeuronCli
 
         match ($command) {
             SlashCommand::Clear => $this->openSession(),
-            SlashCommand::Sessions => $this->view->showError(
-                'The Session picker is not available yet.',
-            ),
+            SlashCommand::Sessions => $this->chooseSession(),
         };
+    }
+
+    /**
+     * Offers the Sessions of this Agent for a person to return to one.
+     *
+     * A list with nothing in it is not worth entering, so it is said in the
+     * conversation instead.
+     */
+    private function chooseSession(): void
+    {
+        $sessions = $this->sessionStore->list();
+
+        if ($sessions === []) {
+            $this->view->showError(
+                'There is no earlier Session to return to yet.',
+            );
+
+            return;
+        }
+
+        $this->view->showSessions($sessions);
     }
 
     /**
      * Puts a Session on the Agent and shows it, screen and composer both.
      *
-     * The conversation it replaces is left where the store keeps it: nothing
-     * here ever deletes a stored Session.
+     * With a key it is the Session a person chose; without one it is a newly
+     * minted Session. The conversation it replaces is left where the store
+     * keeps it: nothing here ever deletes a stored Session.
      */
-    private function openSession(): void
+    private function openSession(?string $key = null): void
     {
-        $session = $this->sessionStore->open();
+        $session = $this->sessionStore->open($key);
         $this->agent->setChatHistory($session);
         $this->view->showHistory($session->getMessages());
         $this->view->emptyComposer();
@@ -253,6 +274,12 @@ final class NeuronCli
             $event->stopPropagation();
             $this->view->stop();
 
+            return;
+        }
+
+        // While a person is choosing a Session the list owns the keys that
+        // move through it, page keys included.
+        if ($this->view->isChoosingSession()) {
             return;
         }
 
