@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Internal;
+namespace NeuronCli\Tui;
 
 use Closure;
 use NeuronAI\Chat\Enums\MessageRole;

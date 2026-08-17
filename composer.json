@@ -23,11 +23,15 @@
     },
     "autoload-dev": {
         "psr-4": {
+            "NeuronCli\\PHPStan\\": "tools/phpstan/",
             "NeuronCli\\Tests\\": "tests/"
         }
     },
     "scripts": {
-        "stan": "phpstan analyse --no-progress --memory-limit=512M",
+        "stan": [
+            "phpstan analyse --no-progress --memory-limit=512M",
+            "phpstan analyse -c phpstan-examples.neon --no-progress --memory-limit=512M"
+        ],
         "test": "phpunit"
     },
     "config": {
