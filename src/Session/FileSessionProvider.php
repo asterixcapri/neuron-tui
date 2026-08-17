@@ -13,9 +13,10 @@ use NeuronCli\History\HistoryProjection;
 /**
  * Provides the Sessions of an Agent from a directory, one file per Session.
  *
- * This is what a Host Application that configures nothing gets. The files and
- * their format belong to Neuron AI's `FileChatHistory`; the only decision
- * taken here is where they live and how a key is minted.
+ * This is what a Host Application that wants its conversations kept passes,
+ * having decided that they are kept in files. The files and their format
+ * belong to Neuron AI's `FileChatHistory`; the only decision taken here is
+ * where they live and how a key is minted.
  *
  * Listing them stays on the same footing: a Session is read by reopening the
  * conversation through Neuron AI, never by parsing what it stored. The file
