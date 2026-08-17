@@ -51,34 +51,35 @@ through it, typing narrows it, Enter resumes the chosen Session, and Escape
 leaves the current one alone. Resuming paints that conversation and the Agent
 answers with its context. A Session nobody wrote in is not listed.
 
-Sessions live in a **Session store**. Without configuration they are files
+Sessions come from a **Session provider**. Without configuration they are files
 under `.neuron/sessions`, relative to the working directory of the Host
 Application. Another directory, or another place entirely, is one argument:
 
 ```php
-use NeuronCli\Session\FileSessionStore;
+use NeuronCli\Session\FileSessionProvider;
 
 (new NeuronCli(
     agent: $agent,
-    sessionStore: new FileSessionStore('/var/lib/my-app/sessions'),
+    sessionProvider: new FileSessionProvider('/var/lib/my-app/sessions'),
 ))->run();
 ```
 
 An application that keeps conversations in its own storage implements
-`NeuronCli\Session\SessionStore` instead. The store decides how a Session is
-addressed, says which Sessions exist, and returns the Neuron AI chat history
-that Neuron CLI installs on the Agent; saving, reloading and deserializing
-remain Neuron AI's work. Neuron CLI never deletes a stored conversation.
+`NeuronCli\Session\SessionProvider` instead. It answers three questions:
+create a Session, list the Sessions, and open one by its key. Opening returns
+the Neuron AI chat history that Neuron CLI installs on the Agent; saving,
+reloading and deserializing remain Neuron AI's work. Neuron CLI never deletes
+a stored conversation.
 
 Starting a Session replaces the History configured on the Agent by the Host
-Application. An application that cares must pass a Session store reaching the
-same place. See
+Application. An application that cares must pass a Session provider reaching
+the same place. See
 [ADR 0001](docs/adr/0001-sessions-replace-the-agent-chat-history.md).
 
-`NeuronCli\NeuronCli` is the public module, and the Session store the one
-dependency an application may supply: `NeuronCli\Session\SessionStore` to
-implement, `NeuronCli\Session\SessionSummary` to list a Session with, and
-`NeuronCli\Session\FileSessionStore` to point at another directory. Every
+`NeuronCli\NeuronCli` is the public module, and the Session provider the one
+dependency an application may supply: `NeuronCli\Session\SessionProvider` to
+implement, `NeuronCli\Session\Session` to list a Session with, and
+`NeuronCli\Session\FileSessionProvider` to point at another directory. Every
 other class under the `NeuronCli` namespace is annotated `@internal`, carries
 no stability promise, and may be renamed, split, or removed in any release. Static analysis enforces this on the examples, which
 are the reference Host Application.

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace NeuronCli\Tui;
 
 use Closure;
-use NeuronCli\Session\SessionSummary;
+use NeuronCli\Session\Session;
 use Symfony\Component\Tui\Event\CancelEvent;
 use Symfony\Component\Tui\Event\SelectEvent;
 use Symfony\Component\Tui\Widget\ContainerWidget;
@@ -92,9 +92,9 @@ final class SessionPicker
     }
 
     /**
-     * Shows the Sessions, in the order the store listed them.
+     * Shows the Sessions, in the order the provider listed them.
      *
-     * @param list<SessionSummary> $sessions
+     * @param list<Session> $sessions
      */
     public function open(array $sessions): void
     {
@@ -120,7 +120,7 @@ final class SessionPicker
     /**
      * @return array{value: string, label: string, description: string}
      */
-    private function line(SessionSummary $session): array
+    private function line(Session $session): array
     {
         $title = DisplayableText::preview($session->title, self::TITLE_WIDTH);
 

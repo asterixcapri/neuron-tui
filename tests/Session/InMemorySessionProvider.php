@@ -8,28 +8,33 @@ use DateTimeImmutable;
 use NeuronAI\Chat\History\ChatHistoryInterface;
 use NeuronAI\Chat\History\InMemoryChatHistory;
 use NeuronCli\History\HistoryProjection;
-use NeuronCli\Session\SessionStore;
-use NeuronCli\Session\SessionSummary;
+use NeuronCli\Session\Session;
+use NeuronCli\Session\SessionProvider;
 
 /**
- * A Session store that keeps its conversations in memory.
+ * A Session provider that keeps its conversations in memory.
  *
  * It stands where a Host Application's own adapter stands, so the feature
  * tests exercise the seam without touching the filesystem. It is not shipped:
- * until a Host Application asks for one, an in-memory store is a testing tool.
+ * until a Host Application asks for one, an in-memory provider is a testing
+ * tool.
+ *
+ * Being that tool, it accepts a key it never minted and starts a Session
+ * under it, which is how a test says what was written before the TUI opened.
  */
-final class InMemorySessionStore implements SessionStore
+final class InMemorySessionProvider implements SessionProvider
 {
     /** @var array<string, ChatHistoryInterface> */
     private array $sessions = [];
 
     private int $minted = 0;
 
-    public function open(?string $key = null): ChatHistoryInterface
+    public function create(): Session
     {
-        $key ??= 'session-' . ++$this->minted;
+        $key = 'session-' . ++$this->minted;
+        $this->sessions[$key] = new InMemoryChatHistory();
 
-        return $this->sessions[$key] ??= new InMemoryChatHistory();
+        return new Session($key, new DateTimeImmutable(), '');
     }
 
     /**
@@ -39,7 +44,7 @@ final class InMemorySessionStore implements SessionStore
      */
     public function list(): array
     {
-        $summaries = [];
+        $listed = [];
         $openedAt = new DateTimeImmutable('2026-01-01 00:00:00');
 
         foreach ($this->sessions as $key => $session) {
@@ -51,11 +56,16 @@ final class InMemorySessionStore implements SessionStore
                 continue;
             }
 
-            $summaries[] = new SessionSummary($key, $openedAt, $title);
+            $listed[] = new Session($key, $openedAt, $title);
             $openedAt = $openedAt->modify('+1 hour');
         }
 
-        return array_reverse($summaries);
+        return array_reverse($listed);
+    }
+
+    public function open(string $key): ChatHistoryInterface
+    {
+        return $this->sessions[$key] ??= new InMemoryChatHistory();
     }
 
     /**

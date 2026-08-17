@@ -8,7 +8,7 @@ use Closure;
 use NeuronAI\Chat\Messages\Message;
 use NeuronCli\History\EntryKind;
 use NeuronCli\History\HistoryProjection;
-use NeuronCli\Session\SessionSummary;
+use NeuronCli\Session\Session;
 use Symfony\Component\Tui\Event\CancelEvent;
 use Symfony\Component\Tui\Event\InputEvent;
 use Symfony\Component\Tui\Event\SubmitEvent;
@@ -180,7 +180,7 @@ final class ConversationView
      * reach, which is why the draft goes now rather than when a Session is
      * finally chosen.
      *
-     * @param list<SessionSummary> $sessions
+     * @param list<Session> $sessions
      */
     public function showSessions(array $sessions): void
     {

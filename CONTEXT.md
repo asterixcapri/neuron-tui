@@ -40,10 +40,10 @@ One conversation with the Agent, identified by a key and held by a single
 History, that outlives the TUI process and can be reopened.
 _Avoid_: Chat, thread
 
-**Session store**:
-The place the Sessions of an Agent live. It is the only thing that knows
-which Sessions exist and how to reach one by its key.
-_Avoid_: Repository, storage, archive
+**Session provider**:
+Where the Sessions of an Agent come from. It is the only thing that mints a
+key, knows which Sessions exist, and can open one by its key.
+_Avoid_: Store, repository, storage, archive
 
 **Session picker**:
 The state the Conversation TUI is in while a person is choosing a Session
