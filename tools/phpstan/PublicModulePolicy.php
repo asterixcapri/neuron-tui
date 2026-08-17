@@ -9,8 +9,9 @@ namespace NeuronCli\PHPStan;
  *
  * `NeuronCli\NeuronCli` is the interface of Neuron CLI, and the Session
  * provider seam is the one dependency a Host Application may supply: the
- * interface to implement, the Session its listing is made of, and the
- * file-based adapter to point at another directory. Every other name under
+ * interface to implement, the Session its listing is made of, and the two
+ * shipped providers — the in-memory one a Host gets by default and the
+ * file-based one it points at a directory. Every other name under
  * the `NeuronCli` namespace — the internal modules, the test suite, this
  * tooling — carries no stability promise and may be reshaped without notice,
  * so a Host Application may not name any of them.
@@ -26,6 +27,7 @@ final class PublicModulePolicy
         'NeuronCli\NeuronCli',
         'NeuronCli\Session\SessionProvider',
         'NeuronCli\Session\FileSessionProvider',
+        'NeuronCli\Session\InMemorySessionProvider',
         'NeuronCli\Session\Session',
     ];
 

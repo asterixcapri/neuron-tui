@@ -37,7 +37,9 @@ _Avoid_: Message, prompt
 
 **Session**:
 One conversation with the Agent, identified by a key and held by a single
-History, that outlives the TUI process and can be reopened.
+History, that outlives the TUI process and can be reopened. The default
+provider keeps its Sessions in memory, so until a Host Application says where
+conversations live a Session ends with the process.
 _Avoid_: Chat, thread
 
 **Session provider**:
