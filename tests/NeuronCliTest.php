@@ -28,7 +28,8 @@ use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Testing\RequestRecord;
 use NeuronAI\Tools\Tool;
 use NeuronCli\NeuronCli;
-use NeuronCli\Tests\Session\InMemorySessionProvider;
+use NeuronCli\Session\InMemorySessionProvider;
+use NeuronCli\Session\Session;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
@@ -864,6 +865,72 @@ MARKDOWN;
         $provider->assertNothingSent();
     }
 
+    public function testSessionsWorkWithNoProviderAndWriteNothingToDisk(): void
+    {
+        $provider = new FakeAIProvider(new AssistantMessage('An answer.'));
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        $terminal = new VirtualTerminal(rows: 30);
+        $pickerDisplay = null;
+        $workingDirectory = getcwd();
+        self::assertIsString($workingDirectory);
+        $before = scandir($workingDirectory);
+        EventLoop::delay(
+            0.03,
+            static fn () => $terminal->simulateInput("/clear\r"),
+        );
+        EventLoop::delay(
+            0.09,
+            static fn () => $terminal->simulateInput("A question\r"),
+        );
+        EventLoop::delay(
+            0.3,
+            static fn () => $terminal->simulateInput("/clear\r"),
+        );
+        EventLoop::delay(
+            0.38,
+            static fn () => $terminal->simulateInput("/sessions\r"),
+        );
+        EventLoop::delay(
+            0.46,
+            static function () use (&$pickerDisplay, $terminal): void {
+                $pickerDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->clearOutput();
+                $terminal->simulateInput("\r");
+            },
+        );
+        EventLoop::delay(
+            0.6,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli($agent, terminal: $terminal))->run();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+
+        self::assertIsString($pickerDisplay);
+        self::assertStringContainsString('A question', $pickerDisplay);
+        self::assertStringContainsString('❯ A question', $display);
+        self::assertStringContainsString('● An answer.', $display);
+        self::assertSame(
+            ['A question', 'An answer.'],
+            array_map(
+                static fn (Message $message): string => (string) $message
+                    ->getContent(),
+                $agent->getChatHistory()->getMessages(),
+            ),
+        );
+        // The directory the old default invented is named because it is the
+        // one a Host Application would have found; the scan says nothing else
+        // arrived either.
+        self::assertDirectoryDoesNotExist(
+            $workingDirectory . '/.neuron',
+        );
+        self::assertSame($before, scandir($workingDirectory));
+    }
+
     public function testClearOpensAnEmptySessionOverTheOneOnScreen(): void
     {
         $earlier = new ExistingChatHistory([
@@ -913,13 +980,16 @@ MARKDOWN;
             $clearedDisplay,
         );
         self::assertStringNotContainsString('/clear', $clearedDisplay);
-        self::assertCount(1, $sessions->sessions());
-        self::assertSame(
-            $sessions->sessions()[0],
-            $agent->getChatHistory(),
-        );
         self::assertSame([], $agent->getChatHistory()->getMessages());
         self::assertCount(2, $earlier->getMessages());
+        // Nobody wrote in the Session that was just started, so there is
+        // nothing to return to until something is written — and what the
+        // provider then lists is the conversation the Agent is holding.
+        self::assertCount(0, $sessions->list());
+        $agent->getChatHistory()->addMessage(new UserMessage('Written later'));
+        $listed = $sessions->list();
+        self::assertCount(1, $listed);
+        self::assertSame('Written later', $listed[0]->title);
     }
 
     public function testClearLeavesTheConversationItReplacedStored(): void
@@ -952,19 +1022,28 @@ MARKDOWN;
             sessionProvider: $sessions,
         ))->run();
 
-        self::assertCount(2, $sessions->sessions());
+        $listed = $sessions->list();
+
+        self::assertCount(1, $listed);
+        self::assertSame('A question', $listed[0]->title);
         self::assertSame(
             ['A question', 'An answer.'],
             array_map(
                 static fn (Message $message): string => (string) $message
                     ->getContent(),
-                $sessions->sessions()[0]->getMessages(),
+                $sessions->open($listed[0]->key)->getMessages(),
             ),
         );
-        self::assertSame([], $sessions->sessions()[1]->getMessages());
+        self::assertSame([], $agent->getChatHistory()->getMessages());
+        // The Session the Agent was left holding is the newer one the
+        // provider minted, so writing in it lists it ahead of the other.
+        $agent->getChatHistory()->addMessage(new UserMessage('Written later'));
         self::assertSame(
-            $sessions->sessions()[1],
-            $agent->getChatHistory(),
+            ['Written later', 'A question'],
+            array_map(
+                static fn (Session $session): string => $session->title,
+                $sessions->list(),
+            ),
         );
     }
 
@@ -985,6 +1064,7 @@ MARKDOWN;
         };
         $agent = new Agent();
         $agent->setAiProvider($provider);
+        $ongoing = $agent->getChatHistory();
         $sessions = new InMemorySessionProvider();
         $terminal = new VirtualTerminal(rows: 24);
         EventLoop::queue(
@@ -1026,7 +1106,8 @@ MARKDOWN;
             $refusedDisplay,
         );
         self::assertStringContainsString('❯ A question', $refusedDisplay);
-        self::assertSame([], $sessions->sessions());
+        self::assertSame([], $sessions->list());
+        self::assertSame($ongoing, $agent->getChatHistory());
         self::assertFalse($forcedExit);
     }
 
@@ -1038,7 +1119,7 @@ MARKDOWN;
         $agent = new Agent();
         $agent->setAiProvider($provider);
         $sessions = new InMemorySessionProvider();
-        $earlier = $sessions->open('earlier');
+        $earlier = $sessions->open($sessions->create()->key);
         $earlier->addMessage(new UserMessage('The earlier subject'));
         $earlier->addMessage(new Message(MessageRole::ASSISTANT, [
             new ReasoningContent('Private chain of thought.'),
@@ -1154,7 +1235,7 @@ MARKDOWN;
         $agent = new Agent();
         $ongoing = $agent->getChatHistory();
         $sessions = new InMemorySessionProvider();
-        $sessions->open('earlier')->addMessage(
+        $sessions->open($sessions->create()->key)->addMessage(
             new UserMessage('The earlier subject'),
         );
         $terminal = new VirtualTerminal(rows: 24);
@@ -1236,8 +1317,10 @@ MARKDOWN;
     {
         $agent = new Agent();
         $sessions = new InMemorySessionProvider();
-        $sessions->open('alpha')->addMessage(new UserMessage('Alpha subject'));
-        $beta = $sessions->open('beta');
+        $sessions->open($sessions->create()->key)->addMessage(
+            new UserMessage('Alpha subject'),
+        );
+        $beta = $sessions->open($sessions->create()->key);
         $beta->addMessage(new UserMessage('Beta subject'));
         $terminal = new VirtualTerminal(rows: 24);
         $narrowedDisplay = null;
@@ -1282,9 +1365,9 @@ MARKDOWN;
     {
         $agent = new Agent();
         $sessions = new InMemorySessionProvider();
-        $older = $sessions->open('older');
+        $older = $sessions->open($sessions->create()->key);
         $older->addMessage(new UserMessage('The older subject'));
-        $sessions->open('newer')->addMessage(
+        $sessions->open($sessions->create()->key)->addMessage(
             new UserMessage('The newer subject'),
         );
         $terminal = new VirtualTerminal(rows: 24);
@@ -1334,7 +1417,7 @@ MARKDOWN;
         $agent = new Agent();
         $agent->setAiProvider($provider);
         $sessions = new InMemorySessionProvider();
-        $sessions->open('earlier')->addMessage(
+        $sessions->open($sessions->create()->key)->addMessage(
             new UserMessage('The earlier subject'),
         );
         $terminal = new VirtualTerminal(rows: 24);

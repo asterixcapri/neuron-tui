@@ -51,9 +51,9 @@ through it, typing narrows it, Enter resumes the chosen Session, and Escape
 leaves the current one alone. Resuming paints that conversation and the Agent
 answers with its context. A Session nobody wrote in is not listed.
 
-Sessions come from a **Session provider**. Without configuration they are files
-under `.neuron/sessions`, relative to the working directory of the Host
-Application. Another directory, or another place entirely, is one argument:
+Sessions come from a **Session provider**. Without configuration they are kept
+in memory and last as long as the process, and Neuron CLI writes nothing
+anywhere. Keeping them on disk, or anywhere else, is one argument:
 
 ```php
 use NeuronCli\Session\FileSessionProvider;
@@ -72,14 +72,16 @@ reloading and deserializing remain Neuron AI's work. Neuron CLI never deletes
 a stored conversation.
 
 Starting a Session replaces the History configured on the Agent by the Host
-Application. An application that cares must pass a Session provider reaching
-the same place. See
+Application, because a provider builds every History it hands back. An
+application that keeps its conversations somewhere passes the Session provider
+reaching that place. See
 [ADR 0001](docs/adr/0001-sessions-replace-the-agent-chat-history.md).
 
 `NeuronCli\NeuronCli` is the public module, and the Session provider the one
 dependency an application may supply: `NeuronCli\Session\SessionProvider` to
 implement, `NeuronCli\Session\Session` to list a Session with, and
-`NeuronCli\Session\FileSessionProvider` to point at another directory. Every
+`NeuronCli\Session\InMemorySessionProvider` and
+`NeuronCli\Session\FileSessionProvider` as the two shipped providers. Every
 other class under the `NeuronCli` namespace is annotated `@internal`, carries
 no stability promise, and may be renamed, split, or removed in any release. Static analysis enforces this on the examples, which
 are the reference Host Application.
