@@ -6,16 +6,15 @@ parameters:
         - examples/vendor (?)
     # The examples are a separate Composer project with its own vendor
     # directory, which is not installed when this suite runs. This analysis
-    # exists for the public-module rule below and for nothing else, so the
-    # errors that follow from the missing dependencies are ignored.
+    # exists for the public-module services below and for nothing else, so
+    # the errors that follow from the missing dependencies are ignored.
+    # PublicModuleOnlyRule reads import statements rather than resolved
+    # classes, so it keeps reporting even when nothing resolves.
     reportUnmatchedIgnoredErrors: false
     ignoreErrors:
         - identifier: class.notFound
         - identifier: function.notFound
         - identifier: constant.notFound
-        - identifier: missingType.parameter
-        - identifier: missingType.return
-        - identifier: missingType.iterableValue
 
 services:
     -
