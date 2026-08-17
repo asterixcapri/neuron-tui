@@ -50,6 +50,12 @@ The state the Conversation TUI is in while a person is choosing a Session
 rather than writing to the Agent.
 _Avoid_: Menu, popup, dialog
 
+**Turn**:
+One stretch of the conversation, from the moment a person's message is taken
+for the Agent to the moment the Agent has finished answering it. A message
+written while a turn is under way waits behind it.
+_Avoid_: Round, exchange, request
+
 **Working indicator**:
 The animated line in the History that tells a person the Agent is still busy,
 counting the seconds the turn has taken so far.

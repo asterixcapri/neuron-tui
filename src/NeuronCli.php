@@ -6,19 +6,16 @@ namespace NeuronCli;
 
 use Amp\Future;
 use NeuronAI\Agent\Agent;
-use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
-use NeuronAI\Chat\Messages\Stream\Chunks\ToolCallChunk;
-use NeuronAI\Chat\Messages\Stream\Chunks\ToolResultChunk;
-use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
+use NeuronCli\Conversation\AgentTurn;
 use NeuronCli\Conversation\MessageForAgent;
 use NeuronCli\Conversation\SlashCommand;
 use NeuronCli\Conversation\Submission;
+use NeuronCli\Conversation\TurnQueue;
 use NeuronCli\Conversation\UnknownSlashCommand;
 use NeuronCli\Session\FileSessionStore;
 use NeuronCli\Session\SessionStore;
 use NeuronCli\Tui\ConversationView;
-use NeuronCli\Tui\DisplayableText;
 use NeuronCli\Tui\WorkingIndicator;
 use Symfony\Component\Tui\Event\InputEvent;
 use Symfony\Component\Tui\Event\SubmitEvent;
@@ -40,13 +37,12 @@ final class NeuronCli
 
     private readonly SessionStore $sessionStore;
 
+    private readonly TurnQueue $turns;
+
+    private readonly AgentTurn $agentTurn;
+
     /** @var Future<mixed>|null */
     private ?Future $response = null;
-
-    private ?string $pendingInput = null;
-
-    /** @var list<string> */
-    private array $queuedInputs = [];
 
     public function __construct(
         private readonly Agent $agent,
@@ -63,6 +59,8 @@ final class NeuronCli
             $subtitle,
         );
         $this->workingIndicator = $this->view->workingIndicator();
+        $this->turns = new TurnQueue();
+        $this->agentTurn = new AgentTurn($this->agent, $this->view);
         $this->view->showHistory(
             $this->agent->getChatHistory()->getMessages(),
         );
@@ -113,16 +111,15 @@ final class NeuronCli
 
     private function send(MessageForAgent $message): void
     {
-        if ($this->isWorking()) {
-            $this->queuedInputs[] = $message->contents;
-            $this->view->showQueuedMessages($this->queuedInputs);
+        $accepted = $this->turns->accept($message->contents);
+
+        if ($accepted === null) {
+            $this->showQueue();
 
             return;
         }
 
-        $this->view->acceptUserMessage($message->contents);
-        $this->startWorking();
-        $this->pendingInput = $message->contents;
+        $this->beginTurn($accepted);
     }
 
     /**
@@ -138,7 +135,7 @@ final class NeuronCli
             return;
         }
 
-        if ($this->isWorking()) {
+        if ($this->turns->isBusy()) {
             $this->view->showError(
                 $command->value
                     . ' is refused while the Agent is working. '
@@ -170,66 +167,13 @@ final class NeuronCli
         $this->view->emptyComposer();
     }
 
-    private function isWorking(): bool
-    {
-        return $this->response instanceof Future
-            || $this->pendingInput !== null;
-    }
-
-    private function respond(string $input): void
-    {
-        $tools = $this->view->beginAgentResponse();
-        $contents = '';
-
-        $events = $this->agent
-            ->stream(new UserMessage($input))
-            ->events();
-
-        foreach ($events as $event) {
-            if ($event instanceof ToolCallChunk) {
-                $tools->start($event->tool);
-                $this->view->paintPendingChanges();
-
-                continue;
-            }
-
-            if ($event instanceof ToolResultChunk) {
-                $this->workingIndicator->whilePaused(
-                    microtime(true),
-                    static function () use ($tools, $event): void {
-                        $tools->finish($event->tool);
-                    },
-                );
-                $this->view->paintPendingChanges();
-
-                continue;
-            }
-
-            if (!$event instanceof TextChunk) {
-                continue;
-            }
-
-            $this->workingIndicator->stop();
-            $contents .= $event->content;
-            $this->view->appendAgentText($event->content);
-            $this->view->paintPendingChanges();
-        }
-
-        $visibleContents = DisplayableText::safe($contents);
-
-        if (trim($visibleContents) === '' && !$tools->hasActivity()) {
-            $this->workingIndicator->stop();
-            $this->view->showEmptyResponse();
-        }
-    }
-
     private function tick(): bool
     {
-        if ($this->pendingInput !== null) {
-            $input = $this->pendingInput;
-            $this->pendingInput = null;
-            $this->response = async(function () use ($input): void {
-                $this->respond($input);
+        $message = $this->turns->beginWorking();
+
+        if ($message !== null) {
+            $this->response = async(function () use ($message): void {
+                $this->agentTurn->respond($message);
             });
 
             return true;
@@ -259,31 +203,42 @@ final class NeuronCli
         }
 
         $this->response = null;
-        $this->stopWorking();
+        $this->finishTurn();
 
-        if ($this->queuedInputs !== []) {
-            $input = array_shift($this->queuedInputs);
-            $this->view->showQueuedMessages($this->queuedInputs);
-            $this->view->acceptUserMessage($input);
-            $this->startWorking();
-            $this->pendingInput = $input;
+        $next = $this->turns->finishWorking();
 
-            return true;
+        if ($next === null) {
+            return false;
         }
 
-        return false;
+        $this->showQueue();
+        $this->beginTurn($next);
+
+        return true;
     }
 
-    private function startWorking(): void
+    /**
+     * Shows the message as the person's own and puts the TUI to work.
+     *
+     * The one transition from an accepted message to a turn in flight, taken
+     * both by a message straight from the composer and by one that waited.
+     */
+    private function beginTurn(string $message): void
     {
+        $this->view->acceptUserMessage($message);
         $this->view->working();
         $this->workingIndicator->start(microtime(true));
     }
 
-    private function stopWorking(): void
+    private function finishTurn(): void
     {
         $this->workingIndicator->stop();
         $this->view->ready();
+    }
+
+    private function showQueue(): void
+    {
+        $this->view->showQueuedMessages($this->turns->queued());
     }
 
     private function handleInput(InputEvent $event): void
