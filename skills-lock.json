@@ -77,7 +77,7 @@
       "source": "asterixcapri/skills",
       "sourceType": "github",
       "skillPath": "skills/implement-ticket-graph/SKILL.md",
-      "computedHash": "36ce8798e1ccf3da3ae27970a7b35042eb0764ed53862dfe92ce63be411db0f2"
+      "computedHash": "5469ef7065ab3763e0211f9b0c4f25e967df9bcdc5f0ec60f32e69b463833dea"
     },
     "improve-codebase-architecture": {
       "source": "mattpocock/skills",
@@ -155,7 +155,7 @@
       "source": "asterixcapri/skills",
       "sourceType": "github",
       "skillPath": "skills/to-docs/SKILL.md",
-      "computedHash": "11117376839db303b2537e52ac3891c83f53172e117152442815e3ddd79c299f"
+      "computedHash": "2d69dee70f2833ab40eb38ce35160142027c7ef4ce8d0963b5f94ca0209c83c8"
     },
     "to-questionnaire": {
       "source": "mattpocock/skills",
