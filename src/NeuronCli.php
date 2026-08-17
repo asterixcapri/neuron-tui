@@ -57,7 +57,7 @@ final class NeuronCli
             $title,
             $subtitle,
         );
-        $this->view->showExistingHistory(
+        $this->view->showHistory(
             $this->agent->getChatHistory()->getMessages(),
         );
         $this->view->onSubmit($this->submit(...));
