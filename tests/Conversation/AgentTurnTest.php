@@ -21,25 +21,26 @@ use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
 final class AgentTurnTest extends TestCase
 {
-    private ?ConversationView $view = null;
-
     public function testTheAnsweredTextIsPaintedIntoTheConversation(): void
     {
         $terminal = new VirtualTerminal(rows: 24);
-        $turn = $this->turn(
-            new class(new AssistantMessage('Forty-two.')) extends FakeAIProvider {
-                protected function streamChunks(Message $response): Generator
-                {
-                    yield new TextChunk('turn-stream', 'Forty');
-                    yield new TextChunk('turn-stream', '-two.');
+        $provider = new class(
+            new AssistantMessage('Forty-two.'),
+        ) extends FakeAIProvider {
+            protected function streamChunks(Message $response): Generator
+            {
+                yield new TextChunk('turn-stream', 'Forty');
+                yield new TextChunk('turn-stream', '-two.');
 
-                    return $response;
-                }
-            },
+                return $response;
+            }
+        };
+
+        $display = $this->respond(
+            $provider,
+            'What is the answer?',
             $terminal,
         );
-
-        $display = $this->respond($turn, 'What is the answer?', $terminal);
 
         self::assertStringContainsString('● Forty-two.', $display);
         self::assertStringNotContainsString('Empty response.', $display);
@@ -48,12 +49,12 @@ final class AgentTurnTest extends TestCase
     public function testAnAnswerWithNothingInItIsCalledEmpty(): void
     {
         $terminal = new VirtualTerminal(rows: 24);
-        $turn = $this->turn(
+
+        $display = $this->respond(
             new FakeAIProvider(new AssistantMessage()),
+            'Anything?',
             $terminal,
         );
-
-        $display = $this->respond($turn, 'Anything?', $terminal);
 
         self::assertStringContainsString('Empty response.', $display);
     }
@@ -61,20 +62,17 @@ final class AgentTurnTest extends TestCase
     public function testAnAnswerOfWhitespaceAloneIsStillEmpty(): void
     {
         $terminal = new VirtualTerminal(rows: 24);
-        $turn = $this->turn(
-            new class(new AssistantMessage()) extends FakeAIProvider {
-                protected function streamChunks(Message $response): Generator
-                {
-                    yield new TextChunk('blank-stream', '');
-                    yield new TextChunk('blank-stream', " \n\t ");
+        $provider = new class(new AssistantMessage()) extends FakeAIProvider {
+            protected function streamChunks(Message $response): Generator
+            {
+                yield new TextChunk('blank-stream', '');
+                yield new TextChunk('blank-stream', " \n\t ");
 
-                    return $response;
-                }
-            },
-            $terminal,
-        );
+                return $response;
+            }
+        };
 
-        $display = $this->respond($turn, 'Anything?', $terminal);
+        $display = $this->respond($provider, 'Anything?', $terminal);
 
         self::assertStringContainsString('Empty response.', $display);
     }
@@ -86,45 +84,38 @@ final class AgentTurnTest extends TestCase
             ->setCallId('lookup-call')
             ->setInputs(['q' => 'alpha'])
             ->setCallable(static fn (): string => 'alpha result');
-        $turn = $this->turn(
-            new FakeAIProvider(
-                new ToolCallMessage(tools: [$tool]),
-                new AssistantMessage(),
-            ),
-            $terminal,
+        $provider = new FakeAIProvider(
+            new ToolCallMessage(tools: [$tool]),
+            new AssistantMessage(),
         );
 
-        $display = $this->respond($turn, 'Run the tool.', $terminal);
+        $display = $this->respond($provider, 'Run the tool.', $terminal);
 
         self::assertStringContainsString('● lookup {"q":"alpha"}', $display);
         self::assertStringContainsString('⎿ alpha result', $display);
         self::assertStringNotContainsString('Empty response.', $display);
     }
 
-    private function turn(
-        FakeAIProvider $provider,
-        VirtualTerminal $terminal,
-    ): AgentTurn {
-        $agent = new Agent();
-        $agent->setAiProvider($provider);
-        $view = new ConversationView($terminal, 'Neuron AI', 'Conversation');
-        $this->view = $view;
-
-        return new AgentTurn($agent, $view, $view->workingIndicator());
-    }
-
+    /**
+     * Takes one turn against the given provider and reads back what the
+     * terminal was told to show.
+     */
     private function respond(
-        AgentTurn $turn,
+        FakeAIProvider $provider,
         string $message,
         VirtualTerminal $terminal,
     ): string {
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        $view = new ConversationView($terminal, 'Neuron AI', 'Conversation');
+        $turn = new AgentTurn($agent, $view);
+
         EventLoop::queue(
             static fn () => $turn->respond($message),
         );
         EventLoop::run();
 
-        self::assertInstanceOf(ConversationView::class, $this->view);
-        $this->view->paintPendingChanges();
+        $view->paintPendingChanges();
 
         return AnsiUtils::stripAnsiCodes($terminal->getOutput());
     }

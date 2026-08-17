@@ -30,11 +30,14 @@ use NeuronCli\Tui\WorkingIndicator;
  */
 final class AgentTurn
 {
+    private readonly WorkingIndicator $workingIndicator;
+
     public function __construct(
         private readonly Agent $agent,
         private readonly ConversationView $view,
-        private readonly WorkingIndicator $workingIndicator,
-    ) {}
+    ) {
+        $this->workingIndicator = $this->view->workingIndicator();
+    }
 
     /**
      * Sends the message and shows the answer as it comes back.
