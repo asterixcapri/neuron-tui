@@ -31,7 +31,7 @@ final class NeuronCli
 
     private readonly TurnQueue $turns;
 
-    private readonly AgentTurn $turn;
+    private readonly AgentTurn $agentTurn;
 
     /** @var Future<mixed>|null */
     private ?Future $response = null;
@@ -50,11 +50,7 @@ final class NeuronCli
         );
         $this->workingIndicator = $this->view->workingIndicator();
         $this->turns = new TurnQueue();
-        $this->turn = new AgentTurn(
-            $this->agent,
-            $this->view,
-            $this->workingIndicator,
-        );
+        $this->agentTurn = new AgentTurn($this->agent, $this->view);
         $this->view->showHistory(
             $this->agent->getChatHistory()->getMessages(),
         );
@@ -104,12 +100,12 @@ final class NeuronCli
         $accepted = $this->turns->accept($input);
 
         if ($accepted === null) {
-            $this->view->showQueuedMessages($this->turns->queued());
+            $this->showQueue();
 
             return;
         }
 
-        $this->startTurn($accepted);
+        $this->beginTurn($accepted);
     }
 
     private function tick(): bool
@@ -118,7 +114,7 @@ final class NeuronCli
 
         if ($message !== null) {
             $this->response = async(function () use ($message): void {
-                $this->turn->respond($message);
+                $this->agentTurn->respond($message);
             });
 
             return true;
@@ -148,7 +144,7 @@ final class NeuronCli
         }
 
         $this->response = null;
-        $this->stopWorking();
+        $this->finishTurn();
 
         $next = $this->turns->finishWorking();
 
@@ -156,8 +152,8 @@ final class NeuronCli
             return false;
         }
 
-        $this->view->showQueuedMessages($this->turns->queued());
-        $this->startTurn($next);
+        $this->showQueue();
+        $this->beginTurn($next);
 
         return true;
     }
@@ -168,17 +164,22 @@ final class NeuronCli
      * The one transition from an accepted message to a turn in flight, taken
      * both by a message straight from the composer and by one that waited.
      */
-    private function startTurn(string $message): void
+    private function beginTurn(string $message): void
     {
         $this->view->acceptUserMessage($message);
         $this->view->working();
         $this->workingIndicator->start(microtime(true));
     }
 
-    private function stopWorking(): void
+    private function finishTurn(): void
     {
         $this->workingIndicator->stop();
         $this->view->ready();
+    }
+
+    private function showQueue(): void
+    {
+        $this->view->showQueuedMessages($this->turns->queued());
     }
 
     private function handleInput(InputEvent $event): void
