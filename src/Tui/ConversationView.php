@@ -119,7 +119,7 @@ final class ConversationView
         $this->activeAgentMessage = null;
         $this->loading = null;
 
-        foreach (HistoryProjection::of($messages) as $entry) {
+        foreach (HistoryProjection::entriesFor($messages) as $entry) {
             if ($entry->kind === EntryKind::Tool) {
                 $this->history->addNote($entry->text, 'tool');
 

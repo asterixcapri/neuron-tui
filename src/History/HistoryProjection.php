@@ -23,7 +23,7 @@ use NeuronCli\Tui\DisplayableText;
  * Every rule about what is shown of a conversation is here: which messages
  * never reach a person, what a payload is replaced with, and where a tool's
  * result belongs relative to the call that asked for it. Pairing a call with
- * its result is this module's business, not something callers arrange between
+ * its result is the History's business, not something callers arrange between
  * themselves — a result may arrive out of order, or never arrive at all.
  *
  * The projection reads the messages and keeps nothing, so it can be asked for
@@ -37,6 +37,14 @@ final class HistoryProjection
     private const int FILENAME_WIDTH = 80;
 
     /**
+     * Stored messages carry no timings, so a call and the result already
+     * filed beside it are read in the same instant.
+     */
+    private const float NOTHING_WAS_WAITED_FOR = 0.0;
+
+    private readonly ToolCorrelation $correlation;
+
+    /**
      * Entries in the order a person reads them, each one still reachable by
      * its position so that a result can complete the call it belongs to.
      *
@@ -44,14 +52,9 @@ final class HistoryProjection
      */
     private array $entries = [];
 
-    /** @var array<string, int> */
-    private array $toolEntryByCallId = [];
-
-    /** @var array<string, list<int>> */
-    private array $toolEntriesByName = [];
-
     private function __construct()
     {
+        $this->correlation = new ToolCorrelation();
     }
 
     /**
@@ -59,7 +62,7 @@ final class HistoryProjection
      *
      * @return list<Entry>
      */
-    public static function of(array $messages): array
+    public static function entriesFor(array $messages): array
     {
         $projection = new self();
 
@@ -124,48 +127,23 @@ final class HistoryProjection
             EntryKind::Tool,
             ToolActivityText::pending($tool),
         );
-        $index = count($this->entries) - 1;
+        $position = count($this->entries) - 1;
+        $this->correlation->called($tool, $position);
 
-        $callId = $tool->getCallId();
-
-        if ($callId === null) {
-            $this->toolEntriesByName[$tool->getName()][] = $index;
-        } else {
-            $this->toolEntryByCallId[$callId] = $index;
-        }
-
-        return $index;
+        return $position;
     }
 
     private function completeTool(ToolInterface $tool): void
     {
         // A result that finds no call of its own is still worth showing, so
         // it opens the call it should have answered and closes it at once.
-        $index = $this->calledAt($tool) ?? $this->callTool($tool);
+        $position = $this->correlation->calledAt($tool)
+            ?? $this->callTool($tool);
 
-        // Stored messages carry no timings: a call and the result already
-        // filed beside it are read in the same instant.
-        $this->entries[$index] = new Entry(
+        $this->entries[$position] = new Entry(
             EntryKind::Tool,
-            ToolActivityText::completed($tool, 0.0),
+            ToolActivityText::completed($tool, self::NOTHING_WAS_WAITED_FOR),
         );
-    }
-
-    private function calledAt(ToolInterface $tool): ?int
-    {
-        $callId = $tool->getCallId();
-
-        if ($callId !== null) {
-            return $this->toolEntryByCallId[$callId] ?? null;
-        }
-
-        $name = $tool->getName();
-
-        if (($this->toolEntriesByName[$name] ?? []) === []) {
-            return null;
-        }
-
-        return array_shift($this->toolEntriesByName[$name]);
     }
 
     private static function contents(Message $message): string
