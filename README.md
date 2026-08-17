@@ -83,6 +83,16 @@ composer so they can be corrected and are never sent to the Agent.
 
 ## Development
 
+A fresh checkout needs the Composer dependencies and the agent skills, which
+are restored from `skills-lock.json`:
+
+```bash
+composer install
+npx skills experimental_install
+```
+
+Then:
+
 ```bash
 composer test
 composer stan
