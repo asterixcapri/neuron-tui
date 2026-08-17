@@ -49,3 +49,8 @@ _Avoid_: Repository, storage, archive
 The state the Conversation TUI is in while a person is choosing a Session
 rather than writing to the Agent.
 _Avoid_: Menu, popup, dialog
+
+**Working indicator**:
+The animated line in the History that tells a person the Agent is still busy,
+counting the seconds the turn has taken so far.
+_Avoid_: Spinner, loader, progress bar

@@ -13,6 +13,7 @@ use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
 use NeuronCli\Tui\ConversationView;
 use NeuronCli\Tui\DisplayableText;
+use NeuronCli\Tui\WorkingIndicator;
 use Symfony\Component\Tui\Event\InputEvent;
 use Symfony\Component\Tui\Event\SubmitEvent;
 use Symfony\Component\Tui\Input\Key;
@@ -25,11 +26,11 @@ use function Amp\async;
 
 final class NeuronCli
 {
-    private const array WORKING_FRAMES = ['✶', '✸', '✹', '✺', '✹', '✷'];
-
     private readonly TerminalInterface $terminal;
 
     private readonly ConversationView $view;
+
+    private readonly WorkingIndicator $workingIndicator;
 
     /** @var Future<mixed>|null */
     private ?Future $response = null;
@@ -38,12 +39,6 @@ final class NeuronCli
 
     /** @var list<string> */
     private array $queuedInputs = [];
-
-    private int $workingFrame = 0;
-
-    private float $workingStartedAt = 0.0;
-
-    private float $lastAnimationAt = 0.0;
 
     public function __construct(
         private readonly Agent $agent,
@@ -57,6 +52,7 @@ final class NeuronCli
             $title,
             $subtitle,
         );
+        $this->workingIndicator = $this->view->workingIndicator();
         $this->view->showExistingHistory(
             $this->agent->getChatHistory()->getMessages(),
         );
@@ -136,9 +132,12 @@ final class NeuronCli
             }
 
             if ($event instanceof ToolResultChunk) {
-                $this->view->stopWorking();
-                $tools->finish($event->tool);
-                $this->resumeWorking();
+                $this->workingIndicator->whilePaused(
+                    microtime(true),
+                    static function () use ($tools, $event): void {
+                        $tools->finish($event->tool);
+                    },
+                );
                 $this->view->paintPendingChanges();
 
                 continue;
@@ -148,7 +147,7 @@ final class NeuronCli
                 continue;
             }
 
-            $this->view->stopWorking();
+            $this->workingIndicator->stop();
             $contents .= $event->content;
             $this->view->appendAgentText($event->content);
             $this->view->paintPendingChanges();
@@ -157,7 +156,7 @@ final class NeuronCli
         $visibleContents = DisplayableText::safe($contents);
 
         if (trim($visibleContents) === '' && !$tools->hasActivity()) {
-            $this->view->stopWorking();
+            $this->workingIndicator->stop();
             $this->view->showEmptyResponse();
         }
     }
@@ -179,7 +178,7 @@ final class NeuronCli
         }
 
         if (!$this->response->isComplete()) {
-            $this->animateWorking();
+            $this->workingIndicator->advance(microtime(true));
 
             return true;
         }
@@ -198,7 +197,7 @@ final class NeuronCli
         }
 
         $this->response = null;
-        $this->view->ready();
+        $this->stopWorking();
 
         if ($this->queuedInputs !== []) {
             $input = array_shift($this->queuedInputs);
@@ -215,43 +214,14 @@ final class NeuronCli
 
     private function startWorking(): void
     {
-        $this->workingFrame = 0;
-        $this->workingStartedAt = microtime(true);
-        $this->lastAnimationAt = $this->workingStartedAt;
-        $this->view->startWorking(
-            self::WORKING_FRAMES[$this->workingFrame],
-            0,
-        );
+        $this->view->working();
+        $this->workingIndicator->start(microtime(true));
     }
 
-    private function resumeWorking(): void
+    private function stopWorking(): void
     {
-        $this->view->startWorking(
-            self::WORKING_FRAMES[$this->workingFrame],
-            $this->elapsedWorkingSeconds(),
-        );
-    }
-
-    private function animateWorking(): void
-    {
-        $now = microtime(true);
-
-        if ($now - $this->lastAnimationAt < 0.08) {
-            return;
-        }
-
-        $this->workingFrame = ($this->workingFrame + 1)
-            % count(self::WORKING_FRAMES);
-        $this->lastAnimationAt = $now;
-        $this->view->updateWorkingFrame(
-            self::WORKING_FRAMES[$this->workingFrame],
-            $this->elapsedWorkingSeconds(),
-        );
-    }
-
-    private function elapsedWorkingSeconds(): int
-    {
-        return (int) floor(microtime(true) - $this->workingStartedAt);
+        $this->workingIndicator->stop();
+        $this->view->ready();
     }
 
     private function handleInput(InputEvent $event): void
