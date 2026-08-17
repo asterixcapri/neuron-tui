@@ -39,9 +39,9 @@ final class ConversationView
 
     private readonly TextWidget $status;
 
-    private ?HistoryEntry $activeAgentMessage = null;
+    private readonly WorkingIndicator $workingIndicator;
 
-    private ?HistoryEntry $loading = null;
+    private ?HistoryEntry $activeAgentMessage = null;
 
     public function __construct(
         private readonly TerminalInterface $terminal,
@@ -53,6 +53,7 @@ final class ConversationView
             $this->terminal,
         );
         $this->history = new HistoryPane($this->tui, $this->terminal);
+        $this->workingIndicator = new WorkingIndicator($this->history);
         $this->queuedMessages = new ContainerWidget();
         $this->queuedMessages->addStyleClass('queued-messages');
         $this->editor = new ComposerEditor();
@@ -115,9 +116,11 @@ final class ConversationView
      */
     public function showHistory(array $messages): void
     {
+        // The indicator lets go of its own line before the pane empties, so it
+        // is not left holding a handle to an entry that no longer exists.
+        $this->workingIndicator->stop();
         $this->history->clear();
         $this->activeAgentMessage = null;
-        $this->loading = null;
 
         foreach (HistoryProjection::entriesFor($messages) as $entry) {
             if ($entry->kind === EntryKind::Tool) {
@@ -183,27 +186,23 @@ final class ConversationView
         $this->showError('Unknown Slash command: ' . $command);
     }
 
-    public function startWorking(string $frame, int $elapsedSeconds): void
+    /**
+     * The animation that says the Agent is busy.
+     *
+     * It owns its own line in the History, so the view has nothing to say
+     * about it beyond handing it over.
+     */
+    public function workingIndicator(): WorkingIndicator
     {
-        $this->status->setText(self::WORKING_STATUS);
-        $this->loading = $this->history->addNote(
-            self::workingText($frame, $elapsedSeconds),
-            'loading',
-        );
-        $this->history->followLatest();
+        return $this->workingIndicator;
     }
 
-    public function updateWorkingFrame(
-        string $frame,
-        int $elapsedSeconds,
-    ): void {
-        if (!$this->loading instanceof HistoryEntry) {
-            return;
-        }
-
-        $this->loading->setText(
-            self::workingText($frame, $elapsedSeconds),
-        );
+    /**
+     * Tells the composer a turn is in flight. `ready()` is the counterpart.
+     */
+    public function working(): void
+    {
+        $this->status->setText(self::WORKING_STATUS);
     }
 
     /**
@@ -236,19 +235,8 @@ final class ConversationView
         $this->tui->requestRender();
     }
 
-    public function stopWorking(): void
-    {
-        if (!$this->loading instanceof HistoryEntry) {
-            return;
-        }
-
-        $this->history->remove($this->loading);
-        $this->loading = null;
-    }
-
     public function ready(): void
     {
-        $this->stopWorking();
         $this->status->setText(self::READY_STATUS);
         $this->tui->setFocus($this->editor);
         $this->history->followLatest();
@@ -300,13 +288,4 @@ final class ConversationView
         return new ToolActivity($this->history);
     }
 
-    private static function workingText(
-        string $frame,
-        int $elapsedSeconds,
-    ): string {
-        return $frame
-            . ' Working ('
-            . $elapsedSeconds
-            . 's)';
-    }
 }
