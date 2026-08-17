@@ -139,9 +139,20 @@ final class ConversationView
         }
     }
 
-    public function acceptUserMessage(string $contents): void
+    /**
+     * Throws away whatever is in the composer.
+     *
+     * A draft belongs to the Session it was written in, so changing Session
+     * takes it away rather than carrying it over.
+     */
+    public function emptyComposer(): void
     {
         $this->editor->setText('');
+    }
+
+    public function acceptUserMessage(string $contents): void
+    {
+        $this->emptyComposer();
         $this->history->addMessage('❯', $contents, 'user');
     }
 
@@ -210,7 +221,7 @@ final class ConversationView
      */
     public function showQueuedMessages(array $messages): void
     {
-        $this->editor->setText('');
+        $this->emptyComposer();
         $this->queuedMessages->clear();
 
         if ($messages !== []) {
@@ -280,7 +291,7 @@ final class ConversationView
 
     private function clearDraft(CancelEvent $event): void
     {
-        $this->editor->setText('');
+        $this->emptyComposer();
     }
 
     private function newToolActivity(): ToolActivity

@@ -38,10 +38,42 @@ be supplied when the terminal should identify a particular Agent or product:
 ))->run();
 ```
 
-`NeuronCli\NeuronCli` is the only public module. Every other class under the
-`NeuronCli` namespace is annotated `@internal`, carries no stability promise,
-and may be renamed, split, or removed in any release. Static analysis enforces
-this on the examples, which are the reference Host Application.
+## Sessions
+
+A Session is one conversation with the Agent. `/clear` starts a fresh one
+without leaving the terminal: the screen and the composer empty, and the
+conversation that was on screen stays where it is stored.
+
+Sessions live in a **Session store**. Without configuration they are files
+under `.neuron/sessions`, relative to the working directory of the Host
+Application. Another directory, or another place entirely, is one argument:
+
+```php
+use NeuronCli\Session\FileSessionStore;
+
+(new NeuronCli(
+    agent: $agent,
+    sessionStore: new FileSessionStore('/var/lib/my-app/sessions'),
+))->run();
+```
+
+An application that keeps conversations in its own storage implements
+`NeuronCli\Session\SessionStore` instead. The store decides how a Session is
+addressed and returns the Neuron AI chat history that Neuron CLI installs on
+the Agent; saving, reloading and deserializing remain Neuron AI's work. Neuron
+CLI never deletes a stored conversation.
+
+Starting a Session replaces the History configured on the Agent by the Host
+Application. An application that cares must pass a Session store reaching the
+same place. See
+[ADR 0001](docs/adr/0001-sessions-replace-the-agent-chat-history.md).
+
+`NeuronCli\NeuronCli` is the public module, and `NeuronCli\Session\SessionStore`
+with `NeuronCli\Session\FileSessionStore` the one dependency an application may
+supply. Every other class under the `NeuronCli` namespace is annotated
+`@internal`, carries no stability promise, and may be renamed, split, or
+removed in any release. Static analysis enforces this on the examples, which
+are the reference Host Application.
 
 The Host Application remains responsible for constructing the Agent,
 providers, credentials, tools, History persistence, and the script or
@@ -81,10 +113,12 @@ Ctrl+C to close it.
 - Shift+Enter inserts a line break.
 - Escape clears the unsent draft.
 - PageUp and PageDown browse the History.
+- `/clear` starts a new Session.
 - `/exit` or Ctrl+C closes the Conversation TUI.
 
-Only `/exit` is supported in this version. Unknown Slash commands stay in the
-composer so they can be corrected and are never sent to the Agent.
+`/clear` is refused while the Agent is working, so an arriving answer cannot
+land in the wrong Session; `/exit` works at any time. Unknown Slash commands
+stay in the composer so they can be corrected and are never sent to the Agent.
 
 ## Development
 
