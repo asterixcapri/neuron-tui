@@ -5,116 +5,64 @@ declare(strict_types=1);
 namespace NeuronCli\Tui;
 
 use NeuronAI\Tools\ToolInterface;
+use NeuronCli\History\ToolActivityText;
+use NeuronCli\History\ToolCorrelation;
 
 /**
- * Correlates and safely renders one group of tool calls and results.
+ * Paints one group of tool calls and results as they happen.
+ *
+ * Neither of the two rules a person can see is decided here: which call a
+ * result answers, and what a person is told about it, both come from the
+ * History, so live activity and activity read back out of a stored Session
+ * read the same. What is left is the painting.
  *
  * @internal
  */
 final class ToolActivity
 {
-    private const int DETAIL_WIDTH = 120;
+    private readonly ToolCorrelation $correlation;
 
-    /** @var array<string, HistoryEntry> */
-    private array $activitiesByCallId = [];
-
-    /** @var array<string, list<HistoryEntry>> */
-    private array $fallbackActivities = [];
+    /** @var list<HistoryEntry> */
+    private array $activities = [];
 
     /** @var array<int, float> */
-    private array $activityStartedAt = [];
-
-    private int $activityCount = 0;
+    private array $calledAt = [];
 
     public function __construct(private readonly HistoryPane $pane)
     {
+        $this->correlation = new ToolCorrelation();
     }
 
-    public function start(ToolInterface $tool): void
+    /**
+     * Shows a call, and reports where it was shown.
+     */
+    public function start(ToolInterface $tool): int
     {
-        $activity = $this->pane->addNote(
-            self::callPreview($tool) . "\n  ⎿ Running…",
+        $this->activities[] = $this->pane->addNote(
+            ToolActivityText::pending($tool),
             'tool',
         );
-        $this->activityStartedAt[spl_object_id($activity)] = microtime(true);
-        $this->activityCount++;
+        $position = count($this->activities) - 1;
+        $this->calledAt[$position] = microtime(true);
+        $this->correlation->called($tool, $position);
 
-        $callId = $tool->getCallId();
-
-        if ($callId === null) {
-            $this->fallbackActivities[$tool->getName()][] = $activity;
-        } else {
-            $this->activitiesByCallId[$callId] = $activity;
-        }
+        return $position;
     }
 
     public function finish(ToolInterface $tool): void
     {
-        $activity = $this->matchingActivity($tool);
+        // A result nothing asked for is still worth showing, so it opens the
+        // call it should have answered and closes it at once.
+        $position = $this->correlation->calledAt($tool) ?? $this->start($tool);
 
-        if (!$activity instanceof HistoryEntry) {
-            $this->start($tool);
-            $activity = $this->matchingActivity($tool);
-        }
-
-        if (!$activity instanceof HistoryEntry) {
-            return;
-        }
-
-        $id = spl_object_id($activity);
-        $startedAt = $this->activityStartedAt[$id] ?? microtime(true);
-        unset($this->activityStartedAt[$id]);
-        $elapsed = microtime(true) - $startedAt;
-        $duration = $elapsed < 1
-            ? '<1s'
-            : round($elapsed) . 's';
-        $activity->setText(
-            self::callPreview($tool)
-            . "\n  ⎿ "
-            . DisplayableText::preview(
-                $tool->getResult(),
-                self::DETAIL_WIDTH,
-            )
-            . "\n  Done in "
-            . $duration,
-        );
+        $this->activities[$position]->setText(ToolActivityText::completed(
+            $tool,
+            microtime(true) - ($this->calledAt[$position] ?? microtime(true)),
+        ));
     }
 
     public function hasActivity(): bool
     {
-        return $this->activityCount > 0;
-    }
-
-    private function matchingActivity(ToolInterface $tool): ?HistoryEntry
-    {
-        $callId = $tool->getCallId();
-
-        if ($callId !== null) {
-            return $this->activitiesByCallId[$callId] ?? null;
-        }
-
-        $name = $tool->getName();
-
-        if (($this->fallbackActivities[$name] ?? []) === []) {
-            return null;
-        }
-
-        return array_shift($this->fallbackActivities[$name]);
-    }
-
-    private static function callPreview(ToolInterface $tool): string
-    {
-        $inputs = json_encode(
-            $tool->getInputs(),
-            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
-        );
-
-        return '● '
-            . DisplayableText::preview($tool->getName(), self::DETAIL_WIDTH)
-            . ' '
-            . DisplayableText::preview(
-                $inputs === false ? '{}' : $inputs,
-                self::DETAIL_WIDTH,
-            );
+        return $this->activities !== [];
     }
 }
