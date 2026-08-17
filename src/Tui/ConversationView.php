@@ -152,7 +152,7 @@ final class ConversationView
 
     public function acceptUserMessage(string $contents): void
     {
-        $this->editor->setText('');
+        $this->emptyComposer();
         $this->history->addMessage('❯', $contents, 'user');
     }
 
@@ -221,7 +221,7 @@ final class ConversationView
      */
     public function showQueuedMessages(array $messages): void
     {
-        $this->editor->setText('');
+        $this->emptyComposer();
         $this->queuedMessages->clear();
 
         if ($messages !== []) {
@@ -291,7 +291,7 @@ final class ConversationView
 
     private function clearDraft(CancelEvent $event): void
     {
-        $this->editor->setText('');
+        $this->emptyComposer();
     }
 
     private function newToolActivity(): ToolActivity
