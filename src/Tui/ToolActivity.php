@@ -4,10 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronCli\Tui;
 
-use Closure;
 use NeuronAI\Tools\ToolInterface;
-use Symfony\Component\Tui\Render\RenderContext;
-use Symfony\Component\Tui\Widget\TextWidget;
 use Symfony\Component\Tui\Widget\Util\StringUtils;
 
 /**
@@ -19,42 +16,28 @@ final class ToolActivity
 {
     private const int DETAIL_WIDTH = 120;
 
-    /** @var array<string, TextWidget> */
+    /** @var array<string, HistoryEntry> */
     private array $activitiesByCallId = [];
 
-    /** @var array<string, list<TextWidget>> */
+    /** @var array<string, list<HistoryEntry>> */
     private array $fallbackActivities = [];
-
-    /** @var array<int, int> */
-    private array $activityHeights = [];
 
     /** @var array<int, float> */
     private array $activityStartedAt = [];
 
     private int $activityCount = 0;
 
-    /**
-     * @param Closure(TextWidget, int): void $addToHistory
-     * @param Closure(int): void $historyHeightChanged
-     */
-    public function __construct(
-        private readonly int $contentColumns,
-        private readonly Closure $addToHistory,
-        private readonly Closure $historyHeightChanged,
-    ) {
+    public function __construct(private readonly HistoryPane $pane)
+    {
     }
 
     public function start(ToolInterface $tool): void
     {
-        $activity = new TextWidget(
+        $activity = $this->pane->addNote(
             self::callPreview($tool) . "\n  ⎿ Running…",
+            'tool',
         );
-        $activity->addStyleClass('tool');
-        $height = $this->height($activity);
-        $id = spl_object_id($activity);
-        $this->activityHeights[$id] = $height;
-        $this->activityStartedAt[$id] = microtime(true);
-        ($this->addToHistory)($activity, $height);
+        $this->activityStartedAt[spl_object_id($activity)] = microtime(true);
         $this->activityCount++;
 
         $callId = $tool->getCallId();
@@ -70,18 +53,19 @@ final class ToolActivity
     {
         $activity = $this->matchingActivity($tool);
 
-        if (!$activity instanceof TextWidget) {
+        if (!$activity instanceof HistoryEntry) {
             $this->start($tool);
             $activity = $this->matchingActivity($tool);
         }
 
-        if (!$activity instanceof TextWidget) {
+        if (!$activity instanceof HistoryEntry) {
             return;
         }
 
         $id = spl_object_id($activity);
-        $previousHeight = $this->activityHeights[$id] ?? 0;
-        $elapsed = microtime(true) - $this->activityStartedAt[$id];
+        $startedAt = $this->activityStartedAt[$id] ?? microtime(true);
+        unset($this->activityStartedAt[$id]);
+        $elapsed = microtime(true) - $startedAt;
         $duration = $elapsed < 1
             ? '<1s'
             : round($elapsed) . 's';
@@ -92,9 +76,6 @@ final class ToolActivity
             . "\n  Done in "
             . $duration,
         );
-        $height = $this->height($activity);
-        $this->activityHeights[$id] = $height;
-        ($this->historyHeightChanged)($height - $previousHeight);
     }
 
     public function hasActivity(): bool
@@ -102,7 +83,7 @@ final class ToolActivity
         return $this->activityCount > 0;
     }
 
-    private function matchingActivity(ToolInterface $tool): ?TextWidget
+    private function matchingActivity(ToolInterface $tool): ?HistoryEntry
     {
         $callId = $tool->getCallId();
 
@@ -117,14 +98,6 @@ final class ToolActivity
         }
 
         return array_shift($this->fallbackActivities[$name]);
-    }
-
-    private function height(TextWidget $activity): int
-    {
-        return count($activity->render(new RenderContext(
-            max(1, $this->contentColumns),
-            PHP_INT_MAX,
-        )));
     }
 
     private static function callPreview(ToolInterface $tool): string
