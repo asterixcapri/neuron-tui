@@ -1099,6 +1099,56 @@ MARKDOWN;
         );
     }
 
+    /**
+     * A null byte is the one character that could confuse a picker packing a
+     * title and a key into a single value, so a title carrying one is what
+     * pins the picker to carrying Sessions instead: the title is displayed
+     * and nothing else, and the Session chosen is the Session opened.
+     */
+    public function testASessionTitledWithANullByteIsListedAndResumed(): void
+    {
+        $agent = new Agent();
+        $sessions = new InMemorySessionProvider();
+        $earlier = $sessions->open('earlier');
+        $earlier->addMessage(new UserMessage("The earlier\x00 subject"));
+        $terminal = new VirtualTerminal(rows: 24);
+        $pickerDisplay = null;
+        EventLoop::delay(
+            0.04,
+            static fn () => $terminal->simulateInput("/sessions\r"),
+        );
+        EventLoop::delay(
+            0.1,
+            static function () use (&$pickerDisplay, $terminal): void {
+                $pickerDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->clearOutput();
+                $terminal->simulateInput("\r");
+            },
+        );
+        EventLoop::delay(
+            0.2,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            sessionProvider: $sessions,
+        ))->run();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+
+        self::assertIsString($pickerDisplay);
+        self::assertStringContainsString(
+            'The earlier subject',
+            $pickerDisplay,
+        );
+        self::assertStringContainsString('❯ The earlier subject', $display);
+        self::assertSame($earlier, $agent->getChatHistory());
+    }
+
     public function testEscapeLeavesTheSessionPickerWithTheSameSession(): void
     {
         $agent = new Agent();
