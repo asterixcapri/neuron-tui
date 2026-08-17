@@ -1190,7 +1190,7 @@ MARKDOWN;
     {
         $agent = new Agent();
         $sessions = new InMemorySessionProvider();
-        $earlier = $sessions->open('earlier');
+        $earlier = $sessions->open($sessions->create()->key);
         $earlier->addMessage(new UserMessage("The earlier\x00 subject"));
         $terminal = new VirtualTerminal(rows: 24);
         $pickerDisplay = null;
