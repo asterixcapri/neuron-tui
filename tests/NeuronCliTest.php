@@ -1181,6 +1181,59 @@ MARKDOWN;
     }
 
     /**
+     * Leaving the picker takes the list off screen, and a list off screen is
+     * a list the TUI has detached — which is where the answers to Enter and
+     * Escape were being lost. So a second opening has to answer both again,
+     * or a person is left in a list that resumes nothing and will not close.
+     */
+    public function testTheSessionPickerStillResumesWhenOpenedASecondTime(): void
+    {
+        $agent = new Agent();
+        $agent->setAiProvider(new FakeAIProvider(
+            new AssistantMessage('A later answer.'),
+        ));
+        $sessions = new InMemorySessionProvider();
+        $earlier = $sessions->open($sessions->create()->key);
+        $earlier->addMessage(new UserMessage('The earlier subject'));
+        $terminal = new VirtualTerminal(rows: 30);
+        EventLoop::delay(
+            0.04,
+            static fn () => $terminal->simulateInput("/sessions\r"),
+        );
+        EventLoop::delay(
+            0.1,
+            static fn () => $terminal->simulateInput("\x1b"),
+        );
+        EventLoop::delay(
+            0.16,
+            static fn () => $terminal->simulateInput("/sessions\r"),
+        );
+        EventLoop::delay(
+            0.22,
+            static function () use ($terminal): void {
+                $terminal->clearOutput();
+                $terminal->simulateInput("\r");
+            },
+        );
+        EventLoop::delay(
+            0.4,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            sessionProvider: $sessions,
+        ))->run();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+
+        self::assertStringNotContainsString('Enter resumes', $display);
+        self::assertStringContainsString('❯ The earlier subject', $display);
+        self::assertSame($earlier, $agent->getChatHistory());
+    }
+
+    /**
      * A null byte is the one character that could confuse a picker packing a
      * title and a key into a single value, so a title carrying one is what
      * pins the picker to carrying Sessions instead: the title is displayed
