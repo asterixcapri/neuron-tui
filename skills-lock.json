@@ -77,7 +77,7 @@
       "source": "asterixcapri/skills",
       "sourceType": "github",
       "skillPath": "skills/implement-ticket-graph/SKILL.md",
-      "computedHash": "dcf36f38ed3e4287425f0d23a6a00ec047111661e9b59792b00d17b4ffa42199"
+      "computedHash": "36ce8798e1ccf3da3ae27970a7b35042eb0764ed53862dfe92ce63be411db0f2"
     },
     "improve-codebase-architecture": {
       "source": "mattpocock/skills",
