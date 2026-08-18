@@ -15,6 +15,8 @@ use Symfony\Component\Tui\Event\CancelEvent;
 use Symfony\Component\Tui\Event\ChangeEvent;
 use Symfony\Component\Tui\Event\InputEvent;
 use Symfony\Component\Tui\Event\SubmitEvent;
+use Symfony\Component\Tui\Input\Key;
+use Symfony\Component\Tui\Input\Keybindings;
 use Symfony\Component\Tui\Terminal\TerminalInterface;
 use Symfony\Component\Tui\Tui;
 use Symfony\Component\Tui\Widget\ContainerWidget;
@@ -36,6 +38,16 @@ final class ConversationView
     private const string CHOOSING_STATUS =
         'choosing · the composer takes no text until you choose';
 
+    private const string SUGGESTING_STATUS =
+        'suggesting · ↑↓ moves · Tab completes · Enter sends';
+
+    /**
+     * Where the keys the suggestions answer are listened for: before the
+     * composer, which has the focus throughout, and after whatever the Host
+     * Application asked to hear first.
+     */
+    private const int SUGGESTION_KEYS_PRIORITY = 50;
+
     private readonly Tui $tui;
 
     private readonly HistoryPane $history;
@@ -52,7 +64,19 @@ final class ConversationView
 
     private readonly CommandSuggestions $suggestions;
 
+    /**
+     * The keys the suggestions answer while they are on screen. Enter is
+     * not among them and never will be: it sends what is written.
+     */
+    private readonly Keybindings $keys;
+
     private ?HistoryEntry $activeAgentMessage = null;
+
+    /**
+     * Whether a turn is in flight, which is what the status line goes back
+     * to saying once the suggestions are no longer on screen.
+     */
+    private bool $working = false;
 
     /**
      * The choice a command is waiting on, while one is open.
@@ -98,6 +122,16 @@ final class ConversationView
             $this->abandon(...),
         );
         $this->suggestions = new CommandSuggestions($commands);
+        $this->keys = new Keybindings([
+            'suggestion-previous' => [Key::UP],
+            'suggestion-next' => [Key::DOWN],
+            'suggestion-complete' => [Key::TAB],
+            'suggestion-close' => [Key::ESCAPE],
+        ]);
+        $this->tui->addListener(
+            $this->handleSuggestionKeys(...),
+            self::SUGGESTION_KEYS_PRIORITY,
+        );
 
         $this->build($title, $subtitle);
     }
@@ -193,10 +227,7 @@ final class ConversationView
      */
     public function emptyComposer(): void
     {
-        $this->editor->setText('');
-        // Text put in the composer from here raises nothing the editor
-        // reports, so the suggestions are told about the empty draft.
-        $this->suggestions->draftChanged('');
+        $this->writeDraft('');
     }
 
     /**
@@ -224,7 +255,7 @@ final class ConversationView
         $this->choice = $choice;
         $this->emptyComposer();
         $this->picker->open($title, $options);
-        $this->status->setText(self::CHOOSING_STATUS);
+        $this->showStatus();
         $this->tui->setFocus($this->picker->focusable());
         $this->tui->requestRender();
 
@@ -317,9 +348,10 @@ final class ConversationView
      */
     public function working(): void
     {
-        $this->status->setText(self::WORKING_STATUS);
+        $this->working = true;
         // A command the TUI would turn away mid-turn is not offered mid-turn.
         $this->suggestions->working();
+        $this->showStatus();
     }
 
     /**
@@ -354,8 +386,9 @@ final class ConversationView
 
     public function ready(): void
     {
-        $this->status->setText(self::READY_STATUS);
+        $this->working = false;
         $this->suggestions->ready();
+        $this->showStatus();
         $this->tui->setFocus($this->editor);
         $this->history->followLatest();
     }
@@ -404,7 +437,133 @@ final class ConversationView
     private function draftChanged(ChangeEvent $event): void
     {
         $this->suggestions->draftChanged($event->getValue());
+        $this->showStatus();
         $this->tui->requestRender();
+    }
+
+    /**
+     * Answers the keys that belong to the suggestions while they are on
+     * screen, and leaves every other key to the composer.
+     *
+     * These are taken here, among the listeners that run before the widget
+     * holding the focus, rather than by giving the list the focus: the
+     * composer keeps it throughout, and a key is taken from it only where
+     * the suggestions have an answer for it — Tab excepted, which is never
+     * the composer's. ↑↓ cost the composer nothing meanwhile, a name being
+     * written being one line by definition. Enter is never taken: it sends
+     * what is written, list or no list.
+     */
+    private function handleSuggestionKeys(InputEvent $event): void
+    {
+        if ($this->picker->isOpen()) {
+            // The keys are the list's while a person is choosing, and there
+            // are no suggestions on screen to answer them anyway.
+            return;
+        }
+
+        $data = $event->getData();
+
+        if ($this->keys->matches($data, 'suggestion-previous')) {
+            $this->move($event, $this->suggestions->choosePrevious(...));
+
+            return;
+        }
+
+        if ($this->keys->matches($data, 'suggestion-next')) {
+            $this->move($event, $this->suggestions->chooseNext(...));
+
+            return;
+        }
+
+        if ($this->keys->matches($data, 'suggestion-complete')) {
+            // Tab is never the composer's: a tabulation in a draft is not
+            // something anyone asked for, so where there is nothing to
+            // complete it does nothing at all.
+            $event->stopPropagation();
+            $this->complete();
+
+            return;
+        }
+
+        if (
+            $this->keys->matches($data, 'suggestion-close')
+            && $this->suggestions->isOnScreen()
+        ) {
+            // The first Escape takes the band away and leaves the draft; the
+            // next one reaches the composer and empties it, as it always has.
+            // The line that says nothing matches is taken away too: it
+            // covers the conversation like the list, whatever the other keys
+            // have to say about it.
+            $event->stopPropagation();
+            $this->suggestions->dismiss();
+            $this->showStatus();
+            $this->tui->requestRender();
+        }
+    }
+
+    /**
+     * Moves through the list, if there is a list to move through.
+     *
+     * @param Closure(): bool $moved
+     */
+    private function move(InputEvent $event, Closure $moved): void
+    {
+        if (!$moved()) {
+            return;
+        }
+
+        $event->stopPropagation();
+        $this->tui->requestRender();
+    }
+
+    /**
+     * Writes the chosen name in the composer, where there is one.
+     *
+     * The name is followed by a space, which closes the list by the rule
+     * that opens it and leaves the cursor where the arguments are written.
+     */
+    private function complete(): void
+    {
+        $chosen = $this->suggestions->chosenName();
+
+        if ($chosen === null) {
+            return;
+        }
+
+        $this->writeDraft($chosen . ' ');
+        $this->tui->requestRender();
+    }
+
+    /**
+     * Puts the given text in the composer, telling the suggestions about it.
+     *
+     * Text written from here raises nothing the editor reports, so what is
+     * being written is said out loud rather than waited for.
+     */
+    private function writeDraft(string $draft): void
+    {
+        $this->editor->writeDraft($draft);
+        $this->suggestions->draftChanged($draft);
+        $this->showStatus();
+    }
+
+    /**
+     * Says on the status line which keys mean something now.
+     *
+     * There is one of these per state the TUI can be read in, and the
+     * suggestions are the fourth: while there is a list to move through,
+     * the line names the keys that move, complete and send. The line that
+     * says nothing matches is not one of them, nothing there being
+     * choosable.
+     */
+    private function showStatus(): void
+    {
+        $this->status->setText(match (true) {
+            $this->picker->isOpen() => self::CHOOSING_STATUS,
+            $this->suggestions->isListOpen() => self::SUGGESTING_STATUS,
+            $this->working => self::WORKING_STATUS,
+            default => self::READY_STATUS,
+        });
     }
 
     private function clearDraft(CancelEvent $event): void
