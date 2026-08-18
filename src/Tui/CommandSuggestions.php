@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace NeuronCli\Tui;
 
 use NeuronCli\Conversation\Command;
+use NeuronCli\Conversation\RunsWhileWorking;
 use Symfony\Component\Tui\Style\Style;
 use Symfony\Component\Tui\Widget\AbstractWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
@@ -20,12 +21,19 @@ use Symfony\Component\Tui\Widget\TextWidget;
  * uses — for the bounded height and the scroll counter it draws by itself —
  * and nothing else is shared.
  *
- * What is on screen is read from the draft alone: a single line beginning
- * with a slash and no whitespace yet is a name being written, and anything
- * else takes the suggestions away. The names that carry what has been
- * written stay, each saying with a bold stretch why it is there; when none
- * do, the one line that says so takes the list's place, because there being
- * nothing is itself worth reading before Enter is pressed.
+ * What is on screen is read from the draft and from the turn: a single line
+ * beginning with a slash and no whitespace yet is a name being written, and
+ * anything else takes the suggestions away. The names that carry what has
+ * been written stay, each saying with a bold stretch why it is there; when
+ * none do, the one line that says so takes the list's place, because there
+ * being nothing is itself worth reading before Enter is pressed.
+ *
+ * While the Agent works the list carries the commands that run there and
+ * nothing else. The Conversation TUI turns away a command that does not say
+ * in its type that it runs mid-turn, so offering that name meanwhile would
+ * promise a run that will not happen — and where none of the mounted
+ * commands runs mid-turn, the line that says nothing matches is the honest
+ * answer. The whole list is back when the turn ends.
  *
  * @internal
  */
@@ -71,6 +79,9 @@ final class CommandSuggestions
      * Read once, in the order the Host Application mounted them, which is
      * the order commands matching alike keep on screen.
      *
+     * `$suggestibleWhileWorking` is the same, kept to the commands a turn
+     * under way does not turn away.
+     *
      * @var list<array{
      *     answersTo: string,
      *     name: string,
@@ -81,12 +92,33 @@ final class CommandSuggestions
     private readonly array $suggestible;
 
     /**
+     * @var list<array{
+     *     answersTo: string,
+     *     name: string,
+     *     label: string,
+     *     description: string,
+     * }>
+     */
+    private readonly array $suggestibleWhileWorking;
+
+    /**
      * The lines the list is holding, so that it is only ever given a set it
      * is not already showing.
      *
      * @var list<array{value: string, label: string, description: string}>|null
      */
     private ?array $shown = null;
+
+    /**
+     * What is being written now, kept so that a turn beginning or ending can
+     * ask the question again of an unchanged draft.
+     */
+    private string $draft = '';
+
+    /**
+     * Whether the Agent is working, which is what narrows the list.
+     */
+    private bool $working = false;
 
     private ?AbstractWidget $onScreen = null;
 
@@ -102,6 +134,13 @@ final class CommandSuggestions
         $this->nothingMatches->addStyleClass('suggestions-empty');
         $this->emphasis = new Style(bold: true);
         $this->suggestible = self::suggestible($commands);
+        $this->suggestibleWhileWorking = self::suggestible(array_values(
+            array_filter(
+                $commands,
+                static fn (Command $command): bool
+                    => $command instanceof RunsWhileWorking,
+            ),
+        ));
         $this->list = new SelectListWidget([], self::VISIBLE_LINES);
         $this->list->addStyleClass('suggestions-list');
     }
@@ -119,21 +158,49 @@ final class CommandSuggestions
      */
     public function draftChanged(string $draft): void
     {
-        if (!self::isNameBeingWritten($draft)) {
+        $this->draft = $draft;
+        $this->show();
+    }
+
+    /**
+     * Tells the suggestions a turn is in flight. `ready()` is the counterpart.
+     *
+     * A turn ends under a name still being written, so what is on screen is
+     * asked again here rather than waiting for the next keystroke, and the
+     * two ends of a turn say it the same way.
+     */
+    public function working(): void
+    {
+        $this->working = true;
+        $this->show();
+    }
+
+    public function ready(): void
+    {
+        $this->working = false;
+        $this->show();
+    }
+
+    /**
+     * Puts on screen what the draft and the turn together ask for.
+     */
+    private function show(): void
+    {
+        if (!self::isNameBeingWritten($this->draft)) {
             $this->hide();
 
             return;
         }
 
-        $lines = $this->linesMatching($draft);
+        $lines = $this->linesMatching($this->draft);
 
         if ($lines === []) {
             $this->nothingMatches->setText(
                 'No commands match "'
-                    . DisplayableText::preview($draft, self::DRAFT_WIDTH)
+                    . DisplayableText::preview($this->draft, self::DRAFT_WIDTH)
                     . '"',
             );
-            $this->show($this->nothingMatches);
+            $this->put($this->nothingMatches);
             // The list is given its lines again when one matches next, so
             // what was selected before this does not come back with them.
             $this->shown = null;
@@ -149,13 +216,13 @@ final class CommandSuggestions
             $this->shown = $lines;
         }
 
-        $this->show($this->list);
+        $this->put($this->list);
     }
 
     /**
      * Puts the given band on screen, in place of whatever was there.
      */
-    private function show(AbstractWidget $band): void
+    private function put(AbstractWidget $band): void
     {
         if ($this->onScreen === $band) {
             return;
@@ -196,6 +263,9 @@ final class CommandSuggestions
      * them. It is not a score: the order can be told from the code without
      * running it.
      *
+     * While the Agent works only the commands that run there are walked, so
+     * a name that would be turned away is never suggested.
+     *
      * @return list<array{value: string, label: string, description: string}>
      */
     private function linesMatching(string $draft): array
@@ -207,7 +277,11 @@ final class CommandSuggestions
         $beginning = [];
         $carrying = [];
 
-        foreach ($this->suggestible as $suggestion) {
+        $suggestible = $this->working
+            ? $this->suggestibleWhileWorking
+            : $this->suggestible;
+
+        foreach ($suggestible as $suggestion) {
             $name = $suggestion['name'];
 
             if ($after !== '' && mb_stripos($name, $after) === false) {

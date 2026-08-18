@@ -2773,6 +2773,212 @@ MARKDOWN;
     }
 
     /**
+     * While the Agent works the list carries what will actually run: a
+     * command the TUI would turn away is never offered there, and the whole
+     * list is back under the same name once the turn has finished.
+     */
+    public function testTheListIsNarrowedToWhatRunsForAsLongAsTheTurnLasts(): void
+    {
+        $midTurnDisplay = null;
+        $readyDisplay = null;
+        $provider = new class(
+            new AssistantMessage('A slow answer.'),
+        ) extends FakeAIProvider {
+            protected function streamChunks(Message $response): Generator
+            {
+                \Amp\delay(0.5);
+                yield new TextChunk('slow-stream', 'A slow answer.');
+
+                return $response;
+            }
+        };
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        $terminal = new VirtualTerminal(rows: 30);
+        $whileWorking = $this->commandThatRunsWhileWorking(
+            static function (
+                LimitedControls $controls,
+                string $arguments,
+            ): void {
+            },
+            '/pulse',
+        );
+        $refused = $this->commandThat(
+            static function (Controls $controls, string $arguments): void {
+            },
+            '/probe',
+        );
+        EventLoop::delay(
+            0.03,
+            static fn () => $terminal->simulateInput("A question\r"),
+        );
+        EventLoop::delay(
+            0.1,
+            static fn () => $terminal->simulateInput('/'),
+        );
+        EventLoop::delay(
+            0.15,
+            static fn () => self::forceRepaint($terminal),
+        );
+        EventLoop::delay(
+            0.2,
+            static function () use (&$midTurnDisplay, $terminal): void {
+                $midTurnDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+            },
+        );
+        // The answer is in by now, and the name is still being written.
+        EventLoop::delay(
+            0.8,
+            static fn () => self::forceRepaint($terminal),
+        );
+        EventLoop::delay(
+            0.85,
+            static function () use (&$readyDisplay, $terminal): void {
+                $readyDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("\x03");
+            },
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [$refused, $whileWorking],
+        ))->run();
+
+        self::assertIsString($midTurnDisplay);
+        self::assertStringContainsString('/pulse', $midTurnDisplay);
+        self::assertStringNotContainsString('/probe', $midTurnDisplay);
+        self::assertIsString($readyDisplay);
+        self::assertStringContainsString('/pulse', $readyDisplay);
+        self::assertStringContainsString('/probe', $readyDisplay);
+    }
+
+    /**
+     * Nothing runs mid-turn, so mid-turn there is nothing to offer, and the
+     * band says so rather than promising a name that would be refused.
+     */
+    public function testWhileTheAgentWorksNothingMatchesWithoutACommandThatRunsThen(): void
+    {
+        $midTurnDisplay = null;
+        $provider = new class(
+            new AssistantMessage('A slow answer.'),
+        ) extends FakeAIProvider {
+            protected function streamChunks(Message $response): Generator
+            {
+                \Amp\delay(0.5);
+                yield new TextChunk('slow-stream', 'A slow answer.');
+
+                return $response;
+            }
+        };
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        $terminal = new VirtualTerminal(rows: 30);
+        $refused = $this->commandThat(
+            static function (Controls $controls, string $arguments): void {
+            },
+            '/probe',
+        );
+        EventLoop::delay(
+            0.03,
+            static fn () => $terminal->simulateInput("A question\r"),
+        );
+        EventLoop::delay(
+            0.1,
+            static fn () => $terminal->simulateInput('/'),
+        );
+        EventLoop::delay(
+            0.15,
+            static fn () => self::forceRepaint($terminal),
+        );
+        EventLoop::delay(
+            0.2,
+            static function () use (&$midTurnDisplay, $terminal): void {
+                $midTurnDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+            },
+        );
+        EventLoop::delay(
+            0.9,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [$refused],
+        ))->run();
+
+        self::assertIsString($midTurnDisplay);
+        self::assertStringContainsString(
+            'No commands match "/"',
+            $midTurnDisplay,
+        );
+        self::assertStringNotContainsString('/probe', $midTurnDisplay);
+    }
+
+    /**
+     * There is one thing to look at: while a person chooses from a list, the
+     * composer takes no text, so there is no name being written and nothing to suggest.
+     */
+    public function testNoSuggestionsAreShownWhileAPickerIsOpen(): void
+    {
+        $choosingDisplay = null;
+        $agent = new Agent();
+        $agent->setAiProvider(new FakeAIProvider());
+        $terminal = new VirtualTerminal(rows: 30);
+        $command = $this->commandThat(
+            static function (Controls $controls, string $arguments): void {
+                $controls->choose('Models', ['haiku' => 'Claude Haiku']);
+            },
+        );
+        EventLoop::delay(
+            0.04,
+            static fn () => $terminal->simulateInput("/probe\r"),
+        );
+        EventLoop::delay(
+            0.1,
+            static fn () => $terminal->simulateInput('/'),
+        );
+        EventLoop::delay(
+            0.15,
+            static fn () => self::forceRepaint($terminal),
+        );
+        EventLoop::delay(
+            0.2,
+            static function () use (&$choosingDisplay, $terminal): void {
+                $choosingDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("\x03");
+            },
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [$command],
+        ))->run();
+
+        self::assertIsString($choosingDisplay);
+        // The picker is what is on screen, and the slash went to it.
+        self::assertStringContainsString('Models', $choosingDisplay);
+        self::assertStringNotContainsString(
+            'Does what the test says.',
+            $choosingDisplay,
+        );
+        self::assertStringNotContainsString(
+            'No commands match',
+            $choosingDisplay,
+        );
+    }
+
+    /**
      * A command that does what the test tells it to, under a name of the
      * test's choosing.
      *
