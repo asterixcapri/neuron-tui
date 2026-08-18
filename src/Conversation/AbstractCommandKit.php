@@ -27,7 +27,8 @@ abstract class AbstractCommandKit implements CommandKit
     private array $excluded = [];
 
     /**
-     * The classes to keep, or nothing at all when everything is kept.
+     * The classes to keep, or nothing at all when nothing was named and
+     * everything is kept.
      *
      * @var list<class-string>|null
      */
@@ -61,10 +62,14 @@ abstract class AbstractCommandKit implements CommandKit
         return $kit;
     }
 
+    /**
+     * Asked twice, the last word is the one kept: `only()` names everything
+     * that survives it, so what an earlier one named is not still there.
+     */
     public function only(array $classes): static
     {
         $kit = clone $this;
-        $kit->kept = [...$this->kept ?? [], ...$classes];
+        $kit->kept = $classes;
 
         return $kit;
     }
