@@ -96,6 +96,11 @@ widgets of the Conversation TUI stay out of reach.
   while the list is open.
 - `agent()` returns the Agent, so its provider, instructions, tools and
   History change through the Neuron AI API rather than through verbs here.
+- `useAgent()` puts another Agent in charge of answering from here on. The
+  conversation under way moves over with it: the new Agent is handed the
+  History the old one was answering, nothing changes on the screen, and it is
+  the next answer that comes from elsewhere. A command that knows the two are
+  not interchangeable installs a fresh History on the new Agent afterwards.
 - `stop()` leaves the terminal.
 
 A command that fails leaves the exception as a line of error in the
