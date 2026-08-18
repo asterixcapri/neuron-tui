@@ -40,7 +40,9 @@ _Avoid_: Message, prompt, action
 What a Slash command may do while it runs: say something in the conversation,
 put a prompt to the Agent, offer a Picker, reach the Agent itself, put another
 Agent in charge of answering, list the mounted commands, leave the terminal. A
-command allowed to run while the Agent is working is given fewer of them.
+command that declares in its type that it runs while the Agent is working is
+given fewer of them — saying, warning, listing and leaving — because there is
+no list to open and no Agent to reach while an answer is on its way.
 _Avoid_: Context, facade, API
 
 **Command kit**:
