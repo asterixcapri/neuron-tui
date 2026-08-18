@@ -68,6 +68,13 @@ final class ConversationStyleSheet
                 color: 'gray',
                 dim: true,
             ),
+            '.suggestions' => new Style(padding: Padding::xy(1)),
+            '.suggestions-list::selected' => new Style(color: 'magenta'),
+            '.suggestions-list::scroll-info' => new Style(
+                color: 'gray',
+                dim: true,
+            ),
+            '.suggestions-empty' => new Style(color: 'gray', dim: true),
             '.notice' => new Style(color: 'cyan'),
             '.tool' => new Style(color: 'cyan', dim: true),
             '.error' => new Style(color: 'red', bold: true),
