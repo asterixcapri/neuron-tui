@@ -69,8 +69,17 @@ _Avoid_: Store, repository, storage, archive
 **Picker**:
 The state the Conversation TUI is in while a person is choosing from a list
 rather than writing to the Agent. Sessions are one of the things chosen this
-way, not the only one.
+way, not the only one. Writing the name of a Slash command is not this state,
+however much of a list is on screen meanwhile.
 _Avoid_: Menu, popup, dialog, Session picker
+
+**Command suggestions**:
+The mounted commands the composer shows while a person is writing a name after
+a slash, each under the line that describes it. Nothing is suspended and
+nothing changes hands: the draft stays where it was being written and the list
+is only ever a shorter way to type what could be typed by hand. So it is not
+the Picker, whatever the two look like.
+_Avoid_: Picker, menu, autocomplete, palette, command palette
 
 **Turn**:
 One stretch of the conversation, from the moment a person's message is taken
