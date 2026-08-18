@@ -90,6 +90,10 @@ widgets of the Conversation TUI stay out of reach.
 - `warn()` writes one that reports something did not go as it should.
 - `ask()` puts a prompt to the Agent as though the person had written it, and
   finishes: the answer arrives on the screen, not back in the command.
+- `choose()` offers a list — a title and key and label pairs — and waits there
+  for the key of the line the person chose, or nothing at all if they
+  cancelled. It is the one verb that waits, and the terminal goes on painting
+  while the list is open.
 - `agent()` returns the Agent, so its provider, instructions, tools and
   History change through the Neuron AI API rather than through verbs here.
 - `stop()` leaves the terminal.
@@ -105,11 +109,11 @@ A Session is one conversation with the Agent. `/clear` starts a fresh one
 without leaving the terminal: the screen and the composer empty, and the
 conversation that was on screen stays where it is stored.
 
-`/sessions` lists the Sessions of this Agent, most recently used first, each
-labelled with the first thing the person wrote in it and when it was last
-used. While the list is open the composer takes no text: the arrow keys move
-through it, typing narrows it, Enter resumes the chosen Session, and Escape
-leaves the current one alone. Resuming paints that conversation and the Agent
+`/sessions` lists the Sessions of this Agent in the Picker, most recently used
+first, each labelled with the first thing the person wrote in it. While the
+list is open the composer takes no text: the arrow keys move through it,
+typing narrows it, Enter chooses one and resumes it, and Escape leaves the
+current one alone. Resuming paints that conversation and the Agent
 answers with its context. A Session nobody wrote in is not listed.
 
 Sessions come from a **Session provider**. Without configuration they are kept
