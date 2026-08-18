@@ -847,7 +847,13 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.1,
-            static fn () => $terminal->simulateInput("\x1b"),
+            static function () use ($terminal): void {
+                // The unknown name is still in the composer under the band
+                // that says nothing matches: the first Escape takes the
+                // band away, the second the name.
+                $terminal->simulateInput("\x1b");
+                $terminal->simulateInput("\x1b");
+            },
         );
         EventLoop::delay(
             0.14,
@@ -1370,8 +1376,10 @@ MARKDOWN;
         EventLoop::delay(
             0.08,
             static function () use ($terminal): void {
-                // An unknown name stays in the composer, so Escape takes it
-                // away before the next one is typed.
+                // An unknown name stays in the composer under the band that
+                // says nothing matches, so the first Escape takes the band
+                // away and the second the name.
+                $terminal->simulateInput("\x1b");
                 $terminal->simulateInput("\x1b");
                 $terminal->simulateInput("/sessions\r");
             },
@@ -1379,6 +1387,7 @@ MARKDOWN;
         EventLoop::delay(
             0.16,
             static function () use ($terminal): void {
+                $terminal->simulateInput("\x1b");
                 $terminal->simulateInput("\x1b");
                 $terminal->simulateInput("/exit\r");
             },
@@ -1437,6 +1446,7 @@ MARKDOWN;
                 $unknownDisplay = AnsiUtils::stripAnsiCodes(
                     $terminal->getOutput(),
                 );
+                $terminal->simulateInput("\x1b");
                 $terminal->simulateInput("\x1b");
                 $terminal->clearOutput();
                 $terminal->simulateInput("/wipe\r");
@@ -2979,6 +2989,364 @@ MARKDOWN;
     }
 
     /**
+     * ↑↓ choose a line while the list is open, and the composer keeps its
+     * cursor: the draft there is one line, so the arrows cost it nothing.
+     */
+    public function testTheArrowsChooseALineWithoutMovingTheCursor(): void
+    {
+        $display = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
+            [
+                self::commandNamed('/alpha', 'The first line.'),
+                self::commandNamed('/album', 'The second line.'),
+            ],
+            '/al',
+            "\x1b[A",
+            'p',
+        ));
+
+        // The name written is what the arrow left alone: had the cursor
+        // moved to the start of the line, the draft would read `p/al`.
+        self::assertStringContainsString('/alp', $display);
+        self::assertStringNotContainsString('p/al', $display);
+    }
+
+    /**
+     * The line under the arrow is the one that was moved to.
+     */
+    public function testTheArrowsMoveTheChosenLine(): void
+    {
+        $display = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
+            [
+                self::commandNamed('/alpha', 'The first line.'),
+                self::commandNamed('/album', 'The second line.'),
+            ],
+            '/al',
+            "\x1b[B",
+        ));
+
+        self::assertStringContainsString('→ /album', $display);
+        self::assertStringNotContainsString('→ /alpha', $display);
+    }
+
+    /**
+     * Whoever is writing is narrowing, not scrolling: a different set of
+     * lines is read from the top.
+     */
+    public function testTheChosenLineGoesBackToTheTopWhenTheLinesChange(): void
+    {
+        $display = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
+            [
+                self::commandNamed('/alpha', 'The first line.'),
+                self::commandNamed('/album', 'The second line.'),
+                self::commandNamed('/base', 'The third line.'),
+            ],
+            '/a',
+            "\x1b[B",
+            "\x1b[B",
+            'l',
+        ));
+
+        self::assertStringContainsString('→ /alpha', $display);
+        self::assertStringNotContainsString('→ /album', $display);
+        self::assertStringNotContainsString('→ /base', $display);
+    }
+
+    /**
+     * Tab writes the chosen name and a space: the list closes by its own
+     * rule and the cursor is where the arguments are written.
+     */
+    public function testTabWritesTheChosenNameAndTheArgumentsFollowIt(): void
+    {
+        $agent = new Agent();
+        $terminal = new VirtualTerminal(rows: 30);
+        $ran = null;
+        $arguments = null;
+        $note = static function (string $name) use (&$ran, &$arguments) {
+            return static function (
+                Controls $controls,
+                string $written,
+            ) use ($name, &$ran, &$arguments): void {
+                $ran = $name;
+                $arguments = $written;
+            };
+        };
+        $completed = null;
+        EventLoop::delay(
+            0.05,
+            static fn () => $terminal->simulateInput('/al'),
+        );
+        EventLoop::delay(
+            0.1,
+            static fn () => $terminal->simulateInput("\x1b[B"),
+        );
+        EventLoop::delay(
+            0.15,
+            static fn () => $terminal->simulateInput("\t"),
+        );
+        EventLoop::delay(
+            0.2,
+            static fn () => self::forceRepaint($terminal),
+        );
+        EventLoop::delay(
+            0.25,
+            static function () use (&$completed, $terminal): void {
+                $completed = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+                $terminal->simulateInput("now\r");
+            },
+        );
+        EventLoop::delay(
+            0.3,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [
+                $this->commandThat($note('/alpha'), '/alpha'),
+                $this->commandThat($note('/album'), '/album'),
+            ],
+        ))->run();
+
+        self::assertIsString($completed);
+        // The name that was chosen, written whole, with the list gone.
+        self::assertStringContainsString('/album', $completed);
+        self::assertStringNotContainsString(
+            'Does what the test says.',
+            $completed,
+        );
+        self::assertSame('/album', $ran);
+        self::assertSame('now', $arguments);
+    }
+
+    /**
+     * There is nothing to complete on the line that says nothing matches,
+     * and Tab never writes a tabulation into the draft.
+     */
+    public function testTabWritesNothingWhenNoCommandMatches(): void
+    {
+        $agent = new Agent();
+        $terminal = new VirtualTerminal(rows: 30);
+        EventLoop::delay(
+            0.05,
+            static fn () => $terminal->simulateInput('/zz'),
+        );
+        EventLoop::delay(
+            0.1,
+            static fn () => $terminal->simulateInput("\t"),
+        );
+        EventLoop::delay(
+            0.15,
+            static fn () => $terminal->simulateInput("\r"),
+        );
+        EventLoop::delay(
+            0.3,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [self::commandNamed('/alpha', 'The only one.')],
+        ))->run();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+
+        // What was sent is what was written, and nothing was written: `/zz`.
+        self::assertStringContainsString(
+            'Unknown Slash command: /zz',
+            $display,
+        );
+        self::assertStringNotContainsString("\t", $display);
+    }
+
+    /**
+     * With the list closed there is nothing to complete either, and the
+     * draft is left as it was written.
+     */
+    public function testTabWritesNothingWhileTheListIsClosed(): void
+    {
+        $provider = new FakeAIProvider(new AssistantMessage('An answer.'));
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        $terminal = new VirtualTerminal(rows: 30);
+        EventLoop::delay(
+            0.05,
+            static fn () => $terminal->simulateInput('hello'),
+        );
+        EventLoop::delay(
+            0.1,
+            static fn () => $terminal->simulateInput("\t"),
+        );
+        EventLoop::delay(
+            0.15,
+            static fn () => $terminal->simulateInput("\r"),
+        );
+        EventLoop::delay(
+            0.3,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli($agent, terminal: $terminal))->run();
+
+        $provider->assertSent(
+            static fn (RequestRecord $request): bool
+                => (string) $request->messages[0]->getContent() === 'hello',
+        );
+    }
+
+    /**
+     * Escape takes the list away and leaves the draft; the next one empties
+     * the draft, as it always has.
+     */
+    public function testEscapeClosesTheListAndTheNextOneEmptiesTheDraft(): void
+    {
+        $agent = new Agent();
+        $terminal = new VirtualTerminal(rows: 30);
+        $closed = null;
+        $emptied = null;
+        EventLoop::delay(
+            0.05,
+            static fn () => $terminal->simulateInput('/hel'),
+        );
+        EventLoop::delay(
+            0.1,
+            static fn () => $terminal->simulateInput("\x1b"),
+        );
+        EventLoop::delay(
+            0.15,
+            static fn () => self::forceRepaint($terminal),
+        );
+        EventLoop::delay(
+            0.2,
+            static function () use (&$closed, $terminal): void {
+                $closed = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+                $terminal->simulateInput("\x1b");
+            },
+        );
+        EventLoop::delay(
+            0.25,
+            static fn () => self::forceRepaint($terminal),
+        );
+        EventLoop::delay(
+            0.3,
+            static function () use (&$emptied, $terminal): void {
+                $emptied = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+                $terminal->simulateInput("\x03");
+            },
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [new Help()],
+        ))->run();
+
+        self::assertIsString($closed);
+        self::assertStringNotContainsString(
+            'Lists what can be typed here.',
+            $closed,
+        );
+        self::assertStringContainsString('/hel', $closed);
+        self::assertIsString($emptied);
+        self::assertStringNotContainsString('/hel', $emptied);
+    }
+
+    /**
+     * The line that says nothing matches covers the conversation as the list
+     * does, so Escape takes it away too, and the draft stays to be corrected.
+     */
+    public function testEscapeAlsoTakesAwayTheLineThatSaysNothingMatches(): void
+    {
+        $display = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
+            [self::commandNamed('/alpha', 'The only one.')],
+            '/zz',
+            "\x1b",
+        ));
+
+        self::assertStringNotContainsString('No commands match', $display);
+        self::assertStringContainsString('/zz', $display);
+    }
+
+    /**
+     * A list longer than the band is scrolled through rather than cut: the
+     * last name is reached with the arrows, and the counter says where one is.
+     */
+    public function testTheArrowsReachTheLastOfMoreCommandsThanFit(): void
+    {
+        $commands = [];
+
+        for ($place = 0; $place < 10; ++$place) {
+            $commands[] = self::commandNamed(
+                '/cmd' . $place,
+                'Mounted ' . $place . '.',
+            );
+        }
+
+        $display = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
+            $commands,
+            '/',
+            // Upwards from the first line is the last of them.
+            "\x1b[A",
+        ));
+
+        self::assertStringContainsString('→ /cmd9', $display);
+        self::assertStringContainsString('(10/10)', $display);
+    }
+
+    /**
+     * The status line names the keys that mean something while the list is
+     * open, and goes back to what it said as soon as it closes.
+     */
+    public function testTheStatusLineNamesTheKeysWhileTheListIsOpen(): void
+    {
+        $agent = new Agent();
+        $terminal = new VirtualTerminal(rows: 30);
+        $open = null;
+        $closed = null;
+        EventLoop::delay(
+            0.05,
+            static fn () => $terminal->simulateInput('/'),
+        );
+        EventLoop::delay(
+            0.1,
+            static fn () => self::forceRepaint($terminal),
+        );
+        EventLoop::delay(
+            0.15,
+            static function () use (&$open, $terminal): void {
+                $open = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+                $terminal->simulateInput(' ');
+            },
+        );
+        EventLoop::delay(
+            0.2,
+            static fn () => self::forceRepaint($terminal),
+        );
+        EventLoop::delay(
+            0.25,
+            static function () use (&$closed, $terminal): void {
+                $closed = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+                $terminal->simulateInput("\x03");
+            },
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [new Help()],
+        ))->run();
+
+        self::assertIsString($open);
+        self::assertStringContainsString('↑↓ moves', $open);
+        self::assertStringContainsString('Tab completes', $open);
+        self::assertStringNotContainsString('ready · Enter sends', $open);
+        self::assertIsString($closed);
+        self::assertStringContainsString('ready · Enter sends', $closed);
+        self::assertStringNotContainsString('Tab completes', $closed);
+    }
+
+    /**
      * A command that does what the test tells it to, under a name of the
      * test's choosing.
      *
@@ -3289,7 +3657,9 @@ MARKDOWN;
                     $terminal->getOutput(),
                 );
                 // A refused command stays in the composer, the way an
-                // unknown one does, so Escape takes it away first.
+                // unknown one does, so the first Escape takes away the band
+                // that says nothing matches and the second the name.
+                $terminal->simulateInput("\x1b");
                 $terminal->simulateInput("\x1b");
                 $terminal->simulateInput("/exit\r");
             },
@@ -3827,8 +4197,10 @@ MARKDOWN;
                 $refusedDisplay = AnsiUtils::stripAnsiCodes(
                     $terminal->getOutput(),
                 );
-                // An unknown name stays in the composer, so Escape takes it
-                // away before the next one is typed.
+                // An unknown name stays in the composer under the band that
+                // says nothing matches, so the first Escape takes the band
+                // away and the second the name.
+                $terminal->simulateInput("\x1b");
                 $terminal->simulateInput("\x1b");
                 $terminal->clearOutput();
                 $terminal->simulateInput("/sessions\r");
@@ -3892,6 +4264,7 @@ MARKDOWN;
                 $refusedDisplay = AnsiUtils::stripAnsiCodes(
                     $terminal->getOutput(),
                 );
+                $terminal->simulateInput("\x1b");
                 $terminal->simulateInput("\x1b");
                 $terminal->clearOutput();
                 $terminal->simulateInput("/clear\r");
