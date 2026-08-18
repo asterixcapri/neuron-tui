@@ -28,11 +28,15 @@ use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Testing\RequestRecord;
 use NeuronAI\Tools\Tool;
+use NeuronCli\Conversation\Commands\Clear;
+use NeuronCli\Conversation\Commands\Leave;
+use NeuronCli\Conversation\Commands\Sessions;
 use NeuronCli\Conversation\Controls;
 use NeuronCli\Conversation\SlashCommand;
 use NeuronCli\NeuronCli;
 use NeuronCli\Session\InMemorySessionProvider;
 use NeuronCli\Session\Session;
+use NeuronCli\Session\SessionProvider;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
@@ -64,7 +68,7 @@ final class NeuronCliTest extends TestCase
             $display,
         );
         self::assertStringContainsString(
-            'ready · Enter sends · Shift+Enter adds a line · /exit exits',
+            'ready · Enter sends · Shift+Enter adds a line · Ctrl+C exits',
             $display,
         );
     }
@@ -852,7 +856,11 @@ MARKDOWN;
             },
         );
 
-        (new NeuronCli($agent, terminal: $terminal))->run();
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [new Leave()],
+        ))->run();
 
         self::assertIsString($intermediateDisplay);
         self::assertStringContainsString(
@@ -920,7 +928,11 @@ MARKDOWN;
             },
         );
 
-        (new NeuronCli($agent, terminal: $terminal))->run();
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: self::sessionCommands(new InMemorySessionProvider()),
+        ))->run();
 
         // `/sessions now` opens the picker on the Session being written in.
         self::assertIsString($afterSessions);
@@ -1275,6 +1287,48 @@ MARKDOWN;
         self::assertStringContainsString('An answer.', $display);
     }
 
+    public function testACommandThatFailsAfterChangingConversationSaysSoOnTheNewOne(): void
+    {
+        $agent = new Agent();
+        $agent->setAiProvider(new FakeAIProvider());
+        $agent->setChatHistory(new ExistingChatHistory([
+            new UserMessage('Earlier question.'),
+            new AssistantMessage('Earlier answer.'),
+        ]));
+        $terminal = new VirtualTerminal(rows: 24);
+        $command = $this->commandThat(
+            static function (Controls $controls, string $arguments): void {
+                $controls->agent()->setChatHistory(new InMemoryChatHistory());
+
+                throw new \RuntimeException('The command broke.');
+            },
+        );
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("/probe\r"),
+        );
+        EventLoop::delay(
+            0.2,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [$command],
+        ))->run();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+
+        // The screen is reconciled first, so the line of error is left on the
+        // conversation the command walked away with rather than wiped by the
+        // repaint that follows it.
+        self::assertStringContainsString(
+            'RuntimeException: The command broke.',
+            $display,
+        );
+        self::assertStringNotContainsString('Earlier question.', $display);
+    }
+
     public function testTwoCommandsAnsweringToTheSameNameStopTheConstruction(): void
     {
         $doNothing = static function (
@@ -1298,28 +1352,216 @@ MARKDOWN;
         );
     }
 
-    public function testACommandCannotTakeANameTheTuiAlreadyAnswers(): void
+    public function testNothingIsMountedUnlessAHostApplicationNamesIt(): void
     {
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage(
-            '/clear is a Slash command the Conversation TUI answers to '
-                . 'itself.',
+        $forcedExit = false;
+        $provider = new FakeAIProvider();
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        $terminal = new VirtualTerminal(rows: 30);
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("/clear\r"),
+        );
+        EventLoop::delay(
+            0.08,
+            static function () use ($terminal): void {
+                // An unknown name stays in the composer, so Escape takes it
+                // away before the next one is typed.
+                $terminal->simulateInput("\x1b");
+                $terminal->simulateInput("/sessions\r");
+            },
+        );
+        EventLoop::delay(
+            0.16,
+            static function () use ($terminal): void {
+                $terminal->simulateInput("\x1b");
+                $terminal->simulateInput("/exit\r");
+            },
+        );
+        EventLoop::delay(
+            0.3,
+            static function () use (&$forcedExit, $terminal): void {
+                $forcedExit = true;
+                $terminal->simulateInput("\x03");
+            },
         );
 
-        new NeuronCli(
-            new Agent(),
-            terminal: new VirtualTerminal(),
-            commands: [
-                $this->commandThat(
-                    static function (
-                        Controls $controls,
-                        string $arguments,
-                    ): void {
-                    },
-                    '/clear',
-                ),
-            ],
+        (new NeuronCli($agent, terminal: $terminal))->run();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+
+        self::assertStringContainsString(
+            'Unknown Slash command: /clear',
+            $display,
         );
+        self::assertStringContainsString(
+            'Unknown Slash command: /sessions',
+            $display,
+        );
+        self::assertStringContainsString(
+            'Unknown Slash command: /exit',
+            $display,
+        );
+        // Without the command that leaves, Ctrl+C is the way out.
+        self::assertTrue($forcedExit);
+        $provider->assertNothingSent();
+    }
+
+    /**
+     * A provided command is mounted the way one of the Host Application's own
+     * is, and under whatever name the Host Application prefers.
+     */
+    public function testAProvidedCommandAnswersToTheNameItWasGiven(): void
+    {
+        $forcedExit = false;
+        $unknownDisplay = null;
+        $wipedDisplay = null;
+        $agent = new Agent();
+        $agent->setAiProvider(new FakeAIProvider());
+        $agent->setChatHistory(new ExistingChatHistory([
+            new UserMessage('Earlier question.'),
+            new AssistantMessage('Earlier answer.'),
+        ]));
+        $terminal = new VirtualTerminal(rows: 24);
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("/clear\r"),
+        );
+        EventLoop::delay(
+            0.08,
+            static function () use (&$unknownDisplay, $terminal): void {
+                $unknownDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("\x1b");
+                $terminal->clearOutput();
+                $terminal->simulateInput("/wipe\r");
+            },
+        );
+        EventLoop::delay(
+            0.16,
+            static function () use (&$wipedDisplay, $terminal): void {
+                $wipedDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("/quit\r");
+            },
+        );
+        EventLoop::delay(
+            0.4,
+            static function () use (&$forcedExit, $terminal): void {
+                $forcedExit = true;
+                $terminal->simulateInput("\x03");
+            },
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [
+                new Clear(new InMemorySessionProvider(), '/wipe'),
+                new Leave('/quit'),
+            ],
+        ))->run();
+
+        // The name it was given is the only name it answers to.
+        self::assertIsString($unknownDisplay);
+        self::assertStringContainsString(
+            'Unknown Slash command: /clear',
+            $unknownDisplay,
+        );
+        self::assertStringContainsString(
+            'Earlier question.',
+            $unknownDisplay,
+        );
+        // `/wipe` behaves as `/clear` always did.
+        self::assertIsString($wipedDisplay);
+        self::assertStringNotContainsString(
+            'Earlier question.',
+            $wipedDisplay,
+        );
+        self::assertSame([], $agent->getChatHistory()->getMessages());
+        // `/quit` behaves as `/exit` always did.
+        self::assertFalse($forcedExit);
+    }
+
+    public function testTheScreenShowsTheConversationACommandInstalled(): void
+    {
+        $agent = new Agent();
+        $agent->setAiProvider(new FakeAIProvider());
+        $terminal = new VirtualTerminal(rows: 24);
+        $command = $this->commandThat(
+            static function (Controls $controls, string $arguments): void {
+                $controls->agent()->setChatHistory(new ExistingChatHistory([
+                    new UserMessage('A restored question.'),
+                    new AssistantMessage('A restored answer.'),
+                ]));
+            },
+        );
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("A question\r"),
+        );
+        EventLoop::delay(
+            0.25,
+            static function () use ($terminal): void {
+                $terminal->clearOutput();
+                $terminal->simulateInput("/probe\r");
+            },
+        );
+        EventLoop::delay(
+            0.4,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [$command],
+        ))->run();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+
+        // The command said nothing about what it had done, and the screen
+        // says it anyway.
+        self::assertStringContainsString('❯ A restored question.', $display);
+        self::assertStringContainsString('● A restored answer.', $display);
+        self::assertStringNotContainsString('A question', $display);
+    }
+
+    public function testACommandThatLeavesTheConversationAloneLeavesTheScreenAlone(): void
+    {
+        $agent = new Agent();
+        $agent->setAiProvider(new FakeAIProvider(
+            new AssistantMessage('An answer.'),
+        ));
+        $terminal = new VirtualTerminal(rows: 30);
+        $command = $this->commandThat(
+            static function (Controls $controls, string $arguments): void {
+                $controls->say('The command ran.');
+            },
+        );
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("A question\r"),
+        );
+        EventLoop::delay(
+            0.25,
+            static fn () => $terminal->simulateInput("/probe\r"),
+        );
+        EventLoop::delay(
+            0.4,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [$command],
+        ))->run();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+
+        self::assertStringContainsString('❯ A question', $display);
+        self::assertStringContainsString('● An answer.', $display);
+        self::assertStringContainsString('The command ran.', $display);
     }
 
     public function testAMountedCommandIsRefusedWhileTheAgentIsWorking(): void
@@ -1633,7 +1875,22 @@ MARKDOWN;
         };
     }
 
-    public function testSessionsWorkWithNoProviderAndWriteNothingToDisk(): void
+    /**
+     * The commands Neuron CLI ships for the Sessions of one provider.
+     *
+     * @return list<SlashCommand>
+     */
+    private static function sessionCommands(
+        SessionProvider $sessions,
+    ): array {
+        return [
+            new Clear($sessions),
+            new Sessions($sessions),
+            new Leave(),
+        ];
+    }
+
+    public function testTheDefaultSessionProviderWritesNothingToDisk(): void
     {
         $provider = new FakeAIProvider(new AssistantMessage('An answer.'));
         $agent = new Agent();
@@ -1674,7 +1931,11 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli($agent, terminal: $terminal))->run();
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: self::sessionCommands(new InMemorySessionProvider()),
+        ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -1734,7 +1995,7 @@ MARKDOWN;
         (new NeuronCli(
             $agent,
             terminal: $terminal,
-            sessionProvider: $sessions,
+            commands: self::sessionCommands($sessions),
         ))->run();
 
         self::assertIsString($clearedDisplay);
@@ -1787,7 +2048,7 @@ MARKDOWN;
         (new NeuronCli(
             $agent,
             terminal: $terminal,
-            sessionProvider: $sessions,
+            commands: self::sessionCommands($sessions),
         ))->run();
 
         $listed = $sessions->list();
@@ -1865,7 +2126,7 @@ MARKDOWN;
         (new NeuronCli(
             $agent,
             terminal: $terminal,
-            sessionProvider: $sessions,
+            commands: self::sessionCommands($sessions),
         ))->run();
 
         self::assertIsString($refusedDisplay);
@@ -1921,7 +2182,7 @@ MARKDOWN;
         (new NeuronCli(
             $agent,
             terminal: $terminal,
-            sessionProvider: $sessions,
+            commands: self::sessionCommands($sessions),
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -1991,7 +2252,7 @@ MARKDOWN;
         (new NeuronCli(
             $agent,
             terminal: $terminal,
-            sessionProvider: $sessions,
+            commands: self::sessionCommands($sessions),
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -2037,7 +2298,7 @@ MARKDOWN;
         (new NeuronCli(
             $agent,
             terminal: $terminal,
-            sessionProvider: $sessions,
+            commands: self::sessionCommands($sessions),
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -2092,7 +2353,7 @@ MARKDOWN;
         (new NeuronCli(
             $agent,
             terminal: $terminal,
-            sessionProvider: $sessions,
+            commands: self::sessionCommands($sessions),
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -2125,7 +2386,7 @@ MARKDOWN;
         (new NeuronCli(
             $agent,
             terminal: $terminal,
-            sessionProvider: new InMemorySessionProvider(),
+            commands: self::sessionCommands(new InMemorySessionProvider()),
         ))->run();
 
         self::assertStringContainsString(
@@ -2173,7 +2434,7 @@ MARKDOWN;
         (new NeuronCli(
             $agent,
             terminal: $terminal,
-            sessionProvider: $sessions,
+            commands: self::sessionCommands($sessions),
         ))->run();
 
         self::assertIsString($narrowedDisplay);
@@ -2212,7 +2473,7 @@ MARKDOWN;
         (new NeuronCli(
             $agent,
             terminal: $terminal,
-            sessionProvider: $sessions,
+            commands: self::sessionCommands($sessions),
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -2262,7 +2523,7 @@ MARKDOWN;
         (new NeuronCli(
             $agent,
             terminal: $terminal,
-            sessionProvider: $sessions,
+            commands: self::sessionCommands($sessions),
         ))->run();
 
         self::assertIsString($refusedDisplay);

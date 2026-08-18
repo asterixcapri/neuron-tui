@@ -7,17 +7,16 @@ namespace NeuronCli;
 use Amp\Future;
 use InvalidArgumentException;
 use NeuronAI\Agent\Agent;
+use NeuronAI\Chat\History\ChatHistoryInterface;
 use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
 use NeuronCli\Conversation\AgentTurn;
-use NeuronCli\Conversation\BuiltInCommand;
+use NeuronCli\Conversation\Commands\Leave;
 use NeuronCli\Conversation\Controls;
 use NeuronCli\Conversation\MessageForAgent;
 use NeuronCli\Conversation\SlashCommand;
 use NeuronCli\Conversation\SlashCommandInput;
 use NeuronCli\Conversation\Submission;
 use NeuronCli\Conversation\TurnQueue;
-use NeuronCli\Session\InMemorySessionProvider;
-use NeuronCli\Session\SessionProvider;
 use NeuronCli\Tui\ConversationView;
 use NeuronCli\Tui\WorkingIndicator;
 use Symfony\Component\Tui\Event\InputEvent;
@@ -38,8 +37,6 @@ final class NeuronCli
 
     private readonly WorkingIndicator $workingIndicator;
 
-    private readonly SessionProvider $sessionProvider;
-
     private readonly TurnQueue $turns;
 
     private readonly AgentTurn $agentTurn;
@@ -55,24 +52,19 @@ final class NeuronCli
     private ?Future $response = null;
 
     /**
-     * @param list<SlashCommand> $commands what can be typed here besides the
-     *                                     commands the TUI carries out itself
+     * @param list<SlashCommand> $commands everything that can be typed here
+     *                                     after a slash: the Conversation TUI
+     *                                     mounts nothing on its own
      */
     public function __construct(
         private Agent $agent,
         string $title = 'Neuron AI',
         string $subtitle = 'Agent conversation',
         ?TerminalInterface $terminal = null,
-        ?SessionProvider $sessionProvider = null,
         array $commands = [],
     ) {
         $this->commands = self::mount($commands);
         $this->terminal = $terminal ?? new Terminal();
-        // A Host Application that named no provider named no place for its
-        // conversations either, so they are kept in memory and nothing is
-        // written anywhere.
-        $this->sessionProvider = $sessionProvider
-            ?? new InMemorySessionProvider();
         $this->view = new ConversationView(
             $this->terminal,
             $title,
@@ -139,32 +131,18 @@ final class NeuronCli
     /**
      * Carries out the command the typed name points at, with its arguments.
      *
-     * The name is looked for among the commands a Host Application mounted
-     * first, and then among the ones the TUI carries out itself; a name
-     * neither answers is said in the conversation rather than sent to the
-     * Agent, because the Slash namespace is answered locally.
+     * The name is looked for among the commands mounted when the terminal was
+     * built, and there is nowhere else to look: the Conversation TUI answers
+     * to nothing on its own. A name no command answers to is said in the
+     * conversation rather than sent to the Agent, because the Slash namespace
+     * is answered locally.
      *
      * No command runs mid-turn but leaving: an answer already on its way
      * would land in a conversation the command had meanwhile replaced.
      */
     private function carryOut(SlashCommandInput $input): void
     {
-        $mounted = $this->commands[$input->name] ?? null;
-
-        if ($mounted !== null) {
-            if ($this->refusedWhileWorking($input->name)) {
-                return;
-            }
-
-            // The command was taken, so what was typed leaves the composer:
-            // only a name nobody answers stays there to be corrected.
-            $this->view->emptyComposer();
-            $this->runSafely($mounted, $input->arguments);
-
-            return;
-        }
-
-        $command = BuiltInCommand::tryFrom($input->name);
+        $command = $this->commands[$input->name] ?? null;
 
         if ($command === null) {
             $this->view->showUnknownSlashCommand($input->name);
@@ -172,20 +150,22 @@ final class NeuronCli
             return;
         }
 
-        if ($command === BuiltInCommand::Exit) {
-            $this->view->stop();
-
+        // Leaving asks the question earlier than the turn does, so it is the
+        // one command a turn under way does not hold back. Which commands
+        // those are is the TUI's decision rather than any single command's,
+        // and until that decision is carried by the type of a command it is
+        // taken by recognising the one this library ships to leave.
+        if (
+            !$command instanceof Leave
+            && $this->refusedWhileWorking($input->name)
+        ) {
             return;
         }
 
-        if ($this->refusedWhileWorking($command->value)) {
-            return;
-        }
-
-        match ($command) {
-            BuiltInCommand::Clear => $this->startSession(),
-            BuiltInCommand::Sessions => $this->chooseSession(),
-        };
+        // The command was taken, so what was typed leaves the composer:
+        // only a name nobody answers stays there to be corrected.
+        $this->view->emptyComposer();
+        $this->runSafely($command, $input->arguments);
     }
 
     /**
@@ -204,6 +184,7 @@ final class NeuronCli
      */
     private function runSafely(SlashCommand $command, string $arguments): void
     {
+        $conversation = $this->agent->getChatHistory();
         $controls = new Controls(
             $this->view,
             fn (): Agent => $this->agent,
@@ -213,11 +194,46 @@ final class NeuronCli
             $this->answerFrom(...),
         );
 
+        $failure = null;
+
         try {
             $command->run($controls, $arguments);
         } catch (Throwable $exception) {
-            $this->showFailure($exception);
+            $failure = $exception;
         }
+
+        // The screen is reconciled before anything is said about the run, so
+        // that a command which failed after changing conversation leaves its
+        // line of error on the conversation it left behind.
+        $this->reconcile($conversation);
+
+        if ($failure instanceof Throwable) {
+            $this->showFailure($failure);
+        }
+    }
+
+    /**
+     * Puts back on screen the conversation the Agent is holding now.
+     *
+     * Read after every command, so that whatever it did — opened another
+     * Session, put another Agent in charge, installed a History of its own —
+     * the screen agrees with the Agent without the command having to say so.
+     *
+     * A command that left the History where it found it left the screen alone
+     * too: what it said, warned or asked stays where it was written, and
+     * repainting would throw it away. Handing a History from one Agent to
+     * another is that same case, which is why nothing is repainted after a
+     * change of Agent alone.
+     */
+    private function reconcile(ChatHistoryInterface $conversation): void
+    {
+        $current = $this->agent->getChatHistory();
+
+        if ($current === $conversation) {
+            return;
+        }
+
+        $this->view->showHistory($current->getMessages());
     }
 
     /**
@@ -265,8 +281,9 @@ final class NeuronCli
      *
      * Two commands answering to the same name are a mistake in how the
      * terminal was built, so it is said at once instead of one of them
-     * silently winning. The names the TUI carries out itself are taken too,
-     * and are said apart, because there is no second command to look for.
+     * silently winning. No name is reserved: the commands Neuron CLI ships
+     * are mounted here like any other, and a Host Application is free to
+     * leave any of them out.
      *
      * @param list<SlashCommand> $commands
      *
@@ -279,14 +296,6 @@ final class NeuronCli
         foreach ($commands as $command) {
             $name = $command->name();
 
-            if (BuiltInCommand::tryFrom($name) instanceof BuiltInCommand) {
-                throw new InvalidArgumentException(
-                    $name
-                        . ' is a Slash command the Conversation TUI '
-                        . 'answers to itself.',
-                );
-            }
-
             if (isset($mounted[$name])) {
                 throw new InvalidArgumentException(
                     'Two Slash commands answer to ' . $name . '.',
@@ -297,69 +306,6 @@ final class NeuronCli
         }
 
         return $mounted;
-    }
-
-    /**
-     * Offers the Sessions of this Agent for a person to return to one.
-     *
-     * A list with nothing in it is not worth entering, so it is said in the
-     * conversation instead. The Picker chooses among keys and labels like
-     * for any other list, so the Sessions are turned into lines here, where
-     * a Session is still something known.
-     */
-    private function chooseSession(): void
-    {
-        $sessions = $this->sessionProvider->list();
-
-        if ($sessions === []) {
-            $this->view->showError(
-                'There is no earlier Session to return to yet.',
-            );
-
-            return;
-        }
-
-        $labels = [];
-
-        foreach ($sessions as $session) {
-            $labels[$session->key] = $session->title;
-        }
-
-        $chosen = $this->view->choose('Sessions', $labels);
-
-        if ($chosen === null) {
-            return;
-        }
-
-        $this->openSession($chosen);
-    }
-
-    /**
-     * Puts a freshly minted Session on the Agent.
-     *
-     * Minting one and opening it are the provider's two separate operations,
-     * and a new Session is both: the key comes back from the provider and
-     * goes straight back to it.
-     */
-    private function startSession(): void
-    {
-        $this->openSession($this->sessionProvider->create()->key);
-    }
-
-    /**
-     * Puts the Session with the given key on the Agent and shows it, screen
-     * and composer both.
-     *
-     * The key is one the provider minted, because no other origin exists.
-     * The conversation it replaces is left where the provider keeps it:
-     * nothing here ever deletes a stored Session.
-     */
-    private function openSession(string $key): void
-    {
-        $session = $this->sessionProvider->open($key);
-        $this->agent->setChatHistory($session);
-        $this->view->showHistory($session->getMessages());
-        $this->view->emptyComposer();
     }
 
     private function tick(): bool
