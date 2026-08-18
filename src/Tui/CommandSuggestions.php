@@ -28,6 +28,13 @@ use Symfony\Component\Tui\Widget\TextWidget;
  * none do, the one line that says so takes the list's place, because there
  * being nothing is itself worth reading before Enter is pressed.
  *
+ * The keys are asked for from outside: whoever holds them says which line is
+ * chosen, asks for the name a completion would write, or takes the band away
+ * for an Escape. Two questions answer for all of them: whether anything is on
+ * screen at all, which is what Escape takes away, and whether what is on
+ * screen is a list rather than the one line that says nothing matches, which
+ * is what ↑↓ and Tab have to work on.
+ *
  * While the Agent works the list carries the commands that run there and
  * nothing else. The Conversation TUI turns away a command that does not say
  * in its type that it runs mid-turn, so offering that name meanwhile would
@@ -110,6 +117,21 @@ final class CommandSuggestions
     private ?array $shown = null;
 
     /**
+     * Which of the shown lines is chosen, as a place among them. Kept here
+     * as well as in the list because the list is handed a set of lines and
+     * answers about the one under the arrow, while what moves the arrow is
+     * a key the list never sees.
+     */
+    private int $chosen = 0;
+
+    /**
+     * Whether Escape has taken the band away from a draft that would still
+     * have it on screen. Writing brings it back; a turn beginning or ending
+     * underneath does not.
+     */
+    private bool $dismissed = false;
+
+    /**
      * What is being written now, kept so that a turn beginning or ending can
      * ask the question again of an unchanged draft.
      */
@@ -159,6 +181,9 @@ final class CommandSuggestions
     public function draftChanged(string $draft): void
     {
         $this->draft = $draft;
+        // A draft that changed is a name being written again, so what
+        // Escape took away comes back with the writing that asks for it.
+        $this->dismissed = false;
         $this->show();
     }
 
@@ -182,11 +207,101 @@ final class CommandSuggestions
     }
 
     /**
+     * Whether anything of the suggestions occupies its band, the line that
+     * says nothing matches included.
+     *
+     * That line is on screen and covers the conversation just as the list
+     * does, so it is what Escape takes away as well.
+     */
+    public function isOnScreen(): bool
+    {
+        return $this->onScreen !== null;
+    }
+
+    /**
+     * Whether there is a list on screen to move through and complete from.
+     *
+     * The one line that says nothing matches is not one: it is read, not
+     * chosen from. So this is the answer to every question the keys ask —
+     * whether ↑↓ have anywhere to go, whether Tab has anything to write,
+     * whether Escape has a list to take away — and to what the status line
+     * says while there is one.
+     */
+    public function isListOpen(): bool
+    {
+        return $this->onScreen === $this->list && $this->shown !== null;
+    }
+
+    /**
+     * The name a completion would write, or nothing where there is no list
+     * to complete from.
+     */
+    public function chosenName(): ?string
+    {
+        if (!$this->isListOpen()) {
+            return null;
+        }
+
+        return $this->shown[$this->chosen]['value'] ?? null;
+    }
+
+    /**
+     * Chooses the line above the one chosen now, the last one being above
+     * the first. Answers whether there was a list to move through.
+     */
+    public function choosePrevious(): bool
+    {
+        return $this->moveBy(-1);
+    }
+
+    /**
+     * Chooses the line below the one chosen now, the first one being below
+     * the last.
+     */
+    public function chooseNext(): bool
+    {
+        return $this->moveBy(1);
+    }
+
+    /**
+     * Takes the band away from a draft that would keep it, which is what
+     * Escape means here. What is being written is left untouched, so a
+     * second Escape reaches the composer and empties it as it always has.
+     */
+    public function dismiss(): void
+    {
+        $this->dismissed = true;
+        $this->hide();
+    }
+
+    /**
+     * Moves the chosen line by the given number of places, wrapping around
+     * the ends the way the list does when it holds the keys itself.
+     */
+    private function moveBy(int $places): bool
+    {
+        if (!$this->isListOpen()) {
+            return false;
+        }
+
+        $lines = count($this->shown ?? []);
+
+        if ($lines === 0) {
+            return false;
+        }
+
+        $this->chosen = ($this->chosen + $places + $lines) % $lines;
+        $this->list->setSelectedIndex($this->chosen);
+
+        return true;
+    }
+
+    /**
      * Puts on screen what the draft and the turn together ask for.
      */
     private function show(): void
     {
-        if (!self::isNameBeingWritten($this->draft)) {
+        if ($this->dismissed || !self::isNameBeingWritten($this->draft)) {
             $this->hide();
 
             return;
@@ -204,6 +319,7 @@ final class CommandSuggestions
             // The list is given its lines again when one matches next, so
             // what was selected before this does not come back with them.
             $this->shown = null;
+            $this->chosen = 0;
 
             return;
         }
@@ -214,6 +330,7 @@ final class CommandSuggestions
             // it: whoever is writing is narrowing, not scrolling.
             $this->list->setItems($lines);
             $this->shown = $lines;
+            $this->chosen = 0;
         }
 
         $this->put($this->list);
@@ -247,6 +364,7 @@ final class CommandSuggestions
         // The list is given its lines again next time it is shown, so what
         // was selected before does not outlive the writing that chose it.
         $this->shown = null;
+        $this->chosen = 0;
     }
 
     /**

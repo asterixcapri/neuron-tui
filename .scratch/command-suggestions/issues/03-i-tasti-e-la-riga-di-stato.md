@@ -24,7 +24,7 @@ la lista si chiude. È il mestiere che quella riga svolge già negli altri stati
 **Blocked by:** 01 — La lista compare mentre si scrive un nome; 02 — Il filtro,
 l'ordine e il grassetto.
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] ↑↓ muovono la riga scelta senza spostare il cursore nel composer
 - [ ] La scelta torna in cima ogni volta che l'insieme delle righe mostrate
