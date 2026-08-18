@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace NeuronCli\Conversation\Commands;
 
-use NeuronCli\Conversation\Controls;
-use NeuronCli\Conversation\SlashCommand;
+use NeuronCli\Conversation\LimitedControls;
+use NeuronCli\Conversation\RunsWhileWorking;
 
 /**
  * Leaves the terminal.
@@ -14,11 +14,11 @@ use NeuronCli\Conversation\SlashCommand;
  * it mounts one of its own, under `/exit` or under whatever name it prefers.
  * A Host Application that mounts nothing leaves `Ctrl+C` as the only way out.
  *
- * It is also the one command a turn under way does not hold back: leaving asks
- * its question earlier than the answer on its way can spoil, so the
- * Conversation TUI lets this one through while the Agent is working.
+ * It runs while the Agent is working too: leaving asks its question earlier
+ * than the answer on its way can spoil, so it says as much in its type and
+ * takes the fewer Controls that come with saying it.
  */
-final readonly class Leave implements SlashCommand
+final readonly class Leave implements RunsWhileWorking
 {
     /**
      * @param string $name the name it answers to, slash included
@@ -37,7 +37,7 @@ final readonly class Leave implements SlashCommand
         return 'Closes the Conversation TUI.';
     }
 
-    public function run(Controls $controls, string $arguments): void
+    public function run(LimitedControls $controls, string $arguments): void
     {
         $controls->stop();
     }
