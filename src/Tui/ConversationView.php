@@ -8,9 +8,11 @@ use Amp\DeferredFuture;
 use Closure;
 use LogicException;
 use NeuronAI\Chat\Messages\Message;
+use NeuronCli\Conversation\Command;
 use NeuronCli\History\EntryKind;
 use NeuronCli\History\HistoryProjection;
 use Symfony\Component\Tui\Event\CancelEvent;
+use Symfony\Component\Tui\Event\ChangeEvent;
 use Symfony\Component\Tui\Event\InputEvent;
 use Symfony\Component\Tui\Event\SubmitEvent;
 use Symfony\Component\Tui\Terminal\TerminalInterface;
@@ -48,6 +50,8 @@ final class ConversationView
 
     private readonly Picker $picker;
 
+    private readonly CommandSuggestions $suggestions;
+
     private ?HistoryEntry $activeAgentMessage = null;
 
     /**
@@ -62,10 +66,16 @@ final class ConversationView
      */
     private bool $leaving = false;
 
+    /**
+     * @param list<Command> $commands
+     *     the mounted commands, in the order the Host Application named
+     *     them, which are what the Command suggestions have to offer
+     */
     public function __construct(
         private readonly TerminalInterface $terminal,
         string $title,
         string $subtitle,
+        array $commands = [],
     ) {
         $this->tui = new Tui(
             ConversationStyleSheet::create(),
@@ -80,12 +90,14 @@ final class ConversationView
         $this->editor->setMinVisibleLines(1);
         $this->editor->setMaxVisibleLines(5);
         $this->editor->onCancel($this->clearDraft(...));
+        $this->editor->onChange($this->draftChanged(...));
         $this->status = new TextWidget(self::READY_STATUS);
         $this->status->addStyleClass('status');
         $this->picker = new Picker(
             $this->closePicker(...),
             $this->abandon(...),
         );
+        $this->suggestions = new CommandSuggestions($commands);
 
         $this->build($title, $subtitle);
     }
@@ -182,6 +194,9 @@ final class ConversationView
     public function emptyComposer(): void
     {
         $this->editor->setText('');
+        // Text put in the composer from here raises nothing the editor
+        // reports, so the suggestions are told about the empty draft.
+        $this->suggestions->draftChanged('');
     }
 
     /**
@@ -374,9 +389,19 @@ final class ConversationView
         $this->tui->add($this->history->widget());
         $this->tui->add($this->queuedMessages);
         $this->tui->add($this->picker->widget());
+        $this->tui->add($this->suggestions->widget());
         $this->tui->add($composer);
         $this->tui->add($this->status);
         $this->tui->setFocus($this->editor);
+    }
+
+    /**
+     * Tells the Command suggestions what is being written now.
+     */
+    private function draftChanged(ChangeEvent $event): void
+    {
+        $this->suggestions->draftChanged($event->getValue());
+        $this->tui->requestRender();
     }
 
     private function clearDraft(CancelEvent $event): void
