@@ -5,9 +5,8 @@ declare(strict_types=1);
 namespace NeuronCli\Tests\Conversation;
 
 use NeuronCli\Conversation\MessageForAgent;
-use NeuronCli\Conversation\SlashCommand;
+use NeuronCli\Conversation\SlashCommandInput;
 use NeuronCli\Conversation\Submission;
-use NeuronCli\Conversation\UnknownSlashCommand;
 use PHPUnit\Framework\TestCase;
 
 final class SubmissionTest extends TestCase
@@ -20,52 +19,69 @@ final class SubmissionTest extends TestCase
         self::assertSame("First line\nsecond line", $submission->contents);
     }
 
-    public function testTheThreeSlashCommandsAreRecognized(): void
+    public function testAMessageKeepsEveryCharacterIncludingItsSpacing(): void
     {
+        $submission = Submission::interpret("  Type /clear to start over \n");
+
+        self::assertInstanceOf(MessageForAgent::class, $submission);
         self::assertSame(
-            SlashCommand::Clear,
-            Submission::interpret('/clear'),
+            "  Type /clear to start over \n",
+            $submission->contents,
         );
-        self::assertSame(
-            SlashCommand::Sessions,
-            Submission::interpret('/sessions'),
-        );
-        self::assertSame(
-            SlashCommand::Exit,
-            Submission::interpret('/exit'),
-        );
+    }
+
+    public function testACommandOnItsOwnHasNoArguments(): void
+    {
+        $submission = Submission::interpret('/exit');
+
+        self::assertInstanceOf(SlashCommandInput::class, $submission);
+        self::assertSame('/exit', $submission->name);
+        self::assertSame('', $submission->arguments);
     }
 
     public function testWhitespaceAroundACommandIsNotAnArgument(): void
     {
-        self::assertSame(
-            SlashCommand::Clear,
-            Submission::interpret("/clear \n"),
-        );
+        $submission = Submission::interpret("/clear \n");
+
+        self::assertInstanceOf(SlashCommandInput::class, $submission);
+        self::assertSame('/clear', $submission->name);
+        self::assertSame('', $submission->arguments);
     }
 
-    public function testAnythingElseBeginningWithASlashIsUnknown(): void
-    {
-        $submission = Submission::interpret('/unknown');
-
-        self::assertInstanceOf(UnknownSlashCommand::class, $submission);
-        self::assertSame('/unknown', $submission->name);
-    }
-
-    public function testAnUnknownCommandIsNamedByItsFirstWordAlone(): void
-    {
-        $submission = Submission::interpret("/unknown with\targuments");
-
-        self::assertInstanceOf(UnknownSlashCommand::class, $submission);
-        self::assertSame('/unknown', $submission->name);
-    }
-
-    public function testACommandFollowedByAnythingIsNotThatCommand(): void
+    public function testWhatFollowsTheNameIsTheArguments(): void
     {
         $submission = Submission::interpret('/exit now');
 
-        self::assertInstanceOf(UnknownSlashCommand::class, $submission);
+        self::assertInstanceOf(SlashCommandInput::class, $submission);
         self::assertSame('/exit', $submission->name);
+        self::assertSame('now', $submission->arguments);
+    }
+
+    public function testTheArgumentsKeepTheirOwnSpacingButNotTheOuterOne(): void
+    {
+        $submission = Submission::interpret("/review  the  diff \t");
+
+        self::assertInstanceOf(SlashCommandInput::class, $submission);
+        self::assertSame('/review', $submission->name);
+        self::assertSame('the  diff', $submission->arguments);
+    }
+
+    public function testWhateverEndsTheNameIsNotThenPartOfTheArguments(): void
+    {
+        $submission = Submission::interpret("/exit\x0Cnow");
+
+        self::assertInstanceOf(SlashCommandInput::class, $submission);
+        self::assertSame('/exit', $submission->name);
+        self::assertSame('now', $submission->arguments);
+    }
+
+    public function testANameNoCommandAnswersToIsStillReadAsAName(): void
+    {
+        $submission = Submission::interpret("/unknown with\targuments");
+
+        self::assertInstanceOf(SlashCommandInput::class, $submission);
+        self::assertSame('/unknown', $submission->name);
+        self::assertSame("with\targuments", $submission->arguments);
     }
 
     public function testTextMentioningASlashCommandIsStillAMessage(): void
