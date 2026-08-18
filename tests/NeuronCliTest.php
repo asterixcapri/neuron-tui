@@ -2102,6 +2102,391 @@ MARKDOWN;
     }
 
     /**
+     * Makes the next render paint the whole screen rather than the lines
+     * the last one touched.
+     *
+     * A resize at an unchanged size is a full repaint, which is what makes
+     * the absence of a line mean it is not on screen.
+     */
+    private static function forceRepaint(VirtualTerminal $terminal): void
+    {
+        $terminal->clearOutput();
+        $terminal->simulateResize(80, 30);
+    }
+
+    /**
+     * The Command suggestions: what is mounted, while a name is written.
+     */
+    public function testWritingASlashShowsTheMountedCommandsWithTheirDescriptions(): void
+    {
+        $provider = new FakeAIProvider();
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        $terminal = new VirtualTerminal(rows: 30);
+        $display = null;
+        EventLoop::delay(
+            0.05,
+            static fn () => $terminal->simulateInput('/'),
+        );
+        EventLoop::delay(
+            0.1,
+            static fn () => self::forceRepaint($terminal),
+        );
+        EventLoop::delay(
+            0.15,
+            static function () use (&$display, $terminal): void {
+                $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+                $terminal->simulateInput("\x03");
+            },
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [new Help(), new Leave()],
+        ))->run();
+
+        self::assertIsString($display);
+        self::assertStringContainsString('/help', $display);
+        self::assertStringContainsString(
+            'Lists what can be typed here.',
+            $display,
+        );
+        self::assertStringContainsString('/exit', $display);
+        self::assertStringContainsString(
+            'Closes the Conversation TUI.',
+            $display,
+        );
+        // The Host Application named /help first, and reads it first.
+        self::assertLessThan(
+            strpos($display, '/exit'),
+            strpos($display, '/help'),
+        );
+        $provider->assertNothingSent();
+    }
+
+    /**
+     * Nothing is suspended: the keys are still the composer's.
+     */
+    public function testTheSuggestionsSitAboveAComposerThatKeepsTakingText(): void
+    {
+        $agent = new Agent();
+        $terminal = new VirtualTerminal(rows: 30);
+        $display = null;
+        EventLoop::delay(
+            0.05,
+            static fn () => $terminal->simulateInput('/hel'),
+        );
+        EventLoop::delay(
+            0.1,
+            static fn () => self::forceRepaint($terminal),
+        );
+        EventLoop::delay(
+            0.15,
+            static function () use (&$display, $terminal): void {
+                $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+                $terminal->simulateInput("\x03");
+            },
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [new Help()],
+        ))->run();
+
+        self::assertIsString($display);
+        $lines = preg_split('/\r\n|\r|\n/', $display);
+        self::assertIsArray($lines);
+        $suggestion = null;
+        $composer = null;
+
+        foreach ($lines as $index => $line) {
+            if (
+                $suggestion === null
+                && str_contains($line, 'Lists what can be typed here.')
+            ) {
+                $suggestion = $index;
+
+                continue;
+            }
+
+            if ($suggestion !== null && str_starts_with(trim($line), '❯')) {
+                $composer = $index;
+                break;
+            }
+        }
+
+        self::assertNotNull($suggestion);
+        self::assertNotNull($composer);
+        self::assertStringContainsString('/hel', $lines[$composer]);
+    }
+
+    /**
+     * More commands than fit are scrolled to, not silently dropped.
+     */
+    public function testMoreCommandsThanFitAreCountedRatherThanDropped(): void
+    {
+        $agent = new Agent();
+        $terminal = new VirtualTerminal(rows: 30);
+        $commands = [];
+
+        for ($place = 0; $place < 10; ++$place) {
+            $commands[] = $this->commandThat(
+                static function (Controls $controls, string $arguments): void {
+                },
+                '/cmd' . $place,
+            );
+        }
+
+        $display = null;
+        EventLoop::delay(
+            0.05,
+            static fn () => $terminal->simulateInput('/'),
+        );
+        EventLoop::delay(
+            0.1,
+            static fn () => self::forceRepaint($terminal),
+        );
+        EventLoop::delay(
+            0.15,
+            static function () use (&$display, $terminal): void {
+                $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+                $terminal->simulateInput("\x03");
+            },
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: $commands,
+        ))->run();
+
+        self::assertIsString($display);
+        self::assertStringContainsString('/cmd0', $display);
+        self::assertStringContainsString('/cmd7', $display);
+        // Eight lines are visible, and the counter says how many there are.
+        self::assertStringNotContainsString('/cmd8', $display);
+        self::assertStringContainsString('(1/10)', $display);
+    }
+
+    /**
+     * A draft that is no longer a name takes the suggestions away.
+     */
+    public function testASpaceANewLineOrADeletedSlashTakesTheSuggestionsAway(): void
+    {
+        $agent = new Agent();
+        $terminal = new VirtualTerminal(rows: 30);
+        $open = null;
+        $afterSpace = null;
+        $afterNewLine = null;
+        $afterBackspace = null;
+        EventLoop::delay(
+            0.05,
+            static fn () => $terminal->simulateInput('/'),
+        );
+        EventLoop::delay(
+            0.1,
+            static fn () => self::forceRepaint($terminal),
+        );
+        EventLoop::delay(
+            0.15,
+            static function () use (&$open, $terminal): void {
+                $open = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+                $terminal->simulateInput(' ');
+            },
+        );
+        EventLoop::delay(
+            0.2,
+            static fn () => self::forceRepaint($terminal),
+        );
+        EventLoop::delay(
+            0.25,
+            static function () use (&$afterSpace, $terminal): void {
+                $afterSpace = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                // Escape empties the composer, and a new name is written.
+                $terminal->simulateInput("\x1b");
+                $terminal->simulateInput('/');
+            },
+        );
+        EventLoop::delay(
+            0.3,
+            static function () use ($terminal): void {
+                $terminal->simulateInput("\x1b[13;2u");
+                self::forceRepaint($terminal);
+            },
+        );
+        EventLoop::delay(
+            0.35,
+            static function () use (&$afterNewLine, $terminal): void {
+                $afterNewLine = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("\x1b");
+                $terminal->simulateInput('/');
+            },
+        );
+        EventLoop::delay(
+            0.4,
+            static function () use ($terminal): void {
+                $terminal->simulateInput("\x7f");
+                self::forceRepaint($terminal);
+            },
+        );
+        EventLoop::delay(
+            0.45,
+            static function () use (&$afterBackspace, $terminal): void {
+                $afterBackspace = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("\x03");
+            },
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [new Help()],
+        ))->run();
+
+        self::assertIsString($open);
+        self::assertStringContainsString(
+            'Lists what can be typed here.',
+            $open,
+        );
+
+        foreach ([$afterSpace, $afterNewLine, $afterBackspace] as $display) {
+            self::assertIsString($display);
+            self::assertStringNotContainsString(
+                'Lists what can be typed here.',
+                $display,
+            );
+        }
+    }
+
+    /**
+     * A slash in the middle of a message is text for the Agent.
+     */
+    public function testASlashInTheMiddleOfAMessageSuggestsNothing(): void
+    {
+        $agent = new Agent();
+        $terminal = new VirtualTerminal(rows: 30);
+        $display = null;
+        EventLoop::delay(
+            0.05,
+            static fn () => $terminal->simulateInput('ask /help about it'),
+        );
+        EventLoop::delay(
+            0.1,
+            static fn () => self::forceRepaint($terminal),
+        );
+        EventLoop::delay(
+            0.15,
+            static function () use (&$display, $terminal): void {
+                $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+                $terminal->simulateInput("\x03");
+            },
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [new Help()],
+        ))->run();
+
+        self::assertIsString($display);
+        self::assertStringNotContainsString(
+            'Lists what can be typed here.',
+            $display,
+        );
+    }
+
+    /**
+     * A terminal with nothing mounted says so rather than showing nothing.
+     */
+    public function testATerminalWithoutCommandsSaysNothingMatches(): void
+    {
+        $agent = new Agent();
+        $terminal = new VirtualTerminal(rows: 30);
+        $display = null;
+        EventLoop::delay(
+            0.05,
+            static fn () => $terminal->simulateInput('/'),
+        );
+        EventLoop::delay(
+            0.1,
+            static fn () => self::forceRepaint($terminal),
+        );
+        EventLoop::delay(
+            0.15,
+            static function () use (&$display, $terminal): void {
+                $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+                $terminal->simulateInput("\x03");
+            },
+        );
+
+        (new NeuronCli($agent, terminal: $terminal))->run();
+
+        self::assertIsString($display);
+        self::assertStringContainsString('No commands match "/"', $display);
+    }
+
+    /**
+     * Enter is never intercepted: it sends what is written.
+     */
+    public function testEnterStillSendsWhileTheSuggestionsAreOpen(): void
+    {
+        $provider = new FakeAIProvider();
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        $terminal = new VirtualTerminal(rows: 30);
+        $sent = null;
+        EventLoop::delay(
+            0.05,
+            static fn () => $terminal->simulateInput('/help'),
+        );
+        EventLoop::delay(
+            0.1,
+            static fn () => $terminal->simulateInput("\r"),
+        );
+        EventLoop::delay(
+            0.15,
+            static fn () => self::forceRepaint($terminal),
+        );
+        EventLoop::delay(
+            0.2,
+            static function () use (&$sent, $terminal): void {
+                $sent = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+                $terminal->simulateInput("\x03");
+            },
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [new Help()],
+        ))->run();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+
+        self::assertStringContainsString(
+            '/help — Lists what can be typed here.',
+            $display,
+        );
+        // The command was taken and the composer emptied, so the band that
+        // was open while the name was written is gone with the draft.
+        self::assertIsString($sent);
+        self::assertStringNotContainsString(
+            ' → /help',
+            $sent,
+        );
+        self::assertStringNotContainsString('Unknown Slash command', $display);
+        $provider->assertNothingSent();
+    }
+
+    /**
      * A command that does what the test tells it to, under a name of the
      * test's choosing.
      *

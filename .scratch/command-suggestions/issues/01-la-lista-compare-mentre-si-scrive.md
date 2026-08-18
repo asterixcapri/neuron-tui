@@ -19,16 +19,56 @@ vedrà chi ha montato una TUI senza comandi.
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Digitando `/` compaiono tutti i comandi montati, ciascuno con la sua
+- [x] Digitando `/` compaiono tutti i comandi montati, ciascuno con la sua
       descrizione
-- [ ] La fascia sta sopra la riga del composer, e il composer continua a
+- [x] La fascia sta sopra la riga del composer, e il composer continua a
       prendere il testo che si scrive
-- [ ] Sono visibili otto righe, con l'indicatore di scorrimento quando i
+- [x] Sono visibili otto righe, con l'indicatore di scorrimento quando i
       comandi non ci stanno
-- [ ] Uno spazio, un a capo o lo slash cancellato fanno sparire la fascia
-- [ ] Uno slash in mezzo a un messaggio non fa comparire niente
-- [ ] Su una TUI senza comandi montati compare la riga `No commands match "…"`
+- [x] Uno spazio, un a capo o lo slash cancellato fanno sparire la fascia
+- [x] Uno slash in mezzo a un messaggio non fa comparire niente
+- [x] Su una TUI senza comandi montati compare la riga `No commands match "…"`
       invece della lista
-- [ ] Invio continua a mandare quello che è scritto, con la fascia aperta
+- [x] Invio continua a mandare quello che è scritto, con la fascia aperta
+
+## Acceptance
+
+Implementato in `src/Tui/CommandSuggestions.php`, montato dalla
+`ConversationView` accanto allo slot del Picker e alimentato dai comandi che
+`NeuronCli` ha montato. Ogni casella qui sopra è verificata da un test in
+`tests/NeuronCliTest.php`, dal solo seam previsto dalla spec: TUI su
+`VirtualTerminal`, tasti simulati, schermo letto senza codici ANSI.
+
+- `testWritingASlashShowsTheMountedCommandsWithTheirDescriptions` — nomi e
+  descrizioni, nell'ordine di montaggio.
+- `testTheSuggestionsSitAboveAComposerThatKeepsTakingText` — la fascia è
+  sopra la riga del composer, che intanto continua a prendere il testo.
+- `testMoreCommandsThanFitAreCountedRatherThanDropped` — otto righe visibili
+  su dieci comandi, con il contatore `(1/10)`.
+- `testASpaceANewLineOrADeletedSlashTakesTheSuggestionsAway`.
+- `testASlashInTheMiddleOfAMessageSuggestsNothing`.
+- `testATerminalWithoutCommandsSaysNothingMatches` — `No commands match "/"`.
+- `testEnterStillSendsWhileTheSuggestionsAreOpen` — Invio manda quello che è
+  scritto e, con la bozza, se ne va anche la fascia.
+
+Note per i ticket successivi: la lista non è mai messa a fuoco e nessun tasto
+è intercettato, quindi 03 aggiunge i listener globali senza toglierli a
+nessuno; le righe sono calcolate una volta sola dai comandi montati, e 02 e 04
+sono i due ticket che le faranno dipendere dalla bozza e dal Turn.
+
+Verifica: `composer test` (140 test, 494 assert) e `composer stan` (due
+configurazioni) verdi sul commit del branch.
+
+Due punti osservati in revisione e lasciati come sono, con la ragione:
+
+- Le otto righe sono otto voci: `VISIBLE_LINES` va al widget di lista come
+  `maxVisible`, che conta le voci, e l'indicatore di scorrimento si aggiunge
+  sotto quando serve — otto righe di comandi più la riga del contatore, che è
+  quello che la casella chiede e quello che il Picker fa già con la stessa
+  costante.
+- La bozza è letta byte per byte (`preg_match` senza `u`): quello che è
+  stato incollato nel composer sono byte che nessuno ha validato, e la
+  domanda «si sta scrivendo un nome?» deve avere una risposta anche lì
+  invece di fallire sulla codifica.
