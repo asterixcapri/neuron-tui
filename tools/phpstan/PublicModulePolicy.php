@@ -31,6 +31,7 @@ final class PublicModulePolicy
         'NeuronCli\Conversation\SlashCommand',
         'NeuronCli\Conversation\Controls',
         'NeuronCli\Conversation\Commands\Clear',
+        'NeuronCli\Conversation\Commands\Help',
         'NeuronCli\Conversation\Commands\Leave',
         'NeuronCli\Conversation\Commands\Sessions',
         'NeuronCli\Session\SessionProvider',
