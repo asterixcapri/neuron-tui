@@ -1096,6 +1096,115 @@ MARKDOWN;
         $chosen->assertToolsConfigured(['read_file']);
     }
 
+    public function testAnotherAgentAnswersFromHereOnWithTheSameConversation(): void
+    {
+        $abandoned = new FakeAIProvider(new AssistantMessage('The old one.'));
+        $chosen = new FakeAIProvider(new AssistantMessage('The new one.'));
+        $agent = new Agent();
+        $agent->setAiProvider($abandoned);
+        $successor = new Agent();
+        $successor->setAiProvider($chosen);
+        $terminal = new VirtualTerminal(rows: 30);
+        $command = $this->commandThat(
+            static function (
+                Controls $controls,
+                string $arguments,
+            ) use ($successor): void {
+                $controls->useAgent($successor);
+            },
+        );
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("A question\r"),
+        );
+        EventLoop::delay(
+            0.3,
+            static fn () => $terminal->simulateInput("/probe\r"),
+        );
+        EventLoop::delay(
+            0.4,
+            static fn () => $terminal->simulateInput("Another question\r"),
+        );
+        EventLoop::delay(
+            0.7,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [$command],
+        ))->run();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+        // The conversation held by the Agent that answered first is still on
+        // the screen, and it is the new Agent that carries it on.
+        self::assertStringContainsString('The old one.', $display);
+        self::assertStringContainsString('The new one.', $display);
+        $abandoned->assertCallCount(1);
+        $chosen->assertCallCount(1);
+        $carried = $chosen->getRecorded()[0]->messages;
+        self::assertSame(
+            ['A question', 'The old one.', 'Another question'],
+            array_map(
+                static fn (Message $message): mixed => $message->getContent(),
+                $carried,
+            ),
+        );
+    }
+
+    public function testACommandCanInstallAnotherHistoryOnTheAgentItChose(): void
+    {
+        $abandoned = new FakeAIProvider(new AssistantMessage('The old one.'));
+        $chosen = new FakeAIProvider(new AssistantMessage('The new one.'));
+        $agent = new Agent();
+        $agent->setAiProvider($abandoned);
+        $successor = new Agent();
+        $successor->setAiProvider($chosen);
+        $terminal = new VirtualTerminal(rows: 30);
+        $command = $this->commandThat(
+            static function (
+                Controls $controls,
+                string $arguments,
+            ) use ($successor): void {
+                $controls->useAgent($successor);
+                $controls->agent()->setChatHistory(new InMemoryChatHistory());
+            },
+        );
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("A question\r"),
+        );
+        EventLoop::delay(
+            0.3,
+            static fn () => $terminal->simulateInput("/probe\r"),
+        );
+        EventLoop::delay(
+            0.4,
+            static fn () => $terminal->simulateInput("Another question\r"),
+        );
+        EventLoop::delay(
+            0.7,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [$command],
+        ))->run();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+        self::assertStringContainsString('The new one.', $display);
+        $chosen->assertCallCount(1);
+        $carried = $chosen->getRecorded()[0]->messages;
+        self::assertSame(
+            ['Another question'],
+            array_map(
+                static fn (Message $message): mixed => $message->getContent(),
+                $carried,
+            ),
+        );
+    }
+
     public function testACommandCanLeaveTheTerminal(): void
     {
         $forcedExit = false;

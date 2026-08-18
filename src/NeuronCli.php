@@ -60,7 +60,7 @@ final class NeuronCli
      *                                     commands the TUI carries out itself
      */
     public function __construct(
-        private readonly Agent $agent,
+        private Agent $agent,
         string $title = 'Neuron AI',
         string $subtitle = 'Agent conversation',
         ?TerminalInterface $terminal = null,
@@ -81,7 +81,7 @@ final class NeuronCli
         );
         $this->workingIndicator = $this->view->workingIndicator();
         $this->turns = new TurnQueue();
-        $this->agentTurn = new AgentTurn($this->agent, $this->view);
+        $this->agentTurn = new AgentTurn($this->view);
         $this->view->showHistory(
             $this->agent->getChatHistory()->getMessages(),
         );
@@ -202,10 +202,11 @@ final class NeuronCli
     {
         $controls = new Controls(
             $this->view,
-            $this->agent,
+            fn (): Agent => $this->agent,
             function (string $prompt): void {
                 $this->send(new MessageForAgent($prompt));
             },
+            $this->answerFrom(...),
         );
 
         try {
@@ -213,6 +214,21 @@ final class NeuronCli
         } catch (Throwable $exception) {
             $this->showFailure($exception);
         }
+    }
+
+    /**
+     * Puts another Agent in charge of answering from here on.
+     *
+     * A conversation is nobody's property: the History the Agent leaving was
+     * answering is handed to the one taking over, so what is on the screen is
+     * still what the Agent holds and nothing is said about the change until
+     * the next answer, which comes from elsewhere. A command that knows the
+     * two Agents are not interchangeable installs another History itself.
+     */
+    private function answerFrom(Agent $agent): void
+    {
+        $agent->setChatHistory($this->agent->getChatHistory());
+        $this->agent = $agent;
     }
 
     /**
@@ -345,8 +361,11 @@ final class NeuronCli
         $message = $this->turns->beginWorking();
 
         if ($message !== null) {
-            $this->response = async(function () use ($message): void {
-                $this->agentTurn->respond($message);
+            // The Agent is read the moment the turn starts, so a turn under
+            // way ends with the one that took it.
+            $agent = $this->agent;
+            $this->response = async(function () use ($agent, $message): void {
+                $this->agentTurn->respond($agent, $message);
             });
 
             return true;

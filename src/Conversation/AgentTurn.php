@@ -26,6 +26,10 @@ use NeuronCli\Tui\WorkingIndicator;
  * turn queue draws: it can only be exercised against a provider, where the
  * queue needs neither one nor an event loop.
  *
+ * Which Agent answers is not remembered here: it arrives with the message, so
+ * that a turn already begun ends with the Agent that took it even when
+ * another one has meanwhile been put in charge.
+ *
  * @internal
  */
 final class AgentTurn
@@ -33,7 +37,6 @@ final class AgentTurn
     private readonly WorkingIndicator $workingIndicator;
 
     public function __construct(
-        private readonly Agent $agent,
         private readonly ConversationView $view,
     ) {
         $this->workingIndicator = $this->view->workingIndicator();
@@ -42,12 +45,12 @@ final class AgentTurn
     /**
      * Sends the message and shows the answer as it comes back.
      */
-    public function respond(string $message): void
+    public function respond(Agent $agent, string $message): void
     {
         $tools = $this->view->beginAgentResponse();
         $contents = '';
 
-        $events = $this->agent
+        $events = $agent
             ->stream(new UserMessage($message))
             ->events();
 
