@@ -31,6 +31,7 @@ use NeuronAI\Tools\Tool;
 use NeuronCli\Conversation\Commands\Clear;
 use NeuronCli\Conversation\Commands\Help;
 use NeuronCli\Conversation\Commands\Leave;
+use NeuronCli\Conversation\Commands\SessionKit;
 use NeuronCli\Conversation\Commands\Sessions;
 use NeuronCli\Conversation\Controls;
 use NeuronCli\Conversation\SlashCommand;
@@ -2615,6 +2616,251 @@ MARKDOWN;
         self::assertStringNotContainsString(
             'The earlier subject',
             $refusedDisplay,
+        );
+    }
+
+    /**
+     * A kit is mounted in one line and every command it offers answers, the
+     * way each would have answered had it been named on its own.
+     */
+    public function testMountingAKitMountsEveryCommandItOffers(): void
+    {
+        $agent = new Agent();
+        $agent->setAiProvider(new FakeAIProvider());
+        $sessions = new InMemorySessionProvider();
+        $earlier = $sessions->open($sessions->create()->key);
+        $earlier->addMessage(new UserMessage('The earlier subject'));
+        $earlier->addMessage(new AssistantMessage('The earlier answer.'));
+        $terminal = new VirtualTerminal(rows: 30);
+        $pickerDisplay = null;
+        $resumedDisplay = null;
+        $clearedDisplay = null;
+        EventLoop::delay(
+            0.04,
+            static fn () => $terminal->simulateInput("/sessions\r"),
+        );
+        EventLoop::delay(
+            0.1,
+            static function () use (&$pickerDisplay, $terminal): void {
+                $pickerDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->clearOutput();
+                $terminal->simulateInput("\r");
+            },
+        );
+        EventLoop::delay(
+            0.16,
+            static function () use (&$resumedDisplay, $terminal): void {
+                $resumedDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->clearOutput();
+                $terminal->simulateInput("/clear\r");
+            },
+        );
+        EventLoop::delay(
+            0.24,
+            static function () use ($terminal): void {
+                $terminal->clearOutput();
+                $terminal->simulateInput('draft');
+            },
+        );
+        EventLoop::delay(
+            0.3,
+            static function () use (&$clearedDisplay, $terminal): void {
+                $clearedDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("\x03");
+            },
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [new SessionKit($sessions), new Leave()],
+        ))->run();
+
+        self::assertIsString($pickerDisplay);
+        self::assertStringContainsString(
+            'The earlier subject',
+            $pickerDisplay,
+        );
+        self::assertIsString($resumedDisplay);
+        self::assertStringContainsString(
+            '● The earlier answer.',
+            $resumedDisplay,
+        );
+        self::assertIsString($clearedDisplay);
+        self::assertStringContainsString('draft', $clearedDisplay);
+        self::assertStringNotContainsString(
+            'The earlier subject',
+            $clearedDisplay,
+        );
+        self::assertSame([], $agent->getChatHistory()->getMessages());
+        // Both commands reached the one provider the kit was given, so the
+        // Session the first resumed is the one the second left stored.
+        self::assertSame(
+            ['The earlier subject'],
+            array_map(
+                static fn (Session $session): string => $session->title,
+                $sessions->list(),
+            ),
+        );
+    }
+
+    public function testAKitCanBeMountedWithSomeOfItsCommandsLeftOut(): void
+    {
+        $agent = new Agent();
+        $agent->setAiProvider(new FakeAIProvider());
+        $sessions = new InMemorySessionProvider();
+        $earlier = $sessions->open($sessions->create()->key);
+        $earlier->addMessage(new UserMessage('The earlier subject'));
+        $terminal = new VirtualTerminal(rows: 30);
+        $refusedDisplay = null;
+        $pickerDisplay = null;
+        EventLoop::delay(
+            0.04,
+            static fn () => $terminal->simulateInput("/clear\r"),
+        );
+        EventLoop::delay(
+            0.1,
+            static function () use (&$refusedDisplay, $terminal): void {
+                $refusedDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                // An unknown name stays in the composer, so Escape takes it
+                // away before the next one is typed.
+                $terminal->simulateInput("\x1b");
+                $terminal->clearOutput();
+                $terminal->simulateInput("/sessions\r");
+            },
+        );
+        EventLoop::delay(
+            0.18,
+            static function () use (&$pickerDisplay, $terminal): void {
+                $pickerDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("\x1b");
+                $terminal->simulateInput("\x03");
+            },
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [
+                (new SessionKit($sessions))->exclude([Clear::class]),
+                new Leave(),
+            ],
+        ))->run();
+
+        self::assertIsString($refusedDisplay);
+        self::assertStringContainsString(
+            'Unknown Slash command: /clear',
+            $refusedDisplay,
+        );
+        self::assertIsString($pickerDisplay);
+        self::assertStringNotContainsString(
+            'Unknown Slash command: /sessions',
+            $pickerDisplay,
+        );
+        self::assertStringContainsString(
+            'The earlier subject',
+            $pickerDisplay,
+        );
+    }
+
+    public function testAKitCanBeMountedKeepingOnlySomeOfItsCommands(): void
+    {
+        $agent = new Agent();
+        $agent->setAiProvider(new FakeAIProvider());
+        $sessions = new InMemorySessionProvider();
+        $agent->setChatHistory(new ExistingChatHistory([
+            new UserMessage('The earlier subject'),
+            new AssistantMessage('The earlier answer.'),
+        ]));
+        $terminal = new VirtualTerminal(rows: 30);
+        $refusedDisplay = null;
+        $clearedDisplay = null;
+        EventLoop::delay(
+            0.04,
+            static fn () => $terminal->simulateInput("/sessions\r"),
+        );
+        EventLoop::delay(
+            0.1,
+            static function () use (&$refusedDisplay, $terminal): void {
+                $refusedDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("\x1b");
+                $terminal->clearOutput();
+                $terminal->simulateInput("/clear\r");
+            },
+        );
+        EventLoop::delay(
+            0.18,
+            static function () use ($terminal): void {
+                $terminal->clearOutput();
+                $terminal->simulateInput('draft');
+            },
+        );
+        EventLoop::delay(
+            0.24,
+            static function () use (&$clearedDisplay, $terminal): void {
+                $clearedDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("\x03");
+            },
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [
+                (new SessionKit($sessions))->only([Clear::class]),
+                new Leave(),
+            ],
+        ))->run();
+
+        self::assertIsString($refusedDisplay);
+        self::assertStringContainsString(
+            'Unknown Slash command: /sessions',
+            $refusedDisplay,
+        );
+        self::assertIsString($clearedDisplay);
+        self::assertStringContainsString('draft', $clearedDisplay);
+        self::assertStringNotContainsString(
+            'Unknown Slash command: /clear',
+            $clearedDisplay,
+        );
+        self::assertStringNotContainsString(
+            'The earlier subject',
+            $clearedDisplay,
+        );
+        self::assertSame([], $agent->getChatHistory()->getMessages());
+    }
+
+    /**
+     * A command a kit brought is a mounted command like any other, so it
+     * stops the construction when it answers to a name already taken.
+     */
+    public function testACommandFromAKitClaimingATakenNameStopsTheBuild(): void
+    {
+        $sessions = new InMemorySessionProvider();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage(
+            'Two Slash commands answer to /clear.',
+        );
+
+        new NeuronCli(
+            new Agent(),
+            terminal: new VirtualTerminal(),
+            commands: [new Clear($sessions), new SessionKit($sessions)],
         );
     }
 

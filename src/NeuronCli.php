@@ -10,6 +10,7 @@ use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\History\ChatHistoryInterface;
 use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
 use NeuronCli\Conversation\AgentTurn;
+use NeuronCli\Conversation\CommandKit;
 use NeuronCli\Conversation\Commands\Leave;
 use NeuronCli\Conversation\Controls;
 use NeuronCli\Conversation\MessageForAgent;
@@ -52,9 +53,13 @@ final class NeuronCli
     private ?Future $response = null;
 
     /**
-     * @param list<SlashCommand> $commands everything that can be typed here
-     *                                     after a slash: the Conversation TUI
-     *                                     mounts nothing on its own
+     * @param list<SlashCommand|CommandKit> $commands everything that can be
+     *                                                typed here after a
+     *                                                slash: the Conversation
+     *                                                TUI mounts nothing on
+     *                                                its own, and a kit
+     *                                                stands for the commands
+     *                                                it carries
      */
     public function __construct(
         private Agent $agent,
@@ -286,7 +291,10 @@ final class NeuronCli
      * are mounted here like any other, and a Host Application is free to
      * leave any of them out.
      *
-     * @param list<SlashCommand> $commands
+     * A kit is unrolled before any of this, so a command that arrived in one
+     * is weighed here like any other.
+     *
+     * @param list<SlashCommand|CommandKit> $commands
      *
      * @return array<string, SlashCommand>
      */
@@ -294,7 +302,7 @@ final class NeuronCli
     {
         $mounted = [];
 
-        foreach ($commands as $command) {
+        foreach (self::unroll($commands) as $command) {
             $name = $command->name();
 
             if (isset($mounted[$name])) {
@@ -307,6 +315,33 @@ final class NeuronCli
         }
 
         return $mounted;
+    }
+
+    /**
+     * Puts the commands a kit carries where the kit was named.
+     *
+     * This is the one place a kit is opened, and nothing downstream is told
+     * a kit ever existed.
+     *
+     * @param list<SlashCommand|CommandKit> $commands
+     *
+     * @return list<SlashCommand>
+     */
+    private static function unroll(array $commands): array
+    {
+        $unrolled = [];
+
+        foreach ($commands as $command) {
+            if ($command instanceof CommandKit) {
+                $unrolled = [...$unrolled, ...$command->commands()];
+
+                continue;
+            }
+
+            $unrolled[] = $command;
+        }
+
+        return $unrolled;
     }
 
     private function tick(): bool

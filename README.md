@@ -164,6 +164,55 @@ Leave any of the four out and the terminal simply does not answer to that
 name. Without `Leave` there is no Slash command to close the terminal, and
 `Ctrl+C` is the only way out.
 
+### Command kits
+
+A **Command kit** is a group of commands mounted in one line, carrying between
+them whatever they need to work. `SessionKit` is the one this library ships: it
+is given the Session provider once and hands it to both the commands that
+touch the Sessions.
+
+```php
+use NeuronCli\Conversation\Commands\Leave;
+use NeuronCli\Conversation\Commands\SessionKit;
+use NeuronCli\Session\FileSessionProvider;
+
+$sessions = new FileSessionProvider('/var/lib/my-app/sessions');
+
+(new NeuronCli(agent: $agent, commands: [
+    new SessionKit($sessions),
+    new Leave(),
+]))->run();
+```
+
+A kit can be taken with some of its commands left out, or with only the named
+ones kept, so an application in which conversations are not thrown away has
+`/sessions` without `/clear`:
+
+```php
+use NeuronCli\Conversation\Commands\Clear;
+
+commands: [
+    (new SessionKit($sessions))->exclude([Clear::class]),
+    new Leave(),
+]
+
+// The other way round, keeping only what is named:
+commands: [(new SessionKit($sessions))->only([Clear::class])]
+```
+
+Both answer with a kit of their own and leave the one asked untouched, so the
+same kit can be mounted twice, differently. A kit is unrolled when the terminal
+is built: afterwards a command that arrived in a kit and one mounted on its own
+are the same thing — same listing, same rules, and the same stopped
+construction when two of them answer to one name.
+
+A Host Application groups commands of its own by extending
+`NeuronCli\Conversation\AbstractCommandKit` and naming them in `provide()`; the
+`NeuronCli\Conversation\CommandKit` interface is what the Conversation TUI
+mounts. Renaming a command stays the command's own business, so a kit is the
+short way in and writing its commands out by hand remains the way to give them
+names of one's own.
+
 ## Sessions
 
 A Session is one conversation with the Agent. `Clear` starts a fresh one
@@ -217,11 +266,14 @@ an application may supply. The Session provider:
 Slash commands it mounts: `NeuronCli\Conversation\SlashCommand` to implement,
 `NeuronCli\Conversation\Command` behind it,
 `NeuronCli\Conversation\Controls` as what a command is handed while it runs,
-and `NeuronCli\Conversation\Commands\Clear`,
+`NeuronCli\Conversation\Commands\Clear`,
 `NeuronCli\Conversation\Commands\Sessions`,
 `NeuronCli\Conversation\Commands\Leave` and
 `NeuronCli\Conversation\Commands\Help` as the commands shipped ready to
-mount.
+mount, and `NeuronCli\Conversation\CommandKit`,
+`NeuronCli\Conversation\AbstractCommandKit` and
+`NeuronCli\Conversation\Commands\SessionKit` for mounting a group of them in
+one line.
 Every other class under the `NeuronCli` namespace is annotated `@internal`, carries
 no stability promise, and may be renamed, split, or removed in any release. Static analysis enforces this on the examples, which
 are the reference Host Application.
