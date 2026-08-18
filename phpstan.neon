@@ -1,5 +1,10 @@
 parameters:
     level: max
+    # A cache of this checkout's own. The default is one directory shared by
+    # the whole machine, where the result cache of a checkout that has since
+    # been removed still names its vendor phar — and every other checkout
+    # then fails on paths that are not there any more.
+    tmpDir: .phpstan.cache
     paths:
         - src
         - tests

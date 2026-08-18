@@ -4,3 +4,5 @@
 .agents
 .pi
 .codex
+/.phpstan.cache/
+/.phpstan-examples.cache/

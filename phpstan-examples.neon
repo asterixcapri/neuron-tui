@@ -1,5 +1,8 @@
 parameters:
     level: 0
+    # This checkout's own cache, kept apart from the one the main analysis
+    # uses: see the note in phpstan.neon.
+    tmpDir: .phpstan-examples.cache
     # The example scripts are named one by one rather than as a directory.
     # The examples are a separate Composer project whose vendor directory,
     # when installed, links asterixcapri/neuron-cli back to this repository —
