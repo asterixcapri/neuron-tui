@@ -107,6 +107,8 @@ widgets of the Conversation TUI stay out of reach.
   while the list is open.
 - `agent()` returns the Agent, so its provider, instructions, tools and
   History change through the Neuron AI API rather than through verbs here.
+- `commands()` returns the commands mounted on this terminal, the one asking
+  included, so a command can list what may be typed here.
 - `useAgent()` puts another Agent in charge of answering from here on. The
   conversation under way moves over with it: the new Agent is handed the
   History the old one was answering, nothing changes on the screen, and it is
@@ -122,7 +124,7 @@ terminal, is the one exception and works at any time.
 
 ### The commands this library ships
 
-Three commands come with Neuron CLI, and they are mounted like any other. Each
+Four commands come with Neuron CLI, and they are mounted like any other. Each
 takes the name it answers to at construction, so a Host Application that
 prefers `/quit` to `/exit` writes no command of its own:
 
@@ -131,9 +133,11 @@ prefers `/quit` to `/exit` writes no command of its own:
 | `NeuronCli\Conversation\Commands\Clear` | `/clear` | Starts a new Session, leaving the current one stored. |
 | `NeuronCli\Conversation\Commands\Sessions` | `/sessions` | Lists the stored Sessions and resumes the one chosen. |
 | `NeuronCli\Conversation\Commands\Leave` | `/exit` | Closes the Conversation TUI. |
+| `NeuronCli\Conversation\Commands\Help` | `/help` | Lists what can be typed here. |
 
 ```php
 use NeuronCli\Conversation\Commands\Clear;
+use NeuronCli\Conversation\Commands\Help;
 use NeuronCli\Conversation\Commands\Leave;
 use NeuronCli\Conversation\Commands\Sessions;
 use NeuronCli\Session\InMemorySessionProvider;
@@ -144,14 +148,19 @@ $sessions = new InMemorySessionProvider();
     new Clear($sessions),
     new Sessions($sessions),
     new Leave('/quit'),
+    new Help(),
 ]))->run();
 ```
 
 The two commands that touch the Sessions receive the Session provider, because
 the place conversations live is named where it is needed. Passing the same
-provider to both is what makes them agree on which conversations exist.
+provider to both is what makes them agree on which conversations exist. `Help`
+receives no list of commands: the one it shows contains itself, so the Conversation TUI
+hands it over while it runs rather than the Host Application building it
+beforehand. Typing `/help` lists every mounted command with the line it
+describes itself by, the ones the Host Application wrote included.
 
-Leave any of the three out and the terminal simply does not answer to that
+Leave any of the four out and the terminal simply does not answer to that
 name. Without `Leave` there is no Slash command to close the terminal, and
 `Ctrl+C` is the only way out.
 
@@ -209,8 +218,9 @@ Slash commands it mounts: `NeuronCli\Conversation\SlashCommand` to implement,
 `NeuronCli\Conversation\Command` behind it,
 `NeuronCli\Conversation\Controls` as what a command is handed while it runs,
 and `NeuronCli\Conversation\Commands\Clear`,
-`NeuronCli\Conversation\Commands\Sessions` and
-`NeuronCli\Conversation\Commands\Leave` as the commands shipped ready to
+`NeuronCli\Conversation\Commands\Sessions`,
+`NeuronCli\Conversation\Commands\Leave` and
+`NeuronCli\Conversation\Commands\Help` as the commands shipped ready to
 mount.
 Every other class under the `NeuronCli` namespace is annotated `@internal`, carries
 no stability promise, and may be renamed, split, or removed in any release. Static analysis enforces this on the examples, which
@@ -245,8 +255,9 @@ composer config --global github-oauth.github.com <token>
 ```
 
 The demo reads `examples/.env` through Symfony Dotenv. Existing process environment
-variables take precedence over values from `examples/.env`. It mounts the three
-commands this library ships, so `/exit` or Ctrl+C closes it.
+variables take precedence over values from `examples/.env`. It mounts the
+commands this library ships, so `/exit` or Ctrl+C closes it and `/help` lists
+them.
 
 ## Keys
 
@@ -256,7 +267,7 @@ commands this library ships, so `/exit` or Ctrl+C closes it.
 - PageUp and PageDown browse the History.
 - Ctrl+C closes the Conversation TUI, mounted commands or not.
 - Any command the Host Application mounted, by the name it answers to —
-  including `Clear`, `Sessions` and `Leave` when it mounted them.
+  including `Clear`, `Sessions`, `Leave` and `Help` when it mounted them.
 
 A command is refused while the Agent is working, so an arriving answer cannot
 land in the wrong Session; `Leave` is the exception and works at any time. Unknown Slash commands

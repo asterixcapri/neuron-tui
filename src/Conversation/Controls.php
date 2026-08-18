@@ -24,6 +24,7 @@ final readonly class Controls
      * @param Closure(): Agent      $answering  the Agent answering right now
      * @param Closure(string): void $putToAgent how a prompt reaches the Agent
      * @param Closure(Agent): void  $answerFrom how another Agent takes over
+     * @param list<Command>         $mounted    the commands mounted here
      *
      * @internal the Conversation TUI builds these, a command receives them
      */
@@ -32,6 +33,7 @@ final readonly class Controls
         private Closure $answering,
         private Closure $putToAgent,
         private Closure $answerFrom,
+        private array $mounted,
     ) {
     }
 
@@ -101,6 +103,21 @@ final readonly class Controls
     public function useAgent(Agent $agent): void
     {
         ($this->answerFrom)($agent);
+    }
+
+    /**
+     * The commands mounted on this terminal, in the order they were mounted.
+     *
+     * The list contains the command reading it, which is why it arrives from
+     * here rather than from the construction of a command: the Conversation
+     * TUI is the one that has it, and a Host Application would have to build
+     * it before it existed.
+     *
+     * @return list<Command>
+     */
+    public function commands(): array
+    {
+        return $this->mounted;
     }
 
     /**

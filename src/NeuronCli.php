@@ -192,6 +192,7 @@ final class NeuronCli
                 $this->send(new MessageForAgent($prompt));
             },
             $this->answerFrom(...),
+            array_values($this->commands),
         );
 
         $failure = null;

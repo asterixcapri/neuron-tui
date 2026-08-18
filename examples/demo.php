@@ -12,6 +12,7 @@ use NeuronAI\Tools\Toolkits\Calendar\CalendarToolkit;
 use NeuronAI\Tools\Toolkits\FileSystem\FileSystemToolkit;
 use NeuronAI\Tools\Toolkits\Jina\JinaToolkit;
 use NeuronCli\Conversation\Commands\Clear;
+use NeuronCli\Conversation\Commands\Help;
 use NeuronCli\Conversation\Commands\Leave;
 use NeuronCli\Conversation\Commands\Sessions;
 use NeuronCli\NeuronCli;
@@ -62,5 +63,6 @@ $sessions = new FileSessionProvider(__DIR__ . '/sessions');
         new Clear($sessions),
         new Sessions($sessions),
         new Leave(),
+        new Help(),
     ],
 ))->run();
