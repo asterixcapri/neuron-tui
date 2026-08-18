@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace NeuronCli\Tui;
 
 use NeuronCli\Conversation\Command;
+use NeuronCli\Conversation\RunsWhileWorking;
+use Symfony\Component\Tui\Widget\AbstractWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 use Symfony\Component\Tui\Widget\SelectListWidget;
 use Symfony\Component\Tui\Widget\TextWidget;
@@ -18,11 +20,18 @@ use Symfony\Component\Tui\Widget\TextWidget;
  * uses — for the bounded height and the scroll counter it draws by itself —
  * and nothing else is shared.
  *
- * What is on screen is read from the draft alone: a single line beginning
- * with a slash and no whitespace yet is a name being written, and anything
- * else takes the suggestions away. With nothing to suggest they stay,
- * carrying the one line that says so, because there being nothing is itself
- * worth reading before Enter is pressed.
+ * What is on screen is read from the draft and from the turn: a single line
+ * beginning with a slash and no whitespace yet is a name being written, and
+ * anything else takes the suggestions away. With nothing to suggest they
+ * stay, carrying the one line that says so, because there being nothing is
+ * itself worth reading before Enter is pressed.
+ *
+ * While the Agent works the list carries the commands that run there and
+ * nothing else. The Conversation TUI turns away a command that does not say
+ * in its type that it runs mid-turn, so offering that name meanwhile would
+ * promise a run that will not happen — and where none of the mounted
+ * commands runs mid-turn, the line that says nothing matches is the honest
+ * answer. The whole list is back when the turn ends.
  *
  * @internal
  */
@@ -55,12 +64,40 @@ final class CommandSuggestions
     private readonly TextWidget $nothingMatches;
 
     /**
-     * Whether the commands to suggest fill a list or leave it empty. Read
-     * once: they are the ones mounted when the terminal was built.
+     * A line for each mounted command, in the order they were named.
+     *
+     * @var list<array{value: string, label: string, description: string}>
      */
-    private readonly bool $anyToSuggest;
+    private readonly array $allLines;
 
-    private bool $onScreen = false;
+    /**
+     * The same, kept to the commands a turn under way does not turn away.
+     *
+     * @var list<array{value: string, label: string, description: string}>
+     */
+    private readonly array $linesWhileWorking;
+
+    /**
+     * What is being written now, kept so that a turn beginning or ending can
+     * ask the question again of an unchanged draft.
+     */
+    private string $draft = '';
+
+    /**
+     * Whether the Agent is working, which is what narrows the list.
+     */
+    private bool $working = false;
+
+    /**
+     * The lines the list was last given, so that it is only handed a new set
+     * when the set is new: being given one moves the selection back to the
+     * top.
+     *
+     * @var list<array{value: string, label: string, description: string}>
+     */
+    private array $listedLines = [];
+
+    private ?AbstractWidget $onScreen = null;
 
     /**
      * @param list<Command> $commands
@@ -73,9 +110,13 @@ final class CommandSuggestions
         $this->nothingMatches = new TextWidget('');
         $this->nothingMatches->addStyleClass('suggestions-empty');
 
-        $lines = self::linesFor($commands);
-        $this->anyToSuggest = $lines !== [];
-        $this->list = new SelectListWidget($lines, self::VISIBLE_LINES);
+        $this->allLines = self::linesFor($commands);
+        $this->linesWhileWorking = self::linesFor(array_values(array_filter(
+            $commands,
+            static fn (Command $command): bool
+                => $command instanceof RunsWhileWorking,
+        )));
+        $this->list = new SelectListWidget([], self::VISIBLE_LINES);
         $this->list->addStyleClass('suggestions-list');
     }
 
@@ -92,28 +133,76 @@ final class CommandSuggestions
      */
     public function draftChanged(string $draft): void
     {
-        if (!self::isNameBeingWritten($draft)) {
+        $this->draft = $draft;
+        $this->show();
+    }
+
+    /**
+     * Tells the suggestions a turn is in flight. `ready()` is the counterpart.
+     *
+     * A turn ends under a name still being written, so what is on screen is
+     * asked again here rather than waiting for the next keystroke, and the
+     * two ends of a turn say it the same way.
+     */
+    public function working(): void
+    {
+        $this->working = true;
+        $this->show();
+    }
+
+    public function ready(): void
+    {
+        $this->working = false;
+        $this->show();
+    }
+
+    /**
+     * Puts on screen what the draft and the turn together ask for.
+     */
+    private function show(): void
+    {
+        if (!self::isNameBeingWritten($this->draft)) {
             $this->hide();
 
             return;
         }
 
-        if (!$this->anyToSuggest) {
+        $lines = $this->working
+            ? $this->linesWhileWorking
+            : $this->allLines;
+
+        if ($lines === []) {
             $this->nothingMatches->setText(
                 'No commands match "'
-                    . DisplayableText::preview($draft, self::DRAFT_WIDTH)
+                    . DisplayableText::preview($this->draft, self::DRAFT_WIDTH)
                     . '"',
             );
-        }
+            $this->put($this->nothingMatches);
 
-        if ($this->onScreen) {
             return;
         }
 
-        $this->widget->add(
-            $this->anyToSuggest ? $this->list : $this->nothingMatches,
-        );
-        $this->onScreen = true;
+        if ($lines !== $this->listedLines) {
+            $this->listedLines = $lines;
+            $this->list->setItems($lines);
+        }
+
+        $this->put($this->list);
+    }
+
+    /**
+     * Makes the given widget the one the suggestions carry, if it is not
+     * already.
+     */
+    private function put(AbstractWidget $widget): void
+    {
+        if ($this->onScreen === $widget) {
+            return;
+        }
+
+        $this->widget->clear();
+        $this->widget->add($widget);
+        $this->onScreen = $widget;
     }
 
     /**
@@ -121,12 +210,12 @@ final class CommandSuggestions
      */
     private function hide(): void
     {
-        if (!$this->onScreen) {
+        if (!$this->onScreen instanceof AbstractWidget) {
             return;
         }
 
         $this->widget->clear();
-        $this->onScreen = false;
+        $this->onScreen = null;
     }
 
     /**
