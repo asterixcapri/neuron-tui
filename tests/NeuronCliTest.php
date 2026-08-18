@@ -2634,6 +2634,47 @@ MARKDOWN;
     }
 
     /**
+     * The three sets are read one after the other: the name written in
+     * full, the names that begin with it, the names that merely carry it.
+     */
+    public function testTheThreeSetsAreReadOneAfterTheOther(): void
+    {
+        $display = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
+            [
+                self::commandNamed('/browses', 'Merely carries it.'),
+                self::commandNamed('/sessions', 'Begins with it.'),
+                self::commandNamed('/ses', 'Written in full.'),
+            ],
+            '/ses',
+        ));
+
+        self::assertLessThan(
+            strpos($display, 'Begins with it.'),
+            strpos($display, 'Written in full.'),
+        );
+        self::assertLessThan(
+            strpos($display, 'Merely carries it.'),
+            strpos($display, 'Begins with it.'),
+        );
+    }
+
+    /**
+     * A name too long to be read whole is still matched whole.
+     */
+    public function testANameLongerThanItsLineIsMatchedAllTheSame(): void
+    {
+        $display = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
+            [self::commandNamed(
+                '/remember-everything-said-in-this-conversation',
+                'Keeps the long name.',
+            )],
+            '/conversation',
+        ));
+
+        self::assertStringContainsString('Keeps the long name.', $display);
+    }
+
+    /**
      * The stretch that matched is bold inside the name, so a line says why
      * it is there.
      */

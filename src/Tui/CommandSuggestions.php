@@ -65,12 +65,18 @@ final class CommandSuggestions
 
     /**
      * What there is to suggest: for each mounted command the name it answers
-     * to, and the two halves of the line it would be read on.
+     * to, the name a draft is matched against, and the two halves of the
+     * line it would be read on.
      *
      * Read once, in the order the Host Application mounted them, which is
      * the order commands matching alike keep on screen.
      *
-     * @var list<array{name: string, label: string, description: string}>
+     * @var list<array{
+     *     answersTo: string,
+     *     name: string,
+     *     label: string,
+     *     description: string,
+     * }>
      */
     private readonly array $suggestible;
 
@@ -128,6 +134,9 @@ final class CommandSuggestions
                     . '"',
             );
             $this->show($this->nothingMatches);
+            // The list is given its lines again when one matches next, so
+            // what was selected before this does not come back with them.
+            $this->shown = null;
 
             return;
         }
@@ -162,7 +171,7 @@ final class CommandSuggestions
      */
     private function hide(): void
     {
-        if (!$this->onScreen instanceof AbstractWidget) {
+        if ($this->onScreen === null) {
             return;
         }
 
@@ -191,35 +200,30 @@ final class CommandSuggestions
      */
     private function linesMatching(string $draft): array
     {
-        $written = mb_strtolower(DisplayableText::safe($draft));
-        $after = mb_substr($written, 1);
+        $draft = DisplayableText::safe($draft);
+        $written = mb_strtolower($draft);
+        $after = mb_substr($draft, 1);
         $exact = [];
         $beginning = [];
         $carrying = [];
 
         foreach ($this->suggestible as $suggestion) {
-            $name = mb_strtolower($suggestion['label']);
-            $at = $after === '' ? false : mb_strpos($name, $after);
+            $name = $suggestion['name'];
 
-            if ($after !== '' && $at === false) {
+            if ($after !== '' && mb_stripos($name, $after) === false) {
                 continue;
             }
 
             $line = [
-                'value' => $suggestion['name'],
-                'label' => $at === false
-                    ? $suggestion['label']
-                    : $this->emphasising(
-                        $suggestion['label'],
-                        $at,
-                        mb_strlen($after),
-                    ),
+                'value' => $suggestion['answersTo'],
+                'label' => $this->emphasising($suggestion['label'], $after),
                 'description' => $suggestion['description'],
             ];
+            $lowered = mb_strtolower($name);
 
-            if ($name === $written) {
+            if ($lowered === $written) {
                 $exact[] = $line;
-            } elseif (str_starts_with($name, $written)) {
+            } elseif (str_starts_with($lowered, $written)) {
                 $beginning[] = $line;
             } else {
                 $carrying[] = $line;
@@ -230,15 +234,27 @@ final class CommandSuggestions
     }
 
     /**
-     * The name with the stretch that matched in bold, so that a line says at
-     * a glance why it is there. With a contiguous stretch there is only ever
-     * the one.
+     * The line's name with the stretch that matched in bold, so that a line
+     * says at a glance why it is there. With a contiguous stretch there is
+     * only ever the one.
+     *
+     * A name too long to be read whole is read shortened, and a stretch that
+     * fell in the part that was cut has nowhere to be shown: the name is
+     * then left as it is, still there for having matched.
      */
-    private function emphasising(string $name, int $at, int $length): string
+    private function emphasising(string $label, string $written): string
     {
-        return mb_substr($name, 0, $at)
-            . $this->emphasis->apply(mb_substr($name, $at, $length))
-            . mb_substr($name, $at + $length);
+        $at = $written === '' ? false : mb_stripos($label, $written);
+
+        if ($at === false) {
+            return $label;
+        }
+
+        $length = mb_strlen($written);
+
+        return mb_substr($label, 0, $at)
+            . $this->emphasis->apply(mb_substr($label, $at, $length))
+            . mb_substr($label, $at + $length);
     }
 
     /**
@@ -246,13 +262,18 @@ final class CommandSuggestions
      *
      * A name and a description are the Host Application's own text, so both
      * are made safe here: the list puts what it is given on the terminal as
-     * it stands. What is matched and emphasised is the safe name, so that
-     * the bold stretch falls where the name is read; the name a completion
-     * would write is kept beside it.
+     * it stands. A name is kept three times over, because the three are not
+     * the same string: the one a completion would write, the whole safe one
+     * a draft is matched against, and the shortened one a line is read on.
      *
      * @param list<Command> $commands
      *
-     * @return list<array{name: string, label: string, description: string}>
+     * @return list<array{
+     *     answersTo: string,
+     *     name: string,
+     *     label: string,
+     *     description: string,
+     * }>
      */
     private static function suggestible(array $commands): array
     {
@@ -260,7 +281,8 @@ final class CommandSuggestions
 
         foreach ($commands as $command) {
             $suggestible[] = [
-                'name' => $command->name(),
+                'answersTo' => $command->name(),
+                'name' => DisplayableText::safe($command->name()),
                 'label' => DisplayableText::preview(
                     $command->name(),
                     self::NAME_WIDTH,
