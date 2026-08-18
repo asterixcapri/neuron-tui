@@ -38,6 +38,67 @@ be supplied when the terminal should identify a particular Agent or product:
 ))->run();
 ```
 
+## Slash commands
+
+The Conversation TUI carries out `/clear`, `/sessions` and `/exit` itself. A
+Host Application mounts commands of its own beside them, so the terminal can
+do what its application needs:
+
+```php
+use NeuronCli\Conversation\Controls;
+use NeuronCli\Conversation\SlashCommand;
+
+final class Review implements SlashCommand
+{
+    public function name(): string
+    {
+        return '/review';
+    }
+
+    public function describe(): string
+    {
+        return 'Reviews what is staged in git.';
+    }
+
+    public function run(Controls $controls, string $arguments): void
+    {
+        $diff = shell_exec('git diff --staged') ?: '';
+
+        if (trim($diff) === '') {
+            $controls->warn('Nothing staged to review.');
+
+            return;
+        }
+
+        $controls->ask("Review this diff:\n\n" . $diff);
+    }
+}
+
+(new NeuronCli(agent: $agent, commands: [new Review()]))->run();
+```
+
+A command answers to a name, slash included, and describes itself in one
+line. Whatever is typed after the name reaches it as its arguments, empty when
+nothing was typed. Two commands answering to the same name — or one taking a
+name the TUI already answers to — stop the construction of the Conversation
+TUI rather than one of them silently winning.
+
+While it runs, a command is handed the **Controls**, and nothing else: the
+widgets of the Conversation TUI stay out of reach.
+
+- `say()` writes a line in the conversation.
+- `warn()` writes one that reports something did not go as it should.
+- `ask()` puts a prompt to the Agent as though the person had written it, and
+  finishes: the answer arrives on the screen, not back in the command.
+- `agent()` returns the Agent, so its provider, instructions, tools and
+  History change through the Neuron AI API rather than through verbs here.
+- `stop()` leaves the terminal.
+
+A command that fails leaves the exception as a line of error in the
+conversation, exactly as a failing turn does, and the terminal stays usable.
+Like `/clear` and `/sessions`, a mounted command is refused while the Agent is
+working, and can be typed again once the turn has finished.
+
 ## Sessions
 
 A Session is one conversation with the Agent. `/clear` starts a fresh one
@@ -77,12 +138,16 @@ application that keeps its conversations somewhere passes the Session provider
 reaching that place. See
 [ADR 0001](docs/adr/0001-sessions-replace-the-agent-chat-history.md).
 
-`NeuronCli\NeuronCli` is the public module, and the Session provider the one
-dependency an application may supply: `NeuronCli\Session\SessionProvider` to
-implement, `NeuronCli\Session\Session` to list a Session with, and
+`NeuronCli\NeuronCli` is the public module, and two seams are the dependencies
+an application may supply. The Session provider:
+`NeuronCli\Session\SessionProvider` to implement,
+`NeuronCli\Session\Session` to list a Session with, and
 `NeuronCli\Session\InMemorySessionProvider` and
-`NeuronCli\Session\FileSessionProvider` as the two shipped providers. Every
-other class under the `NeuronCli` namespace is annotated `@internal`, carries
+`NeuronCli\Session\FileSessionProvider` as the two shipped providers. And the
+Slash commands it mounts: `NeuronCli\Conversation\SlashCommand` to implement,
+`NeuronCli\Conversation\Command` behind it, and
+`NeuronCli\Conversation\Controls` as what a command is handed while it runs.
+Every other class under the `NeuronCli` namespace is annotated `@internal`, carries
 no stability promise, and may be renamed, split, or removed in any release. Static analysis enforces this on the examples, which
 are the reference Host Application.
 
@@ -127,6 +192,7 @@ Ctrl+C to close it.
 - `/clear` starts a new Session.
 - `/sessions` lists the Sessions and resumes the one you choose.
 - `/exit` or Ctrl+C closes the Conversation TUI.
+- Any command the Host Application mounted, by the name it answers to.
 
 `/clear` and `/sessions` are refused while the Agent is working, so an
 arriving answer cannot land in the wrong Session; `/exit` works at any time.
