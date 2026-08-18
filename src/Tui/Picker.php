@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace NeuronCli\Tui;
 
 use Closure;
-use NeuronCli\Session\Session;
 use Symfony\Component\Tui\Event\CancelEvent;
 use Symfony\Component\Tui\Event\SelectEvent;
 use Symfony\Component\Tui\Widget\ContainerWidget;
@@ -13,36 +12,43 @@ use Symfony\Component\Tui\Widget\SelectListWidget;
 use Symfony\Component\Tui\Widget\TextWidget;
 
 /**
- * The list a person moves through while the TUI is in the Session picker.
+ * The list a person moves through while the TUI is in the Picker.
  *
  * Arrow navigation and a bounded visible height are the select list's own;
- * what is added here is the translation between a Session and a line on
- * screen, and the filtering — both the typing the widget does not listen for
- * and the narrowing itself, because a line names its Session rather than
- * describing it. The picker holds the Sessions it was given and hands back
- * the one a person chose, so a key never travels as text. Whoever opens the
- * picker decides what focus and the composer do meanwhile.
+ * what is added here is the title carried by the instructions, and the
+ * filtering — both the typing the widget does not listen for and the
+ * narrowing itself, because a line is named by its label rather than by the
+ * key behind it. Whatever the lines stand for is the caller's business: the
+ * picker takes key and label pairs and hands back the key of the line a
+ * person chose. Whoever opens the picker decides what focus and the composer
+ * do meanwhile.
  *
  * @internal
  */
-final class SessionPicker
+final class Picker
 {
-    private const int VISIBLE_SESSIONS = 8;
+    private const int VISIBLE_LINES = 8;
 
     /**
      * The width the list gives a label before cutting it silently, so a
-     * title is shortened here instead, where the cut is marked.
+     * label is shortened here instead, where the cut is marked.
      */
-    private const int TITLE_WIDTH = 30;
+    private const int LABEL_WIDTH = 30;
+
+    /**
+     * How much of a title the instructions carry, so that a long one does
+     * not push the keys it explains off the line.
+     */
+    private const int TITLE_WIDTH = 40;
+
+    private const string INSTRUCTIONS =
+        ' · ↑↓ moves · type filters · Enter chooses · Escape cancels';
 
     /**
      * What a handle starts with, so that it is a name of the picker's own
      * rather than a bare number a caller might read something into.
      */
-    private const string HANDLE_PREFIX = 'session-';
-
-    private const string INSTRUCTIONS =
-        'Sessions · ↑↓ moves · type filters · Enter resumes · Escape cancels';
+    private const string HANDLE_PREFIX = 'option-';
 
     private readonly ContainerWidget $widget;
 
@@ -51,29 +57,31 @@ final class SessionPicker
     private readonly SelectListWidget $list;
 
     /**
-     * The Sessions on offer, each under the handle its line carries.
+     * The keys on offer, each under the handle its line carries.
      *
-     * @var array<string, Session>
+     * @var array<string, string>
      */
     private array $offered = [];
 
     /**
-     * Every line of the open picker, filtered or not, in the order the
-     * provider listed them.
+     * Every line of the open picker, filtered or not, in the order the caller
+     * listed them.
      *
-     * @var list<array{value: string, label: string, description: string}>
+     * @var list<array{value: string, label: string}>
      */
     private array $lines = [];
 
-    /** @var list<array{value: string, label: string, description: string}> */
+    /** @var list<array{value: string, label: string}> */
     private array $shown = [];
+
+    private string $title = '';
 
     private string $filter = '';
 
     private bool $open = false;
 
     /**
-     * @param Closure(Session): void $chosen
+     * @param Closure(string): void $chosen
      * @param Closure(): void $abandoned
      */
     public function __construct(
@@ -81,11 +89,11 @@ final class SessionPicker
         private readonly Closure $abandoned,
     ) {
         $this->widget = new ContainerWidget();
-        $this->widget->addStyleClass('session-picker');
-        $this->instructions = new TextWidget(self::INSTRUCTIONS);
-        $this->instructions->addStyleClass('session-picker-instructions');
-        $this->list = new SelectListWidget([], self::VISIBLE_SESSIONS);
-        $this->list->addStyleClass('session-list');
+        $this->widget->addStyleClass('picker');
+        $this->instructions = new TextWidget('');
+        $this->instructions->addStyleClass('picker-instructions');
+        $this->list = new SelectListWidget([], self::VISIBLE_LINES);
+        $this->list->addStyleClass('picker-list');
         $this->list->onInput($this->type(...));
     }
 
@@ -108,25 +116,34 @@ final class SessionPicker
     }
 
     /**
-     * Shows the Sessions, in the order the provider listed them.
+     * Shows the options, in the order they were given, under the title that
+     * says what is being chosen.
      *
-     * @param list<Session> $sessions
+     * @param array<string, string> $options key => label
      */
-    public function open(array $sessions): void
+    public function open(string $title, array $options): void
     {
+        $this->title = DisplayableText::preview($title, self::TITLE_WIDTH);
         $this->filter = '';
         $this->offered = [];
         $this->lines = [];
 
-        foreach ($sessions as $place => $session) {
-            $handle = self::HANDLE_PREFIX . $place;
-            $this->offered[$handle] = $session;
-            $this->lines[] = $this->line($handle, $session);
+        $place = 0;
+
+        foreach ($options as $key => $label) {
+            $handle = self::HANDLE_PREFIX . $place++;
+            // A key that reads as a number arrives here as an int, PHP
+            // having made it one on its way into the array.
+            $this->offered[$handle] = (string) $key;
+            $this->lines[] = [
+                'value' => $handle,
+                'label' => DisplayableText::preview($label, self::LABEL_WIDTH),
+            ];
         }
 
         $this->shown = $this->lines;
         $this->list->setItems($this->shown);
-        $this->instructions->setText(self::INSTRUCTIONS);
+        $this->instructions->setText($this->title . self::INSTRUCTIONS);
         $this->widget->clear();
         $this->widget->add($this->instructions);
         $this->widget->add($this->list);
@@ -142,8 +159,8 @@ final class SessionPicker
     }
 
     /**
-     * Takes the list away, leaving nothing of the choice on screen and no
-     * Session held past the moment a person could still choose it.
+     * Takes the list away, leaving nothing of the choice on screen and no key
+     * held past the moment a person could still choose it.
      */
     public function close(): void
     {
@@ -152,29 +169,6 @@ final class SessionPicker
         $this->lines = [];
         $this->shown = [];
         $this->open = false;
-    }
-
-    /**
-     * The line standing for a Session, under a handle of the picker's own.
-     *
-     * The list reports a chosen item by its `value`, so the value has to say
-     * which Session was chosen. It says it with a handle the picker minted
-     * and can look up: the key stays inside the Session, which is what the
-     * picker hands back, so no layer between here and the provider holds a
-     * string it cannot interpret.
-     *
-     * @return array{value: string, label: string, description: string}
-     */
-    private function line(string $handle, Session $session): array
-    {
-        return [
-            'value' => $handle,
-            'label' => DisplayableText::preview(
-                $session->title,
-                self::TITLE_WIDTH,
-            ),
-            'description' => $session->lastUsedAt->format('Y-m-d H:i'),
-        ];
     }
 
     /**
@@ -201,12 +195,12 @@ final class SessionPicker
     }
 
     /**
-     * Narrows to the Sessions whose title starts with what was typed.
+     * Narrows to the lines whose label starts with what was typed.
      *
-     * The list narrows on the value of a line, which names a Session rather
-     * than describing it, so the narrowing happens here against the title. A
-     * keystroke that narrows nothing leaves the list alone, so that the
-     * Session a person moved to stays the one under the arrow.
+     * The list narrows on the value of a line, which is a handle of the
+     * picker's own, so the narrowing happens here against the label. A
+     * keystroke that narrows nothing leaves the list alone, so that the line
+     * a person moved to stays the one under the arrow.
      */
     private function filterBy(string $filter): void
     {
@@ -226,8 +220,8 @@ final class SessionPicker
 
         $this->instructions->setText(
             $filter === ''
-                ? self::INSTRUCTIONS
-                : self::INSTRUCTIONS . "\nfilter: "
+                ? $this->title . self::INSTRUCTIONS
+                : $this->title . self::INSTRUCTIONS . "\nfilter: "
                     . DisplayableText::safe($filter),
         );
     }
@@ -236,9 +230,9 @@ final class SessionPicker
     {
         $chosen = $this->offered[$event->getValue()] ?? null;
 
-        if (!$chosen instanceof Session) {
-            // A value the picker did not put in the list names no Session,
-            // so there is nothing to open and the list stays where it is.
+        if ($chosen === null) {
+            // A value the picker did not put in the list names no option, so
+            // there is nothing to choose and the list stays where it is.
             return;
         }
 

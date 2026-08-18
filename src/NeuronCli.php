@@ -17,7 +17,6 @@ use NeuronCli\Conversation\SlashCommandInput;
 use NeuronCli\Conversation\Submission;
 use NeuronCli\Conversation\TurnQueue;
 use NeuronCli\Session\InMemorySessionProvider;
-use NeuronCli\Session\Session;
 use NeuronCli\Session\SessionProvider;
 use NeuronCli\Tui\ConversationView;
 use NeuronCli\Tui\WorkingIndicator;
@@ -86,7 +85,6 @@ final class NeuronCli
             $this->agent->getChatHistory()->getMessages(),
         );
         $this->view->onSubmit($this->submit(...));
-        $this->view->onSessionChosen($this->resumeSession(...));
         $this->view->onInput($this->handleInput(...));
         $this->view->onTick($this->tick(...));
     }
@@ -197,6 +195,12 @@ final class NeuronCli
      * so whatever a command lets rise becomes a line of error in the
      * conversation, as an exception during a Turn already does, and the
      * terminal stays where the person left it.
+     *
+     * It runs where it was typed, which is a callback of the event loop the
+     * TUI and amphp share, and a callback runs in a fiber of its own. So a
+     * command that waits — `choose()` is the one verb that does — suspends
+     * that fiber alone: the loop goes on ticking, painting and reading keys
+     * meanwhile, which is what lets a person answer the list.
      */
     private function runSafely(SlashCommand $command, string $arguments): void
     {
@@ -283,7 +287,9 @@ final class NeuronCli
      * Offers the Sessions of this Agent for a person to return to one.
      *
      * A list with nothing in it is not worth entering, so it is said in the
-     * conversation instead.
+     * conversation instead. The Picker chooses among keys and labels like
+     * for any other list, so the Sessions are turned into lines here, where
+     * a Session is still something known.
      */
     private function chooseSession(): void
     {
@@ -297,7 +303,19 @@ final class NeuronCli
             return;
         }
 
-        $this->view->showSessions($sessions);
+        $labels = [];
+
+        foreach ($sessions as $session) {
+            $labels[$session->key] = $session->title;
+        }
+
+        $chosen = $this->view->choose('Sessions', $labels);
+
+        if ($chosen === null) {
+            return;
+        }
+
+        $this->openSession($chosen);
     }
 
     /**
@@ -310,18 +328,6 @@ final class NeuronCli
     private function startSession(): void
     {
         $this->openSession($this->sessionProvider->create()->key);
-    }
-
-    /**
-     * Puts the Session a person chose out of the picker on the Agent.
-     *
-     * The picker hands back the Session, key and all, so the key goes from
-     * the provider's own description of a Session straight back to the
-     * provider.
-     */
-    private function resumeSession(Session $session): void
-    {
-        $this->openSession($session->key);
     }
 
     /**
@@ -437,9 +443,9 @@ final class NeuronCli
             return;
         }
 
-        // While a person is choosing a Session the list owns the keys that
-        // move through it, page keys included.
-        if ($this->view->isChoosingSession()) {
+        // While a person is choosing from a list, the list owns the keys
+        // that move through it, page keys included.
+        if ($this->view->isChoosing()) {
             return;
         }
 
