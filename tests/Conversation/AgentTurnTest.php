@@ -96,6 +96,39 @@ final class AgentTurnTest extends TestCase
         self::assertStringNotContainsString('Empty response.', $display);
     }
 
+    public function testEachTurnIsAnsweredByTheAgentHandedToItThen(): void
+    {
+        $terminal = new VirtualTerminal(rows: 24);
+        $first = new FakeAIProvider(new AssistantMessage('The first one.'));
+        $second = new FakeAIProvider(new AssistantMessage('The second one.'));
+        $view = new ConversationView($terminal, 'Neuron AI', 'Conversation');
+        $turn = new AgentTurn($view);
+        $earlier = $this->agentOf($first);
+        $later = $this->agentOf($second);
+
+        EventLoop::queue(
+            static function () use ($turn, $earlier, $later): void {
+                $turn->respond($earlier, 'Who answers?');
+                $turn->respond($later, 'And now?');
+            },
+        );
+        EventLoop::run();
+
+        $view->paintPendingChanges();
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+        self::assertStringContainsString('The second one.', $display);
+        $first->assertCallCount(1);
+        $second->assertCallCount(1);
+    }
+
+    private function agentOf(FakeAIProvider $provider): Agent
+    {
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+
+        return $agent;
+    }
+
     /**
      * Takes one turn against the given provider and reads back what the
      * terminal was told to show.
@@ -105,13 +138,12 @@ final class AgentTurnTest extends TestCase
         string $message,
         VirtualTerminal $terminal,
     ): string {
-        $agent = new Agent();
-        $agent->setAiProvider($provider);
+        $agent = $this->agentOf($provider);
         $view = new ConversationView($terminal, 'Neuron AI', 'Conversation');
-        $turn = new AgentTurn($agent, $view);
+        $turn = new AgentTurn($view);
 
         EventLoop::queue(
-            static fn () => $turn->respond($message),
+            static fn () => $turn->respond($agent, $message),
         );
         EventLoop::run();
 

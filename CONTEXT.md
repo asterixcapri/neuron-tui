@@ -38,9 +38,9 @@ _Avoid_: Message, prompt, action
 
 **Controls**:
 What a Slash command may do while it runs: say something in the conversation,
-put a prompt to the Agent, offer a Picker, reach the Agent itself, leave the
-terminal. A command allowed to run while the Agent is working is given fewer
-of them.
+put a prompt to the Agent, offer a Picker, reach the Agent itself, put another
+Agent in charge of answering, leave the terminal. A command allowed to run
+while the Agent is working is given fewer of them.
 _Avoid_: Context, facade, API
 
 **Command kit**:
