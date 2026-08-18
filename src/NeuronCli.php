@@ -290,9 +290,8 @@ final class NeuronCli
      * are mounted here like any other, and a Host Application is free to
      * leave any of them out.
      *
-     * A kit is unrolled here and nowhere else, so from this line on a command
-     * that arrived in one is indistinguishable from a command named on its
-     * own: same list, same rules, same mistake when two claim one name.
+     * A kit is unrolled before any of this, so a command that arrived in one
+     * is weighed here like any other.
      *
      * @param list<SlashCommand|CommandKit> $commands
      *
@@ -320,9 +319,8 @@ final class NeuronCli
     /**
      * Puts the commands a kit carries where the kit was named.
      *
-     * Kits give way to their members in the order they were mounted, so the
-     * name a kit claims twice — its own member against a command named
-     * beside it — is caught wherever it was written.
+     * This is the one place a kit is opened, and nothing downstream is told
+     * a kit ever existed.
      *
      * @param list<SlashCommand|CommandKit> $commands
      *
