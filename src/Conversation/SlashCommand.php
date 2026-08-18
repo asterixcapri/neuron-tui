@@ -5,18 +5,13 @@ declare(strict_types=1);
 namespace NeuronCli\Conversation;
 
 /**
- * The Slash commands the Conversation TUI carries out itself.
+ * A command that expects the Agent to be standing still.
  *
- * There are exactly three of them and no way for a Host Application to add a
- * fourth: a fixed set does not justify a registry.
- *
- * @internal
+ * It is handed the Controls and whatever was typed after its name — the empty
+ * string when nothing was — and whatever it does with them is the Host
+ * Application's code, which the Conversation TUI survives.
  */
-enum SlashCommand: string
+interface SlashCommand extends Command
 {
-    case Clear = '/clear';
-
-    case Sessions = '/sessions';
-
-    case Exit = '/exit';
+    public function run(Controls $controls, string $arguments): void;
 }

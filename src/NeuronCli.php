@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace NeuronCli;
 
 use Amp\Future;
+use InvalidArgumentException;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
 use NeuronCli\Conversation\AgentTurn;
+use NeuronCli\Conversation\BuiltInCommand;
+use NeuronCli\Conversation\Controls;
 use NeuronCli\Conversation\MessageForAgent;
 use NeuronCli\Conversation\SlashCommand;
 use NeuronCli\Conversation\SlashCommandInput;
@@ -42,16 +45,29 @@ final class NeuronCli
 
     private readonly AgentTurn $agentTurn;
 
+    /**
+     * The mounted commands, indexed by the name each answers to.
+     *
+     * @var array<string, SlashCommand>
+     */
+    private readonly array $commands;
+
     /** @var Future<mixed>|null */
     private ?Future $response = null;
 
+    /**
+     * @param list<SlashCommand> $commands what can be typed here besides the
+     *                                     commands the TUI carries out itself
+     */
     public function __construct(
         private readonly Agent $agent,
         string $title = 'Neuron AI',
         string $subtitle = 'Agent conversation',
         ?TerminalInterface $terminal = null,
         ?SessionProvider $sessionProvider = null,
+        array $commands = [],
     ) {
+        $this->commands = self::mount($commands);
         $this->terminal = $terminal ?? new Terminal();
         // A Host Application that named no provider named no place for its
         // conversations either, so they are kept in memory and nothing is
@@ -123,18 +139,34 @@ final class NeuronCli
     }
 
     /**
-     * Carries out the command the typed name points at, arguments aside.
+     * Carries out the command the typed name points at, with its arguments.
      *
-     * A name no command answers to is said in the conversation rather than
-     * sent to the Agent: the Slash namespace is answered locally.
+     * The name is looked for among the commands a Host Application mounted
+     * first, and then among the ones the TUI carries out itself; a name
+     * neither answers is said in the conversation rather than sent to the
+     * Agent, because the Slash namespace is answered locally.
      *
-     * A command that changes Session cannot run mid-turn: an answer already on
-     * its way would land in the conversation that replaced the one it belongs
-     * to. Leaving the TUI is never refused.
+     * No command runs mid-turn but leaving: an answer already on its way
+     * would land in a conversation the command had meanwhile replaced.
      */
     private function carryOut(SlashCommandInput $input): void
     {
-        $command = SlashCommand::tryFrom($input->name);
+        $mounted = $this->commands[$input->name] ?? null;
+
+        if ($mounted !== null) {
+            if ($this->refusedWhileWorking($input->name)) {
+                return;
+            }
+
+            // The command was taken, so what was typed leaves the composer:
+            // only a name nobody answers stays there to be corrected.
+            $this->view->emptyComposer();
+            $this->runSafely($mounted, $input->arguments);
+
+            return;
+        }
+
+        $command = BuiltInCommand::tryFrom($input->name);
 
         if ($command === null) {
             $this->view->showUnknownSlashCommand($input->name);
@@ -142,26 +174,109 @@ final class NeuronCli
             return;
         }
 
-        if ($command === SlashCommand::Exit) {
+        if ($command === BuiltInCommand::Exit) {
             $this->view->stop();
 
             return;
         }
 
-        if ($this->turns->isBusy()) {
-            $this->view->showError(
-                $command->value
-                    . ' is refused while the Agent is working. '
-                    . 'Try it again once the turn has finished.',
-            );
-
+        if ($this->refusedWhileWorking($command->value)) {
             return;
         }
 
         match ($command) {
-            SlashCommand::Clear => $this->startSession(),
-            SlashCommand::Sessions => $this->chooseSession(),
+            BuiltInCommand::Clear => $this->startSession(),
+            BuiltInCommand::Sessions => $this->chooseSession(),
         };
+    }
+
+    /**
+     * Runs a command of the Host Application's, and survives it.
+     *
+     * From here on the Conversation TUI carries out code that is not its own,
+     * so whatever a command lets rise becomes a line of error in the
+     * conversation, as an exception during a Turn already does, and the
+     * terminal stays where the person left it.
+     */
+    private function runSafely(SlashCommand $command, string $arguments): void
+    {
+        $controls = new Controls(
+            $this->view,
+            $this->agent,
+            function (string $prompt): void {
+                $this->send(new MessageForAgent($prompt));
+            },
+        );
+
+        try {
+            $command->run($controls, $arguments);
+        } catch (Throwable $exception) {
+            $this->showFailure($exception);
+        }
+    }
+
+    /**
+     * Turns a command away while the Agent is answering, and says so.
+     *
+     * A command that changed the conversation mid-turn would have an answer
+     * already on its way land where it does not belong, so the rule is the
+     * TUI's rather than any single command's, and leaving — which asks the
+     * question earlier — is the one thing it does not cover.
+     *
+     * Returns whether the command was turned away.
+     */
+    private function refusedWhileWorking(string $name): bool
+    {
+        if (!$this->turns->isBusy()) {
+            return false;
+        }
+
+        $this->view->showError(
+            $name
+                . ' is refused while the Agent is working. '
+                . 'Try it again once the turn has finished.',
+        );
+
+        return true;
+    }
+
+    /**
+     * Indexes the commands by the name each answers to.
+     *
+     * Two commands answering to the same name are a mistake in how the
+     * terminal was built, so it is said at once instead of one of them
+     * silently winning. The names the TUI carries out itself are taken too,
+     * and are said apart, because there is no second command to look for.
+     *
+     * @param list<SlashCommand> $commands
+     *
+     * @return array<string, SlashCommand>
+     */
+    private static function mount(array $commands): array
+    {
+        $mounted = [];
+
+        foreach ($commands as $command) {
+            $name = $command->name();
+
+            if (BuiltInCommand::tryFrom($name) instanceof BuiltInCommand) {
+                throw new InvalidArgumentException(
+                    $name
+                        . ' is a Slash command the Conversation TUI '
+                        . 'answers to itself.',
+                );
+            }
+
+            if (isset($mounted[$name])) {
+                throw new InvalidArgumentException(
+                    'Two Slash commands answer to ' . $name . '.',
+                );
+            }
+
+            $mounted[$name] = $command;
+        }
+
+        return $mounted;
     }
 
     /**
@@ -255,9 +370,7 @@ final class NeuronCli
                     . $exception->getMessage(),
             );
         } catch (Throwable $exception) {
-            $this->view->showError(
-                $exception::class . ': ' . $exception->getMessage(),
-            );
+            $this->showFailure($exception);
         }
 
         $this->response = null;
@@ -286,6 +399,16 @@ final class NeuronCli
         $this->view->acceptUserMessage($message);
         $this->view->working();
         $this->workingIndicator->start(microtime(true));
+    }
+
+    /**
+     * Shows what went wrong without the stack that says where.
+     */
+    private function showFailure(Throwable $exception): void
+    {
+        $this->view->showError(
+            $exception::class . ': ' . $exception->getMessage(),
+        );
     }
 
     private function finishTurn(): void
