@@ -29,6 +29,7 @@ use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Testing\RequestRecord;
 use NeuronAI\Tools\Tool;
 use NeuronCli\Conversation\Commands\Clear;
+use NeuronCli\Conversation\Commands\Help;
 use NeuronCli\Conversation\Commands\Leave;
 use NeuronCli\Conversation\Commands\Sessions;
 use NeuronCli\Conversation\Controls;
@@ -1482,6 +1483,86 @@ MARKDOWN;
         self::assertSame([], $agent->getChatHistory()->getMessages());
         // `/quit` behaves as `/exit` always did.
         self::assertFalse($forcedExit);
+    }
+
+    /**
+     * Typing `/help` lists what can be typed here, itself included.
+     */
+    public function testHelpListsTheMountedCommandsWithTheirDescriptions(): void
+    {
+        $provider = new FakeAIProvider();
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        $terminal = new VirtualTerminal(rows: 30);
+        $command = $this->commandThat(
+            static function (Controls $controls, string $arguments): void {
+            },
+        );
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("/help\r"),
+        );
+        EventLoop::delay(
+            0.2,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [new Help(), new Leave(), $command],
+        ))->run();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+
+        // The list carries the command that shows it, ...
+        self::assertStringContainsString(
+            '/help — Lists what can be typed here.',
+            $display,
+        );
+        // ... the other commands this library ships, ...
+        self::assertStringContainsString(
+            '/exit — Closes the Conversation TUI.',
+            $display,
+        );
+        // ... and the ones the Host Application wrote itself.
+        self::assertStringContainsString(
+            '/probe — Does what the test says.',
+            $display,
+        );
+        self::assertStringNotContainsString('Unknown Slash command', $display);
+        $provider->assertNothingSent();
+    }
+
+    /**
+     * A name no mounted command answers to is unknown, `/help` included.
+     */
+    public function testATerminalWithoutHelpMountedDoesNotAnswerToIt(): void
+    {
+        $provider = new FakeAIProvider();
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        $terminal = new VirtualTerminal(rows: 30);
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("/help\r"),
+        );
+        EventLoop::delay(
+            0.2,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [new Leave()],
+        ))->run();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+
+        self::assertStringContainsString(
+            'Unknown Slash command: /help',
+            $display,
+        );
+        $provider->assertNothingSent();
     }
 
     public function testTheScreenShowsTheConversationACommandInstalled(): void
