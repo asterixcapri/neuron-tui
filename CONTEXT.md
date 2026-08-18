@@ -31,26 +31,43 @@ including messages that predate the TUI startup.
 _Avoid_: Transcript, TUI log
 
 **Slash command**:
-Input beginning with `/` that is interpreted locally by the TUI instead of
-being sent to the Agent.
-_Avoid_: Message, prompt
+Input beginning with `/` whose effect the TUI decides rather than the model.
+What it does is code someone wrote, and that code is free to send the Agent
+a prompt of its own.
+_Avoid_: Message, prompt, action
+
+**Controls**:
+What a Slash command may do while it runs: say something in the conversation,
+put a prompt to the Agent, offer a Picker, reach the Agent itself, leave the
+terminal. A command allowed to run while the Agent is working is given fewer
+of them.
+_Avoid_: Context, facade, API
+
+**Command kit**:
+A group of Slash commands mounted in one go, carrying between them whatever
+they need to work. A Conversation TUI mounts nothing on its own, so a kit is
+the short way for a Host Application to say yes to several commands at once,
+and it can be taken with some of them left out.
+_Avoid_: Toolkit, bundle, plugin, pack
 
 **Session**:
-One conversation with the Agent, identified by a key and held by a single
-History, that outlives the TUI process and can be reopened. The default
-provider keeps its Sessions in memory, so until a Host Application says where
-conversations live a Session ends with the process.
+One conversation, identified by a key and held by a single History, that
+outlives the TUI process and can be reopened. No Agent owns it: any Agent
+can be handed it and carry it on. The default provider keeps its Sessions in
+memory, so until a Host Application says where conversations live a Session
+ends with the process.
 _Avoid_: Chat, thread
 
 **Session provider**:
-Where the Sessions of an Agent come from. It is the only thing that mints a
-key, knows which Sessions exist, and can open one by its key.
+The place the Sessions come from. It is the only thing that mints a key,
+knows which Sessions exist, and can open one by its key.
 _Avoid_: Store, repository, storage, archive
 
-**Session picker**:
-The state the Conversation TUI is in while a person is choosing a Session
-rather than writing to the Agent.
-_Avoid_: Menu, popup, dialog
+**Picker**:
+The state the Conversation TUI is in while a person is choosing from a list
+rather than writing to the Agent. Sessions are one of the things chosen this
+way, not the only one.
+_Avoid_: Menu, popup, dialog, Session picker
 
 **Turn**:
 One stretch of the conversation, from the moment a person's message is taken
