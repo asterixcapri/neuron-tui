@@ -318,6 +318,8 @@ final class ConversationView
     public function working(): void
     {
         $this->status->setText(self::WORKING_STATUS);
+        // A command the TUI would turn away mid-turn is not offered mid-turn.
+        $this->suggestions->working();
     }
 
     /**
@@ -353,6 +355,7 @@ final class ConversationView
     public function ready(): void
     {
         $this->status->setText(self::READY_STATUS);
+        $this->suggestions->ready();
         $this->tui->setFocus($this->editor);
         $this->history->followLatest();
     }
