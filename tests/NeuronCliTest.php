@@ -2487,6 +2487,251 @@ MARKDOWN;
     }
 
     /**
+     * The list keeps the names that carry what has been written.
+     */
+    public function testTheSuggestionsNarrowToWhatIsBeingWritten(): void
+    {
+        $display = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
+            [new Help(), new Leave()],
+            '/hel',
+        ));
+
+        self::assertStringContainsString('/help', $display);
+        self::assertStringNotContainsString('/exit', $display);
+    }
+
+    /**
+     * What was narrowed by writing widens again by deleting.
+     */
+    public function testDeletingWidensTheSuggestionsAgain(): void
+    {
+        $display = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
+            [new Help(), new Leave()],
+            '/hel',
+            "\x7f\x7f\x7f",
+        ));
+
+        self::assertStringContainsString('/help', $display);
+        self::assertStringContainsString('/exit', $display);
+    }
+
+    /**
+     * Upper and lower case are the same letters here.
+     */
+    public function testTheMatchIgnoresTheCaseOfWhatIsWritten(): void
+    {
+        $display = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
+            [new Help()],
+            '/HEL',
+        ));
+
+        self::assertStringContainsString(
+            'Lists what can be typed here.',
+            $display,
+        );
+    }
+
+    /**
+     * A stretch anywhere in the name finds the command; letters that are
+     * not next to each other find nothing.
+     */
+    public function testAStretchInTheMiddleOfANameFindsTheCommand(): void
+    {
+        $found = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
+            [self::commandNamed('/rewind', 'Goes back a message.')],
+            '/wind',
+        ));
+        $scattered = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
+            [self::commandNamed('/rewind', 'Goes back a message.')],
+            '/rwd',
+        ));
+
+        self::assertStringContainsString('Goes back a message.', $found);
+        self::assertStringNotContainsString(
+            'Goes back a message.',
+            $scattered,
+        );
+        self::assertStringContainsString(
+            'No commands match "/rwd"',
+            $scattered,
+        );
+    }
+
+    /**
+     * The search is among the names, not among the meanings.
+     */
+    public function testADescriptionNeverBringsACommandIn(): void
+    {
+        $display = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
+            [self::commandNamed('/alpha', 'Rewinds the conversation.')],
+            '/rewind',
+        ));
+
+        self::assertStringNotContainsString('/alpha', $display);
+        self::assertStringContainsString(
+            'No commands match "/rewind"',
+            $display,
+        );
+    }
+
+    /**
+     * The name written in full is the first line, whatever was mounted
+     * before it.
+     */
+    public function testTheWholeNameIsTheFirstLine(): void
+    {
+        $display = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
+            [
+                self::commandNamed('/sessions', 'Lists the Sessions.'),
+                self::commandNamed('/ses', 'The shorter one.'),
+            ],
+            '/ses',
+        ));
+
+        self::assertLessThan(
+            strpos($display, 'Lists the Sessions.'),
+            strpos($display, 'The shorter one.'),
+        );
+    }
+
+    /**
+     * A name that begins with what was written comes before one that merely
+     * carries it.
+     */
+    public function testANameThatBeginsWithWhatIsWrittenComesFirst(): void
+    {
+        $display = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
+            [
+                self::commandNamed('/rewind', 'Goes back a message.'),
+                self::commandNamed('/window', 'Frames the conversation.'),
+            ],
+            '/wind',
+        ));
+
+        self::assertLessThan(
+            strpos($display, 'Goes back a message.'),
+            strpos($display, 'Frames the conversation.'),
+        );
+    }
+
+    /**
+     * Two names that match alike are read in the order they were mounted.
+     */
+    public function testCommandsMatchingAlikeKeepTheirMountingOrder(): void
+    {
+        $display = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
+            [
+                self::commandNamed('/window', 'Mounted first.'),
+                self::commandNamed('/winter', 'Mounted second.'),
+            ],
+            '/win',
+        ));
+
+        self::assertLessThan(
+            strpos($display, 'Mounted second.'),
+            strpos($display, 'Mounted first.'),
+        );
+    }
+
+    /**
+     * The stretch that matched is bold inside the name, so a line says why
+     * it is there.
+     */
+    public function testTheMatchingStretchIsBoldInsideTheName(): void
+    {
+        $output = self::screenAfterTyping(
+            [self::commandNamed('/sessions', 'Lists the Sessions.')],
+            '/ses',
+        );
+
+        self::assertStringContainsString(
+            "/\x1b[1mses\x1b[22msions",
+            $output,
+        );
+    }
+
+    /**
+     * The screen, escape codes and all, once the given keys have been typed
+     * into a TUI with the given commands mounted.
+     *
+     * Each string is typed a moment after the one before it, so a test can
+     * write a name and then delete part of it.
+     *
+     * @param list<SlashCommand|RunsWhileWorking> $commands
+     */
+    private static function screenAfterTyping(
+        array $commands,
+        string ...$typed,
+    ): string {
+        $terminal = new VirtualTerminal(rows: 30);
+        $output = null;
+        $moment = 0.05;
+
+        foreach ($typed as $keys) {
+            EventLoop::delay(
+                $moment,
+                static fn () => $terminal->simulateInput($keys),
+            );
+            $moment += 0.05;
+        }
+
+        EventLoop::delay(
+            $moment,
+            static fn () => self::forceRepaint($terminal),
+        );
+        EventLoop::delay(
+            $moment + 0.05,
+            static function () use (&$output, $terminal): void {
+                $output = $terminal->getOutput();
+                $terminal->simulateInput("\x03");
+            },
+        );
+
+        (new NeuronCli(
+            new Agent(),
+            terminal: $terminal,
+            commands: $commands,
+        ))->run();
+
+        self::assertIsString($output);
+
+        return $output;
+    }
+
+    /**
+     * A command that does nothing, under a name and a description of the
+     * test's choosing.
+     */
+    private static function commandNamed(
+        string $name,
+        string $description,
+    ): SlashCommand {
+        return new class($name, $description) implements SlashCommand {
+            public function __construct(
+                private readonly string $commandName,
+                private readonly string $description,
+            ) {
+            }
+
+            public function name(): string
+            {
+                return $this->commandName;
+            }
+
+            public function describe(): string
+            {
+                return $this->description;
+            }
+
+            public function run(
+                Controls $controls,
+                string $arguments,
+            ): void {
+            }
+        };
+    }
+
+    /**
      * A command that does what the test tells it to, under a name of the
      * test's choosing.
      *

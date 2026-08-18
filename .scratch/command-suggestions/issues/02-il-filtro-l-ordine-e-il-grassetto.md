@@ -20,7 +20,7 @@ riga che lo dice, con quanto è stato scritto.
 
 **Blocked by:** 01 — La lista compare mentre si scrive un nome.
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Scrivendo dopo lo slash la lista tiene solo i comandi il cui nome
       contiene quello che si è scritto
