@@ -10,6 +10,7 @@ use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\History\ChatHistoryInterface;
 use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
 use NeuronCli\Conversation\AgentTurn;
+use NeuronCli\Conversation\CommandKit;
 use NeuronCli\Conversation\Commands\Leave;
 use NeuronCli\Conversation\Controls;
 use NeuronCli\Conversation\MessageForAgent;
@@ -52,9 +53,13 @@ final class NeuronCli
     private ?Future $response = null;
 
     /**
-     * @param list<SlashCommand> $commands everything that can be typed here
-     *                                     after a slash: the Conversation TUI
-     *                                     mounts nothing on its own
+     * @param list<SlashCommand|CommandKit> $commands everything that can be
+     *                                                typed here after a
+     *                                                slash: the Conversation
+     *                                                TUI mounts nothing on
+     *                                                its own, and a kit
+     *                                                stands for the commands
+     *                                                it carries
      */
     public function __construct(
         private Agent $agent,
@@ -285,7 +290,11 @@ final class NeuronCli
      * are mounted here like any other, and a Host Application is free to
      * leave any of them out.
      *
-     * @param list<SlashCommand> $commands
+     * A kit is unrolled here and nowhere else, so from this line on a command
+     * that arrived in one is indistinguishable from a command named on its
+     * own: same list, same rules, same mistake when two claim one name.
+     *
+     * @param list<SlashCommand|CommandKit> $commands
      *
      * @return array<string, SlashCommand>
      */
@@ -293,7 +302,7 @@ final class NeuronCli
     {
         $mounted = [];
 
-        foreach ($commands as $command) {
+        foreach (self::unroll($commands) as $command) {
             $name = $command->name();
 
             if (isset($mounted[$name])) {
@@ -306,6 +315,34 @@ final class NeuronCli
         }
 
         return $mounted;
+    }
+
+    /**
+     * Puts the commands a kit carries where the kit was named.
+     *
+     * Kits give way to their members in the order they were mounted, so the
+     * name a kit claims twice — its own member against a command named
+     * beside it — is caught wherever it was written.
+     *
+     * @param list<SlashCommand|CommandKit> $commands
+     *
+     * @return list<SlashCommand>
+     */
+    private static function unroll(array $commands): array
+    {
+        $unrolled = [];
+
+        foreach ($commands as $command) {
+            if ($command instanceof CommandKit) {
+                $unrolled = [...$unrolled, ...$command->commands()];
+
+                continue;
+            }
+
+            $unrolled[] = $command;
+        }
+
+        return $unrolled;
     }
 
     private function tick(): bool
