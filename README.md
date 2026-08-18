@@ -117,10 +117,51 @@ widgets of the Conversation TUI stay out of reach.
 - `stop()` leaves the terminal.
 
 A command that fails leaves the exception as a line of error in the
-conversation, exactly as a failing turn does, and the terminal stays usable. A
-command is refused while the Agent is working, and can be typed again once the
-turn has finished. `Leave`, the command this library ships to close the
-terminal, is the one exception and works at any time.
+conversation, exactly as a failing turn does, and the terminal stays usable.
+
+### Commands that run while the Agent is working
+
+A command is refused while the Agent is answering, and can be typed again once
+the turn has finished: one that replaced the conversation meanwhile would have
+the answer on its way land where it does not belong. A command that changes
+nothing of the sort says so by implementing
+`NeuronCli\Conversation\RunsWhileWorking` instead of
+`NeuronCli\Conversation\SlashCommand`, and is carried out at any time.
+
+```php
+use NeuronCli\Conversation\LimitedControls;
+use NeuronCli\Conversation\RunsWhileWorking;
+
+final class Version implements RunsWhileWorking
+{
+    public function name(): string
+    {
+        return '/version';
+    }
+
+    public function describe(): string
+    {
+        return 'Says which build is answering.';
+    }
+
+    public function run(LimitedControls $controls, string $arguments): void
+    {
+        $controls->say('Build ' . MyApp::VERSION);
+    }
+}
+```
+
+Both interfaces extend `NeuronCli\Conversation\Command`, which carries the
+name and the description; what changes is what `run()` is handed. In exchange
+for running at any time, such a command receives the **LimitedControls**: only
+`say()`, `warn()`, `commands()` and `stop()`. No `choose()`, because nobody
+should be picking from a list while answers and tool calls scroll underneath;
+no `agent()`, no `ask()` and no `useAgent()`, because the Agent is busy
+answering. The restriction is in the type, so a Picker opened from such a
+command does not compile rather than being merely discouraged.
+
+`Leave` and `Help` are the two shipped commands that run this way: leaving and
+reading what may be typed here change no conversation.
 
 ### The commands this library ships
 
@@ -132,8 +173,8 @@ prefers `/quit` to `/exit` writes no command of its own:
 | --- | --- | --- |
 | `NeuronCli\Conversation\Commands\Clear` | `/clear` | Starts a new Session, leaving the current one stored. |
 | `NeuronCli\Conversation\Commands\Sessions` | `/sessions` | Lists the stored Sessions and resumes the one chosen. |
-| `NeuronCli\Conversation\Commands\Leave` | `/exit` | Closes the Conversation TUI. |
-| `NeuronCli\Conversation\Commands\Help` | `/help` | Lists what can be typed here. |
+| `NeuronCli\Conversation\Commands\Leave` | `/exit` | Closes the Conversation TUI. Runs while the Agent is working. |
+| `NeuronCli\Conversation\Commands\Help` | `/help` | Lists what can be typed here. Runs while the Agent is working. |
 
 ```php
 use NeuronCli\Conversation\Commands\Clear;
@@ -264,8 +305,10 @@ an application may supply. The Session provider:
 `NeuronCli\Session\InMemorySessionProvider` and
 `NeuronCli\Session\FileSessionProvider` as the two shipped providers. And the
 Slash commands it mounts: `NeuronCli\Conversation\SlashCommand` to implement,
-`NeuronCli\Conversation\Command` behind it,
-`NeuronCli\Conversation\Controls` as what a command is handed while it runs,
+`NeuronCli\Conversation\RunsWhileWorking` for a command that runs while the
+Agent is answering, `NeuronCli\Conversation\Command` behind both,
+`NeuronCli\Conversation\Controls` and `NeuronCli\Conversation\LimitedControls`
+as what each is handed while it runs,
 `NeuronCli\Conversation\Commands\Clear`,
 `NeuronCli\Conversation\Commands\Sessions`,
 `NeuronCli\Conversation\Commands\Leave` and
@@ -322,8 +365,10 @@ them.
   including `Clear`, `Sessions`, `Leave` and `Help` when it mounted them.
 
 A command is refused while the Agent is working, so an arriving answer cannot
-land in the wrong Session; `Leave` is the exception and works at any time. Unknown Slash commands
-stay in the composer so they can be corrected and are never sent to the Agent.
+land in the wrong Session; a command that says in its type that it runs while
+the Agent works — `Leave` and `Help` among the ones shipped — is carried out at
+any time. Unknown Slash commands stay in the composer so they can be corrected
+and are never sent to the Agent.
 
 ## Development
 

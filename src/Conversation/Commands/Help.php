@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace NeuronCli\Conversation\Commands;
 
-use NeuronCli\Conversation\Controls;
-use NeuronCli\Conversation\SlashCommand;
+use NeuronCli\Conversation\LimitedControls;
+use NeuronCli\Conversation\RunsWhileWorking;
 
 /**
  * Lists the mounted commands, so a person can discover what to type here.
@@ -17,8 +17,12 @@ use NeuronCli\Conversation\SlashCommand;
  * showing it, so asking the Host Application to build the list beforehand
  * would ask it for something it does not have yet. The Conversation TUI
  * knows the mounted commands and hands them over as one of the Controls.
+ *
+ * It runs while the Agent is working too: reading what may be typed here
+ * changes nothing, so there is no reason to wait for an answer to be over
+ * before asking.
  */
-final readonly class Help implements SlashCommand
+final readonly class Help implements RunsWhileWorking
 {
     /**
      * @param string $name the name it answers to, slash included
@@ -37,7 +41,7 @@ final readonly class Help implements SlashCommand
         return 'Lists what can be typed here.';
     }
 
-    public function run(Controls $controls, string $arguments): void
+    public function run(LimitedControls $controls, string $arguments): void
     {
         foreach ($controls->commands() as $command) {
             $controls->say($command->name() . ' — ' . $command->describe());
