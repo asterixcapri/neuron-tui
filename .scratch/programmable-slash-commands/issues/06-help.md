@@ -15,12 +15,30 @@ questo ticket non lo fa.
 
 **Blocked by:** 05 — La Conversation TUI non monta più niente da sé.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Un comando può ottenere l'elenco dei comandi montati, ciascuno con nome
+- [x] Un comando può ottenere l'elenco dei comandi montati, ciascuno con nome
       e descrizione
-- [ ] Digitando `/help` compaiono tutti i comandi montati, sé stesso compreso
-- [ ] I comandi montati dalla Host Application compaiono accanto a quelli
+- [x] Digitando `/help` compaiono tutti i comandi montati, sé stesso compreso
+- [x] I comandi montati dalla Host Application compaiono accanto a quelli
       forniti
-- [ ] Il comando si monta senza ricevere niente alla costruzione
-- [ ] Una Conversation TUI su cui `/help` non è montato non lo riconosce
+- [x] Il comando si monta senza ricevere niente alla costruzione
+- [x] Una Conversation TUI su cui `/help` non è montato non lo riconosce
+
+## Comments
+
+Implementato su `ticket/06-help`.
+
+- `Controls::commands()` è il verbo nuovo: torna i comandi montati, nell'ordine
+  in cui la Host Application li ha nominati, presi dal registro della
+  Conversation TUI. Il comando che legge la lista ci compare dentro.
+- `NeuronCli\Conversation\Commands\Help` è il comando fornito: si costruisce
+  con il solo nome (`/help` di default) e dice una riga per comando,
+  `nome — descrizione`.
+- Provato dall'alto, con terminale virtuale: `/help` elenca sé stesso, gli
+  altri comandi forniti e quello scritto dalla Host Application; una TUI senza
+  `Help` montato risponde «Unknown Slash command: /help».
+- README, CONTEXT.md, l'esempio di riferimento e l'elenco dei moduli pubblici
+  di PHPStan aggiornati.
+- Verifica: `composer test` 126 test / 424 asserzioni verdi, `composer stan`
+  senza errori su entrambe le configurazioni.
