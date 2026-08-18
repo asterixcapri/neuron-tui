@@ -10,9 +10,9 @@ use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
 use NeuronCli\Conversation\AgentTurn;
 use NeuronCli\Conversation\MessageForAgent;
 use NeuronCli\Conversation\SlashCommand;
+use NeuronCli\Conversation\SlashCommandInput;
 use NeuronCli\Conversation\Submission;
 use NeuronCli\Conversation\TurnQueue;
-use NeuronCli\Conversation\UnknownSlashCommand;
 use NeuronCli\Session\InMemorySessionProvider;
 use NeuronCli\Session\Session;
 use NeuronCli\Session\SessionProvider;
@@ -100,14 +100,8 @@ final class NeuronCli
 
         $submission = Submission::interpret($event->getValue());
 
-        if ($submission instanceof SlashCommand) {
+        if ($submission instanceof SlashCommandInput) {
             $this->carryOut($submission);
-
-            return;
-        }
-
-        if ($submission instanceof UnknownSlashCommand) {
-            $this->view->showUnknownSlashCommand($submission->name);
 
             return;
         }
@@ -129,12 +123,25 @@ final class NeuronCli
     }
 
     /**
+     * Carries out the command the typed name points at, arguments aside.
+     *
+     * A name no command answers to is said in the conversation rather than
+     * sent to the Agent: the Slash namespace is answered locally.
+     *
      * A command that changes Session cannot run mid-turn: an answer already on
      * its way would land in the conversation that replaced the one it belongs
      * to. Leaving the TUI is never refused.
      */
-    private function carryOut(SlashCommand $command): void
+    private function carryOut(SlashCommandInput $input): void
     {
+        $command = SlashCommand::tryFrom($input->name);
+
+        if ($command === null) {
+            $this->view->showUnknownSlashCommand($input->name);
+
+            return;
+        }
+
         if ($command === SlashCommand::Exit) {
             $this->view->stop();
 

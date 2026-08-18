@@ -865,6 +865,79 @@ MARKDOWN;
         $provider->assertNothingSent();
     }
 
+    public function testACommandFollowedByArgumentsIsStillThatCommand(): void
+    {
+        $afterSessions = null;
+        $afterClear = null;
+        $forcedExit = false;
+        $provider = new FakeAIProvider(new AssistantMessage('An answer.'));
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        $terminal = new VirtualTerminal(rows: 30);
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("/clear now\r"),
+        );
+        EventLoop::delay(
+            0.06,
+            static fn () => $terminal->simulateInput("A question\r"),
+        );
+        EventLoop::delay(
+            0.2,
+            static function () use ($terminal): void {
+                $terminal->clearOutput();
+                $terminal->simulateInput("/sessions now\r");
+            },
+        );
+        EventLoop::delay(
+            0.3,
+            static function () use (&$afterSessions, $terminal): void {
+                $afterSessions = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                // Escape leaves the picker and the composer is free again.
+                $terminal->simulateInput("\x1b");
+                $terminal->clearOutput();
+                $terminal->simulateInput("/clear now\r");
+            },
+        );
+        EventLoop::delay(
+            0.4,
+            static function () use (&$afterClear, $terminal): void {
+                $afterClear = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("/exit now\r");
+            },
+        );
+        EventLoop::delay(
+            0.6,
+            static function () use (&$forcedExit, $terminal): void {
+                $forcedExit = true;
+                $terminal->simulateInput("\x03");
+            },
+        );
+
+        (new NeuronCli($agent, terminal: $terminal))->run();
+
+        // `/sessions now` opens the picker on the Session being written in.
+        self::assertIsString($afterSessions);
+        self::assertStringNotContainsString(
+            'Unknown Slash command',
+            $afterSessions,
+        );
+        self::assertStringContainsString('A question', $afterSessions);
+        // `/clear now` starts a fresh Session, so the answer goes off the
+        // screen instead of an unknown command reaching the conversation.
+        self::assertIsString($afterClear);
+        self::assertStringNotContainsString(
+            'Unknown Slash command',
+            $afterClear,
+        );
+        self::assertStringNotContainsString('An answer.', $afterClear);
+        // `/exit now` leaves, so Ctrl+C was never needed.
+        self::assertFalse($forcedExit);
+    }
+
     public function testSessionsWorkWithNoProviderAndWriteNothingToDisk(): void
     {
         $provider = new FakeAIProvider(new AssistantMessage('An answer.'));
