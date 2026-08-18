@@ -26,7 +26,7 @@ use Symfony\Component\Tui\Widget\TextWidget;
 final class ConversationView
 {
     private const string READY_STATUS =
-        'ready · Enter sends · Shift+Enter adds a line · /exit exits';
+        'ready · Enter sends · Shift+Enter adds a line · Ctrl+C exits';
 
     private const string WORKING_STATUS =
         'Enter queues · Shift+Enter adds a line';
