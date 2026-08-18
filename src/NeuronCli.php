@@ -10,10 +10,12 @@ use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\History\ChatHistoryInterface;
 use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
 use NeuronCli\Conversation\AgentTurn;
+use NeuronCli\Conversation\Command;
 use NeuronCli\Conversation\CommandKit;
-use NeuronCli\Conversation\Commands\Leave;
 use NeuronCli\Conversation\Controls;
+use NeuronCli\Conversation\LimitedControls;
 use NeuronCli\Conversation\MessageForAgent;
+use NeuronCli\Conversation\RunsWhileWorking;
 use NeuronCli\Conversation\SlashCommand;
 use NeuronCli\Conversation\SlashCommandInput;
 use NeuronCli\Conversation\Submission;
@@ -45,7 +47,7 @@ final class NeuronCli
     /**
      * The mounted commands, indexed by the name each answers to.
      *
-     * @var array<string, SlashCommand>
+     * @var array<string, SlashCommand|RunsWhileWorking>
      */
     private readonly array $commands;
 
@@ -53,13 +55,10 @@ final class NeuronCli
     private ?Future $response = null;
 
     /**
-     * @param list<SlashCommand|CommandKit> $commands everything that can be
-     *                                                typed here after a
-     *                                                slash: the Conversation
-     *                                                TUI mounts nothing on
-     *                                                its own, and a kit
-     *                                                stands for the commands
-     *                                                it carries
+     * @param list<SlashCommand|RunsWhileWorking|CommandKit> $commands
+     *     everything that can be typed here after a slash: the Conversation
+     *     TUI mounts nothing on its own, and a kit stands for the commands it
+     *     carries
      */
     public function __construct(
         private Agent $agent,
@@ -142,8 +141,9 @@ final class NeuronCli
      * conversation rather than sent to the Agent, because the Slash namespace
      * is answered locally.
      *
-     * No command runs mid-turn but leaving: an answer already on its way
-     * would land in a conversation the command had meanwhile replaced.
+     * Whether a command runs while the Agent is working is read from its
+     * type: an answer already on its way would land in a conversation a
+     * command had meanwhile replaced, so only what says it runs there does.
      */
     private function carryOut(SlashCommandInput $input): void
     {
@@ -155,13 +155,8 @@ final class NeuronCli
             return;
         }
 
-        // Leaving asks the question earlier than the turn does, so it is the
-        // one command a turn under way does not hold back. Which commands
-        // those are is the TUI's decision rather than any single command's,
-        // and until that decision is carried by the type of a command it is
-        // taken by recognising the one this library ships to leave.
         if (
-            !$command instanceof Leave
+            !$command instanceof RunsWhileWorking
             && $this->refusedWhileWorking($input->name)
         ) {
             return;
@@ -187,23 +182,19 @@ final class NeuronCli
      * that fiber alone: the loop goes on ticking, painting and reading keys
      * meanwhile, which is what lets a person answer the list.
      */
-    private function runSafely(SlashCommand $command, string $arguments): void
-    {
+    private function runSafely(
+        SlashCommand|RunsWhileWorking $command,
+        string $arguments,
+    ): void {
         $conversation = $this->agent->getChatHistory();
-        $controls = new Controls(
-            $this->view,
-            fn (): Agent => $this->agent,
-            function (string $prompt): void {
-                $this->send(new MessageForAgent($prompt));
-            },
-            $this->answerFrom(...),
-            array_values($this->commands),
-        );
-
         $failure = null;
 
         try {
-            $command->run($controls, $arguments);
+            if ($command instanceof RunsWhileWorking) {
+                $command->run($this->limitedControls(), $arguments);
+            } else {
+                $command->run($this->controls(), $arguments);
+            }
         } catch (Throwable $exception) {
             $failure = $exception;
         }
@@ -216,6 +207,44 @@ final class NeuronCli
         if ($failure instanceof Throwable) {
             $this->showFailure($failure);
         }
+    }
+
+    /**
+     * Everything a command that expects the Agent to stand still may do.
+     */
+    private function controls(): Controls
+    {
+        return new Controls(
+            $this->view,
+            fn (): Agent => $this->agent,
+            function (string $prompt): void {
+                $this->send(new MessageForAgent($prompt));
+            },
+            $this->answerFrom(...),
+            $this->mounted(),
+        );
+    }
+
+    /**
+     * The fewer verbs a command running while the Agent works is handed.
+     *
+     * There is nothing to close off here: what is missing is missing from the
+     * type, so a command asking for a Picker or for the Agent was already
+     * stopped where it was written.
+     */
+    private function limitedControls(): LimitedControls
+    {
+        return new LimitedControls($this->view, $this->mounted());
+    }
+
+    /**
+     * The mounted commands, in the order the Host Application named them.
+     *
+     * @return list<Command>
+     */
+    private function mounted(): array
+    {
+        return array_values($this->commands);
     }
 
     /**
@@ -262,8 +291,8 @@ final class NeuronCli
      *
      * A command that changed the conversation mid-turn would have an answer
      * already on its way land where it does not belong, so the rule is the
-     * TUI's rather than any single command's, and leaving — which asks the
-     * question earlier — is the one thing it does not cover.
+     * TUI's rather than any single command's: what says in its type that it
+     * runs while the Agent works never reaches here.
      *
      * Returns whether the command was turned away.
      */
@@ -294,9 +323,9 @@ final class NeuronCli
      * A kit is unrolled before any of this, so a command that arrived in one
      * is weighed here like any other.
      *
-     * @param list<SlashCommand|CommandKit> $commands
+     * @param list<SlashCommand|RunsWhileWorking|CommandKit> $commands
      *
-     * @return array<string, SlashCommand>
+     * @return array<string, SlashCommand|RunsWhileWorking>
      */
     private static function mount(array $commands): array
     {
@@ -323,9 +352,9 @@ final class NeuronCli
      * This is the one place a kit is opened, and nothing downstream is told
      * a kit ever existed.
      *
-     * @param list<SlashCommand|CommandKit> $commands
+     * @param list<SlashCommand|RunsWhileWorking|CommandKit> $commands
      *
-     * @return list<SlashCommand>
+     * @return list<SlashCommand|RunsWhileWorking>
      */
     private static function unroll(array $commands): array
     {

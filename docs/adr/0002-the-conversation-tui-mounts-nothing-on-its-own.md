@@ -46,12 +46,12 @@ Nothing had been released, so the interface break costs nobody anything.
   construction error rather than a silent override.
 - The screen is repainted from the Agent's History whenever a command changed
   it, so a command need not — and cannot usefully — tell the TUI what it did.
-- Leaving stays the one command a turn under way does not hold back, and for
-  now the Conversation TUI recognises it as the `Leave` class this library
-  ships: a Host Application's own command to close the terminal is still
-  refused mid-turn. Which commands may run while the Agent is working is the
-  TUI's decision, and it is a decision the type of a command will carry
-  instead, which is what will make that recognition go away.
+- Which commands a turn under way does not hold back is carried by the type of
+  a command: one implementing `RunsWhileWorking` rather than `SlashCommand` is
+  carried out at any time, and is handed the `LimitedControls` in exchange. The
+  Conversation TUI names no class of its own to decide it, so a Host
+  Application's own command to close the terminal runs mid-turn on the same
+  terms as the shipped `Leave`.
 - The screen is reconciled by comparing the History the command was handed with
   the one the Agent holds afterwards, so a command that changed a History in
   place rather than replacing it leaves the screen as it was.

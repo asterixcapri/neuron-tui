@@ -28,12 +28,15 @@ use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Testing\RequestRecord;
 use NeuronAI\Tools\Tool;
+use NeuronCli\Conversation\AbstractCommandKit;
 use NeuronCli\Conversation\Commands\Clear;
 use NeuronCli\Conversation\Commands\Help;
 use NeuronCli\Conversation\Commands\Leave;
 use NeuronCli\Conversation\Commands\SessionKit;
 use NeuronCli\Conversation\Commands\Sessions;
 use NeuronCli\Conversation\Controls;
+use NeuronCli\Conversation\LimitedControls;
+use NeuronCli\Conversation\RunsWhileWorking;
 use NeuronCli\Conversation\SlashCommand;
 use NeuronCli\NeuronCli;
 use NeuronCli\Session\InMemorySessionProvider;
@@ -1704,6 +1707,184 @@ MARKDOWN;
     }
 
     /**
+     * A command that says it runs while the Agent is working is carried out
+     * there and then, and the answer on its way is none the worse for it.
+     */
+    public function testACommandThatRunsWhileWorkingIsCarriedOutMidTurn(): void
+    {
+        $ran = false;
+        $midTurnDisplay = null;
+        $provider = new class(
+            new AssistantMessage('A slow answer.'),
+        ) extends FakeAIProvider {
+            protected function streamChunks(Message $response): Generator
+            {
+                \Amp\delay(0.5);
+                yield new TextChunk('slow-stream', 'A slow answer.');
+
+                return $response;
+            }
+        };
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        $terminal = new VirtualTerminal(rows: 24);
+        $command = $this->commandThatRunsWhileWorking(
+            static function (
+                LimitedControls $controls,
+                string $arguments,
+            ) use (&$ran): void {
+                $ran = true;
+                $controls->say('The command ran mid-turn.');
+            },
+        );
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("A question\r"),
+        );
+        EventLoop::delay(
+            0.06,
+            static fn () => $terminal->simulateInput("/probe\r"),
+        );
+        EventLoop::delay(
+            0.12,
+            static function () use (&$midTurnDisplay, $terminal): void {
+                $midTurnDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+            },
+        );
+        EventLoop::delay(
+            0.9,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [$command],
+        ))->run();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+
+        self::assertTrue($ran);
+        self::assertIsString($midTurnDisplay);
+        self::assertStringContainsString(
+            'The command ran mid-turn.',
+            $midTurnDisplay,
+        );
+        self::assertStringNotContainsString('is refused', $midTurnDisplay);
+        // The answer under way arrives all the same, on the conversation the
+        // command ran in, and what the command said is still there under it.
+        self::assertStringContainsString('❯ A question', $display);
+        self::assertStringContainsString('● A slow answer.', $display);
+        self::assertStringContainsString('The command ran mid-turn.', $display);
+    }
+
+    /**
+     * Asking for help is one of the two shipped commands a turn under way
+     * does not hold back, and leaving is the other.
+     */
+    public function testHelpAndLeaveAnswerWhileTheAgentIsWorking(): void
+    {
+        $forcedExit = false;
+        $midTurnDisplay = null;
+        $provider = new class(
+            new AssistantMessage('A slow answer.'),
+        ) extends FakeAIProvider {
+            protected function streamChunks(Message $response): Generator
+            {
+                \Amp\delay(0.5);
+                yield new TextChunk('slow-stream', 'A slow answer.');
+
+                return $response;
+            }
+        };
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        $terminal = new VirtualTerminal(rows: 24);
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("A question\r"),
+        );
+        EventLoop::delay(
+            0.06,
+            static fn () => $terminal->simulateInput("/help\r"),
+        );
+        EventLoop::delay(
+            0.12,
+            static function () use (&$midTurnDisplay, $terminal): void {
+                $midTurnDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("/exit\r");
+            },
+        );
+        EventLoop::delay(
+            0.9,
+            static function () use (&$forcedExit, $terminal): void {
+                $forcedExit = true;
+                $terminal->simulateInput("\x03");
+            },
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [new Help(), new Leave()],
+        ))->run();
+
+        self::assertIsString($midTurnDisplay);
+        self::assertStringContainsString(
+            '/help — Lists what can be typed here.',
+            $midTurnDisplay,
+        );
+        self::assertStringContainsString(
+            '/exit — Closes the Conversation TUI.',
+            $midTurnDisplay,
+        );
+        self::assertFalse($forcedExit);
+    }
+
+    /**
+     * A kit carries commands of both kinds, and what arrived in one is
+     * mounted like anything else — the mid-turn permission included.
+     */
+    public function testAKitCanCarryACommandThatRunsWhileWorking(): void
+    {
+        $agent = new Agent();
+        $agent->setAiProvider(new FakeAIProvider());
+        $terminal = new VirtualTerminal(rows: 24);
+        $kit = new class() extends AbstractCommandKit {
+            protected function provide(): array
+            {
+                return [new Help(), new Leave()];
+            }
+        };
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("/help\r"),
+        );
+        EventLoop::delay(
+            0.06,
+            static fn () => $terminal->simulateInput("/exit\r"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [$kit],
+        ))->run();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+
+        self::assertStringContainsString(
+            '/help — Lists what can be typed here.',
+            $display,
+        );
+        self::assertStringContainsString(
+            '/exit — Closes the Conversation TUI.',
+            $display,
+        );
+    }
+
+    /**
      * A command that offers a list of its own gets back the key of the line
      * a person chose, whatever those lines stand for.
      */
@@ -1958,9 +2139,48 @@ MARKDOWN;
     }
 
     /**
+     * A command that says it may run while the Agent is working, and does
+     * what the test tells it to with the fewer Controls it is handed.
+     *
+     * @param Closure(LimitedControls, string): void $run
+     */
+    private function commandThatRunsWhileWorking(
+        Closure $run,
+        string $name = '/probe',
+    ): RunsWhileWorking {
+        return new class($run, $name) implements RunsWhileWorking {
+            /**
+             * @param Closure(LimitedControls, string): void $run
+             */
+            public function __construct(
+                private readonly Closure $run,
+                private readonly string $commandName,
+            ) {
+            }
+
+            public function name(): string
+            {
+                return $this->commandName;
+            }
+
+            public function describe(): string
+            {
+                return 'Does what the test says, working or not.';
+            }
+
+            public function run(
+                LimitedControls $controls,
+                string $arguments,
+            ): void {
+                ($this->run)($controls, $arguments);
+            }
+        };
+    }
+
+    /**
      * The commands Neuron CLI ships for the Sessions of one provider.
      *
-     * @return list<SlashCommand>
+     * @return list<SlashCommand|RunsWhileWorking>
      */
     private static function sessionCommands(
         SessionProvider $sessions,

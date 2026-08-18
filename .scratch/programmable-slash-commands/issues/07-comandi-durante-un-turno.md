@@ -19,15 +19,41 @@ passano di là sono quello che esce e quello che elenca.
 **Blocked by:** 05 — La Conversation TUI non monta più niente da sé; 06 —
 `/help`.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Un comando che dichiara di poter girare durante un Turn viene eseguito
+- [x] Un comando che dichiara di poter girare durante un Turn viene eseguito
       mentre l'Agent risponde
-- [ ] Un comando che non lo dichiara viene rifiutato durante un Turn, con
+- [x] Un comando che non lo dichiara viene rifiutato durante un Turn, con
       l'invito a riprovare a Turn finito, e non viene eseguito
-- [ ] I comandi che girano durante un Turn ricevono soltanto il dire,
+- [x] I comandi che girano durante un Turn ricevono soltanto il dire,
       l'avvertire, l'elencare e l'uscire
-- [ ] Aprire un Picker da un comando di quel genere non è esprimibile
-- [ ] Uscire e chiedere aiuto funzionano sia a Turn fermo sia a Turn in corso
-- [ ] La risposta in corso non viene disturbata da un comando eseguito nel
+- [x] Aprire un Picker da un comando di quel genere non è esprimibile
+- [x] Uscire e chiedere aiuto funzionano sia a Turn fermo sia a Turn in corso
+- [x] La risposta in corso non viene disturbata da un comando eseguito nel
       frattempo
+
+## Comments
+
+Implementato su `ticket/07-comandi-durante-un-turno`.
+
+- `NeuronCli\Conversation\RunsWhileWorking` è la seconda interfaccia di
+  comando: estende `Command` come `SlashCommand`, e il suo `run()` prende i
+  `NeuronCli\Conversation\LimitedControls` — `say`, `warn`, `commands`,
+  `stop`. Niente `choose()`, niente `agent()`, `ask()` né `useAgent()`: aprire
+  un Picker da un comando di quel genere non è esprimibile, perché il verbo non
+  esiste sul tipo che riceve.
+- La Conversation TUI decide il rifiuto mid-turn dal tipo: l'accoppiamento
+  temporaneo `instanceof Leave` è sparito, con i tre punti che lo dichiaravano
+  provvisorio — commento nel sorgente, README e ADR 0002.
+- `Leave` e `Help` sono i due comandi forniti che girano durante un Turn.
+- I due `LimitedControls` e i `Controls` restano classi distinte: quattro verbi
+  ripetuti valgono meno di una gerarchia o di un delegante fra i due.
+- Provato dall'alto, con terminale virtuale: un comando che dichiara di girare
+  durante un Turn viene eseguito mentre l'Agent risponde e la risposta arriva
+  lo stesso, con la riga del comando ancora sotto; `/help` e `/exit` rispondono
+  a Turn in corso; un kit può portare un comando di quel genere. Il rifiuto di
+  chi non lo dichiara era già provato e resta verde.
+- README, CONTEXT.md, ADR 0002 e l'elenco dei moduli pubblici di PHPStan
+  aggiornati; `examples/` non nominava nessuno dei due tipi e non è cambiato.
+- Verifica: `composer test` 133 test / 460 asserzioni verdi, `composer stan`
+  senza errori su entrambe le configurazioni.
