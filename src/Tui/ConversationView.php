@@ -236,6 +236,14 @@ final class ConversationView
         $this->activeAgentMessage->setText('_Empty response._');
     }
 
+    /**
+     * Shows a line a Slash command said.
+     */
+    public function showNotice(string $text): void
+    {
+        $this->history->addMessage('·', $text, 'notice');
+    }
+
     public function showError(string $message): void
     {
         $this->history->addMessage('Error', $message, 'error');

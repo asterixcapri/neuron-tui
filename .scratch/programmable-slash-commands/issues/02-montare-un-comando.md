@@ -27,20 +27,65 @@ con un errore, invece di lasciar vincere silenziosamente uno dei due.
 
 **Blocked by:** 01 — L'input produce nome e argomenti.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Un comando montato dalla Host Application viene eseguito quando se ne
+- [x] Un comando montato dalla Host Application viene eseguito quando se ne
       digita il nome
-- [ ] Il comando riceve gli argomenti scritti dopo il nome
-- [ ] Ciò che un comando dice, e ciò di cui avverte, compare nella
+- [x] Il comando riceve gli argomenti scritti dopo il nome
+- [x] Ciò che un comando dice, e ciò di cui avverte, compare nella
       conversazione
-- [ ] Il prompt che un comando manda all'Agent produce una risposta sullo
+- [x] Il prompt che un comando manda all'Agent produce una risposta sullo
       schermo
-- [ ] Un comando può raggiungere l'Agent e cambiargli provider, istruzioni o
+- [x] Un comando può raggiungere l'Agent e cambiargli provider, istruzioni o
       tool
-- [ ] Un comando può far uscire dal terminale
-- [ ] Un comando che va in errore lascia una riga di errore e il terminale
+- [x] Un comando può far uscire dal terminale
+- [x] Un comando che va in errore lascia una riga di errore e il terminale
       resta utilizzabile
-- [ ] Due comandi con lo stesso nome fermano la costruzione della Conversation
+- [x] Due comandi con lo stesso nome fermano la costruzione della Conversation
       TUI
-- [ ] I tre comandi esistenti si comportano esattamente come prima
+- [x] I tre comandi esistenti si comportano esattamente come prima
+
+## Esito
+
+`NeuronCli` accetta `commands:` e monta la lista una volta, indicizzata per
+nome. Un comando implementa `SlashCommand` — `name()`, `describe()` da
+`Command`, e `run(Controls $controls, string $arguments)` — e riceve gli
+argomenti che seguivano il nome, stringa vuota quando non ce n'erano.
+
+I `Controls` portano i cinque verbi che il ticket nomina: `say()` (una riga
+nella conversazione, nuovo `ConversationView::showNotice()`), `warn()` (la
+riga di errore che già esisteva), `ask()` (che passa dalla stessa strada di
+un messaggio digitato: coda dei Turn, riga della persona sullo schermo, e la
+risposta arriva sullo schermo, non al comando), `agent()` e `stop()`. Nessun
+widget della Conversation TUI è raggiungibile da lì. `choose()`, `useAgent()`
+e `commands()` restano ai ticket 03, 04 e 06.
+
+L'esecuzione è protetta: quello che un comando lascia risalire diventa la
+stessa riga di errore di un'eccezione durante un Turn — ora entrambe passano
+per `NeuronCli::showFailure()` — e il terminale resta utilizzabile.
+
+Il montaggio rifiuta due comandi con lo stesso nome, e anche un comando che
+prende uno dei tre nomi che la TUI risponde da sé: sono due
+`InvalidArgumentException` con messaggi distinti, perché nel secondo caso non
+c'è un secondo comando da cercare. L'enum dei tre è rinominato
+`BuiltInCommand`, così che `SlashCommand` sia l'interfaccia; i tre si
+comportano come prima, e come loro un comando montato viene rifiutato durante
+un Turn.
+
+`NeuronCli\Conversation\Command`, `SlashCommand` e `Controls` entrano fra i
+moduli pubblici (`tools/phpstan/PublicModulePolicy.php`) e nel README, dove il
+montaggio è documentato con un esempio.
+
+Prove, dal terminale virtuale in `tests/NeuronCliTest.php`: comando montato
+eseguito con i suoi argomenti; `say` e `warn` sullo schermo; il prompt di
+`ask` che produce una risposta; `agent()` che cambia provider, istruzioni e
+tool; `stop()` che esce senza Ctrl+C; un comando che va in errore seguito da
+una domanda a cui l'Agent risponde; il rifiuto durante un Turn; e le due
+costruzioni fermate dai nomi in conflitto.
+
+Verifica: `composer test` 113 test, 371 asserzioni, verde; `composer stan`
+(due configurazioni) senza errori.
+
+Debito lasciato ai ticket seguenti: la ricerca del nome è ancora in due passi
+(registro, poi enum), `describe()` non è letto da nessuno finché non arriva
+`/help`, e la riconciliazione dello schermo dopo un comando è del ticket 05.

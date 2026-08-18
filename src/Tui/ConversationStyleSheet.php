@@ -72,6 +72,7 @@ final class ConversationStyleSheet
                 color: 'gray',
                 dim: true,
             ),
+            '.notice' => new Style(color: 'cyan'),
             '.tool' => new Style(color: 'cyan', dim: true),
             '.error' => new Style(color: 'red', bold: true),
         ]);
