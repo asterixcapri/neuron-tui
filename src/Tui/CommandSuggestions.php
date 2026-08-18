@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace NeuronCli\Tui;
 
 use NeuronCli\Conversation\Command;
+use Symfony\Component\Tui\Style\Style;
+use Symfony\Component\Tui\Widget\AbstractWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 use Symfony\Component\Tui\Widget\SelectListWidget;
 use Symfony\Component\Tui\Widget\TextWidget;
@@ -20,9 +22,10 @@ use Symfony\Component\Tui\Widget\TextWidget;
  *
  * What is on screen is read from the draft alone: a single line beginning
  * with a slash and no whitespace yet is a name being written, and anything
- * else takes the suggestions away. With nothing to suggest they stay,
- * carrying the one line that says so, because there being nothing is itself
- * worth reading before Enter is pressed.
+ * else takes the suggestions away. The names that carry what has been
+ * written stay, each saying with a bold stretch why it is there; when none
+ * do, the one line that says so takes the list's place, because there being
+ * nothing is itself worth reading before Enter is pressed.
  *
  * @internal
  */
@@ -55,12 +58,37 @@ final class CommandSuggestions
     private readonly TextWidget $nothingMatches;
 
     /**
-     * Whether the commands to suggest fill a list or leave it empty. Read
-     * once: they are the ones mounted when the terminal was built.
+     * How the stretch of a name that matched is told apart from the rest of
+     * it. A style sheet dresses whole lines, and this is half a word.
      */
-    private readonly bool $anyToSuggest;
+    private readonly Style $emphasis;
 
-    private bool $onScreen = false;
+    /**
+     * What there is to suggest: for each mounted command the name it answers
+     * to, the name a draft is matched against, and the two halves of the
+     * line it would be read on.
+     *
+     * Read once, in the order the Host Application mounted them, which is
+     * the order commands matching alike keep on screen.
+     *
+     * @var list<array{
+     *     answersTo: string,
+     *     name: string,
+     *     label: string,
+     *     description: string,
+     * }>
+     */
+    private readonly array $suggestible;
+
+    /**
+     * The lines the list is holding, so that it is only ever given a set it
+     * is not already showing.
+     *
+     * @var list<array{value: string, label: string, description: string}>|null
+     */
+    private ?array $shown = null;
+
+    private ?AbstractWidget $onScreen = null;
 
     /**
      * @param list<Command> $commands
@@ -72,10 +100,9 @@ final class CommandSuggestions
         $this->widget->addStyleClass('suggestions');
         $this->nothingMatches = new TextWidget('');
         $this->nothingMatches->addStyleClass('suggestions-empty');
-
-        $lines = self::linesFor($commands);
-        $this->anyToSuggest = $lines !== [];
-        $this->list = new SelectListWidget($lines, self::VISIBLE_LINES);
+        $this->emphasis = new Style(bold: true);
+        $this->suggestible = self::suggestible($commands);
+        $this->list = new SelectListWidget([], self::VISIBLE_LINES);
         $this->list->addStyleClass('suggestions-list');
     }
 
@@ -98,22 +125,45 @@ final class CommandSuggestions
             return;
         }
 
-        if (!$this->anyToSuggest) {
+        $lines = $this->linesMatching($draft);
+
+        if ($lines === []) {
             $this->nothingMatches->setText(
                 'No commands match "'
                     . DisplayableText::preview($draft, self::DRAFT_WIDTH)
                     . '"',
             );
-        }
+            $this->show($this->nothingMatches);
+            // The list is given its lines again when one matches next, so
+            // what was selected before this does not come back with them.
+            $this->shown = null;
 
-        if ($this->onScreen) {
             return;
         }
 
-        $this->widget->add(
-            $this->anyToSuggest ? $this->list : $this->nothingMatches,
-        );
-        $this->onScreen = true;
+        if ($lines !== $this->shown) {
+            // A different set of lines is a different list to read, so it is
+            // handed over whole and the selection goes back to the top with
+            // it: whoever is writing is narrowing, not scrolling.
+            $this->list->setItems($lines);
+            $this->shown = $lines;
+        }
+
+        $this->show($this->list);
+    }
+
+    /**
+     * Puts the given band on screen, in place of whatever was there.
+     */
+    private function show(AbstractWidget $band): void
+    {
+        if ($this->onScreen === $band) {
+            return;
+        }
+
+        $this->widget->clear();
+        $this->widget->add($band);
+        $this->onScreen = $band;
     }
 
     /**
@@ -121,32 +171,118 @@ final class CommandSuggestions
      */
     private function hide(): void
     {
-        if (!$this->onScreen) {
+        if ($this->onScreen === null) {
             return;
         }
 
         $this->widget->clear();
-        $this->onScreen = false;
+        $this->onScreen = null;
+        // The list is given its lines again next time it is shown, so what
+        // was selected before does not outlive the writing that chose it.
+        $this->shown = null;
     }
 
     /**
-     * A line for each command to suggest, in the order they were mounted.
+     * The lines to read for a draft, in the order they are read in.
      *
-     * A name and a description are the Host Application's own text, so both
-     * are made safe here: the list puts what it is given on the terminal as
-     * it stands.
+     * A name stays if what has been written after the slash appears inside
+     * it, in one contiguous stretch and whatever the case: `/wind` finds
+     * `/rewind`, `/rwd` finds nothing. The description is not searched — one
+     * looks here among the names, not among the meanings.
      *
-     * @param list<Command> $commands
+     * The order is three sets one after the other — the name written in
+     * full, then the names that begin with it, then the names that merely
+     * carry it — and inside each the order the Host Application mounted
+     * them. It is not a score: the order can be told from the code without
+     * running it.
      *
      * @return list<array{value: string, label: string, description: string}>
      */
-    private static function linesFor(array $commands): array
+    private function linesMatching(string $draft): array
     {
-        $lines = [];
+        $draft = DisplayableText::safe($draft);
+        $written = mb_strtolower($draft);
+        $after = mb_substr($draft, 1);
+        $exact = [];
+        $beginning = [];
+        $carrying = [];
+
+        foreach ($this->suggestible as $suggestion) {
+            $name = $suggestion['name'];
+
+            if ($after !== '' && mb_stripos($name, $after) === false) {
+                continue;
+            }
+
+            $line = [
+                'value' => $suggestion['answersTo'],
+                'label' => $this->emphasising($suggestion['label'], $after),
+                'description' => $suggestion['description'],
+            ];
+            $lowered = mb_strtolower($name);
+
+            if ($lowered === $written) {
+                $exact[] = $line;
+            } elseif (str_starts_with($lowered, $written)) {
+                $beginning[] = $line;
+            } else {
+                $carrying[] = $line;
+            }
+        }
+
+        return [...$exact, ...$beginning, ...$carrying];
+    }
+
+    /**
+     * The line's name with the stretch that matched in bold, so that a line
+     * says at a glance why it is there. With a contiguous stretch there is
+     * only ever the one.
+     *
+     * A name too long to be read whole is read shortened, and a stretch that
+     * fell in the part that was cut has nowhere to be shown: the name is
+     * then left as it is, still there for having matched.
+     */
+    private function emphasising(string $label, string $written): string
+    {
+        $at = $written === '' ? false : mb_stripos($label, $written);
+
+        if ($at === false) {
+            return $label;
+        }
+
+        $length = mb_strlen($written);
+
+        return mb_substr($label, 0, $at)
+            . $this->emphasis->apply(mb_substr($label, $at, $length))
+            . mb_substr($label, $at + $length);
+    }
+
+    /**
+     * What there is to suggest, one entry per mounted command.
+     *
+     * A name and a description are the Host Application's own text, so both
+     * are made safe here: the list puts what it is given on the terminal as
+     * it stands. A name is kept three times over, because the three are not
+     * the same string: the one a completion would write, the whole safe one
+     * a draft is matched against, and the shortened one a line is read on.
+     *
+     * @param list<Command> $commands
+     *
+     * @return list<array{
+     *     answersTo: string,
+     *     name: string,
+     *     label: string,
+     *     description: string,
+     * }>
+     */
+    private static function suggestible(array $commands): array
+    {
+        $suggestible = [];
 
         foreach ($commands as $command) {
-            $lines[] = [
-                'value' => $command->name(),
+            $suggestible[] = [
+                'answersTo' => $command->name(),
+                'name' => DisplayableText::safe($command->name()),
                 'label' => DisplayableText::preview(
                     $command->name(),
                     self::NAME_WIDTH,
@@ -158,7 +294,7 @@ final class CommandSuggestions
             ];
         }
 
-        return $lines;
+        return $suggestible;
     }
 
     /**
