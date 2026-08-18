@@ -119,6 +119,15 @@ widgets of the Conversation TUI stay out of reach.
 A command that fails leaves the exception as a line of error in the
 conversation, exactly as a failing turn does, and the terminal stays usable.
 
+While a name is being written after a slash, the mounted commands are shown
+above the composer, each with the line it describes itself with. Nothing is
+mounted or configured to get them: they are the commands the Host Application
+already mounted, so a terminal without commands shows none. The keys stay with
+the composer meanwhile — Enter sends what is written, as it always did — and
+the list goes as soon as the draft stops being a name: a space, a line break,
+or the slash deleted. A slash in the middle of a message shows nothing and
+stays text for the Agent.
+
 ### Commands that run while the Agent is working
 
 A command is refused while the Agent is answering, and can be typed again once

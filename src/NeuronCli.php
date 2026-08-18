@@ -73,6 +73,7 @@ final class NeuronCli
             $this->terminal,
             $title,
             $subtitle,
+            $this->mounted(),
         );
         $this->workingIndicator = $this->view->workingIndicator();
         $this->turns = new TurnQueue();
