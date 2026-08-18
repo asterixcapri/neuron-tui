@@ -6,6 +6,7 @@ namespace NeuronCli\Tests;
 
 use Closure;
 use Generator;
+use InvalidArgumentException;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Agent\Middleware\ToolApproval;
 use NeuronAI\Agent\Nodes\ToolNode;
@@ -27,6 +28,8 @@ use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Testing\RequestRecord;
 use NeuronAI\Tools\Tool;
+use NeuronCli\Conversation\Controls;
+use NeuronCli\Conversation\SlashCommand;
 use NeuronCli\NeuronCli;
 use NeuronCli\Session\InMemorySessionProvider;
 use NeuronCli\Session\Session;
@@ -936,6 +939,372 @@ MARKDOWN;
         self::assertStringNotContainsString('An answer.', $afterClear);
         // `/exit now` leaves, so Ctrl+C was never needed.
         self::assertFalse($forcedExit);
+    }
+
+    /**
+     * Mounts a command of the Host Application's own and runs it.
+     */
+    public function testAMountedCommandRunsWithWhatWasTypedAfterItsName(): void
+    {
+        $arguments = null;
+        $provider = new FakeAIProvider();
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        $terminal = new VirtualTerminal(rows: 30);
+        $command = $this->commandThat(
+            static function (
+                Controls $controls,
+                string $typed,
+            ) use (&$arguments): void {
+                $arguments = $typed;
+                $controls->say('The command ran.');
+            },
+        );
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("/probe two words\r"),
+        );
+        EventLoop::delay(
+            0.2,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [$command],
+        ))->run();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+        self::assertSame('two words', $arguments);
+        self::assertStringContainsString('The command ran.', $display);
+        self::assertStringNotContainsString('Unknown Slash command', $display);
+        $provider->assertNothingSent();
+    }
+
+    public function testWhatACommandSaysAndWarnsReachesTheConversation(): void
+    {
+        $provider = new FakeAIProvider();
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        $terminal = new VirtualTerminal(rows: 30);
+        $command = $this->commandThat(
+            static function (Controls $controls, string $arguments): void {
+                $controls->say('Everything was in order.');
+                $controls->warn('Except for one thing.');
+            },
+        );
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("/probe\r"),
+        );
+        EventLoop::delay(
+            0.2,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [$command],
+        ))->run();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+        self::assertStringContainsString(
+            'Everything was in order.',
+            $display,
+        );
+        self::assertStringContainsString('Except for one thing.', $display);
+        $provider->assertNothingSent();
+    }
+
+    public function testThePromptACommandPutsToTheAgentIsAnsweredOnScreen(): void
+    {
+        $provider = new FakeAIProvider(new AssistantMessage('An answer.'));
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        $terminal = new VirtualTerminal(rows: 30);
+        $command = $this->commandThat(
+            static function (Controls $controls, string $arguments): void {
+                $controls->ask('Review ' . $arguments . '.');
+            },
+        );
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("/probe this diff\r"),
+        );
+        EventLoop::delay(
+            0.4,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [$command],
+        ))->run();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+        self::assertStringContainsString('❯ Review this diff.', $display);
+        self::assertStringContainsString('An answer.', $display);
+        self::assertCount(1, $provider->getRecorded());
+        self::assertSame(
+            'Review this diff.',
+            $provider->getRecorded()[0]->messages[0]->getContent(),
+        );
+    }
+
+    public function testACommandReachesTheAgentToChangeProviderInstructionsAndTools(): void
+    {
+        $abandoned = new FakeAIProvider(new AssistantMessage('The old one.'));
+        $chosen = new FakeAIProvider(new AssistantMessage('The new one.'));
+        $agent = new Agent();
+        $agent->setAiProvider($abandoned);
+        $terminal = new VirtualTerminal(rows: 30);
+        $command = $this->commandThat(
+            static function (
+                Controls $controls,
+                string $arguments,
+            ) use ($chosen): void {
+                $controls->agent()
+                    ->setAiProvider($chosen)
+                    ->setInstructions('Answer in one word.')
+                    ->addTool(new Tool('read_file'));
+            },
+        );
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("/probe\r"),
+        );
+        EventLoop::delay(
+            0.1,
+            static fn () => $terminal->simulateInput("A question\r"),
+        );
+        EventLoop::delay(
+            0.4,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [$command],
+        ))->run();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+        self::assertStringContainsString('The new one.', $display);
+        self::assertStringNotContainsString('The old one.', $display);
+        $abandoned->assertNothingSent();
+        $chosen->assertCallCount(1);
+        $chosen->assertSystemPrompt('Answer in one word.');
+        $chosen->assertToolsConfigured(['read_file']);
+    }
+
+    public function testACommandCanLeaveTheTerminal(): void
+    {
+        $forcedExit = false;
+        $agent = new Agent();
+        $agent->setAiProvider(new FakeAIProvider());
+        $terminal = new VirtualTerminal(rows: 30);
+        $command = $this->commandThat(
+            static function (Controls $controls, string $arguments): void {
+                $controls->stop();
+            },
+            '/quit',
+        );
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("/quit\r"),
+        );
+        EventLoop::delay(
+            0.3,
+            static function () use (&$forcedExit, $terminal): void {
+                $forcedExit = true;
+                $terminal->simulateInput("\x03");
+            },
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [$command],
+        ))->run();
+
+        self::assertFalse($forcedExit);
+    }
+
+    public function testACommandThatFailsLeavesAnErrorLineAndAUsableTerminal(): void
+    {
+        $provider = new FakeAIProvider(new AssistantMessage('An answer.'));
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        $terminal = new VirtualTerminal(rows: 30);
+        $command = $this->commandThat(
+            static function (Controls $controls, string $arguments): void {
+                throw new \RuntimeException('The command broke.');
+            },
+        );
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("/probe\r"),
+        );
+        EventLoop::delay(
+            0.15,
+            static fn () => $terminal->simulateInput("A question\r"),
+        );
+        EventLoop::delay(
+            0.45,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [$command],
+        ))->run();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+        self::assertStringContainsString(
+            'RuntimeException: The command broke.',
+            $display,
+        );
+        self::assertStringNotContainsString('#0 ', $display);
+        self::assertStringContainsString('An answer.', $display);
+    }
+
+    public function testTwoCommandsAnsweringToTheSameNameStopTheConstruction(): void
+    {
+        $doNothing = static function (
+            Controls $controls,
+            string $arguments,
+        ): void {
+        };
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage(
+            'Two Slash commands answer to /probe.',
+        );
+
+        new NeuronCli(
+            new Agent(),
+            terminal: new VirtualTerminal(),
+            commands: [
+                $this->commandThat($doNothing),
+                $this->commandThat($doNothing),
+            ],
+        );
+    }
+
+    public function testACommandCannotTakeANameTheTuiAlreadyAnswers(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage(
+            '/clear is a Slash command the Conversation TUI answers to '
+                . 'itself.',
+        );
+
+        new NeuronCli(
+            new Agent(),
+            terminal: new VirtualTerminal(),
+            commands: [
+                $this->commandThat(
+                    static function (
+                        Controls $controls,
+                        string $arguments,
+                    ): void {
+                    },
+                    '/clear',
+                ),
+            ],
+        );
+    }
+
+    public function testAMountedCommandIsRefusedWhileTheAgentIsWorking(): void
+    {
+        $refusedDisplay = null;
+        $ran = false;
+        $provider = new class(
+            new AssistantMessage('A slow answer.'),
+        ) extends FakeAIProvider {
+            protected function streamChunks(Message $response): Generator
+            {
+                \Amp\delay(0.4);
+                yield new TextChunk('slow-stream', 'A slow answer.');
+
+                return $response;
+            }
+        };
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        $terminal = new VirtualTerminal(rows: 24);
+        $command = $this->commandThat(
+            static function (
+                Controls $controls,
+                string $arguments,
+            ) use (&$ran): void {
+                $ran = true;
+            },
+        );
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("A question\r"),
+        );
+        EventLoop::delay(
+            0.06,
+            static fn () => $terminal->simulateInput("/probe\r"),
+        );
+        EventLoop::delay(
+            0.12,
+            static function () use (&$refusedDisplay, $terminal): void {
+                $refusedDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("\x03");
+            },
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [$command],
+        ))->run();
+
+        self::assertIsString($refusedDisplay);
+        self::assertStringContainsString(
+            '/probe is refused while the Agent is working',
+            $refusedDisplay,
+        );
+        self::assertFalse($ran);
+    }
+
+    /**
+     * A command that does what the test tells it to, under a name of the
+     * test's choosing.
+     *
+     * @param Closure(Controls, string): void $run
+     */
+    private function commandThat(
+        Closure $run,
+        string $name = '/probe',
+    ): SlashCommand {
+        return new class($run, $name) implements SlashCommand {
+            /**
+             * @param Closure(Controls, string): void $run
+             */
+            public function __construct(
+                private readonly Closure $run,
+                private readonly string $commandName,
+            ) {
+            }
+
+            public function name(): string
+            {
+                return $this->commandName;
+            }
+
+            public function describe(): string
+            {
+                return 'Does what the test says.';
+            }
+
+            public function run(Controls $controls, string $arguments): void
+            {
+                ($this->run)($controls, $arguments);
+            }
+        };
     }
 
     public function testSessionsWorkWithNoProviderAndWriteNothingToDisk(): void
