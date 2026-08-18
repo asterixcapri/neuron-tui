@@ -57,6 +57,22 @@ final readonly class Controls
     }
 
     /**
+     * Offers a list and waits there for what a person chose.
+     *
+     * The only verb that waits: it returns the key of the line chosen, or
+     * nothing at all if a person cancelled. What the keys stand for is the
+     * command's own business — the list shows the labels and hands the key
+     * back untouched. The terminal goes on painting meanwhile.
+     *
+     * @param array<string, string> $options key => label, in the order the
+     *                                       lines are offered
+     */
+    public function choose(string $title, array $options): ?string
+    {
+        return $this->view->choose($title, $options);
+    }
+
+    /**
      * The Agent answering the conversation.
      *
      * Its provider, its instructions, its tools and its History are the Host

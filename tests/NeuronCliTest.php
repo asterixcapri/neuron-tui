@@ -1271,6 +1271,223 @@ MARKDOWN;
     }
 
     /**
+     * A command that offers a list of its own gets back the key of the line
+     * a person chose, whatever those lines stand for.
+     */
+    public function testACommandOffersAListAndReceivesTheChosenKey(): void
+    {
+        $chosen = 'nothing yet';
+        $pickerDisplay = null;
+        $agent = new Agent();
+        $agent->setAiProvider(new FakeAIProvider());
+        $terminal = new VirtualTerminal(rows: 24);
+        $command = $this->commandThat(
+            static function (
+                Controls $controls,
+                string $arguments,
+            ) use (&$chosen): void {
+                $chosen = $controls->choose('Models', [
+                    'haiku' => 'Claude Haiku',
+                    'opus' => 'Claude Opus',
+                ]);
+                $controls->say('Chosen: ' . ($chosen ?? 'nothing'));
+            },
+        );
+        EventLoop::delay(
+            0.04,
+            static fn () => $terminal->simulateInput("/probe\r"),
+        );
+        EventLoop::delay(
+            0.1,
+            static function () use (&$pickerDisplay, $terminal): void {
+                // Captured while the command is still waiting: the list is on
+                // screen, so the TUI went on painting instead of stopping.
+                $pickerDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("\x1b[B");
+            },
+        );
+        EventLoop::delay(
+            0.16,
+            static fn () => $terminal->simulateInput("\r"),
+        );
+        EventLoop::delay(
+            0.26,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [$command],
+        ))->run();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+
+        self::assertIsString($pickerDisplay);
+        self::assertStringContainsString('Models · ↑↓ moves', $pickerDisplay);
+        self::assertStringContainsString('Claude Haiku', $pickerDisplay);
+        self::assertStringContainsString('Claude Opus', $pickerDisplay);
+        self::assertSame('opus', $chosen);
+        self::assertStringContainsString('Chosen: opus', $display);
+        self::assertStringContainsString('ready · Enter sends', $display);
+    }
+
+    /**
+     * Escape gives the command no choice at all, and it can tell that apart
+     * from a choice made. Meanwhile the composer takes no text: what was
+     * typed narrowed the list and is gone with it.
+     */
+    public function testACommandTellsAnAbandonedChoiceApartFromAChosenKey(): void
+    {
+        $chosen = 'nothing yet';
+        $agent = new Agent();
+        $agent->setAiProvider(new FakeAIProvider());
+        $terminal = new VirtualTerminal(rows: 24);
+        $command = $this->commandThat(
+            static function (
+                Controls $controls,
+                string $arguments,
+            ) use (&$chosen): void {
+                $chosen = $controls->choose('Models', [
+                    'haiku' => 'Claude Haiku',
+                ]);
+                $controls->say('Chosen: ' . ($chosen ?? 'nothing'));
+            },
+        );
+        EventLoop::delay(
+            0.04,
+            static fn () => $terminal->simulateInput("/probe\r"),
+        );
+        EventLoop::delay(
+            0.1,
+            static function () use ($terminal): void {
+                $terminal->clearOutput();
+                $terminal->simulateInput('zzz');
+            },
+        );
+        EventLoop::delay(
+            0.16,
+            static function () use ($terminal): void {
+                $terminal->clearOutput();
+                $terminal->simulateInput("\x1b");
+            },
+        );
+        EventLoop::delay(
+            0.26,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [$command],
+        ))->run();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+
+        self::assertNull($chosen);
+        self::assertStringContainsString('Chosen: nothing', $display);
+        self::assertStringNotContainsString('Claude Haiku', $display);
+        self::assertStringNotContainsString('zzz', $display);
+        self::assertStringContainsString('ready · Enter sends', $display);
+    }
+
+    /**
+     * Leaving the terminal mid-choice answers the command with nothing, so
+     * that nobody is left waiting on a list that will never come back.
+     */
+    public function testLeavingWhileAListIsOpenAnswersTheCommandWithNothing(): void
+    {
+        $chosen = 'nothing yet';
+        $agent = new Agent();
+        $agent->setAiProvider(new FakeAIProvider());
+        $terminal = new VirtualTerminal(rows: 24);
+        $command = $this->commandThat(
+            static function (
+                Controls $controls,
+                string $arguments,
+            ) use (&$chosen): void {
+                $chosen = $controls->choose('Models', [
+                    'haiku' => 'Claude Haiku',
+                ]);
+            },
+        );
+        EventLoop::delay(
+            0.04,
+            static fn () => $terminal->simulateInput("/probe\r"),
+        );
+        EventLoop::delay(
+            0.1,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [$command],
+        ))->run();
+
+        self::assertNull($chosen);
+    }
+
+    public function testTypingNarrowsAListACommandOffered(): void
+    {
+        $chosen = 'nothing yet';
+        $narrowedDisplay = null;
+        $agent = new Agent();
+        $agent->setAiProvider(new FakeAIProvider());
+        $terminal = new VirtualTerminal(rows: 24);
+        $command = $this->commandThat(
+            static function (
+                Controls $controls,
+                string $arguments,
+            ) use (&$chosen): void {
+                $chosen = $controls->choose('Models', [
+                    'haiku' => 'Claude Haiku',
+                    'opus' => 'Claude Opus',
+                ]);
+            },
+        );
+        EventLoop::delay(
+            0.04,
+            static fn () => $terminal->simulateInput("/probe\r"),
+        );
+        EventLoop::delay(
+            0.1,
+            static function () use ($terminal): void {
+                $terminal->clearOutput();
+                $terminal->simulateInput('Claude O');
+            },
+        );
+        EventLoop::delay(
+            0.16,
+            static function () use (&$narrowedDisplay, $terminal): void {
+                $narrowedDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("\r");
+            },
+        );
+        EventLoop::delay(
+            0.26,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [$command],
+        ))->run();
+
+        self::assertIsString($narrowedDisplay);
+        self::assertStringContainsString('Claude Opus', $narrowedDisplay);
+        self::assertStringNotContainsString('Claude Haiku', $narrowedDisplay);
+        self::assertSame('opus', $chosen);
+    }
+
+    /**
      * A command that does what the test tells it to, under a name of the
      * test's choosing.
      *

@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace NeuronCli\Tui;
 
+use Amp\DeferredFuture;
 use Closure;
+use LogicException;
 use NeuronAI\Chat\Messages\Message;
 use NeuronCli\History\EntryKind;
 use NeuronCli\History\HistoryProjection;
-use NeuronCli\Session\Session;
 use Symfony\Component\Tui\Event\CancelEvent;
 use Symfony\Component\Tui\Event\InputEvent;
 use Symfony\Component\Tui\Event\SubmitEvent;
@@ -31,7 +32,7 @@ final class ConversationView
         'Enter queues · Shift+Enter adds a line';
 
     private const string CHOOSING_STATUS =
-        'choosing a Session · the composer takes no text until you choose';
+        'choosing · the composer takes no text until you choose';
 
     private readonly Tui $tui;
 
@@ -45,12 +46,21 @@ final class ConversationView
 
     private readonly WorkingIndicator $workingIndicator;
 
-    private readonly SessionPicker $sessionPicker;
+    private readonly Picker $picker;
 
     private ?HistoryEntry $activeAgentMessage = null;
 
-    /** @var (Closure(Session): void)|null */
-    private ?Closure $sessionChosen = null;
+    /**
+     * The choice a command is waiting on, while one is open.
+     *
+     * @var DeferredFuture<string|null>|null
+     */
+    private ?DeferredFuture $choice = null;
+
+    /**
+     * Whether leaving the terminal is waiting on a choice to be let go.
+     */
+    private bool $leaving = false;
 
     public function __construct(
         private readonly TerminalInterface $terminal,
@@ -72,9 +82,9 @@ final class ConversationView
         $this->editor->onCancel($this->clearDraft(...));
         $this->status = new TextWidget(self::READY_STATUS);
         $this->status->addStyleClass('status');
-        $this->sessionPicker = new SessionPicker(
-            $this->sessionPicked(...),
-            $this->closeSessionPicker(...),
+        $this->picker = new Picker(
+            $this->closePicker(...),
+            $this->abandon(...),
         );
 
         $this->build($title, $subtitle);
@@ -104,16 +114,6 @@ final class ConversationView
         $this->tui->onTick($listener);
     }
 
-    /**
-     * Called with the Session a person picked out of the list.
-     *
-     * @param Closure(Session): void $listener
-     */
-    public function onSessionChosen(Closure $listener): void
-    {
-        $this->sessionChosen = $listener;
-    }
-
     public function run(): void
     {
         $this->tui->run();
@@ -121,6 +121,17 @@ final class ConversationView
 
     public function stop(): void
     {
+        if ($this->choice instanceof DeferredFuture) {
+            // A choice still open holds the command that asked for it, and a
+            // loop that goes now would leave that command suspended for
+            // good. So the choice is answered with nothing and leaving is
+            // taken up again where the waiting ends.
+            $this->leaving = true;
+            $this->abandon();
+
+            return;
+        }
+
         $this->tui->stop();
     }
 
@@ -174,29 +185,50 @@ final class ConversationView
     }
 
     /**
-     * Puts the TUI in the Session picker.
+     * Puts the TUI in the Picker and waits there for an answer, which is the
+     * key of the line a person chose, or nothing if they cancelled.
      *
      * From here on the keys belong to the list and the composer is out of
-     * reach, which is why the draft goes now rather than when a Session is
-     * finally chosen.
+     * reach, which is why the draft goes now rather than when a line is
+     * finally chosen. The wait suspends the caller alone: the event loop the
+     * TUI runs on goes on ticking, so the screen keeps being painted while
+     * the choice is open.
      *
-     * @param list<Session> $sessions
+     * @param array<string, string> $options key => label
      */
-    public function showSessions(array $sessions): void
+    public function choose(string $title, array $options): ?string
     {
+        if ($this->choice instanceof DeferredFuture) {
+            // One list at a time: a second one would take the place of the
+            // first and leave whoever asked for it waiting for good.
+            throw new LogicException('A choice is already open.');
+        }
+
+        /** @var DeferredFuture<string|null> $choice */
+        $choice = new DeferredFuture();
+        $this->choice = $choice;
         $this->emptyComposer();
-        $this->sessionPicker->open($sessions);
+        $this->picker->open($title, $options);
         $this->status->setText(self::CHOOSING_STATUS);
-        $this->tui->setFocus($this->sessionPicker->focusable());
+        $this->tui->setFocus($this->picker->focusable());
         $this->tui->requestRender();
+
+        $chosen = $choice->getFuture()->await();
+
+        if ($this->leaving) {
+            $this->leaving = false;
+            $this->tui->stop();
+        }
+
+        return $chosen;
     }
 
     /**
-     * Whether a person is choosing a Session rather than writing.
+     * Whether a person is choosing from a list rather than writing.
      */
-    public function isChoosingSession(): bool
+    public function isChoosing(): bool
     {
-        return $this->sessionPicker->isOpen();
+        return $this->picker->isOpen();
     }
 
     public function acceptUserMessage(string $contents): void
@@ -341,7 +373,7 @@ final class ConversationView
         $this->tui->add($header);
         $this->tui->add($this->history->widget());
         $this->tui->add($this->queuedMessages);
-        $this->tui->add($this->sessionPicker->widget());
+        $this->tui->add($this->picker->widget());
         $this->tui->add($composer);
         $this->tui->add($this->status);
         $this->tui->setFocus($this->editor);
@@ -352,23 +384,36 @@ final class ConversationView
         $this->emptyComposer();
     }
 
-    private function sessionPicked(Session $session): void
+    /**
+     * Answers the waiting command with no choice at all.
+     *
+     * Nothing is waiting once the picker is closed, so this is also what a
+     * person leaving the terminal mid-choice ends up saying.
+     */
+    private function abandon(): void
     {
-        $this->closeSessionPicker();
-
-        if ($this->sessionChosen instanceof Closure) {
-            ($this->sessionChosen)($session);
-        }
+        $this->closePicker(null);
     }
 
     /**
      * Leaves the picker, whatever came of it: the list goes, the keys and the
-     * status line go back to the conversation.
+     * status line go back to the conversation, and the command that was
+     * waiting is resumed with what a person decided.
      */
-    private function closeSessionPicker(): void
+    private function closePicker(?string $key): void
     {
-        $this->sessionPicker->close();
+        if (!$this->choice instanceof DeferredFuture) {
+            return;
+        }
+
+        $choice = $this->choice;
+        // Let go of the choice before completing it: the command resumes
+        // from there, and must not find the answer it has just been given
+        // still standing open.
+        $this->choice = null;
+        $this->picker->close();
         $this->ready();
+        $choice->complete($key);
     }
 
     private function newToolActivity(): ToolActivity
