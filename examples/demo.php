@@ -11,6 +11,9 @@ use NeuronAI\Tools\Toolkits\Calculator\CalculatorToolkit;
 use NeuronAI\Tools\Toolkits\Calendar\CalendarToolkit;
 use NeuronAI\Tools\Toolkits\FileSystem\FileSystemToolkit;
 use NeuronAI\Tools\Toolkits\Jina\JinaToolkit;
+use NeuronCli\Conversation\Commands\Clear;
+use NeuronCli\Conversation\Commands\Leave;
+use NeuronCli\Conversation\Commands\Sessions;
 use NeuronCli\NeuronCli;
 use NeuronCli\Session\FileSessionProvider;
 use Symfony\Component\Dotenv\Dotenv;
@@ -49,9 +52,15 @@ if ($jinaKey !== '') {
     $agent->addTool(new JinaToolkit($jinaKey));
 }
 
+$sessions = new FileSessionProvider(__DIR__ . '/sessions');
+
 (new NeuronCli(
     agent: $agent,
     title: 'Neuron CLI Demo',
     subtitle: "OpenAI Responses · {$model}",
-    sessionProvider: new FileSessionProvider(__DIR__ . '/sessions'),
+    commands: [
+        new Clear($sessions),
+        new Sessions($sessions),
+        new Leave(),
+    ],
 ))->run();
