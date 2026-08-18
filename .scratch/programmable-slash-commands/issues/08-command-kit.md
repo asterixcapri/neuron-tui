@@ -18,7 +18,7 @@ modello.
 
 **Blocked by:** 05 — La Conversation TUI non monta più niente da sé.
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Montare un kit monta tutti i suoi comandi
 - [ ] Un kit e un comando singolo si montano nello stesso elenco
