@@ -64,6 +64,19 @@ final class DisplayableTextTest extends TestCase
         );
     }
 
+    public function testSingleLineAppliesSanitizationAndWhitespaceNormalization(): void
+    {
+        self::assertSame(
+            '[2J one two',
+            DisplayableText::singleLine("\x1b[2J \n\t one  two "),
+        );
+    }
+
+    public function testSingleLineOfOnlyWhitespaceAndControlBytesIsEmpty(): void
+    {
+        self::assertSame('', DisplayableText::singleLine(" \n\t\x00\x07 "));
+    }
+
     public function testPreviewIsSafe(): void
     {
         self::assertSame(

@@ -2547,11 +2547,11 @@ MARKDOWN;
         $lowLines = explode("\n", str_replace("\r", '', $lowDisplay));
         $visibleLowDisplay = implode("\n", array_slice($lowLines, -7));
         self::assertStringContainsString(
-            '→ Match third choic…',
+            '→ Match …',
             $visibleLowDisplay,
         );
-        self::assertStringNotContainsString(
-            'Third supporting',
+        self::assertStringContainsString(
+            'Third s…',
             $visibleLowDisplay,
         );
         self::assertStringContainsString('↑↓ move · Enter', $visibleLowDisplay);

@@ -58,11 +58,11 @@ final class Picker
      * Every line of the open picker, filtered or not, in the order the caller
      * listed them.
      *
-     * @var list<array{value: string, label: string, detail: string|null}>
+     * @var list<PickerListItem>
      */
     private array $lines = [];
 
-    /** @var list<array{value: string, label: string, detail: string|null}> */
+    /** @var list<PickerListItem> */
     private array $shown = [];
 
     private string $title = '';
@@ -129,11 +129,7 @@ final class Picker
         ?string $description = null,
     ): void
     {
-        $this->title = preg_replace(
-            '/\s+/u',
-            ' ',
-            trim(DisplayableText::safe($title)),
-        ) ?? '';
+        $this->title = DisplayableText::singleLine($title);
         $this->filter = '';
         $this->searchable = count($options) >= 6;
         $this->description = null;
@@ -145,11 +141,11 @@ final class Picker
         foreach ($options as $option) {
             $handle = self::HANDLE_PREFIX . $place++;
             $this->offered[$handle] = $option->key;
-            $this->lines[] = [
-                'value' => $handle,
-                'label' => $option->label,
-                'detail' => $option->detail,
-            ];
+            $this->lines[] = new PickerListItem(
+                $handle,
+                $option->label,
+                $option->detail,
+            );
         }
 
         $this->shown = $this->lines;
@@ -230,12 +226,12 @@ final class Picker
         $this->filter = $filter;
         $matching = array_values(array_filter(
             $this->lines,
-            static fn (array $line): bool => self::contains(
-                $line['label'],
+            static fn (PickerListItem $line): bool => self::contains(
+                $line->label,
                 $filter,
             ) || (
-                $line['detail'] !== null
-                && self::contains($line['detail'], $filter)
+                $line->detail !== null
+                && self::contains($line->detail, $filter)
             ),
         ));
 
@@ -294,13 +290,7 @@ final class Picker
 
     private static function contains(string $text, string $filter): bool
     {
-        $completeText = preg_replace(
-            '/\s+/u',
-            ' ',
-            trim(DisplayableText::safe($text)),
-        ) ?? '';
-
-        return mb_stripos($completeText, $filter) !== false;
+        return mb_stripos(DisplayableText::singleLine($text), $filter) !== false;
     }
 
     private function positionChanged(int $position, int $total): void
