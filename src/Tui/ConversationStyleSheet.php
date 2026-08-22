@@ -65,6 +65,7 @@ final class ConversationStyleSheet
             ),
             '.picker-heading' => new Style(color: 'magenta', bold: true),
             '.picker-description' => new Style(color: 'gray'),
+            '.picker-search' => new Style(color: 'white'),
             '.picker-instructions' => new Style(
                 color: 'gray',
                 dim: true,

@@ -41,6 +41,8 @@ final class PickerList extends AbstractWidget implements FocusableInterface
 
     private int $selectedIndex = 0;
 
+    private string $query = '';
+
     /**
      * @param Closure(string): void $selected
      * @param Closure(): void $cancelled
@@ -67,6 +69,11 @@ final class PickerList extends AbstractWidget implements FocusableInterface
             count($items),
         );
         $this->invalidate();
+    }
+
+    public function setQuery(string $query): void
+    {
+        $this->query = DisplayableText::safe($query);
     }
 
     public function handleInput(string $data): void
@@ -115,7 +122,10 @@ final class PickerList extends AbstractWidget implements FocusableInterface
     public function render(RenderContext $context): array
     {
         if ($this->items === []) {
-            return [$this->applyElement('no-match', '  No matching items')];
+            return [$this->applyElement(
+                'no-match',
+                sprintf('  No options match "%s"', $this->query),
+            )];
         }
 
         $start = max(0, min(
