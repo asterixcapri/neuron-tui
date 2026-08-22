@@ -25,6 +25,17 @@ final class PickerDescription extends AbstractWidget
     /** @return string[] */
     public function render(RenderContext $context): array
     {
+        return $this->linesForWidth($context->getColumns());
+    }
+
+    public function heightForWidth(int $columns): int
+    {
+        return count($this->linesForWidth($columns));
+    }
+
+    /** @return string[] */
+    private function linesForWidth(int $columns): array
+    {
         $normalized = preg_replace(
             '/\s+/u',
             ' ',
@@ -33,7 +44,7 @@ final class PickerDescription extends AbstractWidget
 
         $lines = TextWrapper::wrapTextWithAnsi(
             $normalized,
-            max(1, $context->getColumns()),
+            max(1, $columns),
         );
 
         if (count($lines) <= self::MAX_LINES) {
@@ -46,7 +57,7 @@ final class PickerDescription extends AbstractWidget
             ...array_slice($lines, 0, $last),
             AnsiUtils::truncateToWidth(
                 $lines[$last] . '…',
-                max(1, $context->getColumns()),
+                max(1, $columns),
                 '…',
             ),
         ];
