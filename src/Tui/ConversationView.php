@@ -6,8 +6,10 @@ namespace NeuronCli\Tui;
 
 use Amp\DeferredFuture;
 use Closure;
+use InvalidArgumentException;
 use LogicException;
 use NeuronAI\Chat\Messages\Message;
+use NeuronCli\Conversation\ChoiceOption;
 use NeuronCli\Conversation\Command;
 use NeuronCli\History\EntryKind;
 use NeuronCli\History\HistoryProjection;
@@ -240,7 +242,7 @@ final class ConversationView
      * TUI runs on goes on ticking, so the screen keeps being painted while
      * the choice is open.
      *
-     * @param array<string, string> $options key => label
+     * @param non-empty-list<ChoiceOption> $options
      */
     public function choose(string $title, array $options): ?string
     {
@@ -249,6 +251,8 @@ final class ConversationView
             // first and leave whoever asked for it waiting for good.
             throw new LogicException('A choice is already open.');
         }
+
+        $this->validateChoiceOptions($options);
 
         /** @var DeferredFuture<string|null> $choice */
         $choice = new DeferredFuture();
@@ -267,6 +271,50 @@ final class ConversationView
         }
 
         return $chosen;
+    }
+
+    /**
+     * Rejects a malformed choice before the composer or Picker is touched.
+     *
+     * @param array<mixed> $options
+     */
+    private function validateChoiceOptions(array $options): void
+    {
+        if ($options === []) {
+            throw new InvalidArgumentException(
+                'A choice must offer at least one option.',
+            );
+        }
+
+        if (!array_is_list($options)) {
+            throw new InvalidArgumentException(
+                'Choice options must be an ordered list.',
+            );
+        }
+
+        $keys = [];
+
+        foreach ($options as $option) {
+            if (!$option instanceof ChoiceOption) {
+                throw new InvalidArgumentException(
+                    'Every choice option must be a ChoiceOption.',
+                );
+            }
+
+            if ($option->label === '') {
+                throw new InvalidArgumentException(
+                    'Choice option labels must not be empty.',
+                );
+            }
+
+            if (in_array($option->key, $keys, true)) {
+                throw new InvalidArgumentException(
+                    'Choice option keys must be unique.',
+                );
+            }
+
+            $keys[] = $option->key;
+        }
     }
 
     /**

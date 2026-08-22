@@ -70,8 +70,8 @@ final readonly class Controls
      * command's own business — the list shows the labels and hands the key
      * back untouched. The terminal goes on painting meanwhile.
      *
-     * @param array<string, string> $options key => label, in the order the
-     *                                       lines are offered
+     * @param non-empty-list<ChoiceOption> $options in the order the lines are
+     *                                                 offered
      */
     public function choose(string $title, array $options): ?string
     {
