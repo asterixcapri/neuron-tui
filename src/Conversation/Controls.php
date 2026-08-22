@@ -69,13 +69,17 @@ final readonly class Controls
      * nothing at all if a person cancelled. What the keys stand for is the
      * command's own business — the list shows the labels and hands the key
      * back untouched. The terminal goes on painting meanwhile.
+     * A description may explain the choice beneath its title.
      *
      * @param non-empty-list<ChoiceOption> $options in the order the lines are
      *                                                 offered
      */
-    public function choose(string $title, array $options): ?string
-    {
-        return $this->view->choose($title, $options);
+    public function choose(
+        string $title,
+        array $options,
+        ?string $description = null,
+    ): ?string {
+        return $this->view->choose($title, $options, $description);
     }
 
     /**

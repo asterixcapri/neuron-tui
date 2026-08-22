@@ -101,10 +101,11 @@ widgets of the Conversation TUI stay out of reach.
 - `warn()` writes one that reports something did not go as it should.
 - `ask()` puts a prompt to the Agent as though the person had written it, and
   finishes: the answer arrives on the screen, not back in the command.
-- `choose()` offers an ordered list of `ChoiceOption` values — each separating
-  the returned key from the visible label — and waits there for the key of the
-  line the person chose, or nothing at all if they cancelled. It is the one
-  verb that waits, and the terminal goes on painting while the list is open.
+- `choose()` offers a titled, optionally described, ordered list of
+  `ChoiceOption` values — each separating the returned key from the visible
+  label — and waits there for the key of the line the person chose, or nothing
+  at all if they cancelled. It is the one verb that waits, and the terminal
+  goes on painting while the list is open.
 - `agent()` returns the Agent, so its provider, instructions, tools and
   History change through the Neuron AI API rather than through verbs here.
 - `commands()` returns the commands mounted on this terminal, the one asking
