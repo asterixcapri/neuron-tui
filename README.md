@@ -101,10 +101,10 @@ widgets of the Conversation TUI stay out of reach.
 - `warn()` writes one that reports something did not go as it should.
 - `ask()` puts a prompt to the Agent as though the person had written it, and
   finishes: the answer arrives on the screen, not back in the command.
-- `choose()` offers a list — a title and key and label pairs — and waits there
-  for the key of the line the person chose, or nothing at all if they
-  cancelled. It is the one verb that waits, and the terminal goes on painting
-  while the list is open.
+- `choose()` offers an ordered list of `ChoiceOption` values — each separating
+  the returned key from the visible label — and waits there for the key of the
+  line the person chose, or nothing at all if they cancelled. It is the one
+  verb that waits, and the terminal goes on painting while the list is open.
 - `agent()` returns the Agent, so its provider, instructions, tools and
   History change through the Neuron AI API rather than through verbs here.
 - `commands()` returns the commands mounted on this terminal, the one asking
@@ -320,7 +320,8 @@ Slash commands it mounts: `NeuronCli\Conversation\SlashCommand` to implement,
 `NeuronCli\Conversation\RunsWhileWorking` for a command that runs while the
 Agent is answering, `NeuronCli\Conversation\Command` behind both,
 `NeuronCli\Conversation\Controls` and `NeuronCli\Conversation\LimitedControls`
-as what each is handed while it runs,
+as what each is handed while it runs, and
+`NeuronCli\Conversation\ChoiceOption` for each option offered by `choose()`,
 `NeuronCli\Conversation\Commands\Clear`,
 `NeuronCli\Conversation\Commands\Sessions`,
 `NeuronCli\Conversation\Commands\Leave` and

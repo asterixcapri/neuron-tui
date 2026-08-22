@@ -29,6 +29,7 @@ use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Testing\RequestRecord;
 use NeuronAI\Tools\Tool;
 use NeuronCli\Conversation\AbstractCommandKit;
+use NeuronCli\Conversation\ChoiceOption;
 use NeuronCli\Conversation\Commands\Clear;
 use NeuronCli\Conversation\Commands\Help;
 use NeuronCli\Conversation\Commands\Leave;
@@ -1911,8 +1912,8 @@ MARKDOWN;
                 string $arguments,
             ) use (&$chosen): void {
                 $chosen = $controls->choose('Models', [
-                    'haiku' => 'Claude Haiku',
-                    'opus' => 'Claude Opus',
+                    new ChoiceOption('haiku', 'Claude Haiku'),
+                    new ChoiceOption('007', 'Claude Opus'),
                 ]);
                 $controls->say('Chosen: ' . ($chosen ?? 'nothing'));
             },
@@ -1953,8 +1954,9 @@ MARKDOWN;
         self::assertStringContainsString('Models · ↑↓ moves', $pickerDisplay);
         self::assertStringContainsString('Claude Haiku', $pickerDisplay);
         self::assertStringContainsString('Claude Opus', $pickerDisplay);
-        self::assertSame('opus', $chosen);
-        self::assertStringContainsString('Chosen: opus', $display);
+        self::assertStringNotContainsString('007', $pickerDisplay);
+        self::assertSame('007', $chosen);
+        self::assertStringContainsString('Chosen: 007', $display);
         self::assertStringContainsString('ready · Enter sends', $display);
     }
 
@@ -1975,7 +1977,7 @@ MARKDOWN;
                 string $arguments,
             ) use (&$chosen): void {
                 $chosen = $controls->choose('Models', [
-                    'haiku' => 'Claude Haiku',
+                    new ChoiceOption('haiku', 'Claude Haiku'),
                 ]);
                 $controls->say('Chosen: ' . ($chosen ?? 'nothing'));
             },
@@ -2034,7 +2036,7 @@ MARKDOWN;
                 string $arguments,
             ) use (&$chosen): void {
                 $chosen = $controls->choose('Models', [
-                    'haiku' => 'Claude Haiku',
+                    new ChoiceOption('haiku', 'Claude Haiku'),
                 ]);
             },
         );
@@ -2069,8 +2071,8 @@ MARKDOWN;
                 string $arguments,
             ) use (&$chosen): void {
                 $chosen = $controls->choose('Models', [
-                    'haiku' => 'Claude Haiku',
-                    'opus' => 'Claude Opus',
+                    new ChoiceOption('haiku', 'Claude Haiku'),
+                    new ChoiceOption('opus', 'Claude Opus'),
                 ]);
             },
         );
@@ -2944,7 +2946,9 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
             static function (Controls $controls, string $arguments): void {
-                $controls->choose('Models', ['haiku' => 'Claude Haiku']);
+                $controls->choose('Models', [
+                    new ChoiceOption('haiku', 'Claude Haiku'),
+                ]);
             },
         );
         EventLoop::delay(

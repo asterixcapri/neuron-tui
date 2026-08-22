@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace NeuronCli\Tui;
 
 use Closure;
+use NeuronCli\Conversation\ChoiceOption;
 use Symfony\Component\Tui\Event\CancelEvent;
 use Symfony\Component\Tui\Event\SelectEvent;
 use Symfony\Component\Tui\Widget\ContainerWidget;
@@ -19,7 +20,7 @@ use Symfony\Component\Tui\Widget\TextWidget;
  * filtering — both the typing the widget does not listen for and the
  * narrowing itself, because a line is named by its label rather than by the
  * key behind it. Whatever the lines stand for is the caller's business: the
- * picker takes key and label pairs and hands back the key of the line a
+ * picker takes ChoiceOptions and hands back the key of the line a
  * person chose. Whoever opens the picker decides what focus and the composer
  * do meanwhile.
  *
@@ -119,7 +120,7 @@ final class Picker
      * Shows the options, in the order they were given, under the title that
      * says what is being chosen.
      *
-     * @param array<string, string> $options key => label
+     * @param non-empty-list<ChoiceOption> $options
      */
     public function open(string $title, array $options): void
     {
@@ -130,14 +131,15 @@ final class Picker
 
         $place = 0;
 
-        foreach ($options as $key => $label) {
+        foreach ($options as $option) {
             $handle = self::HANDLE_PREFIX . $place++;
-            // A key that reads as a number arrives here as an int, PHP
-            // having made it one on its way into the array.
-            $this->offered[$handle] = (string) $key;
+            $this->offered[$handle] = $option->key;
             $this->lines[] = [
                 'value' => $handle,
-                'label' => DisplayableText::preview($label, self::LABEL_WIDTH),
+                'label' => DisplayableText::preview(
+                    $option->label,
+                    self::LABEL_WIDTH,
+                ),
             ];
         }
 
