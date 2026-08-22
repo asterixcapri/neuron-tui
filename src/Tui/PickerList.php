@@ -30,7 +30,7 @@ final class PickerList extends AbstractWidget implements FocusableInterface
     use FocusableTrait;
     use KeybindingsTrait;
 
-    private const int MAX_VISIBLE_BLOCKS = 6;
+    private const int MAX_VISIBLE_BLOCKS = 4;
 
     private const int MAX_TEXT_LINES = 2;
 
@@ -50,14 +50,14 @@ final class PickerList extends AbstractWidget implements FocusableInterface
      * @param Closure(): void $cancelled
      * @param Closure(string): bool $typed
      * @param Closure(int, int): void $positionChanged
-     * @param Closure(int): int $availableRows
+     * @param Closure(int): int $rowsOutsideList
      */
     public function __construct(
         private readonly Closure $selected,
         private readonly Closure $cancelled,
         private readonly Closure $typed,
         private readonly Closure $positionChanged,
-        private readonly Closure $availableRows,
+        private readonly Closure $rowsOutsideList,
     ) {
     }
 
@@ -143,7 +143,10 @@ final class PickerList extends AbstractWidget implements FocusableInterface
         }
 
         $columns = $context->getColumns();
-        $availableRows = ($this->availableRows)($columns);
+        $availableRows = max(
+            1,
+            $context->getRows() - ($this->rowsOutsideList)($columns),
+        );
         $blocks = [];
 
         foreach ($this->items as $index => $item) {

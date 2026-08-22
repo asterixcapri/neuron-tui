@@ -2329,28 +2329,31 @@ MARKDOWN;
         self::assertSame('key-9', $chosen);
     }
 
-    public function testPickerViewportUsesFortyPercentAndShowsUpToSixBlocks(): void
+    public function testPickerViewportShowsFourCompleteBlocksAndWrapsWithSelection(): void
     {
         $chosen = null;
         $initialDisplay = null;
-        $grownDisplay = null;
         $scrolledDisplay = null;
+        $wrappedDisplay = null;
         $agent = new Agent();
         $agent->setAiProvider(new FakeAIProvider());
-        $terminal = new VirtualTerminal(columns: 80, rows: 40);
+        $terminal = new VirtualTerminal(columns: 36, rows: 40);
         $command = $this->commandThat(
             static function (
                 Controls $controls,
                 string $arguments,
             ) use (&$chosen): void {
                 $chosen = $controls->choose('Viewport', [
-                    new ChoiceOption('one', 'Option one'),
+                    new ChoiceOption('one', 'Option one', 'Detail one'),
                     new ChoiceOption('two', 'Option two'),
-                    new ChoiceOption('three', 'Option three'),
-                    new ChoiceOption('four', 'Option four'),
-                    new ChoiceOption('five', 'Option five'),
-                    new ChoiceOption('six', 'Option six'),
-                    new ChoiceOption('seven', 'Option seven'),
+                    new ChoiceOption(
+                        'three',
+                        'Option three has a label that wraps',
+                        'Detail three also wraps at this width',
+                    ),
+                    new ChoiceOption('four', 'Option four', 'Detail four'),
+                    new ChoiceOption('five', 'Option five', 'Detail five'),
+                    new ChoiceOption('six', 'Option six', 'Detail six'),
                 ]);
             },
         );
@@ -2362,7 +2365,7 @@ MARKDOWN;
             0.1,
             static function () use ($terminal): void {
                 $terminal->clearOutput();
-                $terminal->simulateResize(80, 40);
+                $terminal->simulateResize(36, 40);
             },
         );
         EventLoop::delay(
@@ -2372,24 +2375,25 @@ MARKDOWN;
                     $terminal->getOutput(),
                 );
                 $terminal->clearOutput();
-                $terminal->simulateResize(80, 50);
+                $terminal->simulateInput(str_repeat("\x1b[B", 4));
+                $terminal->simulateResize(36, 40);
             },
         );
         EventLoop::delay(
             0.21,
-            static function () use (&$grownDisplay, $terminal): void {
-                $grownDisplay = AnsiUtils::stripAnsiCodes(
+            static function () use (&$scrolledDisplay, $terminal): void {
+                $scrolledDisplay = AnsiUtils::stripAnsiCodes(
                     $terminal->getOutput(),
                 );
                 $terminal->clearOutput();
-                $terminal->simulateInput(str_repeat("\x1b[B", 6));
-                $terminal->simulateResize(80, 50);
+                $terminal->simulateInput(str_repeat("\x1b[A", 5));
+                $terminal->simulateResize(36, 40);
             },
         );
         EventLoop::delay(
             0.28,
-            static function () use (&$scrolledDisplay, $terminal): void {
-                $scrolledDisplay = AnsiUtils::stripAnsiCodes(
+            static function () use (&$wrappedDisplay, $terminal): void {
+                $wrappedDisplay = AnsiUtils::stripAnsiCodes(
                     $terminal->getOutput(),
                 );
                 $terminal->simulateInput("\r");
@@ -2408,21 +2412,23 @@ MARKDOWN;
 
         self::assertIsString($initialDisplay);
         self::assertStringContainsString('→ Option one', $initialDisplay);
+        self::assertStringContainsString('Detail three also', $initialDisplay);
         self::assertStringContainsString('Option four', $initialDisplay);
         self::assertStringNotContainsString('Option five', $initialDisplay);
         self::assertStringNotContainsString('Option six', $initialDisplay);
-        self::assertStringNotContainsString('Option seven', $initialDisplay);
-
-        self::assertIsString($grownDisplay);
-        self::assertStringContainsString('→ Option one', $grownDisplay);
-        self::assertStringContainsString('Option six', $grownDisplay);
-        self::assertStringNotContainsString('Option seven', $grownDisplay);
 
         self::assertIsString($scrolledDisplay);
-        self::assertStringContainsString('Viewport (7 of 7)', $scrolledDisplay);
-        self::assertStringContainsString('→ Option seven', $scrolledDisplay);
+        self::assertStringContainsString('Viewport (5 of 6)', $scrolledDisplay);
+        self::assertStringContainsString('→ Option five', $scrolledDisplay);
+        self::assertStringContainsString('Detail five', $scrolledDisplay);
         self::assertStringNotContainsString('Option one', $scrolledDisplay);
-        self::assertSame('seven', $chosen);
+
+        self::assertIsString($wrappedDisplay);
+        self::assertStringContainsString('Viewport (6 of 6)', $wrappedDisplay);
+        self::assertStringContainsString('→ Option six', $wrappedDisplay);
+        self::assertStringContainsString('Detail six', $wrappedDisplay);
+        self::assertStringNotContainsString('Option one', $wrappedDisplay);
+        self::assertSame('six', $chosen);
     }
 
     public function testPickerResizeKeepsQueryAndSelectionWhileReducingCompleteBlocks(): void
@@ -2470,7 +2476,7 @@ MARKDOWN;
                 $terminal->simulateInput('match');
                 $terminal->simulateInput("\x1b[B\x1b[B");
                 $terminal->clearOutput();
-                $terminal->simulateResize(22, 36);
+                $terminal->simulateResize(22, 24);
             },
         );
         EventLoop::delay(
@@ -2490,7 +2496,7 @@ MARKDOWN;
                     $terminal->getOutput(),
                 );
                 $terminal->clearOutput();
-                $terminal->simulateResize(40, 50);
+                $terminal->simulateResize(40, 30);
             },
         );
         EventLoop::delay(
@@ -2506,7 +2512,7 @@ MARKDOWN;
             0.38,
             static function () use ($terminal): void {
                 $terminal->clearOutput();
-                $terminal->simulateResize(40, 50);
+                $terminal->simulateResize(40, 30);
             },
         );
         EventLoop::delay(
@@ -2532,7 +2538,7 @@ MARKDOWN;
         self::assertIsString($shortDisplay);
         self::assertStringContainsString('Resizable (3 of 6)', $shortDisplay);
         self::assertStringContainsString('Search: match', $shortDisplay);
-        self::assertStringContainsString('→ Match third choic', $shortDisplay);
+        self::assertStringContainsString('→ Match third choice', $shortDisplay);
         self::assertStringContainsString('Third supporting', $shortDisplay);
         self::assertStringNotContainsString('Match second choice', $shortDisplay);
         self::assertStringNotContainsString('Match fourth choice', $shortDisplay);
@@ -2821,7 +2827,7 @@ MARKDOWN;
         $filteredDisplay = null;
         $agent = new Agent();
         $agent->setAiProvider(new FakeAIProvider());
-        $terminal = new VirtualTerminal(columns: 38, rows: 60);
+        $terminal = new VirtualTerminal(columns: 38, rows: 32);
         $command = $this->commandThat(
             static function (
                 Controls $controls,
@@ -2855,7 +2861,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.17,
-            static fn () => $terminal->simulateResize(38, 60),
+            static fn () => $terminal->simulateResize(38, 32),
         );
         EventLoop::delay(
             0.2,
