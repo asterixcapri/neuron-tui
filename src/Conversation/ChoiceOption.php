@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace NeuronCli\Conversation;
 
+use InvalidArgumentException;
+use NeuronCli\Tui\DisplayableText;
+
 /**
  * One value a Slash command offers through the Picker.
  *
@@ -18,5 +21,19 @@ final readonly class ChoiceOption
         public string $label,
         public ?string $detail = null,
     ) {
+        if (DisplayableText::singleLine($label) === '') {
+            throw new InvalidArgumentException(
+                'Choice option labels must not be empty.',
+            );
+        }
+
+        if (
+            $detail !== null
+            && DisplayableText::singleLine($detail) === ''
+        ) {
+            throw new InvalidArgumentException(
+                'Choice option details must not be empty.',
+            );
+        }
     }
 }

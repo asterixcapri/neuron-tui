@@ -36,14 +36,8 @@ final class PickerDescription extends AbstractWidget
     /** @return string[] */
     private function linesForWidth(int $columns): array
     {
-        $normalized = preg_replace(
-            '/\s+/u',
-            ' ',
-            trim(DisplayableText::safe($this->text)),
-        ) ?? '';
-
         $lines = TextWrapper::wrapTextWithAnsi(
-            $normalized,
+            DisplayableText::singleLine($this->text),
             max(1, $columns),
         );
 
