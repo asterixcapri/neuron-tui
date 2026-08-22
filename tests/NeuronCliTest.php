@@ -1930,7 +1930,7 @@ MARKDOWN;
                 $pickerDisplay = AnsiUtils::stripAnsiCodes(
                     $terminal->getOutput(),
                 );
-                $terminal->simulateInput("\x1b[B");
+                $terminal->simulateInput("\x1b[A");
             },
         );
         EventLoop::delay(
@@ -1951,13 +1951,198 @@ MARKDOWN;
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
         self::assertIsString($pickerDisplay);
-        self::assertStringContainsString('Models · ↑↓ moves', $pickerDisplay);
+        self::assertStringContainsString('Models (1 of 2)', $pickerDisplay);
+        self::assertStringContainsString(
+            '↑↓ move · Enter chooses · Escape cancels',
+            $pickerDisplay,
+        );
         self::assertStringContainsString('Claude Haiku', $pickerDisplay);
         self::assertStringContainsString('Claude Opus', $pickerDisplay);
         self::assertStringNotContainsString('007', $pickerDisplay);
         self::assertSame('007', $chosen);
         self::assertStringContainsString('Chosen: 007', $display);
         self::assertStringContainsString('ready · Enter sends', $display);
+    }
+
+    public function testPickerPanelReplacesWritingControlsAndUpdatesCounter(): void
+    {
+        $chosen = null;
+        $initialDisplay = null;
+        $movedDisplay = null;
+        $agent = new Agent();
+        $agent->setAiProvider(new FakeAIProvider());
+        $terminal = new VirtualTerminal(columns: 48, rows: 30);
+        $command = $this->commandThat(
+            static function (
+                Controls $controls,
+                string $arguments,
+            ) use (&$chosen): void {
+                $controls->say('History remains visible.');
+                $chosen = $controls->choose(
+                    'Models',
+                    [
+                        new ChoiceOption('haiku', 'Claude Haiku'),
+                        new ChoiceOption('opus', 'Claude Opus'),
+                    ],
+                    'Choose the model used for the next response.',
+                );
+            },
+        );
+        EventLoop::delay(
+            0.04,
+            static fn () => $terminal->simulateInput("/probe\r"),
+        );
+        EventLoop::delay(
+            0.1,
+            static function () use ($terminal): void {
+                $terminal->clearOutput();
+                $terminal->simulateResize(48, 30);
+            },
+        );
+        EventLoop::delay(
+            0.14,
+            static function () use (&$initialDisplay, $terminal): void {
+                $initialDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->clearOutput();
+                $terminal->simulateInput("\x1b[B");
+            },
+        );
+        EventLoop::delay(
+            0.2,
+            static function () use (&$movedDisplay, $terminal): void {
+                $movedDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("\r");
+            },
+        );
+        EventLoop::delay(
+            0.3,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [$command],
+        ))->run();
+
+        self::assertIsString($initialDisplay);
+        self::assertStringContainsString('History remains visible.', $initialDisplay);
+        self::assertStringContainsString('Models (1 of 2)', $initialDisplay);
+        self::assertStringContainsString(
+            'Choose the model used for the next response.',
+            $initialDisplay,
+        );
+        self::assertStringContainsString(
+            '↑↓ move · Enter chooses · Escape cancels',
+            $initialDisplay,
+        );
+        self::assertStringNotContainsString('ready · Enter sends', $initialDisplay);
+        self::assertStringNotContainsString('suggesting ·', $initialDisplay);
+        self::assertDoesNotMatchRegularExpression('/^\s*❯\s*$/m', $initialDisplay);
+        $initialLines = explode("\n", str_replace("\r", '', $initialDisplay));
+        $headingLine = array_find_key(
+            $initialLines,
+            static fn (string $line): bool => str_contains($line, 'Models (1 of 2)'),
+        );
+        self::assertIsInt($headingLine);
+        self::assertMatchesRegularExpression(
+            '/^─+$/u',
+            trim($initialLines[$headingLine - 2]),
+        );
+        self::assertIsString($movedDisplay);
+        self::assertStringContainsString('Models (2 of 2)', $movedDisplay);
+        self::assertStringContainsString('→ Claude Opus', $movedDisplay);
+        self::assertSame('opus', $chosen);
+    }
+
+    public function testPickerDescriptionUsesNoRowWhenAbsentAndStopsAtThreeLines(): void
+    {
+        $withoutDescription = null;
+        $withDescription = null;
+        $agent = new Agent();
+        $agent->setAiProvider(new FakeAIProvider());
+        $terminal = new VirtualTerminal(columns: 32, rows: 30);
+        $command = $this->commandThat(
+            static function (Controls $controls, string $arguments): void {
+                $controls->choose('First choice', [
+                    new ChoiceOption('first', 'First option'),
+                ]);
+                $controls->choose(
+                    'Second choice',
+                    [new ChoiceOption('second', 'Second option')],
+                    'alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau',
+                );
+            },
+        );
+        EventLoop::delay(
+            0.04,
+            static fn () => $terminal->simulateInput("/probe\r"),
+        );
+        EventLoop::delay(
+            0.1,
+            static function () use ($terminal): void {
+                $terminal->clearOutput();
+                $terminal->simulateResize(32, 30);
+            },
+        );
+        EventLoop::delay(
+            0.13,
+            static function () use (&$withoutDescription, $terminal): void {
+                $withoutDescription = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("\r");
+            },
+        );
+        EventLoop::delay(
+            0.18,
+            static function () use ($terminal): void {
+                $terminal->clearOutput();
+                $terminal->simulateResize(32, 30);
+            },
+        );
+        EventLoop::delay(
+            0.21,
+            static function () use (&$withDescription, $terminal): void {
+                $withDescription = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("\x1b");
+            },
+        );
+        EventLoop::delay(
+            0.3,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [$command],
+        ))->run();
+
+        self::assertIsString($withoutDescription);
+        $withoutLines = explode("\n", str_replace("\r", '', $withoutDescription));
+        $headingLine = array_find_key(
+            $withoutLines,
+            static fn (string $line): bool => str_contains($line, 'First choice'),
+        );
+        $optionLine = array_find_key(
+            $withoutLines,
+            static fn (string $line): bool => str_contains($line, 'First option'),
+        );
+        self::assertIsInt($headingLine);
+        self::assertIsInt($optionLine);
+        self::assertSame(2, $optionLine - $headingLine);
+
+        self::assertIsString($withDescription);
+        self::assertStringContainsString('alpha beta gamma delta', $withDescription);
+        self::assertStringContainsString('…', $withDescription);
+        self::assertStringNotContainsString('rho sigma tau', $withDescription);
     }
 
     public function testACommandCanOfferCompleteLabelAndDetailBlocks(): void
@@ -2211,6 +2396,7 @@ MARKDOWN;
     public function testLeavingWhileAListIsOpenAnswersTheCommandWithNothing(): void
     {
         $chosen = 'nothing yet';
+        $completions = 0;
         $agent = new Agent();
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(rows: 24);
@@ -2218,10 +2404,11 @@ MARKDOWN;
             static function (
                 Controls $controls,
                 string $arguments,
-            ) use (&$chosen): void {
+            ) use (&$chosen, &$completions): void {
                 $chosen = $controls->choose('Models', [
                     new ChoiceOption('haiku', 'Claude Haiku'),
                 ]);
+                ++$completions;
             },
         );
         EventLoop::delay(
@@ -2240,6 +2427,7 @@ MARKDOWN;
         ))->run();
 
         self::assertNull($chosen);
+        self::assertSame(1, $completions);
     }
 
     public function testTypingNarrowsAListACommandOffered(): void

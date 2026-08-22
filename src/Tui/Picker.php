@@ -13,7 +13,7 @@ use Symfony\Component\Tui\Widget\TextWidget;
  * The list a person moves through while the TUI is in the Picker.
  *
  * Arrow navigation and complete option blocks belong to the internal list;
- * this object adds the title carried by the instructions and the filtering.
+ * this object adds the surrounding lower panel and the filtering.
  * Whatever the options stand for is the caller's business: the picker takes
  * ChoiceOptions and hands back the key of the one a person chose. Whoever
  * opens the picker decides what focus and the composer do meanwhile.
@@ -22,14 +22,8 @@ use Symfony\Component\Tui\Widget\TextWidget;
  */
 final class Picker
 {
-    /**
-     * How much of a title the instructions carry, so that a long one does
-     * not push the keys it explains off the line.
-     */
-    private const int TITLE_WIDTH = 40;
-
     private const string INSTRUCTIONS =
-        ' · ↑↓ moves · type filters · Enter chooses · Escape cancels';
+        '↑↓ move · Enter chooses · Escape cancels';
 
     /**
      * What a handle starts with, so that it is a name of the picker's own
@@ -38,6 +32,8 @@ final class Picker
     private const string HANDLE_PREFIX = 'option-';
 
     private readonly ContainerWidget $widget;
+
+    private readonly TextWidget $heading;
 
     private readonly TextWidget $instructions;
 
@@ -77,12 +73,15 @@ final class Picker
     ) {
         $this->widget = new ContainerWidget();
         $this->widget->addStyleClass('picker');
+        $this->heading = new TextWidget('');
+        $this->heading->addStyleClass('picker-heading');
         $this->instructions = new TextWidget('');
         $this->instructions->addStyleClass('picker-instructions');
         $this->list = new PickerList(
             $this->choose(...),
             $this->abandon(...),
             $this->type(...),
+            $this->positionChanged(...),
         );
         $this->list->addStyleClass('picker-list');
     }
@@ -111,9 +110,17 @@ final class Picker
      *
      * @param non-empty-list<ChoiceOption> $options
      */
-    public function open(string $title, array $options): void
+    public function open(
+        string $title,
+        array $options,
+        ?string $description = null,
+    ): void
     {
-        $this->title = DisplayableText::preview($title, self::TITLE_WIDTH);
+        $this->title = preg_replace(
+            '/\s+/u',
+            ' ',
+            trim(DisplayableText::safe($title)),
+        ) ?? '';
         $this->filter = '';
         $this->offered = [];
         $this->lines = [];
@@ -132,10 +139,18 @@ final class Picker
 
         $this->shown = $this->lines;
         $this->list->setItems($this->shown);
-        $this->instructions->setText($this->title . self::INSTRUCTIONS);
+        $this->instructions->setText(self::INSTRUCTIONS);
         $this->widget->clear();
-        $this->widget->add($this->instructions);
+        $this->widget->add($this->heading);
+
+        if ($description !== null) {
+            $explanation = new PickerDescription($description);
+            $explanation->addStyleClass('picker-description');
+            $this->widget->add($explanation);
+        }
+
         $this->widget->add($this->list);
+        $this->widget->add($this->instructions);
         $this->open = true;
     }
 
@@ -198,13 +213,16 @@ final class Picker
             $this->shown = $matching;
             $this->list->setItems($matching);
         }
+    }
 
-        $this->instructions->setText(
-            $filter === ''
-                ? $this->title . self::INSTRUCTIONS
-                : $this->title . self::INSTRUCTIONS . "\nfilter: "
-                    . DisplayableText::safe($filter),
-        );
+    private function positionChanged(int $position, int $total): void
+    {
+        $this->heading->setText(sprintf(
+            '%s (%d of %d)',
+            $this->title,
+            $position,
+            $total,
+        ));
     }
 
     private function choose(string $handle): void
