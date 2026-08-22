@@ -6,36 +6,22 @@ namespace NeuronCli\Tui;
 
 use Closure;
 use NeuronCli\Conversation\ChoiceOption;
-use Symfony\Component\Tui\Event\CancelEvent;
-use Symfony\Component\Tui\Event\SelectEvent;
 use Symfony\Component\Tui\Widget\ContainerWidget;
-use Symfony\Component\Tui\Widget\SelectListWidget;
 use Symfony\Component\Tui\Widget\TextWidget;
 
 /**
  * The list a person moves through while the TUI is in the Picker.
  *
- * Arrow navigation and a bounded visible height are the select list's own;
- * what is added here is the title carried by the instructions, and the
- * filtering — both the typing the widget does not listen for and the
- * narrowing itself, because a line is named by its label rather than by the
- * key behind it. Whatever the lines stand for is the caller's business: the
- * picker takes ChoiceOptions and hands back the key of the line a
- * person chose. Whoever opens the picker decides what focus and the composer
- * do meanwhile.
+ * Arrow navigation and complete option blocks belong to the internal list;
+ * this object adds the title carried by the instructions and the filtering.
+ * Whatever the options stand for is the caller's business: the picker takes
+ * ChoiceOptions and hands back the key of the one a person chose. Whoever
+ * opens the picker decides what focus and the composer do meanwhile.
  *
  * @internal
  */
 final class Picker
 {
-    private const int VISIBLE_LINES = 8;
-
-    /**
-     * The width the list gives a label before cutting it silently, so a
-     * label is shortened here instead, where the cut is marked.
-     */
-    private const int LABEL_WIDTH = 30;
-
     /**
      * How much of a title the instructions carry, so that a long one does
      * not push the keys it explains off the line.
@@ -55,7 +41,7 @@ final class Picker
 
     private readonly TextWidget $instructions;
 
-    private readonly SelectListWidget $list;
+    private readonly PickerList $list;
 
     /**
      * The keys on offer, each under the handle its line carries.
@@ -68,11 +54,11 @@ final class Picker
      * Every line of the open picker, filtered or not, in the order the caller
      * listed them.
      *
-     * @var list<array{value: string, label: string}>
+     * @var list<array{value: string, label: string, detail: string|null}>
      */
     private array $lines = [];
 
-    /** @var list<array{value: string, label: string}> */
+    /** @var list<array{value: string, label: string, detail: string|null}> */
     private array $shown = [];
 
     private string $title = '';
@@ -93,9 +79,12 @@ final class Picker
         $this->widget->addStyleClass('picker');
         $this->instructions = new TextWidget('');
         $this->instructions->addStyleClass('picker-instructions');
-        $this->list = new SelectListWidget([], self::VISIBLE_LINES);
+        $this->list = new PickerList(
+            $this->choose(...),
+            $this->abandon(...),
+            $this->type(...),
+        );
         $this->list->addStyleClass('picker-list');
-        $this->list->onInput($this->type(...));
     }
 
     public function widget(): ContainerWidget
@@ -106,7 +95,7 @@ final class Picker
     /**
      * The widget the keys belong to while the picker is open.
      */
-    public function focusable(): SelectListWidget
+    public function focusable(): PickerList
     {
         return $this->list;
     }
@@ -136,10 +125,8 @@ final class Picker
             $this->offered[$handle] = $option->key;
             $this->lines[] = [
                 'value' => $handle,
-                'label' => DisplayableText::preview(
-                    $option->label,
-                    self::LABEL_WIDTH,
-                ),
+                'label' => $option->label,
+                'detail' => $option->detail,
             ];
         }
 
@@ -149,14 +136,6 @@ final class Picker
         $this->widget->clear();
         $this->widget->add($this->instructions);
         $this->widget->add($this->list);
-        // Taking the list off screen detaches it, and a detached widget is
-        // left without the listeners it was given: Enter and Escape would
-        // reach a list with nobody listening for what they mean. So the
-        // answers to them are given here, once per opening, after the list
-        // is back on screen — which is also the only place a second opening
-        // passes through. Typing is not a listener and survives the detach.
-        $this->list->onSelect($this->choose(...));
-        $this->list->onCancel($this->abandon(...));
         $this->open = true;
     }
 
@@ -228,9 +207,9 @@ final class Picker
         );
     }
 
-    private function choose(SelectEvent $event): void
+    private function choose(string $handle): void
     {
-        $chosen = $this->offered[$event->getValue()] ?? null;
+        $chosen = $this->offered[$handle] ?? null;
 
         if ($chosen === null) {
             // A value the picker did not put in the list names no option, so
@@ -241,7 +220,7 @@ final class Picker
         ($this->chosen)($chosen);
     }
 
-    private function abandon(CancelEvent $event): void
+    private function abandon(): void
     {
         ($this->abandoned)();
     }
