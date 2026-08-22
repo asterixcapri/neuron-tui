@@ -35,7 +35,7 @@ final class PickerList extends AbstractWidget implements FocusableInterface
     private const int MAX_TEXT_LINES = 2;
 
     /**
-     * @var list<array{value: string, label: string, detail: string|null}>
+     * @var list<PickerListItem>
      */
     private array $items = [];
 
@@ -62,7 +62,7 @@ final class PickerList extends AbstractWidget implements FocusableInterface
     }
 
     /**
-     * @param list<array{value: string, label: string, detail: string|null}> $items
+     * @param list<PickerListItem> $items
      */
     public function setItems(array $items): void
     {
@@ -121,7 +121,7 @@ final class PickerList extends AbstractWidget implements FocusableInterface
             }
 
             if ($keybindings->matches($data, 'select_confirm')) {
-                ($this->selected)($this->items[$this->selectedIndex]['value']);
+                ($this->selected)($this->items[$this->selectedIndex]->value);
 
                 return;
             }
@@ -163,6 +163,7 @@ final class PickerList extends AbstractWidget implements FocusableInterface
             return $this->renderCompactBlock(
                 $this->items[$this->selectedIndex],
                 $columns,
+                $availableRows,
             );
         }
 
@@ -214,17 +215,15 @@ final class PickerList extends AbstractWidget implements FocusableInterface
     }
 
     /**
-     * @param array{value: string, label: string, detail: string|null} $item
-     *
      * @return non-empty-list<string>
      */
     private function renderBlock(
-        array $item,
+        PickerListItem $item,
         bool $selected,
         int $columns,
     ): array {
         $textWidth = max(1, $columns - 2);
-        $labelLines = self::wrapped($item['label'], $textWidth);
+        $labelLines = self::wrapped($item->label, $textWidth);
         $lines = [];
 
         foreach ($labelLines as $line => $text) {
@@ -234,8 +233,8 @@ final class PickerList extends AbstractWidget implements FocusableInterface
                 : $text);
         }
 
-        if ($item['detail'] !== null) {
-            foreach (self::wrapped($item['detail'], $textWidth) as $text) {
+        if ($item->detail !== null) {
+            foreach (self::wrapped($item->detail, $textWidth) as $text) {
                 $lines[] = '  ' . $this->applyElement('detail', $text);
             }
         }
@@ -244,37 +243,63 @@ final class PickerList extends AbstractWidget implements FocusableInterface
     }
 
     /**
-     * A terminal too low for the active block still keeps its arrow, label
-     * and the panel instructions reachable. Detail returns after a resize.
+     * A terminal too low for the normal active block abbreviates each of its
+     * present parts instead of dropping one. With only one list row left,
+     * label and detail share that row so the panel instructions remain visible.
      *
-     * @param array{value: string, label: string, detail: string|null} $item
-     *
-     * @return list{string}
+     * @return non-empty-list<string>
      */
-    private function renderCompactBlock(array $item, int $columns): array
-    {
+    private function renderCompactBlock(
+        PickerListItem $item,
+        int $columns,
+        int $availableRows,
+    ): array {
         $textWidth = max(1, $columns - 2);
-        $label = preg_replace(
-            '/\s+/u',
-            ' ',
-            trim(DisplayableText::safe($item['label'])),
-        ) ?? '';
+        $label = DisplayableText::singleLine($item->label);
+
+        if ($item->detail === null) {
+            return ['→ ' . $this->applyElement(
+                'selected',
+                AnsiUtils::truncateToWidth($label, $textWidth, '…'),
+            )];
+        }
+
+        $detail = DisplayableText::singleLine($item->detail);
+
+        if ($availableRows >= 2) {
+            return [
+                '→ ' . $this->applyElement(
+                    'selected',
+                    AnsiUtils::truncateToWidth($label, $textWidth, '…'),
+                ),
+                '  ' . $this->applyElement(
+                    'detail',
+                    AnsiUtils::truncateToWidth($detail, $textWidth, '…'),
+                ),
+            ];
+        }
+
+        $separator = $textWidth >= 5 ? ' · ' : '';
+        $contentWidth = max(2, $textWidth - mb_strwidth($separator));
+        $labelWidth = max(1, intdiv($contentWidth, 2));
+        $detailWidth = max(1, $contentWidth - $labelWidth);
 
         return ['→ ' . $this->applyElement(
             'selected',
-            AnsiUtils::truncateToWidth($label, $textWidth, '…'),
+            AnsiUtils::truncateToWidth($label, $labelWidth, '…'),
+        ) . $separator . $this->applyElement(
+            'detail',
+            AnsiUtils::truncateToWidth($detail, $detailWidth, '…'),
         )];
     }
 
     /** @return non-empty-list<string> */
     private static function wrapped(string $text, int $width): array
     {
-        $normalized = preg_replace(
-            '/\s+/u',
-            ' ',
-            trim(DisplayableText::safe($text)),
-        ) ?? '';
-        $lines = TextWrapper::wrapTextWithAnsi($normalized, $width);
+        $lines = TextWrapper::wrapTextWithAnsi(
+            DisplayableText::singleLine($text),
+            $width,
+        );
 
         if (count($lines) <= self::MAX_TEXT_LINES) {
             /** @var non-empty-list<string> $lines */

@@ -29,12 +29,24 @@ final class DisplayableText
     }
 
     /**
+     * The text, safe to display and normalized onto one visual line.
+     */
+    public static function singleLine(string $text): string
+    {
+        return preg_replace('/\s+/u', ' ', trim(self::safe($text))) ?? '';
+    }
+
+    /**
      * The text as one safe line, no wider than the given display width.
      */
     public static function preview(string $text, int $width): string
     {
-        $line = preg_replace('/\s+/u', ' ', trim(self::safe($text))) ?? '';
-
-        return mb_strimwidth($line, 0, $width, '…', 'UTF-8');
+        return mb_strimwidth(
+            self::singleLine($text),
+            0,
+            $width,
+            '…',
+            'UTF-8',
+        );
     }
 }
