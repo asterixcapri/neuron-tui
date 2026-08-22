@@ -2445,6 +2445,10 @@ MARKDOWN;
                 $chosen = $controls->choose('Models', [
                     new ChoiceOption('haiku', 'Claude Haiku'),
                     new ChoiceOption('opus', 'Claude Opus'),
+                    new ChoiceOption('sonnet', 'Claude Sonnet'),
+                    new ChoiceOption('gemini', 'Gemini Pro'),
+                    new ChoiceOption('gpt', 'GPT'),
+                    new ChoiceOption('mistral', 'Mistral'),
                 ]);
             },
         );
@@ -2483,6 +2487,279 @@ MARKDOWN;
         self::assertStringContainsString('Claude Opus', $narrowedDisplay);
         self::assertStringNotContainsString('Claude Haiku', $narrowedDisplay);
         self::assertSame('opus', $chosen);
+    }
+
+    public function testOnlyAChoiceOfAtLeastSixOptionsAcceptsVisibleSearch(): void
+    {
+        $shortChoice = null;
+        $longChoice = null;
+        $shortDisplay = null;
+        $longDisplay = null;
+        $filteredDisplay = null;
+        $agent = new Agent();
+        $agent->setAiProvider(new FakeAIProvider());
+        $terminal = new VirtualTerminal(rows: 30);
+        $command = $this->commandThat(
+            static function (
+                Controls $controls,
+                string $arguments,
+            ) use (&$shortChoice, &$longChoice): void {
+                $shortChoice = $controls->choose('Short choice', [
+                    new ChoiceOption('short-1', 'Short one'),
+                    new ChoiceOption('short-2', 'Short two'),
+                    new ChoiceOption('short-3', 'Short three'),
+                    new ChoiceOption('short-4', 'Short four'),
+                    new ChoiceOption('short-5', 'Short five'),
+                ]);
+                $longChoice = $controls->choose('Long choice', [
+                    new ChoiceOption('long-1', 'Long one'),
+                    new ChoiceOption('long-2', 'Long two'),
+                    new ChoiceOption('long-3', 'Long three'),
+                    new ChoiceOption('long-4', 'Long four'),
+                    new ChoiceOption('long-5', 'Long five'),
+                    new ChoiceOption('long-6', 'Long six'),
+                ]);
+            },
+        );
+        EventLoop::delay(
+            0.04,
+            static fn () => $terminal->simulateInput("/probe\r"),
+        );
+        EventLoop::delay(
+            0.1,
+            static function () use (&$shortDisplay, $terminal): void {
+                $shortDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput('Short five');
+                $terminal->simulateInput("\r");
+            },
+        );
+        EventLoop::delay(
+            0.17,
+            static function () use (&$longDisplay, $terminal): void {
+                $longDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->clearOutput();
+                $terminal->simulateInput('six');
+            },
+        );
+        EventLoop::delay(
+            0.23,
+            static function () use (&$filteredDisplay, $terminal): void {
+                $filteredDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("\r");
+            },
+        );
+        EventLoop::delay(
+            0.32,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [$command],
+        ))->run();
+
+        self::assertIsString($shortDisplay);
+        self::assertStringNotContainsString('Search:', $shortDisplay);
+        self::assertSame('short-1', $shortChoice);
+        self::assertIsString($longDisplay);
+        self::assertStringContainsString('Search:', $longDisplay);
+        self::assertIsString($filteredDisplay);
+        self::assertStringContainsString('Search: six', $filteredDisplay);
+        self::assertStringContainsString('Long choice (1 of 1)', $filteredDisplay);
+        self::assertStringContainsString('Long six', $filteredDisplay);
+        self::assertSame('long-6', $longChoice);
+    }
+
+    public function testSearchUsesCompleteLabelsAndDetailsWithoutReordering(): void
+    {
+        $chosen = null;
+        $filteredDisplay = null;
+        $agent = new Agent();
+        $agent->setAiProvider(new FakeAIProvider());
+        $terminal = new VirtualTerminal(columns: 38, rows: 32);
+        $command = $this->commandThat(
+            static function (
+                Controls $controls,
+                string $arguments,
+            ) use (&$chosen): void {
+                $chosen = $controls->choose('Models', [
+                    new ChoiceOption('alpha', 'Alpha'),
+                    new ChoiceOption(
+                        'detail',
+                        'First matching option',
+                        'A detail whose visible beginning is deliberately long before HIDDEN NEEDLE',
+                    ),
+                    new ChoiceOption('label', 'Middle nEeDlE label'),
+                    new ChoiceOption('later', 'Later option', 'needle detail'),
+                    new ChoiceOption('fifth', 'Fifth option'),
+                    new ChoiceOption('sixth', 'Sixth option'),
+                ]);
+            },
+        );
+        EventLoop::delay(
+            0.04,
+            static fn () => $terminal->simulateInput("/probe\r"),
+        );
+        EventLoop::delay(
+            0.1,
+            static function () use ($terminal): void {
+                $terminal->simulateInput("\x1b[B\x1b[B");
+                $terminal->clearOutput();
+                $terminal->simulateInput('NeEdLe');
+            },
+        );
+        EventLoop::delay(
+            0.17,
+            static function () use (&$filteredDisplay, $terminal): void {
+                $filteredDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("\r");
+            },
+        );
+        EventLoop::delay(
+            0.26,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [$command],
+        ))->run();
+
+        self::assertIsString($filteredDisplay);
+        self::assertStringContainsString('Models (1 of 3)', $filteredDisplay);
+        self::assertStringContainsString('→ First matching option', $filteredDisplay);
+        self::assertLessThan(
+            mb_strpos($filteredDisplay, 'Middle nEeDlE label'),
+            mb_strpos($filteredDisplay, 'First matching option'),
+        );
+        self::assertLessThan(
+            mb_strpos($filteredDisplay, 'Later option'),
+            mb_strpos($filteredDisplay, 'Middle nEeDlE label'),
+        );
+        self::assertSame('detail', $chosen);
+    }
+
+    public function testEmptySearchIsInertAndEveryOpeningStartsFresh(): void
+    {
+        $first = 'still open';
+        $second = 'still open';
+        $emptyDisplay = null;
+        $afterEnter = null;
+        $restoredDisplay = null;
+        $reopenedDisplay = null;
+        $agent = new Agent();
+        $agent->setAiProvider(new FakeAIProvider());
+        $terminal = new VirtualTerminal(rows: 30);
+        $command = $this->commandThat(
+            static function (
+                Controls $controls,
+                string $arguments,
+            ) use (&$first, &$second): void {
+                $options = [
+                    new ChoiceOption('one', 'Option one'),
+                    new ChoiceOption('two', 'Option two'),
+                    new ChoiceOption('three', 'Option three'),
+                    new ChoiceOption('four', 'Option four'),
+                    new ChoiceOption('five', 'Option five'),
+                    new ChoiceOption('six', 'Option six'),
+                ];
+                $first = $controls->choose('First opening', $options);
+                $second = $controls->choose('Second opening', $options);
+            },
+        );
+        EventLoop::delay(
+            0.04,
+            static fn () => $terminal->simulateInput("/probe\r"),
+        );
+        EventLoop::delay(
+            0.1,
+            static function () use ($terminal): void {
+                $terminal->clearOutput();
+                $terminal->simulateInput('zzz');
+            },
+        );
+        EventLoop::delay(
+            0.16,
+            static function () use (&$emptyDisplay, $terminal): void {
+                $emptyDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->clearOutput();
+                $terminal->simulateInput("\r");
+            },
+        );
+        EventLoop::delay(
+            0.2,
+            static fn () => $terminal->simulateResize(80, 30),
+        );
+        EventLoop::delay(
+            0.23,
+            static function () use (&$afterEnter, $terminal): void {
+                $afterEnter = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->clearOutput();
+                $terminal->simulateInput("\x7f");
+                $terminal->simulateInput("\x7f");
+                $terminal->simulateInput("\x7f");
+            },
+        );
+        EventLoop::delay(
+            0.3,
+            static function () use (&$restoredDisplay, $terminal): void {
+                $restoredDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("\x1b[B");
+                $terminal->simulateInput("\x1b");
+            },
+        );
+        EventLoop::delay(
+            0.37,
+            static function () use (&$reopenedDisplay, $terminal): void {
+                $reopenedDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("\x1b");
+            },
+        );
+        EventLoop::delay(
+            0.46,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [$command],
+        ))->run();
+
+        self::assertIsString($emptyDisplay);
+        self::assertStringContainsString('First opening (0 of 0)', $emptyDisplay);
+        self::assertStringContainsString('Search: zzz', $emptyDisplay);
+        self::assertStringContainsString('No options match "zzz"', $emptyDisplay);
+        self::assertIsString($afterEnter);
+        self::assertStringContainsString('No options match "zzz"', $afterEnter);
+        self::assertIsString($restoredDisplay);
+        self::assertStringContainsString('First opening (1 of 6)', $restoredDisplay);
+        self::assertStringContainsString('Search:', $restoredDisplay);
+        self::assertStringContainsString('→ Option one', $restoredDisplay);
+        self::assertNull($first);
+        self::assertIsString($reopenedDisplay);
+        self::assertStringContainsString('Second opening (1 of 6)', $reopenedDisplay);
+        self::assertStringNotContainsString('Search: z', $reopenedDisplay);
+        self::assertStringContainsString('→ Option one', $reopenedDisplay);
+        self::assertNull($second);
     }
 
     /**
@@ -4329,6 +4606,13 @@ MARKDOWN;
         );
         $beta = $sessions->open($sessions->create()->key);
         $beta->addMessage(new UserMessage('Beta subject'));
+
+        foreach (['Gamma', 'Delta', 'Epsilon', 'Zeta'] as $subject) {
+            $sessions->open($sessions->create()->key)->addMessage(
+                new UserMessage($subject . ' subject'),
+            );
+        }
+
         $terminal = new VirtualTerminal(rows: 24);
         $narrowedDisplay = null;
         EventLoop::delay(
