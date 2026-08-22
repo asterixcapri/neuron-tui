@@ -126,6 +126,29 @@ final class ConversationViewTest extends TestCase
         self::assertFalse($view->isChoosing());
     }
 
+    public function testAChoiceRejectsAnEmptyPresentDetailBeforeOpening(): void
+    {
+        $view = new ConversationView(
+            new VirtualTerminal(rows: 24),
+            'Neuron AI',
+            'Conversation',
+        );
+
+        try {
+            $view->choose('Models', [
+                new ChoiceOption('haiku', 'Claude Haiku', " \n "),
+            ]);
+            self::fail('Empty choice details should be rejected.');
+        } catch (InvalidArgumentException $exception) {
+            self::assertSame(
+                'Choice option details must not be empty.',
+                $exception->getMessage(),
+            );
+        }
+
+        self::assertFalse($view->isChoosing());
+    }
+
     public function testASecondChoiceCannotReplaceAnOpenChoice(): void
     {
         $firstResult = 'still waiting';
