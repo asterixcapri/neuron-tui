@@ -2329,6 +2329,250 @@ MARKDOWN;
         self::assertSame('key-9', $chosen);
     }
 
+    public function testPickerViewportShowsFourCompleteBlocksAndWrapsWithSelection(): void
+    {
+        $chosen = null;
+        $initialDisplay = null;
+        $scrolledDisplay = null;
+        $wrappedDisplay = null;
+        $agent = new Agent();
+        $agent->setAiProvider(new FakeAIProvider());
+        $terminal = new VirtualTerminal(columns: 36, rows: 40);
+        $command = $this->commandThat(
+            static function (
+                Controls $controls,
+                string $arguments,
+            ) use (&$chosen): void {
+                $chosen = $controls->choose('Viewport', [
+                    new ChoiceOption('one', 'Option one', 'Detail one'),
+                    new ChoiceOption('two', 'Option two'),
+                    new ChoiceOption(
+                        'three',
+                        'Option three has a label that wraps',
+                        'Detail three also wraps at this width',
+                    ),
+                    new ChoiceOption('four', 'Option four', 'Detail four'),
+                    new ChoiceOption('five', 'Option five', 'Detail five'),
+                    new ChoiceOption('six', 'Option six', 'Detail six'),
+                ]);
+            },
+        );
+        EventLoop::delay(
+            0.04,
+            static fn () => $terminal->simulateInput("/probe\r"),
+        );
+        EventLoop::delay(
+            0.1,
+            static function () use ($terminal): void {
+                $terminal->clearOutput();
+                $terminal->simulateResize(36, 40);
+            },
+        );
+        EventLoop::delay(
+            0.14,
+            static function () use (&$initialDisplay, $terminal): void {
+                $initialDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->clearOutput();
+                $terminal->simulateInput(str_repeat("\x1b[B", 4));
+                $terminal->simulateResize(36, 40);
+            },
+        );
+        EventLoop::delay(
+            0.21,
+            static function () use (&$scrolledDisplay, $terminal): void {
+                $scrolledDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->clearOutput();
+                $terminal->simulateInput(str_repeat("\x1b[A", 5));
+                $terminal->simulateResize(36, 40);
+            },
+        );
+        EventLoop::delay(
+            0.28,
+            static function () use (&$wrappedDisplay, $terminal): void {
+                $wrappedDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("\r");
+            },
+        );
+        EventLoop::delay(
+            0.38,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [$command],
+        ))->run();
+
+        self::assertIsString($initialDisplay);
+        self::assertStringContainsString('→ Option one', $initialDisplay);
+        self::assertStringContainsString('Detail three also', $initialDisplay);
+        self::assertStringContainsString('Option four', $initialDisplay);
+        self::assertStringNotContainsString('Option five', $initialDisplay);
+        self::assertStringNotContainsString('Option six', $initialDisplay);
+
+        self::assertIsString($scrolledDisplay);
+        self::assertStringContainsString('Viewport (5 of 6)', $scrolledDisplay);
+        self::assertStringContainsString('→ Option five', $scrolledDisplay);
+        self::assertStringContainsString('Detail five', $scrolledDisplay);
+        self::assertStringNotContainsString('Option one', $scrolledDisplay);
+
+        self::assertIsString($wrappedDisplay);
+        self::assertStringContainsString('Viewport (6 of 6)', $wrappedDisplay);
+        self::assertStringContainsString('→ Option six', $wrappedDisplay);
+        self::assertStringContainsString('Detail six', $wrappedDisplay);
+        self::assertStringNotContainsString('Option one', $wrappedDisplay);
+        self::assertSame('six', $chosen);
+    }
+
+    public function testPickerResizeKeepsQueryAndSelectionWhileReducingCompleteBlocks(): void
+    {
+        $chosen = null;
+        $shortDisplay = null;
+        $lowDisplay = null;
+        $grownDisplay = null;
+        $reopenedDisplay = null;
+        $agent = new Agent();
+        $agent->setAiProvider(new FakeAIProvider());
+        $terminal = new VirtualTerminal(columns: 40, rows: 30);
+        $command = $this->commandThat(
+            static function (
+                Controls $controls,
+                string $arguments,
+            ) use (&$chosen): void {
+                $options = [
+                    new ChoiceOption('one', 'Match first choice'),
+                    new ChoiceOption(
+                        'two',
+                        'Match second choice with a long label',
+                        'Second supporting detail is also long',
+                    ),
+                    new ChoiceOption(
+                        'three',
+                        'Match third choice with a long label',
+                        'Third supporting detail is also long',
+                    ),
+                    new ChoiceOption('four', 'Match fourth choice'),
+                    new ChoiceOption('five', 'Match fifth choice', 'Fifth supporting detail'),
+                    new ChoiceOption('six', 'Match sixth choice'),
+                ];
+                $chosen = $controls->choose('Resizable', $options);
+                $controls->choose('Reopened', $options);
+            },
+        );
+        EventLoop::delay(
+            0.04,
+            static fn () => $terminal->simulateInput("/probe\r"),
+        );
+        EventLoop::delay(
+            0.1,
+            static function () use ($terminal): void {
+                $terminal->simulateInput('match');
+                $terminal->simulateInput("\x1b[B\x1b[B");
+                $terminal->clearOutput();
+                $terminal->simulateResize(22, 24);
+            },
+        );
+        EventLoop::delay(
+            0.17,
+            static function () use (&$shortDisplay, $terminal): void {
+                $shortDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->clearOutput();
+                $terminal->simulateResize(22, 7);
+            },
+        );
+        EventLoop::delay(
+            0.24,
+            static function () use (&$lowDisplay, $terminal): void {
+                $lowDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->clearOutput();
+                $terminal->simulateResize(40, 30);
+            },
+        );
+        EventLoop::delay(
+            0.31,
+            static function () use (&$grownDisplay, $terminal): void {
+                $grownDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("\r");
+            },
+        );
+        EventLoop::delay(
+            0.38,
+            static function () use ($terminal): void {
+                $terminal->clearOutput();
+                $terminal->simulateResize(40, 30);
+            },
+        );
+        EventLoop::delay(
+            0.43,
+            static function () use (&$reopenedDisplay, $terminal): void {
+                $reopenedDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("\x1b");
+            },
+        );
+        EventLoop::delay(
+            0.51,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [$command],
+        ))->run();
+
+        self::assertIsString($shortDisplay);
+        self::assertStringContainsString('Resizable (3 of 6)', $shortDisplay);
+        self::assertStringContainsString('Search: match', $shortDisplay);
+        self::assertStringContainsString('→ Match third choice', $shortDisplay);
+        self::assertStringContainsString('Third supporting', $shortDisplay);
+        self::assertStringNotContainsString('Match second choice', $shortDisplay);
+        self::assertStringNotContainsString('Match fourth choice', $shortDisplay);
+
+        self::assertIsString($lowDisplay);
+        $lowLines = explode("\n", str_replace("\r", '', $lowDisplay));
+        $visibleLowDisplay = implode("\n", array_slice($lowLines, -7));
+        self::assertStringContainsString(
+            '→ Match third choic…',
+            $visibleLowDisplay,
+        );
+        self::assertStringNotContainsString(
+            'Third supporting',
+            $visibleLowDisplay,
+        );
+        self::assertStringContainsString('↑↓ move · Enter', $visibleLowDisplay);
+        self::assertStringContainsString('chooses · Escape', $visibleLowDisplay);
+        self::assertStringContainsString('cancels', $visibleLowDisplay);
+
+        self::assertIsString($grownDisplay);
+        self::assertStringContainsString('Resizable (3 of 6)', $grownDisplay);
+        self::assertStringContainsString('Search: match', $grownDisplay);
+        self::assertStringContainsString('→ Match third choice', $grownDisplay);
+        self::assertStringContainsString('Match sixth choice', $grownDisplay);
+        self::assertStringNotContainsString('Match second choice', $grownDisplay);
+        self::assertSame('three', $chosen);
+
+        self::assertIsString($reopenedDisplay);
+        self::assertStringContainsString('Reopened (1 of 6)', $reopenedDisplay);
+        self::assertStringContainsString('Search: ', $reopenedDisplay);
+        self::assertStringNotContainsString('Search: match', $reopenedDisplay);
+        self::assertStringContainsString('→ Match first choice', $reopenedDisplay);
+    }
+
     /**
      * Escape gives the command no choice at all, and it can tell that apart
      * from a choice made. Meanwhile the composer takes no text: what was
@@ -2617,6 +2861,10 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.17,
+            static fn () => $terminal->simulateResize(38, 32),
+        );
+        EventLoop::delay(
+            0.2,
             static function () use (&$filteredDisplay, $terminal): void {
                 $filteredDisplay = AnsiUtils::stripAnsiCodes(
                     $terminal->getOutput(),
@@ -2625,7 +2873,7 @@ MARKDOWN;
             },
         );
         EventLoop::delay(
-            0.26,
+            0.3,
             static fn () => $terminal->simulateInput("\x03"),
         );
 

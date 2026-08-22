@@ -30,7 +30,7 @@ final class PickerList extends AbstractWidget implements FocusableInterface
     use FocusableTrait;
     use KeybindingsTrait;
 
-    private const int MAX_VISIBLE_BLOCKS = 8;
+    private const int MAX_VISIBLE_BLOCKS = 4;
 
     private const int MAX_TEXT_LINES = 2;
 
@@ -43,17 +43,21 @@ final class PickerList extends AbstractWidget implements FocusableInterface
 
     private string $query = '';
 
+    private int $viewportStart = 0;
+
     /**
      * @param Closure(string): void $selected
      * @param Closure(): void $cancelled
      * @param Closure(string): bool $typed
      * @param Closure(int, int): void $positionChanged
+     * @param Closure(int): int $rowsOutsideList
      */
     public function __construct(
         private readonly Closure $selected,
         private readonly Closure $cancelled,
         private readonly Closure $typed,
         private readonly Closure $positionChanged,
+        private readonly Closure $rowsOutsideList,
     ) {
     }
 
@@ -64,10 +68,20 @@ final class PickerList extends AbstractWidget implements FocusableInterface
     {
         $this->items = $items;
         $this->selectedIndex = 0;
+        $this->viewportStart = 0;
         ($this->positionChanged)(
             $items === [] ? 0 : 1,
             count($items),
         );
+        $this->invalidate();
+    }
+
+    public function reset(): void
+    {
+        $this->items = [];
+        $this->selectedIndex = 0;
+        $this->viewportStart = 0;
+        $this->query = '';
         $this->invalidate();
     }
 
@@ -128,26 +142,59 @@ final class PickerList extends AbstractWidget implements FocusableInterface
             )];
         }
 
-        $start = max(0, min(
-            $this->selectedIndex - intdiv(self::MAX_VISIBLE_BLOCKS, 2),
-            count($this->items) - self::MAX_VISIBLE_BLOCKS,
-        ));
-        $end = min($start + self::MAX_VISIBLE_BLOCKS, count($this->items));
+        $columns = $context->getColumns();
+        $availableRows = max(
+            1,
+            $context->getRows() - ($this->rowsOutsideList)($columns),
+        );
+        $blocks = [];
+
+        foreach ($this->items as $index => $item) {
+            $blocks[$index] = $this->renderBlock(
+                $item,
+                $index === $this->selectedIndex,
+                $columns,
+            );
+        }
+
+        if (count($blocks[$this->selectedIndex]) > $availableRows) {
+            $this->viewportStart = $this->selectedIndex;
+
+            return $this->renderCompactBlock(
+                $this->items[$this->selectedIndex],
+                $columns,
+            );
+        }
+
+        $visible = $this->visibleFrom(
+            min($this->viewportStart, count($this->items) - 1),
+            $blocks,
+            $availableRows,
+        );
+
+        if (!in_array($this->selectedIndex, $visible, true)) {
+            $start = $this->selectedIndex;
+
+            if ($this->selectedIndex > $visible[array_key_last($visible)]) {
+                $start = $this->startEndingAt(
+                    $this->selectedIndex,
+                    $blocks,
+                    $availableRows,
+                );
+            }
+
+            $visible = $this->visibleFrom($start, $blocks, $availableRows);
+        }
+
+        $this->viewportStart = $visible[0];
         $lines = [];
 
-        for ($index = $start; $index < $end; ++$index) {
+        foreach ($visible as $index) {
             if ($lines !== []) {
                 $lines[] = '';
             }
 
-            array_push(
-                $lines,
-                ...$this->renderBlock(
-                    $this->items[$index],
-                    $index === $this->selectedIndex,
-                    $context->getColumns(),
-                ),
-            );
+            array_push($lines, ...$blocks[$index]);
         }
 
         return $lines;
@@ -196,6 +243,29 @@ final class PickerList extends AbstractWidget implements FocusableInterface
         return $lines;
     }
 
+    /**
+     * A terminal too low for the active block still keeps its arrow, label
+     * and the panel instructions reachable. Detail returns after a resize.
+     *
+     * @param array{value: string, label: string, detail: string|null} $item
+     *
+     * @return list{string}
+     */
+    private function renderCompactBlock(array $item, int $columns): array
+    {
+        $textWidth = max(1, $columns - 2);
+        $label = preg_replace(
+            '/\s+/u',
+            ' ',
+            trim(DisplayableText::safe($item['label'])),
+        ) ?? '';
+
+        return ['→ ' . $this->applyElement(
+            'selected',
+            AnsiUtils::truncateToWidth($label, $textWidth, '…'),
+        )];
+    }
+
     /** @return non-empty-list<string> */
     private static function wrapped(string $text, int $width): array
     {
@@ -223,5 +293,67 @@ final class PickerList extends AbstractWidget implements FocusableInterface
             $this->selectedIndex + 1,
             count($this->items),
         );
+    }
+
+    /**
+     * @param array<int, non-empty-list<string>> $blocks
+     *
+     * @return non-empty-list<int>
+     */
+    private function visibleFrom(
+        int $start,
+        array $blocks,
+        int $availableRows,
+    ): array {
+        $visible = [];
+        $usedRows = 0;
+        $end = min(count($blocks), $start + self::MAX_VISIBLE_BLOCKS);
+
+        for ($index = $start; $index < $end; ++$index) {
+            $blockRows = count($blocks[$index]);
+            $neededRows = $blockRows + ($visible === [] ? 0 : 1);
+
+            if ($visible !== [] && $usedRows + $neededRows > $availableRows) {
+                break;
+            }
+
+            $visible[] = $index;
+            $usedRows += $neededRows;
+        }
+
+        /** @var non-empty-list<int> $visible */
+        return $visible;
+    }
+
+    /**
+     * Finds the earliest complete block that can share the viewport with the
+     * selected block. This puts a wrapped last option at the bottom when Up
+     * wraps from the first item, and does the same while scrolling down.
+     *
+     * @param array<int, non-empty-list<string>> $blocks
+     */
+    private function startEndingAt(
+        int $selected,
+        array $blocks,
+        int $availableRows,
+    ): int {
+        $start = $selected;
+        $usedRows = count($blocks[$selected]);
+
+        while (
+            $start > 0
+            && $selected - $start + 1 < self::MAX_VISIBLE_BLOCKS
+        ) {
+            $previousRows = count($blocks[$start - 1]) + 1;
+
+            if ($usedRows + $previousRows > $availableRows) {
+                break;
+            }
+
+            --$start;
+            $usedRows += $previousRows;
+        }
+
+        return $start;
     }
 }
