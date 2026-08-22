@@ -307,6 +307,15 @@ final class ConversationView
                 );
             }
 
+            if (
+                $option->detail !== null
+                && trim($option->detail) === ''
+            ) {
+                throw new InvalidArgumentException(
+                    'Choice option details must not be empty.',
+                );
+            }
+
             if (in_array($option->key, $keys, true)) {
                 throw new InvalidArgumentException(
                     'Choice option keys must be unique.',
