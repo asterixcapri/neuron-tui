@@ -14,8 +14,9 @@ namespace NeuronCli\PHPStan;
  * file-based one it points at a directory. And the Slash commands it mounts:
  * the two interfaces a command may implement — one for a command that expects
  * the Agent to stand still, one for a command that runs while it works — the
- * one they both extend, and the Controls, full or fewer, each is handed while
- * it runs. Every other name under
+ * one they both extend, the Controls, full or fewer, each is handed while it
+ * runs, and the choice option passed to the waiting Controls. Every other
+ * name under
  * the `NeuronCli` namespace — the internal modules, the test suite, this
  * tooling — carries no stability promise and may be reshaped without notice,
  * so a Host Application may not name any of them.
@@ -32,6 +33,7 @@ final class PublicModulePolicy
         'NeuronCli\Conversation\Command',
         'NeuronCli\Conversation\SlashCommand',
         'NeuronCli\Conversation\RunsWhileWorking',
+        'NeuronCli\Conversation\ChoiceOption',
         'NeuronCli\Conversation\Controls',
         'NeuronCli\Conversation\LimitedControls',
         'NeuronCli\Conversation\Commands\Clear',

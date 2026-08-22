@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronCli\Conversation\Commands;
 
+use NeuronCli\Conversation\ChoiceOption;
 use NeuronCli\Conversation\Controls;
 use NeuronCli\Conversation\SlashCommand;
 use NeuronCli\Session\SessionProvider;
@@ -16,9 +17,8 @@ use NeuronCli\Session\SessionProvider;
  * prefers.
  *
  * A list with nothing in it is not worth entering, so it is said in the
- * conversation instead. The Picker chooses among keys and labels like for any
- * other list, so the Sessions are turned into lines here, where a Session is
- * still something known.
+ * conversation instead. The Sessions become ChoiceOptions here, while their
+ * keys and titles are still something known.
  */
 final readonly class Sessions implements SlashCommand
 {
@@ -52,13 +52,13 @@ final readonly class Sessions implements SlashCommand
             return;
         }
 
-        $labels = [];
+        $options = [];
 
         foreach ($sessions as $session) {
-            $labels[$session->key] = $session->title;
+            $options[] = new ChoiceOption($session->key, $session->title);
         }
 
-        $chosen = $controls->choose('Sessions', $labels);
+        $chosen = $controls->choose('Sessions', $options);
 
         if ($chosen === null) {
             return;
