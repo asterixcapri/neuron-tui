@@ -1960,6 +1960,190 @@ MARKDOWN;
         self::assertStringContainsString('ready · Enter sends', $display);
     }
 
+    public function testACommandCanOfferCompleteLabelAndDetailBlocks(): void
+    {
+        $chosen = null;
+        $pickerOutput = null;
+        $agent = new Agent();
+        $agent->setAiProvider(new FakeAIProvider());
+        $terminal = new VirtualTerminal(columns: 42, rows: 32);
+        $command = $this->commandThat(
+            static function (
+                Controls $controls,
+                string $arguments,
+            ) use (&$chosen): void {
+                $chosen = $controls->choose('Models', [
+                    new ChoiceOption(
+                        'detailed',
+                        "A selected label with a supplied\nline break and enough text to need more than two visual lines",
+                        "A lighter detail with its own\r\nline break and enough text to need more than two visual lines",
+                    ),
+                    new ChoiceOption('plain', 'A plain option'),
+                ]);
+            },
+        );
+        EventLoop::delay(
+            0.04,
+            static fn () => $terminal->simulateInput("/probe\r"),
+        );
+        EventLoop::delay(
+            0.1,
+            static function () use (&$pickerOutput, $terminal): void {
+                $pickerOutput = $terminal->getOutput();
+                $terminal->simulateInput("\r");
+            },
+        );
+        EventLoop::delay(
+            0.2,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [$command],
+        ))->run();
+
+        self::assertIsString($pickerOutput);
+        $display = str_replace(
+            "\r",
+            '',
+            AnsiUtils::stripAnsiCodes($pickerOutput),
+        );
+        self::assertStringContainsString(
+            'A selected label with a supplied line',
+            $display,
+        );
+        self::assertStringContainsString(
+            'A lighter detail with its own line',
+            $display,
+        );
+        self::assertStringContainsString('…', $display);
+        $lines = explode("\n", $display);
+        $label = array_values(array_filter(
+            $lines,
+            static fn (string $line): bool => str_contains(
+                $line,
+                'A selected label',
+            ),
+        ))[0];
+        $labelContinuation = array_values(array_filter(
+            $lines,
+            static fn (string $line): bool => str_contains(
+                $line,
+                'break and enough',
+            ),
+        ))[0];
+        $detail = array_values(array_filter(
+            $lines,
+            static fn (string $line): bool => str_contains(
+                $line,
+                'A lighter detail',
+            ),
+        ))[0];
+        self::assertSame(
+            mb_strpos($label, 'A'),
+            mb_strpos($labelContinuation, 'break'),
+        );
+        self::assertSame(mb_strpos($label, 'A'), mb_strpos($detail, 'A'));
+        self::assertSame(
+            mb_strpos($label, 'A') - 2,
+            mb_strpos($label, '→'),
+        );
+        $labelIndex = array_search($label, $lines, true);
+        $detailIndex = array_search($detail, $lines, true);
+        $plainIndex = null;
+
+        foreach ($lines as $index => $line) {
+            if (str_contains($line, 'A plain option')) {
+                $plainIndex = $index;
+                break;
+            }
+        }
+
+        self::assertIsInt($labelIndex);
+        self::assertIsInt($detailIndex);
+        self::assertIsInt($plainIndex);
+        self::assertSame($labelIndex + 2, $detailIndex);
+        self::assertSame($detailIndex + 3, $plainIndex);
+        self::assertSame('', trim($lines[$plainIndex - 1]));
+        self::assertStringContainsString(
+            "\x1b[35mA selected label",
+            $pickerOutput,
+        );
+        self::assertStringContainsString(
+            "\x1b[90mA lighter detail",
+            $pickerOutput,
+        );
+        self::assertSame('detailed', $chosen);
+    }
+
+    public function testPickerNavigationScrollsWholeOptionBlocks(): void
+    {
+        $chosen = null;
+        $scrolledDisplay = null;
+        $agent = new Agent();
+        $agent->setAiProvider(new FakeAIProvider());
+        $terminal = new VirtualTerminal(rows: 40);
+        $command = $this->commandThat(
+            static function (
+                Controls $controls,
+                string $arguments,
+            ) use (&$chosen): void {
+                $options = [];
+
+                for ($number = 1; $number <= 10; ++$number) {
+                    $options[] = new ChoiceOption(
+                        'key-' . $number,
+                        'Label ' . $number,
+                        'Detail ' . $number,
+                    );
+                }
+
+                $chosen = $controls->choose('Models', $options);
+            },
+        );
+        EventLoop::delay(
+            0.04,
+            static fn () => $terminal->simulateInput("/probe\r"),
+        );
+        EventLoop::delay(
+            0.1,
+            static function () use ($terminal): void {
+                $terminal->clearOutput();
+                $terminal->simulateInput(str_repeat("\x1b[B", 8));
+            },
+        );
+        EventLoop::delay(
+            0.16,
+            static function () use (&$scrolledDisplay, $terminal): void {
+                $scrolledDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("\r");
+            },
+        );
+        EventLoop::delay(
+            0.26,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new NeuronCli(
+            $agent,
+            terminal: $terminal,
+            commands: [$command],
+        ))->run();
+
+        self::assertIsString($scrolledDisplay);
+        self::assertStringContainsString('→ Label 9', $scrolledDisplay);
+        self::assertStringContainsString('Detail 9', $scrolledDisplay);
+        self::assertDoesNotMatchRegularExpression(
+            '/Label 1(?:\s|\r?\n)/',
+            $scrolledDisplay,
+        );
+        self::assertSame('key-9', $chosen);
+    }
+
     /**
      * Escape gives the command no choice at all, and it can tell that apart
      * from a choice made. Meanwhile the composer takes no text: what was

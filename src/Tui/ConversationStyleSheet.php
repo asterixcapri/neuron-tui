@@ -63,6 +63,7 @@ final class ConversationStyleSheet
                 dim: true,
             ),
             '.picker-list::selected' => new Style(color: 'magenta'),
+            '.picker-list::detail' => new Style(color: 'gray'),
             '.picker-list::no-match' => new Style(color: 'gray', dim: true),
             '.picker-list::scroll-info' => new Style(
                 color: 'gray',
