@@ -37,6 +37,8 @@ final class Picker
 
     private readonly TextWidget $instructions;
 
+    private readonly TextWidget $search;
+
     private readonly PickerList $list;
 
     /**
@@ -61,6 +63,8 @@ final class Picker
 
     private string $filter = '';
 
+    private bool $searchable = false;
+
     private bool $open = false;
 
     /**
@@ -77,6 +81,8 @@ final class Picker
         $this->heading->addStyleClass('picker-heading');
         $this->instructions = new TextWidget('');
         $this->instructions->addStyleClass('picker-instructions');
+        $this->search = new TextWidget('');
+        $this->search->addStyleClass('picker-search');
         $this->list = new PickerList(
             $this->choose(...),
             $this->abandon(...),
@@ -122,6 +128,7 @@ final class Picker
             trim(DisplayableText::safe($title)),
         ) ?? '';
         $this->filter = '';
+        $this->searchable = count($options) >= 6;
         $this->offered = [];
         $this->lines = [];
 
@@ -138,6 +145,7 @@ final class Picker
         }
 
         $this->shown = $this->lines;
+        $this->list->setQuery('');
         $this->list->setItems($this->shown);
         $this->instructions->setText(self::INSTRUCTIONS);
         $this->widget->clear();
@@ -147,6 +155,11 @@ final class Picker
             $explanation = new PickerDescription($description);
             $explanation->addStyleClass('picker-description');
             $this->widget->add($explanation);
+        }
+
+        if ($this->searchable) {
+            $this->updateSearch();
+            $this->widget->add($this->search);
         }
 
         $this->widget->add($this->list);
@@ -164,6 +177,8 @@ final class Picker
         $this->offered = [];
         $this->lines = [];
         $this->shown = [];
+        $this->filter = '';
+        $this->searchable = false;
         $this->open = false;
     }
 
@@ -175,8 +190,14 @@ final class Picker
      */
     private function type(string $data): bool
     {
+        if (!$this->searchable) {
+            return false;
+        }
+
         if ($data === "\x7f" || $data === "\x08") {
-            $this->filterBy(mb_substr($this->filter, 0, -1));
+            if ($this->filter !== '') {
+                $this->filterBy(mb_substr($this->filter, 0, -1));
+            }
 
             return true;
         }
@@ -191,28 +212,45 @@ final class Picker
     }
 
     /**
-     * Narrows to the lines whose label starts with what was typed.
-     *
-     * The list narrows on the value of a line, which is a handle of the
-     * picker's own, so the narrowing happens here against the label. A
-     * keystroke that narrows nothing leaves the list alone, so that the line
-     * a person moved to stays the one under the arrow.
+     * Narrows to the lines containing what was typed in their complete label
+     * or detail. array_filter preserves the command's supplied order.
      */
     private function filterBy(string $filter): void
     {
         $this->filter = $filter;
         $matching = array_values(array_filter(
             $this->lines,
-            static fn (array $line): bool => str_starts_with(
-                strtolower($line['label']),
-                strtolower($filter),
+            static fn (array $line): bool => self::contains(
+                $line['label'],
+                $filter,
+            ) || (
+                $line['detail'] !== null
+                && self::contains($line['detail'], $filter)
             ),
         ));
 
-        if ($matching !== $this->shown) {
-            $this->shown = $matching;
-            $this->list->setItems($matching);
-        }
+        $this->shown = $matching;
+        $this->list->setQuery($filter);
+        $this->list->setItems($matching);
+        $this->updateSearch();
+    }
+
+    private function updateSearch(): void
+    {
+        $this->search->setText(
+            'Search: ' . DisplayableText::safe($this->filter),
+        );
+    }
+
+    private static function contains(string $text, string $filter): bool
+    {
+        $completeText = preg_replace(
+            '/\s+/u',
+            ' ',
+            trim(DisplayableText::safe($text)),
+        ) ?? '';
+
+        return mb_stripos($completeText, $filter) !== false;
     }
 
     private function positionChanged(int $position, int $total): void
