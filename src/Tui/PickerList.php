@@ -45,11 +45,13 @@ final class PickerList extends AbstractWidget implements FocusableInterface
      * @param Closure(string): void $selected
      * @param Closure(): void $cancelled
      * @param Closure(string): bool $typed
+     * @param Closure(int, int): void $positionChanged
      */
     public function __construct(
         private readonly Closure $selected,
         private readonly Closure $cancelled,
         private readonly Closure $typed,
+        private readonly Closure $positionChanged,
     ) {
     }
 
@@ -58,12 +60,12 @@ final class PickerList extends AbstractWidget implements FocusableInterface
      */
     public function setItems(array $items): void
     {
-        if ($items === $this->items) {
-            return;
-        }
-
         $this->items = $items;
         $this->selectedIndex = 0;
+        ($this->positionChanged)(
+            $items === [] ? 0 : 1,
+            count($items),
+        );
         $this->invalidate();
     }
 
@@ -80,6 +82,7 @@ final class PickerList extends AbstractWidget implements FocusableInterface
                 $this->selectedIndex = $this->selectedIndex === 0
                     ? count($this->items) - 1
                     : $this->selectedIndex - 1;
+                $this->announcePosition();
                 $this->invalidate();
 
                 return;
@@ -90,6 +93,7 @@ final class PickerList extends AbstractWidget implements FocusableInterface
                     === count($this->items) - 1
                     ? 0
                     : $this->selectedIndex + 1;
+                $this->announcePosition();
                 $this->invalidate();
 
                 return;
@@ -201,5 +205,13 @@ final class PickerList extends AbstractWidget implements FocusableInterface
             $lines[0],
             AnsiUtils::truncateToWidth($lines[1] . '…', $width, '…'),
         ];
+    }
+
+    private function announcePosition(): void
+    {
+        ($this->positionChanged)(
+            $this->selectedIndex + 1,
+            count($this->items),
+        );
     }
 }
