@@ -6,6 +6,7 @@ namespace NeuronCli\Tui;
 
 use Closure;
 use NeuronCli\Conversation\ChoiceOption;
+use Symfony\Component\Tui\Render\RenderContext;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 use Symfony\Component\Tui\Widget\TextWidget;
 
@@ -22,6 +23,9 @@ use Symfony\Component\Tui\Widget\TextWidget;
  */
 final class Picker
 {
+    /** Header, root separation and the smallest still-visible History pane. */
+    private const int CONVERSATION_ROWS_ABOVE_PICKER = 7;
+
     private const string INSTRUCTIONS =
         '↑↓ move · Enter chooses · Escape cancels';
 
@@ -40,6 +44,8 @@ final class Picker
     private readonly TextWidget $search;
 
     private readonly PickerList $list;
+
+    private ?PickerDescription $description = null;
 
     /**
      * The keys on offer, each under the handle its line carries.
@@ -88,6 +94,7 @@ final class Picker
             $this->abandon(...),
             $this->type(...),
             $this->positionChanged(...),
+            $this->rowsOutsideList(...),
         );
         $this->list->addStyleClass('picker-list');
     }
@@ -129,6 +136,7 @@ final class Picker
         ) ?? '';
         $this->filter = '';
         $this->searchable = count($options) >= 6;
+        $this->description = null;
         $this->offered = [];
         $this->lines = [];
 
@@ -152,9 +160,9 @@ final class Picker
         $this->widget->add($this->heading);
 
         if ($description !== null) {
-            $explanation = new PickerDescription($description);
-            $explanation->addStyleClass('picker-description');
-            $this->widget->add($explanation);
+            $this->description = new PickerDescription($description);
+            $this->description->addStyleClass('picker-description');
+            $this->widget->add($this->description);
         }
 
         if ($this->searchable) {
@@ -179,6 +187,8 @@ final class Picker
         $this->shown = [];
         $this->filter = '';
         $this->searchable = false;
+        $this->description = null;
+        $this->list->reset();
         $this->open = false;
     }
 
@@ -240,6 +250,46 @@ final class Picker
         $this->search->setText(
             'Search: ' . DisplayableText::safe($this->filter),
         );
+    }
+
+    /**
+     * Rows in the panel's content area that remain reserved around the list.
+     *
+     * The list receives the panel's inner terminal height from Symfony. It
+     * subtracts these rows before choosing complete option blocks, leaving
+     * the conversation above the panel, title, optional description/search
+     * and instructions intact.
+     */
+    private function rowsOutsideList(int $columns): int
+    {
+        $childCount = 3; // Heading, list and instructions.
+        $rows = $this->textHeight($this->heading, $columns)
+            + $this->textHeight($this->instructions, $columns);
+
+        if ($this->description instanceof PickerDescription) {
+            ++$childCount;
+            $rows += $this->description->heightForWidth($columns);
+        }
+
+        if ($this->searchable) {
+            ++$childCount;
+            $rows += $this->textHeight($this->search, $columns);
+        }
+
+        // The Picker container has one row of gap between adjacent children.
+        return self::CONVERSATION_ROWS_ABOVE_PICKER
+            + $rows
+            + $childCount
+            - 1;
+    }
+
+    /** Matches the wrapping performed by Symfony's TextWidget renderer. */
+    private function textHeight(TextWidget $text, int $columns): int
+    {
+        return count($text->render(new RenderContext(
+            max(1, $columns),
+            1,
+        )));
     }
 
     private static function contains(string $text, string $filter): bool
