@@ -9,7 +9,8 @@ scorrimento, ricerca e ridimensionamento.
 
 **Status:** ready-for-agent
 
-- [ ] Il viewport mostra al massimo quattro blocchi di opzione completi.
+- [ ] Il pannello usa al massimo il quaranta percento dell'altezza del
+      terminale e il viewport mostra al massimo sei blocchi completi.
 - [ ] Quando lo spazio verticale non basta, il viewport mostra meno blocchi
       anziché tagliare label, detail o la separazione necessaria a leggerli.
 - [ ] Opzioni senza detail, con detail e con testo mandato a capo possono
