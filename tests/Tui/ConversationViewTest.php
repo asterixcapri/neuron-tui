@@ -149,6 +149,54 @@ final class ConversationViewTest extends TestCase
         self::assertFalse($view->isChoosing());
     }
 
+    public function testAChoiceRejectsAWhitespaceOnlyLabelBeforeOpening(): void
+    {
+        $view = new ConversationView(
+            new VirtualTerminal(rows: 24),
+            'Neuron AI',
+            'Conversation',
+        );
+
+        try {
+            $view->choose('Models', [new ChoiceOption('haiku', " \n\t ")]);
+            self::fail('Whitespace-only choice labels should be rejected.');
+        } catch (InvalidArgumentException $exception) {
+            self::assertSame(
+                'Choice option labels must not be empty.',
+                $exception->getMessage(),
+            );
+        }
+
+        self::assertFalse($view->isChoosing());
+    }
+
+    public function testAChoiceRejectsControlOnlyTextBeforeOpening(): void
+    {
+        $view = new ConversationView(
+            new VirtualTerminal(rows: 24),
+            'Neuron AI',
+            'Conversation',
+        );
+
+        foreach ([
+            static fn () => new ChoiceOption('haiku', "\x00\x07"),
+            static fn () => new ChoiceOption(
+                'haiku',
+                'Claude Haiku',
+                "\x00\x07",
+            ),
+        ] as $invalidOption) {
+            try {
+                $view->choose('Models', [$invalidOption()]);
+                self::fail('Control-only choice text should be rejected.');
+            } catch (InvalidArgumentException) {
+                // The option rejected itself before choose could alter the UI.
+            }
+
+            self::assertFalse($view->isChoosing());
+        }
+    }
+
     public function testASecondChoiceCannotReplaceAnOpenChoice(): void
     {
         $firstResult = 'still waiting';
