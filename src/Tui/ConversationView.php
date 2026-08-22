@@ -19,6 +19,7 @@ use Symfony\Component\Tui\Event\InputEvent;
 use Symfony\Component\Tui\Event\SubmitEvent;
 use Symfony\Component\Tui\Input\Key;
 use Symfony\Component\Tui\Input\Keybindings;
+use Symfony\Component\Tui\Style\Style;
 use Symfony\Component\Tui\Terminal\TerminalInterface;
 use Symfony\Component\Tui\Tui;
 use Symfony\Component\Tui\Widget\ContainerWidget;
@@ -36,9 +37,6 @@ final class ConversationView
 
     private const string WORKING_STATUS =
         'Enter queues · Shift+Enter adds a line';
-
-    private const string CHOOSING_STATUS =
-        'choosing · the composer takes no text until you choose';
 
     private const string SUGGESTING_STATUS =
         'suggesting · ↑↓ moves · Tab completes · Enter sends';
@@ -59,6 +57,12 @@ final class ConversationView
     private readonly ComposerEditor $editor;
 
     private readonly TextWidget $status;
+
+    private readonly ContainerWidget $composerRow;
+
+    private readonly ContainerWidget $conversationControls;
+
+    private readonly ContainerWidget $lowerPanel;
 
     private readonly WorkingIndicator $workingIndicator;
 
@@ -119,6 +123,15 @@ final class ConversationView
         $this->editor->onChange($this->draftChanged(...));
         $this->status = new TextWidget(self::READY_STATUS);
         $this->status->addStyleClass('status');
+        $this->composerRow = new ContainerWidget();
+        $this->composerRow->addStyleClass('composer-row');
+        $prompt = new TextWidget('❯');
+        $prompt->addStyleClass('composer-label');
+        $this->composerRow->add($prompt);
+        $this->composerRow->add($this->editor);
+        $this->conversationControls = new ContainerWidget();
+        $this->conversationControls->addStyleClass('conversation-controls');
+        $this->lowerPanel = new ContainerWidget();
         $this->picker = new Picker(
             $this->closePicker(...),
             $this->abandon(...),
@@ -244,7 +257,11 @@ final class ConversationView
      *
      * @param non-empty-list<ChoiceOption> $options
      */
-    public function choose(string $title, array $options): ?string
+    public function choose(
+        string $title,
+        array $options,
+        ?string $description = null,
+    ): ?string
     {
         if ($this->choice instanceof DeferredFuture) {
             // One list at a time: a second one would take the place of the
@@ -258,8 +275,8 @@ final class ConversationView
         $choice = new DeferredFuture();
         $this->choice = $choice;
         $this->emptyComposer();
-        $this->picker->open($title, $options);
-        $this->showStatus();
+        $this->picker->open($title, $options, $description);
+        $this->showPicker();
         $this->tui->setFocus($this->picker->focusable());
         $this->tui->requestRender();
 
@@ -471,20 +488,12 @@ final class ConversationView
         $header->add($title);
         $header->add($subtitle);
 
-        $composer = new ContainerWidget();
-        $composer->addStyleClass('composer-row');
-        $prompt = new TextWidget('❯');
-        $prompt->addStyleClass('composer-label');
-        $composer->add($prompt);
-        $composer->add($this->editor);
+        $this->showConversationControls();
 
         $this->tui->add($header);
         $this->tui->add($this->history->widget());
         $this->tui->add($this->queuedMessages);
-        $this->tui->add($this->picker->widget());
-        $this->tui->add($this->suggestions->widget());
-        $this->tui->add($composer);
-        $this->tui->add($this->status);
+        $this->tui->add($this->lowerPanel);
         $this->tui->setFocus($this->editor);
     }
 
@@ -607,16 +616,15 @@ final class ConversationView
     /**
      * Says on the status line which keys mean something now.
      *
-     * There is one of these per state the TUI can be read in, and the
-     * suggestions are the fourth: while there is a list to move through,
+     * There is one of these per writing state the TUI can be read in, and
+     * the suggestions are the third: while there is a list to move through,
      * the line names the keys that move, complete and send. The line that
      * says nothing matches is not one of them, nothing there being
-     * choosable.
+     * choosable. Choosing replaces this line with the Picker footer.
      */
     private function showStatus(): void
     {
         $this->status->setText(match (true) {
-            $this->picker->isOpen() => self::CHOOSING_STATUS,
             $this->suggestions->isListOpen() => self::SUGGESTING_STATUS,
             $this->working => self::WORKING_STATUS,
             default => self::READY_STATUS,
@@ -656,8 +664,35 @@ final class ConversationView
         // still standing open.
         $this->choice = null;
         $this->picker->close();
+        $this->showConversationControls();
         $this->ready();
         $choice->complete($key);
+    }
+
+    /**
+     * Replaces every writing control with the one focused choice panel.
+     */
+    private function showPicker(): void
+    {
+        $this->picker->widget()->setStyle(new Style(hidden: false));
+        $this->conversationControls->setStyle(new Style(hidden: true));
+    }
+
+    /**
+     * Restores the controls that belong to writing after a choice closes.
+     */
+    private function showConversationControls(): void
+    {
+        if ($this->conversationControls->all() === []) {
+            $this->conversationControls->add($this->suggestions->widget());
+            $this->conversationControls->add($this->composerRow);
+            $this->conversationControls->add($this->status);
+            $this->lowerPanel->add($this->picker->widget());
+            $this->lowerPanel->add($this->conversationControls);
+        }
+
+        $this->picker->widget()->setStyle(new Style(hidden: true));
+        $this->conversationControls->setStyle(new Style(hidden: false));
     }
 
     private function newToolActivity(): ToolActivity

@@ -50,6 +50,7 @@ final class ConversationStyleSheet
             ),
             '.composer' => new Style(color: 'white', flex: 1),
             '.status' => new Style(color: 'gray', dim: true),
+            '.conversation-controls' => new Style(gap: 1),
             '.user' => new Style(color: 'magenta', bold: true),
             '.agent' => new Style(color: 'magenta', bold: true),
             '.loading' => new Style(color: 'gray', dim: true),
@@ -57,7 +58,13 @@ final class ConversationStyleSheet
                 color: 'gray',
                 padding: Padding::xy(1),
             ),
-            '.picker' => new Style(padding: Padding::xy(1)),
+            '.picker' => new Style(
+                border: new Border(1, 0, 0, 0, 'normal', 'gray'),
+                gap: 1,
+                padding: new Padding(1, 1, 0, 1),
+            ),
+            '.picker-heading' => new Style(color: 'magenta', bold: true),
+            '.picker-description' => new Style(color: 'gray'),
             '.picker-instructions' => new Style(
                 color: 'gray',
                 dim: true,
