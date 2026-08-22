@@ -98,12 +98,12 @@ rendered and operated.
 26. As a person using the Conversation TUI, I want labels and details longer
     than two visual lines each to end in an ellipsis, so that one option cannot
     occupy the entire panel.
-27. As a person using the Conversation TUI, I want the Picker to use up to
-    forty percent of the terminal and show no more than six complete options
-    at once, so that choosing has useful space without displacing the History.
-28. As a person using the Conversation TUI, I want fewer options shown when
-    that space cannot fit six complete blocks, so that an option is never split
-    between visible and hidden content.
+27. As a person using the Conversation TUI, I want the Picker to show no more
+    than four complete options at once, so that the History retains useful
+    space.
+28. As a person using the Conversation TUI, I want fewer options shown when a
+    short terminal cannot fit four complete blocks, so that an option is never
+    split between visible and hidden content.
 29. As a person using the Conversation TUI, I want to scroll through every
     supplied option, so that the visible limit does not make any choice
     unreachable.
@@ -199,10 +199,10 @@ rendered and operated.
 - Labels and details wrap independently for up to two visual lines each. Text
   beyond the second line is abbreviated with an ellipsis. Supplied line breaks
   are normalised as whitespace before terminal-width wrapping.
-- The complete Picker panel uses at most forty percent of the terminal height.
-  Its viewport contains at most six complete option blocks and may contain
-  fewer when the panel budget cannot fit six. It never displays only part of
-  an option block. All remaining options are reachable by scrolling.
+- The viewport contains at most four complete option blocks and may contain
+  fewer when the available terminal height cannot fit four. It never displays
+  only part of an option block. All remaining options are reachable by
+  scrolling.
 - Up and Down move the option selection even when search is active and wrap at
   the ends. Enter chooses the active option. Escape cancels. Backspace edits
   the query. The footer always communicates movement, choice and cancellation.
@@ -250,9 +250,9 @@ rendered and operated.
 - Option rendering tests cover missing details, wrapped labels, wrapped
   details, the two-line limit, ellipses, aligned continuation lines, blank
   rows and selected versus secondary colours.
-- Viewport tests cover the forty-percent panel budget, no more than six
-  complete blocks, a short terminal showing fewer blocks, scrolling in both
-  directions, wraparound navigation, and never splitting a block.
+- Viewport tests cover no more than four complete blocks, a short terminal
+  showing fewer blocks, scrolling in both directions, wraparound navigation,
+  and never splitting a block.
 - Lifecycle tests cover a fresh query and selection on every opening, restored
   composer/status/focus, cancellation on terminal shutdown, and completion of
   the waiting Slash command exactly once.

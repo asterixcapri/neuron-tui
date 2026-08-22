@@ -23,11 +23,8 @@ use Symfony\Component\Tui\Widget\TextWidget;
  */
 final class Picker
 {
-    /** The choosing state may occupy at most two fifths of the terminal. */
-    private const int PANEL_HEIGHT_PERCENT = 40;
-
-    /** Top border and padding applied by the Picker container style. */
-    private const int PANEL_DECORATION_ROWS = 2;
+    /** Header, root separation and the smallest still-visible History pane. */
+    private const int CONVERSATION_ROWS_ABOVE_PICKER = 7;
 
     private const string INSTRUCTIONS =
         '↑↓ move · Enter chooses · Escape cancels';
@@ -79,12 +76,10 @@ final class Picker
     /**
      * @param Closure(string): void $chosen
      * @param Closure(): void $abandoned
-     * @param Closure(): int $terminalRows
      */
     public function __construct(
         private readonly Closure $chosen,
         private readonly Closure $abandoned,
-        private readonly Closure $terminalRows,
     ) {
         $this->widget = new ContainerWidget();
         $this->widget->addStyleClass('picker');
@@ -99,7 +94,7 @@ final class Picker
             $this->abandon(...),
             $this->type(...),
             $this->positionChanged(...),
-            $this->availableListRows(...),
+            $this->rowsOutsideList(...),
         );
         $this->list->addStyleClass('picker-list');
     }
@@ -254,42 +249,34 @@ final class Picker
     }
 
     /**
-     * Rows the list may use inside a panel capped at 40% of the terminal.
+     * Rows in the panel's content area that remain reserved around the list.
      *
-     * A compact choice consumes only what its complete blocks need. A long
-     * choice may grow to this budget, while the remaining terminal stays
-     * available to the History above it.
+     * The list receives the panel's inner terminal height from Symfony. It
+     * subtracts these rows before choosing complete option blocks, leaving
+     * the conversation above the panel, title, optional description/search
+     * and instructions intact.
      */
-    private function availableListRows(int $columns): int
+    private function rowsOutsideList(int $columns): int
     {
         $childCount = 3; // Heading, list and instructions.
-        $fixedRows = $this->textHeight($this->heading, $columns)
+        $rows = $this->textHeight($this->heading, $columns)
             + $this->textHeight($this->instructions, $columns);
 
         if ($this->description instanceof PickerDescription) {
             ++$childCount;
-            $fixedRows += $this->description->heightForWidth($columns);
+            $rows += $this->description->heightForWidth($columns);
         }
 
         if ($this->searchable) {
             ++$childCount;
-            $fixedRows += $this->textHeight($this->search, $columns);
+            $rows += $this->textHeight($this->search, $columns);
         }
 
-        $panelRows = intdiv(
-            max(1, ($this->terminalRows)()) * self::PANEL_HEIGHT_PERCENT,
-            100,
-        );
-
-        // The container has one row of gap between adjacent children.
-        return max(
-            1,
-            $panelRows
-                - self::PANEL_DECORATION_ROWS
-                - $fixedRows
-                - $childCount
-                + 1,
-        );
+        // The Picker container has one row of gap between adjacent children.
+        return self::CONVERSATION_ROWS_ABOVE_PICKER
+            + $rows
+            + $childCount
+            - 1;
     }
 
     /** Matches the wrapping performed by Symfony's TextWidget renderer. */
