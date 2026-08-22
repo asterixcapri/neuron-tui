@@ -135,6 +135,7 @@ final class ConversationView
         $this->picker = new Picker(
             $this->closePicker(...),
             $this->abandon(...),
+            $this->terminal->getRows(...),
         );
         $this->suggestions = new CommandSuggestions($commands);
         $this->keys = new Keybindings([
