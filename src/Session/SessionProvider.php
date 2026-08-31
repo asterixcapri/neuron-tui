@@ -10,11 +10,10 @@ use NeuronAI\Chat\History\ChatHistoryInterface;
  * Where the Sessions of an Agent come from.
  *
  * Neuron AI already saves, reloads and deserializes a conversation, so a
- * provider neither writes nor parses one: it decides how a Session is
- * addressed, says which Sessions exist, and hands back the History that
- * Neuron CLI installs on the Agent. Keys are minted here and nowhere else,
- * so the only key `open()` can be given is one `create()` or `list()` handed
- * out.
+ * provider neither writes nor parses one: it starts a new Session, says which
+ * Sessions exist, and hands back the History of one being resumed. Keys are
+ * minted and consumed behind this seam; a caller only carries one from
+ * `list()` to `resume()` when a person chooses an existing Session.
  *
  * A Host Application that keeps conversations somewhere other than a
  * directory of files implements this and passes it to Neuron CLI.
@@ -22,9 +21,9 @@ use NeuronAI\Chat\History\ChatHistoryInterface;
 interface SessionProvider
 {
     /**
-     * Mints a Session nobody has written to yet.
+     * Starts a new Session and returns its empty History.
      */
-    public function create(): Session;
+    public function start(): ChatHistoryInterface;
 
     /**
      * The Sessions a person can return to, most recently used first.
@@ -38,7 +37,9 @@ interface SessionProvider
     public function list(): array;
 
     /**
-     * Opens the Session with the given key.
+     * Resumes the existing Session with the given key.
+     *
+     * A key names no new Session here: only `start()` starts one.
      */
-    public function open(string $key): ChatHistoryInterface;
+    public function resume(string $key): ChatHistoryInterface;
 }

@@ -63,7 +63,8 @@ _Avoid_: Chat, thread
 
 **Session provider**:
 The place the Sessions come from. It is the only thing that mints a key,
-knows which Sessions exist, and can open one by its key.
+knows which Sessions exist, starts a new one, and can resume an existing one
+by its key.
 _Avoid_: Store, repository, storage, archive
 
 **Picker**:

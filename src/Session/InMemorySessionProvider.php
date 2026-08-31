@@ -47,16 +47,17 @@ final class InMemorySessionProvider implements SessionProvider
      * to tell them apart. The word in front of the count keeps a key from
      * being read as a number when it names an entry in an array.
      */
-    public function create(): Session
+    public function start(): ChatHistoryInterface
     {
         $key = 'session-' . ++$this->minted;
         $mintedAt = new DateTimeImmutable();
+        $history = new InMemoryChatHistory();
         $this->sessions[$key] = [
-            'history' => new InMemoryChatHistory(),
+            'history' => $history,
             'mintedAt' => $mintedAt,
         ];
 
-        return new Session($key, $mintedAt, '');
+        return $history;
     }
 
     public function list(): array
@@ -83,7 +84,7 @@ final class InMemorySessionProvider implements SessionProvider
      * know names no Session of this Agent. Saying so is better than starting a
      * conversation nobody asked for under a name nobody minted.
      */
-    public function open(string $key): ChatHistoryInterface
+    public function resume(string $key): ChatHistoryInterface
     {
         return $this->sessions[$key]['history']
             ?? throw new InvalidArgumentException(

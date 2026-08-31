@@ -197,6 +197,7 @@ use NeuronCli\Conversation\Commands\Sessions;
 use NeuronCli\Session\InMemorySessionProvider;
 
 $sessions = new InMemorySessionProvider();
+$agent->setChatHistory($sessions->start());
 
 (new NeuronCli(agent: $agent, commands: [
     new Clear($sessions),
@@ -231,6 +232,7 @@ use NeuronCli\Conversation\Commands\SessionKit;
 use NeuronCli\Session\FileSessionProvider;
 
 $sessions = new FileSessionProvider('/var/lib/my-app/sessions');
+$agent->setChatHistory($sessions->start());
 
 (new NeuronCli(agent: $agent, commands: [
     new SessionKit($sessions),
@@ -289,6 +291,7 @@ them on disk, or anywhere else, is a different provider passed the same way:
 use NeuronCli\Session\FileSessionProvider;
 
 $sessions = new FileSessionProvider('/var/lib/my-app/sessions');
+$agent->setChatHistory($sessions->start());
 
 (new NeuronCli(agent: $agent, commands: [
     new Clear($sessions),
@@ -298,10 +301,10 @@ $sessions = new FileSessionProvider('/var/lib/my-app/sessions');
 
 An application that keeps conversations in its own storage implements
 `NeuronCli\Session\SessionProvider` instead. It answers three questions:
-create a Session, list the Sessions, and open one by its key. Opening returns
-the Neuron AI chat history that Neuron CLI installs on the Agent; saving,
-reloading and deserializing remain Neuron AI's work. Neuron CLI never deletes
-a stored conversation.
+start a Session, list the Sessions, and resume one by its key. Starting and
+resuming return the Neuron AI chat history that the Host Application or a
+command installs on the Agent; saving, reloading and deserializing remain
+Neuron AI's work. Neuron CLI never deletes a stored conversation.
 
 Starting a Session replaces the History configured on the Agent by the Host
 Application, because a provider builds every History it hands back. An
