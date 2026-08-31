@@ -64,6 +64,6 @@ final readonly class Sessions implements SlashCommand
             return;
         }
 
-        $controls->agent()->setChatHistory($this->sessions->open($chosen));
+        $controls->agent()->setChatHistory($this->sessions->resume($chosen));
     }
 }

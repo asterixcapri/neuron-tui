@@ -4508,7 +4508,7 @@ MARKDOWN;
             array_map(
                 static fn (Message $message): string => (string) $message
                     ->getContent(),
-                $sessions->open($listed[0]->key)->getMessages(),
+                $sessions->resume($listed[0]->key)->getMessages(),
             ),
         );
         self::assertSame([], $agent->getChatHistory()->getMessages());
@@ -4598,7 +4598,7 @@ MARKDOWN;
         $agent = new Agent();
         $agent->setAiProvider($provider);
         $sessions = new InMemorySessionProvider();
-        $earlier = $sessions->open($sessions->create()->key);
+        $earlier = $sessions->start();
         $earlier->addMessage(new UserMessage('The earlier subject'));
         $earlier->addMessage(new Message(MessageRole::ASSISTANT, [
             new ReasoningContent('Private chain of thought.'),
@@ -4672,7 +4672,7 @@ MARKDOWN;
             new AssistantMessage('A later answer.'),
         ));
         $sessions = new InMemorySessionProvider();
-        $earlier = $sessions->open($sessions->create()->key);
+        $earlier = $sessions->start();
         $earlier->addMessage(new UserMessage('The earlier subject'));
         $terminal = new VirtualTerminal(rows: 30);
         EventLoop::delay(
@@ -4722,7 +4722,7 @@ MARKDOWN;
     {
         $agent = new Agent();
         $sessions = new InMemorySessionProvider();
-        $earlier = $sessions->open($sessions->create()->key);
+        $earlier = $sessions->start();
         $earlier->addMessage(new UserMessage("The earlier\x00 subject"));
         $terminal = new VirtualTerminal(rows: 24);
         $pickerDisplay = null;
@@ -4767,7 +4767,7 @@ MARKDOWN;
         $agent = new Agent();
         $ongoing = $agent->getChatHistory();
         $sessions = new InMemorySessionProvider();
-        $sessions->open($sessions->create()->key)->addMessage(
+        $sessions->start()->addMessage(
             new UserMessage('The earlier subject'),
         );
         $terminal = new VirtualTerminal(rows: 24);
@@ -4849,14 +4849,14 @@ MARKDOWN;
     {
         $agent = new Agent();
         $sessions = new InMemorySessionProvider();
-        $sessions->open($sessions->create()->key)->addMessage(
+        $sessions->start()->addMessage(
             new UserMessage('Alpha subject'),
         );
-        $beta = $sessions->open($sessions->create()->key);
+        $beta = $sessions->start();
         $beta->addMessage(new UserMessage('Beta subject'));
 
         foreach (['Gamma', 'Delta', 'Epsilon', 'Zeta'] as $subject) {
-            $sessions->open($sessions->create()->key)->addMessage(
+            $sessions->start()->addMessage(
                 new UserMessage($subject . ' subject'),
             );
         }
@@ -4904,9 +4904,9 @@ MARKDOWN;
     {
         $agent = new Agent();
         $sessions = new InMemorySessionProvider();
-        $older = $sessions->open($sessions->create()->key);
+        $older = $sessions->start();
         $older->addMessage(new UserMessage('The older subject'));
-        $sessions->open($sessions->create()->key)->addMessage(
+        $sessions->start()->addMessage(
             new UserMessage('The newer subject'),
         );
         $terminal = new VirtualTerminal(rows: 24);
@@ -4956,7 +4956,7 @@ MARKDOWN;
         $agent = new Agent();
         $agent->setAiProvider($provider);
         $sessions = new InMemorySessionProvider();
-        $sessions->open($sessions->create()->key)->addMessage(
+        $sessions->start()->addMessage(
             new UserMessage('The earlier subject'),
         );
         $terminal = new VirtualTerminal(rows: 24);
@@ -5003,7 +5003,7 @@ MARKDOWN;
         $agent = new Agent();
         $agent->setAiProvider(new FakeAIProvider());
         $sessions = new InMemorySessionProvider();
-        $earlier = $sessions->open($sessions->create()->key);
+        $earlier = $sessions->start();
         $earlier->addMessage(new UserMessage('The earlier subject'));
         $earlier->addMessage(new AssistantMessage('The earlier answer.'));
         $terminal = new VirtualTerminal(rows: 30);
@@ -5090,7 +5090,7 @@ MARKDOWN;
         $agent = new Agent();
         $agent->setAiProvider(new FakeAIProvider());
         $sessions = new InMemorySessionProvider();
-        $earlier = $sessions->open($sessions->create()->key);
+        $earlier = $sessions->start();
         $earlier->addMessage(new UserMessage('The earlier subject'));
         $terminal = new VirtualTerminal(rows: 30);
         $refusedDisplay = null;

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronCli\Tests\Session;
 
-use NeuronAI\Chat\History\ChatHistoryInterface;
+use InvalidArgumentException;
 use NeuronAI\Chat\History\FileChatHistory;
 use NeuronAI\Chat\Messages\AssistantMessage;
 use NeuronAI\Chat\Messages\Message;
@@ -34,18 +34,18 @@ final class FileSessionProviderTest extends TestCase
     {
         $provider = new FileSessionProvider($this->directory);
 
-        self::assertSame([], $this->start($provider)->getMessages());
+        self::assertSame([], $provider->start()->getMessages());
     }
 
     public function testStartingANewSessionLeavesThePreviousOneStored(): void
     {
         $provider = new FileSessionProvider($this->directory);
 
-        $first = $this->start($provider);
+        $first = $provider->start();
         $first->addMessage(new UserMessage('The first subject'));
         $first->addMessage(new AssistantMessage('An answer.'));
 
-        $second = $this->start($provider);
+        $second = $provider->start();
         $second->addMessage(new UserMessage('The second subject'));
 
         self::assertCount(2, $this->storedFiles());
@@ -65,7 +65,7 @@ final class FileSessionProviderTest extends TestCase
         $stored->addMessage(new UserMessage('Written earlier'));
 
         $reopened = (new FileSessionProvider($this->directory))
-            ->open('known-key');
+            ->resume('known-key');
 
         self::assertSame(
             ['Written earlier'],
@@ -77,7 +77,7 @@ final class FileSessionProviderTest extends TestCase
     {
         $provider = new FileSessionProvider($this->directory . '/deeper');
 
-        $this->start($provider)->addMessage(new UserMessage('Anything'));
+        $provider->start()->addMessage(new UserMessage('Anything'));
 
         self::assertDirectoryExists($this->directory . '/deeper');
     }
@@ -141,7 +141,7 @@ final class FileSessionProviderTest extends TestCase
     public function testASessionThatReceivedNoMessageIsNotListed(): void
     {
         $provider = new FileSessionProvider($this->directory);
-        $this->start($provider);
+        $provider->start();
         file_put_contents($this->directory . '/neuron_empty.chat', '[]');
         $this->storeSession('asked', 'A question', 1_700_000_000);
 
@@ -151,14 +151,14 @@ final class FileSessionProviderTest extends TestCase
         self::assertSame('asked', $listed[0]->key);
     }
 
-    /**
-     * A Session as Neuron CLI starts one: minted by the provider, then
-     * opened by the key the provider minted for it.
-     */
-    private function start(
-        FileSessionProvider $provider,
-    ): ChatHistoryInterface {
-        return $provider->open($provider->create()->key);
+    public function testAnUnknownSessionCannotBeResumed(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage(
+            'No Session is named by that key.',
+        );
+
+        (new FileSessionProvider($this->directory))->resume('unknown');
     }
 
     private function storeSession(

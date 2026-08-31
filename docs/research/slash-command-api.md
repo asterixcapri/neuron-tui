@@ -195,9 +195,7 @@ final class Clear implements SlashCommand
 
     public function run(Controls $controls, string $arguments): void
     {
-        $session = $this->sessions->create();
-
-        $controls->agent()->setChatHistory($this->sessions->open($session->key));
+        $controls->agent()->setChatHistory($this->sessions->start());
     }
 }
 
@@ -231,7 +229,7 @@ final class Sessions implements SlashCommand
         $chosen = $controls->choose('Sessions', $labels);
 
         if ($chosen !== null) {
-            $controls->agent()->setChatHistory($this->sessions->open($chosen));
+            $controls->agent()->setChatHistory($this->sessions->resume($chosen));
         }
     }
 }

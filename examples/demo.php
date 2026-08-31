@@ -53,16 +53,20 @@ if ($jinaKey !== '') {
     $agent->addTool(new JinaToolkit($jinaKey));
 }
 
-$sessions = new FileSessionProvider(__DIR__ . '/sessions');
+$sessionProvider = new FileSessionProvider(__DIR__ . '/sessions');
 
-(new NeuronCli(
+$agent->setChatHistory($sessionProvider->start());
+
+$tui = new NeuronCli(
     agent: $agent,
     title: 'Neuron CLI Demo',
     subtitle: "OpenAI Responses · {$model}",
     commands: [
-        new Clear($sessions),
-        new Sessions($sessions),
+        new Clear($sessionProvider),
+        new Sessions($sessionProvider),
         new Leave(),
         new Help(),
     ],
-))->run();
+);
+
+$tui->run();

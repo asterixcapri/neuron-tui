@@ -14,9 +14,9 @@ use NeuronCli\Session\SessionProvider;
  * One of the commands Neuron CLI ships: a Host Application mounts it the way
  * it mounts one of its own, under `/clear` or under whatever name it prefers.
  *
- * Minting a Session and opening it are the provider's two separate
- * operations, and a new Session is both: the key comes back from the provider
- * and goes straight back to it. Nothing here ever deletes what it replaced.
+ * Starting a Session returns the empty History the Agent needs. Minting its
+ * key stays behind the provider seam, and nothing here ever deletes what the
+ * new Session replaced.
  */
 final readonly class Clear implements SlashCommand
 {
@@ -42,8 +42,6 @@ final readonly class Clear implements SlashCommand
 
     public function run(Controls $controls, string $arguments): void
     {
-        $controls->agent()->setChatHistory(
-            $this->sessions->open($this->sessions->create()->key),
-        );
+        $controls->agent()->setChatHistory($this->sessions->start());
     }
 }

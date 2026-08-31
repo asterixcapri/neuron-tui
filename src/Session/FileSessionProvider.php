@@ -6,6 +6,7 @@ namespace NeuronCli\Session;
 
 use DateTimeImmutable;
 use DateTimeZone;
+use InvalidArgumentException;
 use NeuronAI\Chat\History\ChatHistoryInterface;
 use NeuronAI\Chat\History\FileChatHistory;
 use NeuronCli\History\HistoryProjection;
@@ -41,12 +42,12 @@ final readonly class FileSessionProvider implements SessionProvider
     public function __construct(private string $directory) {}
 
     /**
-     * Nothing is written until the conversation receives a message, so a
-     * minted Session is a key and the moment it was minted, and no file.
+     * Nothing is written until the conversation receives a message, so the
+     * newly minted key and its History do not create a file by themselves.
      */
-    public function create(): Session
+    public function start(): ChatHistoryInterface
     {
-        return new Session($this->mintKey(), new DateTimeImmutable(), '');
+        return $this->history($this->mintKey());
     }
 
     public function list(): array
@@ -58,7 +59,7 @@ final readonly class FileSessionProvider implements SessionProvider
             // Read through Neuron AI and projected the way the History is
             // painted, so a title says what the conversation would show.
             $title = HistoryProjection::openingWords(
-                $this->open($key)->getMessages(),
+                $this->history($key)->getMessages(),
             );
 
             if ($title === null) {
@@ -83,7 +84,20 @@ final readonly class FileSessionProvider implements SessionProvider
         return $sessions;
     }
 
-    public function open(string $key): ChatHistoryInterface
+    public function resume(string $key): ChatHistoryInterface
+    {
+        foreach ($this->storedFiles() as $path) {
+            if ($this->keyOf($path) === $key) {
+                return $this->history($key);
+            }
+        }
+
+        throw new InvalidArgumentException(
+            'No Session is named by that key.',
+        );
+    }
+
+    private function history(string $key): ChatHistoryInterface
     {
         return new FileChatHistory(
             $this->directory,
