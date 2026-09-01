@@ -3379,30 +3379,9 @@ MARKDOWN;
      */
     public function testEnterRunsTheAutomaticallySelectedSuggestion(): void
     {
-        $agent = new Agent();
-        $terminal = new VirtualTerminal(rows: 30);
         $arguments = null;
-        EventLoop::delay(
-            0.05,
-            static fn () => $terminal->simulateInput('/al'),
-        );
-        EventLoop::delay(
-            0.1,
-            static fn () => $terminal->simulateInput("\r"),
-        );
-        EventLoop::delay(
-            0.15,
-            static fn () => self::forceRepaint($terminal),
-        );
-        EventLoop::delay(
-            0.2,
-            static fn () => $terminal->simulateInput("\x03"),
-        );
-
-        (new Tui(
-            $agent,
-            terminal: $terminal,
-        ))->addCommand([
+        $display = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
+            [
                 $this->commandThat(
                     static function (
                         Controls $controls,
@@ -3414,9 +3393,10 @@ MARKDOWN;
                     '/alpha',
                 ),
                 self::commandNamed('/album', 'The second match.'),
-            ])->run();
-
-        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+            ],
+            '/al',
+            "\r",
+        ));
 
         self::assertStringContainsString('Alpha ran.', $display);
         self::assertStringNotContainsString('Unknown Slash command', $display);
@@ -3429,11 +3409,9 @@ MARKDOWN;
      */
     public function testEnterRunsTheArrowSelectedSuggestion(): void
     {
-        $agent = new Agent();
-        $terminal = new VirtualTerminal(rows: 30);
         $ran = null;
         $arguments = null;
-        $command = static function (string $name) use (
+        $handlerForCommandNamed = static function (string $name) use (
             &$ran,
             &$arguments,
         ): Closure {
@@ -3446,36 +3424,21 @@ MARKDOWN;
                 $controls->say($name . ' ran.');
             };
         };
-        EventLoop::delay(
-            0.05,
-            static fn () => $terminal->simulateInput('/al'),
-        );
-        EventLoop::delay(
-            0.1,
-            static fn () => $terminal->simulateInput("\x1b[B"),
-        );
-        EventLoop::delay(
-            0.15,
-            static fn () => $terminal->simulateInput("\r"),
-        );
-        EventLoop::delay(
-            0.2,
-            static fn () => self::forceRepaint($terminal),
-        );
-        EventLoop::delay(
-            0.25,
-            static fn () => $terminal->simulateInput("\x03"),
-        );
-
-        (new Tui(
-            $agent,
-            terminal: $terminal,
-        ))->addCommand([
-                $this->commandThat($command('/alpha'), '/alpha'),
-                $this->commandThat($command('/album'), '/album'),
-            ])->run();
-
-        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+        $display = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
+            [
+                $this->commandThat(
+                    $handlerForCommandNamed('/alpha'),
+                    '/alpha',
+                ),
+                $this->commandThat(
+                    $handlerForCommandNamed('/album'),
+                    '/album',
+                ),
+            ],
+            '/al',
+            "\x1b[B",
+            "\r",
+        ));
 
         self::assertStringContainsString('/album ran.', $display);
         self::assertStringNotContainsString('Unknown Slash command', $display);
@@ -4259,34 +4222,15 @@ MARKDOWN;
      */
     public function testEnterSubmitsTheDraftUnchangedAfterSuggestionsAreDismissed(): void
     {
-        $agent = new Agent();
-        $terminal = new VirtualTerminal(rows: 30);
-        EventLoop::delay(
-            0.05,
-            static fn () => $terminal->simulateInput('/al'),
-        );
-        EventLoop::delay(
-            0.1,
-            static fn () => $terminal->simulateInput("\x1b"),
-        );
-        EventLoop::delay(
-            0.15,
-            static fn () => $terminal->simulateInput("\r"),
-        );
-        EventLoop::delay(
-            0.2,
-            static fn () => $terminal->simulateInput("\x03"),
-        );
-
-        (new Tui(
-            $agent,
-            terminal: $terminal,
-        ))->addCommand([
+        $display = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
+            [
                 self::commandNamed('/alpha', 'The first match.'),
                 self::commandNamed('/album', 'The second match.'),
-            ])->run();
-
-        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+            ],
+            '/al',
+            "\x1b",
+            "\r",
+        ));
 
         self::assertStringContainsString(
             'Unknown Slash command: /al',
