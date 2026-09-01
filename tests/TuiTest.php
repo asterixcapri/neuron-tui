@@ -34,7 +34,7 @@ use NeuronTui\Conversation\Commands\Clear;
 use NeuronTui\Conversation\Commands\Help;
 use NeuronTui\Conversation\Commands\Leave;
 use NeuronTui\Conversation\Commands\SessionKit;
-use NeuronTui\Conversation\Commands\Sessions;
+use NeuronTui\Conversation\Commands\Resume;
 use NeuronTui\Conversation\Controls;
 use NeuronTui\Conversation\LimitedControls;
 use NeuronTui\Conversation\RunsWhileWorking;
@@ -981,7 +981,7 @@ MARKDOWN;
 
     public function testACommandFollowedByArgumentsIsStillThatCommand(): void
     {
-        $afterSessions = null;
+        $afterResume = null;
         $afterClear = null;
         $forcedExit = false;
         $provider = new FakeAIProvider(new AssistantMessage('An answer.'));
@@ -999,13 +999,13 @@ MARKDOWN;
             0.2,
             static function () use ($terminal): void {
                 $terminal->clearOutput();
-                $terminal->simulateInput("/sessions now\r");
+                $terminal->simulateInput("/resume now\r");
             },
         );
         EventLoop::delay(
             0.3,
-            static function () use (&$afterSessions, $terminal): void {
-                $afterSessions = AnsiUtils::stripAnsiCodes(
+            static function () use (&$afterResume, $terminal): void {
+                $afterResume = AnsiUtils::stripAnsiCodes(
                     $terminal->getOutput(),
                 );
                 // Escape leaves the picker and the composer is free again.
@@ -1036,13 +1036,13 @@ MARKDOWN;
             terminal: $terminal,
         ))->addCommand(self::sessionCommands(new InMemorySessionProvider()))->run();
 
-        // `/sessions now` opens the picker on the Session being written in.
-        self::assertIsString($afterSessions);
+        // `/resume now` opens the picker on the Session being written in.
+        self::assertIsString($afterResume);
         self::assertStringNotContainsString(
             'Unknown Slash command',
-            $afterSessions,
+            $afterResume,
         );
-        self::assertStringContainsString('A question', $afterSessions);
+        self::assertStringContainsString('A question', $afterResume);
         // `/clear now` starts a fresh Session, so the answer goes off the
         // screen instead of an unknown command reaching the conversation.
         self::assertIsString($afterClear);
@@ -1440,7 +1440,7 @@ MARKDOWN;
                 // away and the second the name.
                 $terminal->simulateInput("\x1b");
                 $terminal->simulateInput("\x1b");
-                $terminal->simulateInput("/sessions\r");
+                $terminal->simulateInput("/resume\r");
             },
         );
         EventLoop::delay(
@@ -1468,7 +1468,7 @@ MARKDOWN;
             $display,
         );
         self::assertStringContainsString(
-            'Unknown Slash command: /sessions',
+            'Unknown Slash command: /resume',
             $display,
         );
         self::assertStringContainsString(
@@ -3521,14 +3521,14 @@ MARKDOWN;
     {
         $display = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
             [
-                self::commandNamed('/sessions', 'Lists the Sessions.'),
-                self::commandNamed('/ses', 'The shorter one.'),
+                self::commandNamed('/resume', 'Resumes a Session.'),
+                self::commandNamed('/res', 'The shorter one.'),
             ],
-            '/ses',
+            '/res',
         ));
 
         self::assertLessThan(
-            strpos($display, 'Lists the Sessions.'),
+            strpos($display, 'Resumes a Session.'),
             strpos($display, 'The shorter one.'),
         );
     }
@@ -3580,11 +3580,11 @@ MARKDOWN;
     {
         $display = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
             [
-                self::commandNamed('/browses', 'Merely carries it.'),
-                self::commandNamed('/sessions', 'Begins with it.'),
-                self::commandNamed('/ses', 'Written in full.'),
+                self::commandNamed('/forest', 'Merely carries it.'),
+                self::commandNamed('/resume', 'Begins with it.'),
+                self::commandNamed('/res', 'Written in full.'),
             ],
-            '/ses',
+            '/res',
         ));
 
         self::assertLessThan(
@@ -3620,12 +3620,12 @@ MARKDOWN;
     public function testTheMatchingStretchIsBoldInsideTheName(): void
     {
         $output = self::screenAfterTyping(
-            [self::commandNamed('/sessions', 'Lists the Sessions.')],
-            '/ses',
+            [self::commandNamed('/resume', 'Resumes a Session.')],
+            '/res',
         );
 
         self::assertStringContainsString(
-            "/\x1b[1mses\x1b[22msions",
+            "/\x1b[1mres\x1b[22mume",
             $output,
         );
     }
@@ -4358,7 +4358,7 @@ MARKDOWN;
     ): array {
         return [
             new Clear($sessions),
-            new Sessions($sessions),
+            new Resume($sessions),
             new Leave(),
         ];
     }
@@ -4387,7 +4387,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.38,
-            static fn () => $terminal->simulateInput("/sessions\r"),
+            static fn () => $terminal->simulateInput("/resume\r"),
         );
         EventLoop::delay(
             0.46,
@@ -4611,7 +4611,7 @@ MARKDOWN;
         self::assertFalse($forcedExit);
     }
 
-    public function testSessionsListsStoredConversationsAndResumesOne(): void
+    public function testResumeListsStoredConversationsAndResumesOne(): void
     {
         $provider = new FakeAIProvider(
             new AssistantMessage('A later answer.'),
@@ -4629,7 +4629,7 @@ MARKDOWN;
         $pickerDisplay = null;
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("/sessions\r"),
+            static fn () => $terminal->simulateInput("/resume\r"),
         );
         EventLoop::delay(
             0.1,
@@ -4697,7 +4697,7 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 30);
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("/sessions\r"),
+            static fn () => $terminal->simulateInput("/resume\r"),
         );
         EventLoop::delay(
             0.1,
@@ -4705,7 +4705,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.16,
-            static fn () => $terminal->simulateInput("/sessions\r"),
+            static fn () => $terminal->simulateInput("/resume\r"),
         );
         EventLoop::delay(
             0.22,
@@ -4747,7 +4747,7 @@ MARKDOWN;
         $pickerDisplay = null;
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("/sessions\r"),
+            static fn () => $terminal->simulateInput("/resume\r"),
         );
         EventLoop::delay(
             0.1,
@@ -4792,7 +4792,7 @@ MARKDOWN;
         $pickerDisplay = null;
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("/sessions\r"),
+            static fn () => $terminal->simulateInput("/resume\r"),
         );
         EventLoop::delay(
             0.1,
@@ -4831,19 +4831,19 @@ MARKDOWN;
             $pickerDisplay,
         );
         self::assertStringNotContainsString('The earlier subject', $display);
-        self::assertStringNotContainsString('/sessions', $display);
+        self::assertStringNotContainsString('/resume', $display);
         self::assertStringNotContainsString('zzz', $display);
         self::assertStringContainsString('ready · Enter sends', $display);
         self::assertSame($ongoing, $agent->getChatHistory());
     }
 
-    public function testSessionsSaysSoWhenThereIsNothingToReturnTo(): void
+    public function testResumeSaysSoWhenThereIsNothingToReturnTo(): void
     {
         $agent = new Agent();
         $terminal = new VirtualTerminal(rows: 24);
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("/sessions\r"),
+            static fn () => $terminal->simulateInput("/resume\r"),
         );
         EventLoop::delay(
             0.12,
@@ -4881,7 +4881,7 @@ MARKDOWN;
         $narrowedDisplay = null;
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("/sessions\r"),
+            static fn () => $terminal->simulateInput("/resume\r"),
         );
         EventLoop::delay(
             0.1,
@@ -4927,7 +4927,7 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 24);
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("/sessions\r"),
+            static fn () => $terminal->simulateInput("/resume\r"),
         );
         EventLoop::delay(
             0.1,
@@ -4953,7 +4953,7 @@ MARKDOWN;
         self::assertSame($older, $agent->getChatHistory());
     }
 
-    public function testSessionsIsRefusedWhileTheAgentIsWorking(): void
+    public function testResumeIsRefusedWhileTheAgentIsWorking(): void
     {
         $refusedDisplay = null;
         $provider = new class(
@@ -4979,7 +4979,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.06,
-            static fn () => $terminal->simulateInput("/sessions\r"),
+            static fn () => $terminal->simulateInput("/resume\r"),
         );
         EventLoop::delay(
             0.12,
@@ -4998,7 +4998,7 @@ MARKDOWN;
 
         self::assertIsString($refusedDisplay);
         self::assertStringContainsString(
-            '/sessions is refused while the Agent is working',
+            '/resume is refused while the Agent is working',
             $refusedDisplay,
         );
         self::assertStringNotContainsString(
@@ -5025,7 +5025,7 @@ MARKDOWN;
         $clearedDisplay = null;
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("/sessions\r"),
+            static fn () => $terminal->simulateInput("/resume\r"),
         );
         EventLoop::delay(
             0.1,
@@ -5123,7 +5123,7 @@ MARKDOWN;
                 $terminal->simulateInput("\x1b");
                 $terminal->simulateInput("\x1b");
                 $terminal->clearOutput();
-                $terminal->simulateInput("/sessions\r");
+                $terminal->simulateInput("/resume\r");
             },
         );
         EventLoop::delay(
@@ -5152,7 +5152,7 @@ MARKDOWN;
         );
         self::assertIsString($pickerDisplay);
         self::assertStringNotContainsString(
-            'Unknown Slash command: /sessions',
+            'Unknown Slash command: /resume',
             $pickerDisplay,
         );
         self::assertStringContainsString(
@@ -5175,7 +5175,7 @@ MARKDOWN;
         $clearedDisplay = null;
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("/sessions\r"),
+            static fn () => $terminal->simulateInput("/resume\r"),
         );
         EventLoop::delay(
             0.1,
@@ -5216,7 +5216,7 @@ MARKDOWN;
 
         self::assertIsString($refusedDisplay);
         self::assertStringContainsString(
-            'Unknown Slash command: /sessions',
+            'Unknown Slash command: /resume',
             $refusedDisplay,
         );
         self::assertIsString($clearedDisplay);

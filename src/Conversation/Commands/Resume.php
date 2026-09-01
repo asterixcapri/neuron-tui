@@ -10,17 +10,17 @@ use NeuronTui\Conversation\SlashCommand;
 use NeuronTui\Session\SessionProvider;
 
 /**
- * Offers the stored Sessions so a person can return to one.
+ * Offers the stored Sessions so a person can resume one.
  *
  * One of the commands Neuron TUI ships: a Host Application mounts it the way
- * it mounts one of its own, under `/sessions` or under whatever name it
+ * it mounts one of its own, under `/resume` or under whatever name it
  * prefers.
  *
  * A list with nothing in it is not worth entering, so it is said in the
  * conversation instead. The Sessions become ChoiceOptions here, while their
  * keys and titles are still something known.
  */
-final readonly class Sessions implements SlashCommand
+final readonly class Resume implements SlashCommand
 {
     /**
      * @param SessionProvider $sessions the place the conversations live
@@ -28,7 +28,7 @@ final readonly class Sessions implements SlashCommand
      */
     public function __construct(
         private SessionProvider $sessions,
-        private string $name = '/sessions',
+        private string $name = '/resume',
     ) {
     }
 
@@ -39,7 +39,7 @@ final readonly class Sessions implements SlashCommand
 
     public function describe(): string
     {
-        return 'Lists the stored Sessions and resumes the one you choose.';
+        return 'Lets you choose a stored Session to resume.';
     }
 
     public function run(Controls $controls, string $arguments): void
