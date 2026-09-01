@@ -79,12 +79,7 @@ final class FileSessionProviderTest extends TestCase
 
     public function testAStoredSessionIsReopenedByItsKey(): void
     {
-        $stored = new FileChatHistory(
-            $this->directory,
-            'known-key',
-            prefix: '',
-            ext: '.json',
-        );
+        $stored = $this->fileHistory('known-key');
         $stored->addMessage(new UserMessage('Written earlier'));
 
         $reopened = (new FileSessionProvider($this->directory))
@@ -163,12 +158,7 @@ final class FileSessionProviderTest extends TestCase
 
     public function testASessionIsTitledByTheFirstThingThePersonWrote(): void
     {
-        $stored = new FileChatHistory(
-            $this->directory,
-            'titled',
-            prefix: '',
-            ext: '.json',
-        );
+        $stored = $this->fileHistory('titled');
         $stored->addMessage(new UserMessage('What the person asked'));
         $stored->addMessage(new AssistantMessage('An answer.'));
         $stored->addMessage(new UserMessage('A later question'));
@@ -232,15 +222,20 @@ final class FileSessionProviderTest extends TestCase
         string $question,
         int $lastUsedAt,
     ): void {
-        $session = new FileChatHistory(
+        $session = $this->fileHistory($key);
+        $session->addMessage(new UserMessage($question));
+        $session->addMessage(new AssistantMessage('An answer.'));
+        touch($this->directory . '/' . $key . '.json', $lastUsedAt);
+    }
+
+    private function fileHistory(string $key): FileChatHistory
+    {
+        return new FileChatHistory(
             $this->directory,
             $key,
             prefix: '',
             ext: '.json',
         );
-        $session->addMessage(new UserMessage($question));
-        $session->addMessage(new AssistantMessage('An answer.'));
-        touch($this->directory . '/' . $key . '.json', $lastUsedAt);
     }
 
     /**
