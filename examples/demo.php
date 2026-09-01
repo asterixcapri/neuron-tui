@@ -12,7 +12,7 @@ use NeuronAI\Tools\Toolkits\Jina\JinaToolkit;
 use NeuronTui\Conversation\Commands\Clear;
 use NeuronTui\Conversation\Commands\Help;
 use NeuronTui\Conversation\Commands\Leave;
-use NeuronTui\Conversation\Commands\Sessions;
+use NeuronTui\Conversation\Commands\Resume;
 use NeuronTui\Tui;
 use NeuronTui\Session\FileSessionProvider;
 use Symfony\Component\Dotenv\Dotenv;
@@ -61,7 +61,7 @@ $tui = Tui::make($agent)
     ->setSubtitle("OpenAI Responses · {$model}")
     ->addCommand([
         new Clear($sessionProvider),
-        new Sessions($sessionProvider),
+        new Resume($sessionProvider),
         new Leave(),
         new Help(),
     ]);

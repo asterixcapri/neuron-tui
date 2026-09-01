@@ -184,7 +184,7 @@ prefers `/quit` to `/exit` writes no command of its own:
 | Class | Default name | What it does |
 | --- | --- | --- |
 | `NeuronTui\Conversation\Commands\Clear` | `/clear` | Starts a new Session, leaving the current one stored. |
-| `NeuronTui\Conversation\Commands\Sessions` | `/sessions` | Lists the stored Sessions and resumes the one chosen. |
+| `NeuronTui\Conversation\Commands\Resume` | `/resume` | Lets you choose a stored Session to resume. |
 | `NeuronTui\Conversation\Commands\Leave` | `/exit` | Closes the Conversation TUI. Runs while the Agent is working. |
 | `NeuronTui\Conversation\Commands\Help` | `/help` | Lists what can be typed here. Runs while the Agent is working. |
 
@@ -192,7 +192,7 @@ prefers `/quit` to `/exit` writes no command of its own:
 use NeuronTui\Conversation\Commands\Clear;
 use NeuronTui\Conversation\Commands\Help;
 use NeuronTui\Conversation\Commands\Leave;
-use NeuronTui\Conversation\Commands\Sessions;
+use NeuronTui\Conversation\Commands\Resume;
 use NeuronTui\Session\InMemorySessionProvider;
 
 $sessions = new InMemorySessionProvider();
@@ -200,7 +200,7 @@ $agent->setChatHistory($sessions->start());
 
 Tui::make($agent)->addCommand([
     new Clear($sessions),
-    new Sessions($sessions),
+    new Resume($sessions),
     new Leave('/quit'),
     new Help(),
 ])->run();
@@ -241,7 +241,7 @@ Tui::make($agent)->addCommand([
 
 A kit can be taken with some of its commands left out, or with only the named
 ones kept, so an application in which conversations are not thrown away has
-`/sessions` without `/clear`:
+`/resume` without `/clear`:
 
 ```php
 use NeuronTui\Conversation\Commands\Clear;
@@ -275,7 +275,7 @@ A Session is one conversation with the Agent. `Clear` starts a fresh one
 without leaving the terminal: the screen and the composer empty, and the
 conversation that was on screen stays where it is stored.
 
-`Sessions` lists the Sessions of this Agent in the Picker, most recently used
+`Resume` lists the Sessions of this Agent in the Picker, most recently used
 first, each labelled with the first thing the person wrote in it. While the
 list is open the composer takes no text: the arrow keys move through it,
 typing narrows it, Enter chooses one and resumes it, and Escape leaves the
@@ -295,7 +295,7 @@ $agent->setChatHistory($sessions->start());
 
 Tui::make($agent)->addCommand([
     new Clear($sessions),
-    new Sessions($sessions),
+    new Resume($sessions),
 ])->run();
 ```
 
@@ -327,16 +327,16 @@ Agent is answering, `NeuronTui\Conversation\Command` behind both,
 as what each is handed while it runs, and
 `NeuronTui\Conversation\ChoiceOption` for each option offered by `choose()`,
 `NeuronTui\Conversation\Commands\Clear`,
-`NeuronTui\Conversation\Commands\Sessions`,
+`NeuronTui\Conversation\Commands\Resume`,
 `NeuronTui\Conversation\Commands\Leave` and
 `NeuronTui\Conversation\Commands\Help` as the commands shipped ready to
 mount, and `NeuronTui\Conversation\CommandKit`,
 `NeuronTui\Conversation\AbstractCommandKit` and
 `NeuronTui\Conversation\Commands\SessionKit` for mounting a group of them in
 one line.
-Every other class under the `NeuronTui` namespace is annotated `@internal`, carries
-no stability promise, and may be renamed, split, or removed in any release. Static analysis enforces this on the examples, which
-are the reference Host Application.
+Every other class under the `NeuronTui` namespace is annotated `@internal`,
+carries no stability promise, and may be renamed, split, or removed in any
+release.
 
 The Host Application remains responsible for constructing the Agent,
 providers, credentials, tools, History persistence, and the script or
@@ -382,7 +382,7 @@ them.
 - PageUp and PageDown browse the History.
 - Ctrl+C closes the Conversation TUI, mounted commands or not.
 - Any command the Host Application mounted, by the name it answers to —
-  including `Clear`, `Sessions`, `Leave` and `Help` when it mounted them.
+  including `Clear`, `Resume`, `Leave` and `Help` when it mounted them.
 
 A command is refused while the Agent is working, so an arriving answer cannot
 land in the wrong Session; a command that says in its type that it runs while

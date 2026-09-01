@@ -15,7 +15,7 @@ namespace NeuronTui\Conversation;
  * the same list under the same rules.
  *
  * A kit can be taken with some of its members left out, or with only the
- * named ones kept, so `/sessions` without `/clear` costs no command of one's
+ * named ones kept, so `/resume` without `/clear` costs no command of one's
  * own. Both answer with a kit of their own and leave the one asked untouched,
  * so the same kit can be mounted twice, differently.
  *
