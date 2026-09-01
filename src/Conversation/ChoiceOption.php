@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Conversation;
+namespace NeuronTui\Conversation;
 
 use InvalidArgumentException;
-use NeuronCli\Tui\DisplayableText;
+use NeuronTui\Tui\DisplayableText;
 
 /**
  * One value a Slash command offers through the Picker.

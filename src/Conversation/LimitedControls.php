@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Conversation;
+namespace NeuronTui\Conversation;
 
-use NeuronCli\Tui\ConversationView;
+use NeuronTui\Tui\ConversationView;
 
 /**
  * What a command allowed to run while the Agent is working may do.

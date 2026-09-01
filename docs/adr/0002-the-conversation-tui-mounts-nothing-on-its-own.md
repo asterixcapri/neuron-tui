@@ -3,7 +3,8 @@
 _ADR 0003 supersedes only this decision's duplicate-name rule. The TUI still
 mounts nothing on its own and all other consequences remain in force._
 
-Neuron CLI used to answer three Slash commands — `/clear`, `/sessions` and
+The package, then named Neuron CLI, used to answer three Slash commands —
+`/clear`, `/sessions` and
 `/exit` — carried out by the Conversation TUI itself, and the source said as
 much: a fixed set of commands does not justify a registry. That reasoning held
 only while the set was fixed. Once a Host Application can mount a Slash command
@@ -41,7 +42,7 @@ Nothing had been released, so the interface break costs nobody anything.
 - Building the Conversation TUI without commands gives a terminal that chats
   and is left with `Ctrl+C`. `/clear`, `/sessions` and `/exit` are unknown
   names until a Host Application mounts the commands that answer them.
-- `NeuronCli` no longer takes a Session provider. A Host Application that wants
+- `Tui` no longer takes a Session provider. A Host Application that wants
   Sessions passes its provider to `Clear` and to `Sessions`, and passing the
   same one to both is what makes the two agree on which conversations exist.
 - No name is reserved any more: a Host Application may mount a command of its

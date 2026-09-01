@@ -1,6 +1,6 @@
 {
-    "name": "asterixcapri/neuron-cli",
-    "description": "Reusable terminal conversation interface for Neuron AI agents.",
+    "name": "asterixcapri/neuron-tui",
+    "description": "Reusable terminal user interface for conversations with Neuron AI Agents.",
     "type": "library",
     "license": "MIT",
     "require": {
@@ -18,13 +18,13 @@
     },
     "autoload": {
         "psr-4": {
-            "NeuronCli\\": "src/"
+            "NeuronTui\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "NeuronCli\\PHPStan\\": "tools/phpstan/",
-            "NeuronCli\\Tests\\": "tests/"
+            "NeuronTui\\PHPStan\\": "tools/phpstan/",
+            "NeuronTui\\Tests\\": "tests/"
         }
     },
     "scripts": {

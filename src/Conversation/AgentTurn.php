@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Conversation;
+namespace NeuronTui\Conversation;
 
 use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
 use NeuronAI\Chat\Messages\Stream\Chunks\ToolCallChunk;
 use NeuronAI\Chat\Messages\Stream\Chunks\ToolResultChunk;
 use NeuronAI\Chat\Messages\UserMessage;
-use NeuronCli\Tui\ConversationView;
-use NeuronCli\Tui\DisplayableText;
-use NeuronCli\Tui\WorkingIndicator;
+use NeuronTui\Tui\ConversationView;
+use NeuronTui\Tui\DisplayableText;
+use NeuronTui\Tui\WorkingIndicator;
 
 /**
  * One turn of the Agent, read from its stream as it happens.

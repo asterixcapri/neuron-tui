@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\PHPStan;
+namespace NeuronTui\PHPStan;
 
 use PHPStan\Analyser\Scope;
 use PHPStan\Reflection\ClassReflection;

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Tests\Conversation;
+namespace NeuronTui\Tests\Conversation;
 
-use NeuronCli\Conversation\TurnQueue;
+use NeuronTui\Conversation\TurnQueue;
 use PHPUnit\Framework\TestCase;
 
 final class TurnQueueTest extends TestCase

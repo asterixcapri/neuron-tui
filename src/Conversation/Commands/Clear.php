@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Conversation\Commands;
+namespace NeuronTui\Conversation\Commands;
 
-use NeuronCli\Conversation\Controls;
-use NeuronCli\Conversation\SlashCommand;
-use NeuronCli\Session\SessionProvider;
+use NeuronTui\Conversation\Controls;
+use NeuronTui\Conversation\SlashCommand;
+use NeuronTui\Session\SessionProvider;
 
 /**
  * Starts a new Session, leaving the one on screen where it is stored.
  *
- * One of the commands Neuron CLI ships: a Host Application mounts it the way
+ * One of the commands Neuron TUI ships: a Host Application mounts it the way
  * it mounts one of its own, under `/clear` or under whatever name it prefers.
  *
  * Starting a Session returns the empty History the Agent needs. Minting its

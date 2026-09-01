@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Tui;
+namespace NeuronTui\Tui;
 
 use Closure;
-use NeuronCli\Conversation\ChoiceOption;
+use NeuronTui\Conversation\ChoiceOption;
 use Symfony\Component\Tui\Render\RenderContext;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 use Symfony\Component\Tui\Widget\TextWidget;
