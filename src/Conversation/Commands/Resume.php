@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace NeuronTui\Conversation\Commands;
 
+use DateTimeImmutable;
 use NeuronTui\Conversation\ChoiceOption;
 use NeuronTui\Conversation\Controls;
+use NeuronTui\Conversation\SessionMetadata;
 use NeuronTui\Conversation\SlashCommand;
 use NeuronTui\Session\SessionProvider;
 
@@ -53,13 +55,13 @@ final readonly class Resume implements SlashCommand
         }
 
         $options = [];
+        $now = new DateTimeImmutable();
 
         foreach ($sessions as $session) {
             $options[] = new ChoiceOption(
                 $session->key,
                 $session->title,
-                'Last used '
-                    . $session->lastUsedAt->format('j M Y, H:i'),
+                SessionMetadata::format($session, $now),
             );
         }
 
