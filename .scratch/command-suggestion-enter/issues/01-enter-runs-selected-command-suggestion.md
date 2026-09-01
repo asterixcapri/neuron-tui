@@ -9,7 +9,7 @@ and documentation describe the resulting interaction accurately.
 
 **Blocked by:** None (can start immediately).
 
-**Status:** resolved
+Status: resolved
 
 - [x] Enter executes the first Command suggestion selected automatically when
       the composer contains only a matching command prefix.
