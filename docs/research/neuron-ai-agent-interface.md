@@ -197,11 +197,13 @@ istruzioni, tool e History, ma **non** `getChatHistory()`
 L'implementazione concreta espone invece sia setter sia getter
 ([`HandleAgentState`, righe 24-37](https://github.com/neuron-core/neuron-ai/blob/3.15.30/src/Agent/HandleAgentState.php#L24-L37)).
 
-L'attuale TUI legge la History iniziale nel costruttore
-([`NeuronCli`, righe 63-86](../../src/NeuronCli.php)) e può sostituire l'Agent
-preservandone la History
-([`NeuronCli`, metodo `answerFrom`](../../src/NeuronCli.php)). Non può quindi
-tipizzarsi correttamente contro l'`AgentInterface` installata.
+La TUI risultante legge la History iniziale quando costruisce il runtime
+([`ConversationRuntime`](../../src/Conversation/ConversationRuntime.php)) e può
+sostituire l'Agent preservandone la History nello stesso modulo. Non può quindi
+tipizzarsi correttamente contro l'`AgentInterface` installata. Al momento della
+ricerca queste responsabilità vivevano ancora nell'entry point precedente,
+allora chiamato `NeuronCli`; quel nome descrive lo stato storico, non l'API
+pubblica attuale.
 
 La decisione per questa major è richiedere `NeuronAI\Agent\Agent` nel
 costruttore e in `make()`. Non esistono né `setAgent()` né un hook `agent()`:
@@ -265,12 +267,14 @@ un coordinatore di Turn quando emergerà un secondo caso concreto, mentre:
 
 ## Confronto con il costruttore attuale
 
-Oggi `NeuronCli` è `final` e riceve nel costruttore Agent, title, subtitle,
-Terminal e commands; monta subito i comandi, costruisce la view, legge la
-History e collega i callback
-([`NeuronCli`, righe 35-87](../../src/NeuronCli.php)).
+La baseline osservata durante la ricerca era un entry point `NeuronCli` final
+che riceveva nel costruttore Agent, title, subtitle, Terminal e commands;
+montava subito i comandi, costruiva la view, leggeva la History e collegava i
+callback. L'implementazione successiva ha assunto la nuova identità pubblica
+[`Tui`](../../src/Tui.php) e ha spostato l'assemblaggio live in
+[`ConversationRuntime`](../../src/Conversation/ConversationRuntime.php).
 
-| Aspetto | `NeuronCli` attuale | Idioma di `Agent` | Direzione proposta |
+| Aspetto | Baseline storica (`NeuronCli`) | Idioma di `Agent` | Direzione proposta |
 |---|---|---|---|
 | Costruzione | `new NeuronCli(...)` | `Agent::make()` | `Tui::make(...)` e `new` entrambi validi |
 | Configurazione | parametri constructor-only | hook protetti + fluent runtime | Agent nel costruttore, opzioni fluenti |
@@ -485,8 +489,9 @@ ne eredita il motore.
   [Chat History](https://docs.neuron-ai.dev/agent/chat-history-and-memory),
   [Middleware](https://docs.neuron-ai.dev/workflow/middleware),
   [upgrade v3](https://docs.neuron-ai.dev/overview/upgrade).
-- Stato locale:
+- Stato locale risultante:
   [`composer.json`](../../composer.json),
   [`composer.lock`](../../composer.lock),
-  [`NeuronCli`](../../src/NeuronCli.php),
+  [`Tui`](../../src/Tui.php),
+  [`ConversationRuntime`](../../src/Conversation/ConversationRuntime.php),
   [`AgentTurn`](../../src/Conversation/AgentTurn.php).
