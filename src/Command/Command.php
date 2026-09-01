@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace NeuronTui\Conversation;
+namespace NeuronTui\Command;
 
 /**
  * Whoever answers to a name typed after a slash.

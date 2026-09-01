@@ -309,7 +309,7 @@ raccomandazione da discutere prima di implementare.
   `$ARGUMENTS[N]`, `$N` ([skills](https://code.claude.com/docs/en/skills)).
   neuron-cli ha la posizione opposta, scritta nel sorgente: «There are exactly
   three of them and no way for a Host Application to add a fourth: a fixed set
-  does not justify a registry» (`src/Conversation/SlashCommand.php`). È una
+  does not justify a registry» (`src/Command/SlashCommand.php`). È una
   decisione difendibile finché i comandi sono tre; smette di esserlo appena
   arrivano `/help`, `/compact` e l'approvazione. La forma minima e coerente col
   repository non è copiare le skill — quelle sono file di *prompt*, cioè materia

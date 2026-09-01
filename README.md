@@ -49,7 +49,7 @@ does what its application needs:
 
 ```php
 use NeuronTui\Conversation\Controls;
-use NeuronTui\Conversation\SlashCommand;
+use NeuronTui\Command\SlashCommand;
 
 final class Review implements SlashCommand
 {
@@ -137,12 +137,12 @@ A command is refused while the Agent is answering, and can be typed again once
 the turn has finished: one that replaced the conversation meanwhile would have
 the answer on its way land where it does not belong. A command that changes
 nothing of the sort says so by implementing
-`NeuronTui\Conversation\RunsWhileWorking` instead of
-`NeuronTui\Conversation\SlashCommand`, and is carried out at any time.
+`NeuronTui\Command\RunsWhileWorking` instead of
+`NeuronTui\Command\SlashCommand`, and is carried out at any time.
 
 ```php
 use NeuronTui\Conversation\LimitedControls;
-use NeuronTui\Conversation\RunsWhileWorking;
+use NeuronTui\Command\RunsWhileWorking;
 
 final class Version implements RunsWhileWorking
 {
@@ -163,7 +163,7 @@ final class Version implements RunsWhileWorking
 }
 ```
 
-Both interfaces extend `NeuronTui\Conversation\Command`, which carries the
+Both interfaces extend `NeuronTui\Command\Command`, which carries the
 name and the description; what changes is what `run()` is handed. In exchange
 for running at any time, such a command receives the **LimitedControls**: only
 `say()`, `warn()`, `commands()` and `stop()`. No `choose()`, because nobody
@@ -183,16 +183,16 @@ prefers `/quit` to `/exit` writes no command of its own:
 
 | Class | Default name | What it does |
 | --- | --- | --- |
-| `NeuronTui\Conversation\Commands\Clear` | `/clear` | Starts a new Session, leaving the current one stored. |
-| `NeuronTui\Conversation\Commands\Resume` | `/resume` | Lets you choose a stored Session to resume. |
-| `NeuronTui\Conversation\Commands\Leave` | `/exit` | Closes the Conversation TUI. Runs while the Agent is working. |
-| `NeuronTui\Conversation\Commands\Help` | `/help` | Lists what can be typed here. Runs while the Agent is working. |
+| `NeuronTui\Command\Clear` | `/clear` | Starts a new Session, leaving the current one stored. |
+| `NeuronTui\Command\Resume` | `/resume` | Lets you choose a stored Session to resume. |
+| `NeuronTui\Command\Leave` | `/exit` | Closes the Conversation TUI. Runs while the Agent is working. |
+| `NeuronTui\Command\Help` | `/help` | Lists what can be typed here. Runs while the Agent is working. |
 
 ```php
-use NeuronTui\Conversation\Commands\Clear;
-use NeuronTui\Conversation\Commands\Help;
-use NeuronTui\Conversation\Commands\Leave;
-use NeuronTui\Conversation\Commands\Resume;
+use NeuronTui\Command\Clear;
+use NeuronTui\Command\Help;
+use NeuronTui\Command\Leave;
+use NeuronTui\Command\Resume;
 use NeuronTui\Session\InMemorySessionProvider;
 
 $sessions = new InMemorySessionProvider();
@@ -226,8 +226,8 @@ is given the Session provider once and hands it to both the commands that
 touch the Sessions.
 
 ```php
-use NeuronTui\Conversation\Commands\Leave;
-use NeuronTui\Conversation\Commands\SessionKit;
+use NeuronTui\Command\Leave;
+use NeuronTui\Command\SessionKit;
 use NeuronTui\Session\FileSessionProvider;
 
 $sessions = new FileSessionProvider('/var/lib/my-app/sessions');
@@ -244,7 +244,7 @@ ones kept, so an application in which conversations are not thrown away has
 `/resume` without `/clear`:
 
 ```php
-use NeuronTui\Conversation\Commands\Clear;
+use NeuronTui\Command\Clear;
 
 Tui::make($agent)->addCommand([
     (new SessionKit($sessions))->exclude([Clear::class]),
@@ -263,8 +263,8 @@ afterwards a command that arrived in a kit and one mounted on its own are the
 same thing, with the same listing and rules.
 
 A Host Application groups commands of its own by extending
-`NeuronTui\Conversation\AbstractCommandKit` and naming them in `provide()`; the
-`NeuronTui\Conversation\CommandKit` interface is what the Conversation TUI
+`NeuronTui\Command\AbstractCommandKit` and naming them in `provide()`; the
+`NeuronTui\Command\CommandKit` interface is what the Conversation TUI
 mounts. Renaming a command stays the command's own business, so a kit is the
 short way in and writing its commands out by hand remains the way to give them
 names of one's own.
@@ -320,19 +320,19 @@ an application may supply. The Session provider:
 `NeuronTui\Session\Session` to list a Session with, and
 `NeuronTui\Session\InMemorySessionProvider` and
 `NeuronTui\Session\FileSessionProvider` as the two shipped providers. And the
-Slash commands it mounts: `NeuronTui\Conversation\SlashCommand` to implement,
-`NeuronTui\Conversation\RunsWhileWorking` for a command that runs while the
-Agent is answering, `NeuronTui\Conversation\Command` behind both,
+Slash commands it mounts: `NeuronTui\Command\SlashCommand` to implement,
+`NeuronTui\Command\RunsWhileWorking` for a command that runs while the
+Agent is answering, `NeuronTui\Command\Command` behind both,
 `NeuronTui\Conversation\Controls` and `NeuronTui\Conversation\LimitedControls`
 as what each is handed while it runs, and
 `NeuronTui\Conversation\ChoiceOption` for each option offered by `choose()`,
-`NeuronTui\Conversation\Commands\Clear`,
-`NeuronTui\Conversation\Commands\Resume`,
-`NeuronTui\Conversation\Commands\Leave` and
-`NeuronTui\Conversation\Commands\Help` as the commands shipped ready to
-mount, and `NeuronTui\Conversation\CommandKit`,
-`NeuronTui\Conversation\AbstractCommandKit` and
-`NeuronTui\Conversation\Commands\SessionKit` for mounting a group of them in
+`NeuronTui\Command\Clear`,
+`NeuronTui\Command\Resume`,
+`NeuronTui\Command\Leave` and
+`NeuronTui\Command\Help` as the commands shipped ready to
+mount, and `NeuronTui\Command\CommandKit`,
+`NeuronTui\Command\AbstractCommandKit` and
+`NeuronTui\Command\SessionKit` for mounting a group of them in
 one line.
 Every other class under the `NeuronTui` namespace is annotated `@internal`,
 carries no stability promise, and may be renamed, split, or removed in any
