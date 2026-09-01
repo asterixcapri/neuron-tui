@@ -37,6 +37,24 @@ final class FileSessionProviderTest extends TestCase
         self::assertSame([], $provider->start()->getMessages());
     }
 
+    public function testAWrittenSessionIsStoredAsItsOpaqueKeyNamedJson(): void
+    {
+        $provider = new FileSessionProvider($this->directory);
+
+        $provider->start()->addMessage(new UserMessage('A question'));
+
+        $files = $this->storedFiles();
+        self::assertCount(1, $files);
+        self::assertMatchesRegularExpression(
+            '/^[a-f0-9]{16}\.json$/',
+            basename($files[0]),
+        );
+        self::assertSame(
+            pathinfo($files[0], PATHINFO_FILENAME),
+            $provider->list()[0]->key,
+        );
+    }
+
     public function testStartingANewSessionLeavesThePreviousOneStored(): void
     {
         $provider = new FileSessionProvider($this->directory);
@@ -61,7 +79,12 @@ final class FileSessionProviderTest extends TestCase
 
     public function testAStoredSessionIsReopenedByItsKey(): void
     {
-        $stored = new FileChatHistory($this->directory, 'known-key');
+        $stored = new FileChatHistory(
+            $this->directory,
+            'known-key',
+            prefix: '',
+            ext: '.json',
+        );
         $stored->addMessage(new UserMessage('Written earlier'));
 
         $reopened = (new FileSessionProvider($this->directory))
@@ -127,7 +150,12 @@ final class FileSessionProviderTest extends TestCase
 
     public function testASessionIsTitledByTheFirstThingThePersonWrote(): void
     {
-        $stored = new FileChatHistory($this->directory, 'titled');
+        $stored = new FileChatHistory(
+            $this->directory,
+            'titled',
+            prefix: '',
+            ext: '.json',
+        );
         $stored->addMessage(new UserMessage('What the person asked'));
         $stored->addMessage(new AssistantMessage('An answer.'));
         $stored->addMessage(new UserMessage('A later question'));
@@ -142,13 +170,38 @@ final class FileSessionProviderTest extends TestCase
     {
         $provider = new FileSessionProvider($this->directory);
         $provider->start();
-        file_put_contents($this->directory . '/neuron_empty.chat', '[]');
+        file_put_contents($this->directory . '/empty.json', '[]');
         $this->storeSession('asked', 'A question', 1_700_000_000);
 
         $listed = $provider->list();
 
         self::assertCount(1, $listed);
         self::assertSame('asked', $listed[0]->key);
+    }
+
+    public function testLegacyFilesAreLeftUntouchedButCannotBeListedOrResumed(): void
+    {
+        $legacy = new FileChatHistory($this->directory, 'legacy-key');
+        $legacy->addMessage(new UserMessage('An earlier question'));
+        $path = $this->directory . '/neuron_legacy-key.chat';
+        $contents = file_get_contents($path);
+        $provider = new FileSessionProvider($this->directory);
+
+        self::assertSame([], $provider->list());
+
+        try {
+            $provider->resume('legacy-key');
+            self::fail('A legacy Session was resumed.');
+        } catch (InvalidArgumentException $exception) {
+            self::assertSame(
+                'No Session is named by that key.',
+                $exception->getMessage(),
+            );
+        }
+
+        self::assertFileExists($path);
+        self::assertSame($contents, file_get_contents($path));
+        self::assertSame([$path], $this->storedFiles());
     }
 
     public function testAnUnknownSessionCannotBeResumed(): void
@@ -166,10 +219,15 @@ final class FileSessionProviderTest extends TestCase
         string $question,
         int $lastUsedAt,
     ): void {
-        $session = new FileChatHistory($this->directory, $key);
+        $session = new FileChatHistory(
+            $this->directory,
+            $key,
+            prefix: '',
+            ext: '.json',
+        );
         $session->addMessage(new UserMessage($question));
         $session->addMessage(new AssistantMessage('An answer.'));
-        touch($this->directory . '/neuron_' . $key . '.chat', $lastUsedAt);
+        touch($this->directory . '/' . $key . '.json', $lastUsedAt);
     }
 
     /**
