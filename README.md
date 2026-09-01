@@ -24,18 +24,17 @@ use NeuronTui\Tui;
 $agent = new Agent();
 $agent->setAiProvider($provider);
 
-(new Tui($agent))->run();
+Tui::make($agent)->run();
 ```
 
 The default header uses generic Neuron AI branding. A title and subtitle can
 be supplied when the terminal should identify a particular Agent or product:
 
 ```php
-(new Tui(
-    agent: $agent,
-    title: 'Research Agent',
-    subtitle: 'Ask about the knowledge base',
-))->run();
+Tui::make($agent)
+    ->setTitle('Research Agent')
+    ->setSubtitle('Ask about the knowledge base')
+    ->run();
 ```
 
 A terminal built this way chats and nothing else: no Slash command is mounted
@@ -78,14 +77,14 @@ final class Review implements SlashCommand
     }
 }
 
-(new Tui(agent: $agent, commands: [new Review()]))->run();
+Tui::make($agent)->addCommand(new Review())->run();
 ```
 
 A command answers to a name, slash included, and describes itself in one
 line. Whatever is typed after the name reaches it as its arguments, empty when
-nothing was typed. No name is reserved, and two commands answering to the same
-name stop the construction of the Conversation TUI rather than one of them
-silently winning.
+nothing was typed. No name is reserved. If commands share a name, the first
+one added receives matching input and every duplicate remains visible in
+suggestions.
 
 Once a command has run, the Conversation TUI reads the History back from the
 Agent and repaints the screen when the command replaced it with another one. So
@@ -199,12 +198,12 @@ use NeuronTui\Session\InMemorySessionProvider;
 $sessions = new InMemorySessionProvider();
 $agent->setChatHistory($sessions->start());
 
-(new Tui(agent: $agent, commands: [
+Tui::make($agent)->addCommand([
     new Clear($sessions),
     new Sessions($sessions),
     new Leave('/quit'),
     new Help(),
-]))->run();
+])->run();
 ```
 
 The two commands that touch the Sessions receive the Session provider, because
@@ -234,10 +233,10 @@ use NeuronTui\Session\FileSessionProvider;
 $sessions = new FileSessionProvider('/var/lib/my-app/sessions');
 $agent->setChatHistory($sessions->start());
 
-(new Tui(agent: $agent, commands: [
+Tui::make($agent)->addCommand([
     new SessionKit($sessions),
     new Leave(),
-]))->run();
+])->run();
 ```
 
 A kit can be taken with some of its commands left out, or with only the named
@@ -247,20 +246,21 @@ ones kept, so an application in which conversations are not thrown away has
 ```php
 use NeuronTui\Conversation\Commands\Clear;
 
-commands: [
+Tui::make($agent)->addCommand([
     (new SessionKit($sessions))->exclude([Clear::class]),
     new Leave(),
-]
+])->run();
 
 // The other way round, keeping only what is named:
-commands: [(new SessionKit($sessions))->only([Clear::class])]
+Tui::make($agent)
+    ->addCommand((new SessionKit($sessions))->only([Clear::class]))
+    ->run();
 ```
 
 Both answer with a kit of their own and leave the one asked untouched, so the
-same kit can be mounted twice, differently. A kit is unrolled when the terminal
-is built: afterwards a command that arrived in a kit and one mounted on its own
-are the same thing — same listing, same rules, and the same stopped
-construction when two of them answer to one name.
+same kit can be mounted twice, differently. A kit is unrolled when it is added:
+afterwards a command that arrived in a kit and one mounted on its own are the
+same thing, with the same listing and rules.
 
 A Host Application groups commands of its own by extending
 `NeuronTui\Conversation\AbstractCommandKit` and naming them in `provide()`; the
@@ -293,10 +293,10 @@ use NeuronTui\Session\FileSessionProvider;
 $sessions = new FileSessionProvider('/var/lib/my-app/sessions');
 $agent->setChatHistory($sessions->start());
 
-(new Tui(agent: $agent, commands: [
+Tui::make($agent)->addCommand([
     new Clear($sessions),
     new Sessions($sessions),
-]))->run();
+])->run();
 ```
 
 An application that keeps conversations in its own storage implements

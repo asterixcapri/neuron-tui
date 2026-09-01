@@ -10,7 +10,7 @@ namespace NeuronTui\Conversation;
  * A kit carries whatever its members need to work — the Session provider, for
  * the kit this library ships — so a Host Application names that thing once
  * instead of once per command. What comes out is commands and nothing else: a
- * kit is unrolled when the terminal is built, and afterwards a command that
+ * kit is unrolled when it is added, and afterwards a command that
  * arrived in a kit and one named on its own are the same thing, indexed in
  * the same list under the same rules.
  *

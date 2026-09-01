@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace NeuronTui\Conversation;
 
 use Amp\Future;
-use InvalidArgumentException;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\History\ChatHistoryInterface;
 use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
@@ -40,9 +39,9 @@ final class ConversationRuntime
     private readonly AgentTurn $agentTurn;
 
     /**
-     * The mounted commands, indexed by the name each answers to.
+     * The mounted commands in the order the Host Application added them.
      *
-     * @var array<string, SlashCommand|RunsWhileWorking>
+     * @var list<SlashCommand|RunsWhileWorking>
      */
     private readonly array $commands;
 
@@ -50,10 +49,9 @@ final class ConversationRuntime
     private ?Future $response = null;
 
     /**
-     * @param list<SlashCommand|RunsWhileWorking|CommandKit> $commands
-     *     everything that can be typed here after a slash: the Conversation
-     *     TUI mounts nothing on its own, and a kit stands for the commands it
-     *     carries
+     * @param list<SlashCommand|RunsWhileWorking> $commands everything that
+     *     can be typed here after a slash; the Conversation TUI mounts
+     *     nothing on its own
      */
     public function __construct(
         private Agent $agent,
@@ -62,7 +60,7 @@ final class ConversationRuntime
         ?TerminalInterface $terminal = null,
         array $commands = [],
     ) {
-        $this->commands = self::mount($commands);
+        $this->commands = $commands;
         $this->terminal = $terminal ?? new Terminal();
         $this->view = new ConversationView(
             $this->terminal,
@@ -143,7 +141,7 @@ final class ConversationRuntime
      */
     private function carryOut(SlashCommandInput $input): void
     {
-        $command = $this->commands[$input->name] ?? null;
+        $command = $this->commandNamed($input->name);
 
         if ($command === null) {
             $this->view->showUnknownSlashCommand($input->name);
@@ -240,7 +238,7 @@ final class ConversationRuntime
      */
     private function mounted(): array
     {
-        return array_values($this->commands);
+        return $this->commands;
     }
 
     /**
@@ -308,65 +306,21 @@ final class ConversationRuntime
     }
 
     /**
-     * Indexes the commands by the name each answers to.
+     * Returns the first mounted command answering to the given name.
      *
-     * Two commands answering to the same name are a mistake in how the
-     * terminal was built, so it is said at once instead of one of them
-     * silently winning. No name is reserved: the commands Neuron TUI ships
-     * are mounted here like any other, and a Host Application is free to
-     * leave any of them out.
-     *
-     * A kit is unrolled before any of this, so a command that arrived in one
-     * is weighed here like any other.
-     *
-     * @param list<SlashCommand|RunsWhileWorking|CommandKit> $commands
-     *
-     * @return array<string, SlashCommand|RunsWhileWorking>
+     * Duplicate names remain in the mounted list so suggestions expose the
+     * complete terminal composition. Scanning from the beginning makes the
+     * first command with a name the stable recipient of matching input.
      */
-    private static function mount(array $commands): array
+    private function commandNamed(string $name): SlashCommand|RunsWhileWorking|null
     {
-        $mounted = [];
-
-        foreach (self::unroll($commands) as $command) {
-            $name = $command->name();
-
-            if (isset($mounted[$name])) {
-                throw new InvalidArgumentException(
-                    'Two Slash commands answer to ' . $name . '.',
-                );
+        foreach ($this->commands as $command) {
+            if ($command->name() === $name) {
+                return $command;
             }
-
-            $mounted[$name] = $command;
         }
 
-        return $mounted;
-    }
-
-    /**
-     * Puts the commands a kit carries where the kit was named.
-     *
-     * This is the one place a kit is opened, and nothing downstream is told
-     * a kit ever existed.
-     *
-     * @param list<SlashCommand|RunsWhileWorking|CommandKit> $commands
-     *
-     * @return list<SlashCommand|RunsWhileWorking>
-     */
-    private static function unroll(array $commands): array
-    {
-        $unrolled = [];
-
-        foreach ($commands as $command) {
-            if ($command instanceof CommandKit) {
-                $unrolled = [...$unrolled, ...$command->commands()];
-
-                continue;
-            }
-
-            $unrolled[] = $command;
-        }
-
-        return $unrolled;
+        return null;
     }
 
     private function tick(): bool
