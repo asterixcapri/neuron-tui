@@ -148,6 +148,19 @@ final class FileSessionProviderTest extends TestCase
         );
     }
 
+    public function testAListedSessionReportsItsExactStoredByteSize(): void
+    {
+        $this->storeSession('sized', 'The sized subject', 1_700_000_000);
+        $path = $this->directory . '/sized.json';
+        $contents = file_get_contents($path);
+        self::assertIsString($contents);
+
+        $listed = (new FileSessionProvider($this->directory))->list();
+
+        self::assertCount(1, $listed);
+        self::assertSame(strlen($contents), $listed[0]->storageSize);
+    }
+
     public function testASessionIsTitledByTheFirstThingThePersonWrote(): void
     {
         $stored = new FileChatHistory(
