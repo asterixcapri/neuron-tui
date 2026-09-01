@@ -8,8 +8,8 @@ use Amp\Future;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\History\ChatHistoryInterface;
 use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
-use NeuronTui\Command\RunsWhileWorking;
-use NeuronTui\Command\SlashCommand;
+use NeuronTui\Command\Command;
+use NeuronTui\Command\ConcurrentCommand;
 use NeuronTui\Tui\ConversationView;
 use NeuronTui\Tui\WorkingIndicator;
 use Symfony\Component\Tui\Event\InputEvent;
@@ -43,7 +43,7 @@ final class ConversationRuntime
     /**
      * The mounted commands in the order the Host Application added them.
      *
-     * @var list<SlashCommand|RunsWhileWorking>
+     * @var list<Command|ConcurrentCommand>
      */
     private readonly array $commands;
 
@@ -51,7 +51,7 @@ final class ConversationRuntime
     private ?Future $response = null;
 
     /**
-     * @param list<SlashCommand|RunsWhileWorking> $commands everything that
+     * @param list<Command|ConcurrentCommand> $commands everything that
      *     can be typed here after a slash; the Conversation TUI mounts
      *     nothing on its own
      */
@@ -137,9 +137,9 @@ final class ConversationRuntime
      * conversation rather than sent to the Agent, because the Slash namespace
      * is answered locally.
      *
-     * Whether a command runs while the Agent is working is read from its
-     * type: an answer already on its way would land in a conversation a
-     * command had meanwhile replaced, so only what says it runs there does.
+     * Whether a command may overlap a Turn is read from its type: an answer
+     * already on its way would land in a conversation a command had meanwhile
+     * replaced, so only a Concurrent command runs there.
      */
     private function carryOut(SlashCommandInput $input): void
     {
@@ -152,7 +152,7 @@ final class ConversationRuntime
         }
 
         if (
-            !$command instanceof RunsWhileWorking
+            !$command instanceof ConcurrentCommand
             && $this->refusedWhileWorking($input->name)
         ) {
             return;
@@ -179,15 +179,15 @@ final class ConversationRuntime
      * meanwhile, which is what lets a person answer the list.
      */
     private function runSafely(
-        SlashCommand|RunsWhileWorking $command,
+        Command|ConcurrentCommand $command,
         string $arguments,
     ): void {
         $conversation = $this->agent->getChatHistory();
         $failure = null;
 
         try {
-            if ($command instanceof RunsWhileWorking) {
-                $command->run($this->limitedControls(), $arguments);
+            if ($command instanceof ConcurrentCommand) {
+                $command->run($this->concurrentControls(), $arguments);
             } else {
                 $command->run($this->controls(), $arguments);
             }
@@ -222,15 +222,15 @@ final class ConversationRuntime
     }
 
     /**
-     * The fewer verbs a command running while the Agent works is handed.
+     * The verbs whose meaning remains stable while a Turn is under way.
      *
      * There is nothing to close off here: what is missing is missing from the
      * type, so a command asking for a Picker or for the Agent was already
      * stopped where it was written.
      */
-    private function limitedControls(): LimitedControls
+    private function concurrentControls(): ConcurrentControls
     {
-        return new LimitedControls($this->view, $this->commands);
+        return new ConcurrentControls($this->view, $this->commands);
     }
 
     /**
@@ -277,8 +277,8 @@ final class ConversationRuntime
      *
      * A command that changed the conversation mid-turn would have an answer
      * already on its way land where it does not belong, so the rule is the
-     * TUI's rather than any single command's: what says in its type that it
-     * runs while the Agent works never reaches here.
+     * TUI's rather than any single command's: a Concurrent command never
+     * reaches here.
      *
      * Returns whether the command was turned away.
      */
@@ -304,7 +304,7 @@ final class ConversationRuntime
      * complete terminal composition. Scanning from the beginning makes the
      * first command with a name the stable recipient of matching input.
      */
-    private function commandNamed(string $name): SlashCommand|RunsWhileWorking|null
+    private function commandNamed(string $name): Command|ConcurrentCommand|null
     {
         foreach ($this->commands as $command) {
             if ($command->name() === $name) {

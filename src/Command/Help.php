@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronTui\Command;
 
-use NeuronTui\Conversation\LimitedControls;
+use NeuronTui\Conversation\ConcurrentControls;
 
 /**
  * Lists the mounted commands, so a person can discover what to type here.
@@ -17,11 +17,10 @@ use NeuronTui\Conversation\LimitedControls;
  * would ask it for something it does not have yet. The Conversation TUI
  * knows the mounted commands and hands them over as one of the Controls.
  *
- * It runs while the Agent is working too: reading what may be typed here
- * changes nothing, so there is no reason to wait for an answer to be over
- * before asking.
+ * It is Concurrent: reading what may be typed here changes nothing, so there
+ * is no reason to wait for a Turn to finish before asking.
  */
-final readonly class Help implements RunsWhileWorking
+final readonly class Help implements ConcurrentCommand
 {
     /**
      * @param string $name the name it answers to, slash included
@@ -40,7 +39,7 @@ final readonly class Help implements RunsWhileWorking
         return 'Lists what can be typed here.';
     }
 
-    public function run(LimitedControls $controls, string $arguments): void
+    public function run(ConcurrentControls $controls, string $arguments): void
     {
         foreach ($controls->commands() as $command) {
             $controls->say($command->name() . ' — ' . $command->describe());

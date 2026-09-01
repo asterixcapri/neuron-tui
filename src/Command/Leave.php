@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronTui\Command;
 
-use NeuronTui\Conversation\LimitedControls;
+use NeuronTui\Conversation\ConcurrentControls;
 
 /**
  * Leaves the terminal.
@@ -13,11 +13,11 @@ use NeuronTui\Conversation\LimitedControls;
  * it mounts one of its own, under `/exit` or under whatever name it prefers.
  * A Host Application that mounts nothing leaves `Ctrl+C` as the only way out.
  *
- * It runs while the Agent is working too: leaving asks its question earlier
- * than the answer on its way can spoil, so it says as much in its type and
- * takes the fewer Controls that come with saying it.
+ * It is Concurrent: leaving asks its question earlier than the answer on its
+ * way can spoil, so it receives only the Controls that remain meaningful
+ * while a Turn is under way.
  */
-final readonly class Leave implements RunsWhileWorking
+final readonly class Leave implements ConcurrentCommand
 {
     /**
      * @param string $name the name it answers to, slash included
@@ -36,7 +36,7 @@ final readonly class Leave implements RunsWhileWorking
         return 'Closes the Conversation TUI.';
     }
 
-    public function run(LimitedControls $controls, string $arguments): void
+    public function run(ConcurrentControls $controls, string $arguments): void
     {
         $controls->stop();
     }

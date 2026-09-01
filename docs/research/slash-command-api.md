@@ -59,17 +59,7 @@ interface Command
 
     /** Una riga sola, per /help. */
     public function describe(): string;
-}
 
-/**
- * Un comando che pretende che l'Agent stia fermo.
- *
- * È la regola: cambiare conversazione a turno in corso farebbe atterrare una
- * risposta dove non appartiene, quindi un comando che arriva mentre l'Agent
- * lavora viene rifiutato.
- */
-interface SlashCommand extends Command
-{
     public function run(Controls $controls, string $arguments): void;
 }
 
@@ -80,9 +70,13 @@ interface SlashCommand extends Command
  * persona non deve scegliere da un elenco mentre sotto scorrono le risposte,
  * e non si tocca l'Agent, perché sta rispondendo.
  */
-interface RunsWhileWorking extends Command
+interface ConcurrentCommand
 {
-    public function run(LimitedControls $controls, string $arguments): void;
+    public function name(): string;
+
+    public function describe(): string;
+
+    public function run(ConcurrentControls $controls, string $arguments): void;
 }
 ```
 
@@ -129,7 +123,7 @@ final class Controls
     public function stop(): void;
 }
 
-final class LimitedControls
+final class ConcurrentControls
 {
     public function say(string $text): void;
 
@@ -152,7 +146,7 @@ Nessuno di questi è montato senza che l'host lo chieda.
 ```php
 namespace NeuronCli\Command;
 
-final class Leave implements RunsWhileWorking
+final class Leave implements ConcurrentCommand
 {
     public function __construct(private readonly string $name = '/exit') {}
 
@@ -160,13 +154,13 @@ final class Leave implements RunsWhileWorking
 
     public function describe(): string { return 'Leaves the terminal.'; }
 
-    public function run(LimitedControls $controls, string $arguments): void
+    public function run(ConcurrentControls $controls, string $arguments): void
     {
         $controls->stop();
     }
 }
 
-final class Help implements RunsWhileWorking
+final class Help implements ConcurrentCommand
 {
     public function __construct(private readonly string $name = '/help') {}
 
@@ -174,7 +168,7 @@ final class Help implements RunsWhileWorking
 
     public function describe(): string { return 'Lists what can be typed here.'; }
 
-    public function run(LimitedControls $controls, string $arguments): void
+    public function run(ConcurrentControls $controls, string $arguments): void
     {
         foreach ($controls->commands() as $command) {
             $controls->say($command->name() . ' — ' . $command->describe());
@@ -182,7 +176,7 @@ final class Help implements RunsWhileWorking
     }
 }
 
-final class Clear implements SlashCommand
+final class Clear implements Command
 {
     public function __construct(
         private readonly SessionProvider $sessions,
@@ -199,7 +193,7 @@ final class Clear implements SlashCommand
     }
 }
 
-final class Sessions implements SlashCommand
+final class Sessions implements Command
 {
     public function __construct(
         private readonly SessionProvider $sessions,
@@ -299,7 +293,7 @@ commands: [
 ## Quello che scrive la Host Application
 
 ```php
-final class Model implements SlashCommand
+final class Model implements Command
 {
     /** @param array<string, AIProviderInterface> $models */
     public function __construct(private readonly array $models) {}
@@ -329,7 +323,7 @@ final class Model implements SlashCommand
     }
 }
 
-final class Review implements SlashCommand
+final class Review implements Command
 {
     public function name(): string { return '/review'; }
 
@@ -396,7 +390,7 @@ private function carryOut(CommandInvocation $invocation): void
         return;
     }
 
-    if ($this->turns->isBusy() && !$command instanceof RunsWhileWorking) {
+    if ($this->turns->isBusy() && !$command instanceof ConcurrentCommand) {
         $this->view->showError(
             $invocation->name . ' is refused while the Agent is working. '
                 . 'Try it again once the turn has finished.',
@@ -407,8 +401,8 @@ private function carryOut(CommandInvocation $invocation): void
 
     async(function () use ($command, $invocation): void {
         try {
-            $command instanceof RunsWhileWorking
-                ? $command->run($this->limitedControls, $invocation->arguments)
+            $command instanceof ConcurrentCommand
+                ? $command->run($this->concurrentControls, $invocation->arguments)
                 : $command->run($this->controls, $invocation->arguments);
         } catch (Throwable $exception) {
             // Il codice di un comando è dell'host: la TUI gli sopravvive.
@@ -472,6 +466,6 @@ scrivibile, non montato d'ufficio — e per riflesso il difetto di
 ## Da chiarire scrivendo il codice
 
 1. Come far sospendere `choose()` su Revolt senza bloccare il loop.
-2. Se `LimitedControls` debba avere anche `ask()`: accodare un turno mentre
+2. Se `ConcurrentControls` debba avere anche `ask()`: accodare un turno mentre
    l'Agent lavora è ciò che già succede quando una persona scrive, quindi non
    sarebbe scorretto — ma nessun comando nella scatola ne ha bisogno.

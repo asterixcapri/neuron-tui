@@ -7,8 +7,8 @@ namespace NeuronTui\Tests;
 use Closure;
 use NeuronAI\Agent\Agent;
 use NeuronTui\Command\AbstractCommandKit;
+use NeuronTui\Command\Command;
 use NeuronTui\Command\Help;
-use NeuronTui\Command\SlashCommand;
 use NeuronTui\Conversation\Controls;
 use NeuronTui\Tui;
 use PHPUnit\Framework\TestCase;
@@ -21,28 +21,28 @@ final class DuplicateCommandsTest extends TestCase
     public function testTheFirstDuplicateRunsForEveryWayCommandsCanBeAdded(): void
     {
         /**
-         * @var array<string, Closure(Tui, SlashCommand, SlashCommand): Tui>
+         * @var array<string, Closure(Tui, Command, Command): Tui>
          */
         $mount = [
             'separate calls' => static fn (
                 Tui $tui,
-                SlashCommand $first,
-                SlashCommand $second,
+                Command $first,
+                Command $second,
             ): Tui => $tui->addCommand($first)->addCommand($second),
             'one array' => static fn (
                 Tui $tui,
-                SlashCommand $first,
-                SlashCommand $second,
+                Command $first,
+                Command $second,
             ): Tui => $tui->addCommand([$first, $second]),
             'one kit' => static fn (
                 Tui $tui,
-                SlashCommand $first,
-                SlashCommand $second,
+                Command $first,
+                Command $second,
             ): Tui => $tui->addCommand(self::kit([$first, $second])),
             'array and kit' => static fn (
                 Tui $tui,
-                SlashCommand $first,
-                SlashCommand $second,
+                Command $first,
+                Command $second,
             ): Tui => $tui->addCommand([
                 $first,
                 self::kit([$second]),
@@ -96,7 +96,7 @@ final class DuplicateCommandsTest extends TestCase
             'Kit member of the combination.',
         ];
         $commands = array_map(
-            static fn (string $description): SlashCommand => self::command(
+            static fn (string $description): Command => self::command(
                 '/clear',
                 $description,
             ),
@@ -156,13 +156,13 @@ final class DuplicateCommandsTest extends TestCase
     }
 
     /**
-     * @param list<SlashCommand> $commands
+     * @param list<Command> $commands
      */
     private static function kit(array $commands): AbstractCommandKit
     {
         return new class($commands) extends AbstractCommandKit {
             /**
-             * @param list<SlashCommand> $commands
+             * @param list<Command> $commands
              */
             public function __construct(
                 private readonly array $commands,
@@ -170,7 +170,7 @@ final class DuplicateCommandsTest extends TestCase
             }
 
             /**
-             * @return list<SlashCommand>
+             * @return list<Command>
              */
             protected function provide(): array
             {
@@ -186,8 +186,8 @@ final class DuplicateCommandsTest extends TestCase
         string $name,
         string $description,
         ?Closure $run = null,
-    ): SlashCommand {
-        return new class($name, $description, $run) implements SlashCommand {
+    ): Command {
+        return new class($name, $description, $run) implements Command {
             /**
              * @param Closure(Controls, string): void|null $run
              */

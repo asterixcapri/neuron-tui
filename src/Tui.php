@@ -9,8 +9,7 @@ use LogicException;
 use NeuronAI\Agent\Agent;
 use NeuronTui\Command\Command;
 use NeuronTui\Command\CommandKit;
-use NeuronTui\Command\RunsWhileWorking;
-use NeuronTui\Command\SlashCommand;
+use NeuronTui\Command\ConcurrentCommand;
 use NeuronTui\Conversation\ConversationRuntime;
 use Symfony\Component\Tui\Terminal\TerminalInterface;
 
@@ -23,7 +22,7 @@ final class Tui
 
     private string $subtitle = 'Agent conversation';
 
-    /** @var list<SlashCommand|RunsWhileWorking> */
+    /** @var list<Command|ConcurrentCommand> */
     private array $commands = [];
 
     private bool $started = false;
@@ -57,9 +56,11 @@ final class Tui
     }
 
     /**
-     * @param Command|CommandKit|array<array-key, mixed> $commands
+     * @param Command|ConcurrentCommand|CommandKit|array<array-key, mixed> $commands
      */
-    public function addCommand(Command|CommandKit|array $commands): self
+    public function addCommand(
+        Command|ConcurrentCommand|CommandKit|array $commands,
+    ): self
     {
         $this->ensureNotStarted();
 
@@ -68,10 +69,12 @@ final class Tui
         foreach ($commands as $command) {
             if (
                 !$command instanceof Command
+                && !$command instanceof ConcurrentCommand
                 && !$command instanceof CommandKit
             ) {
                 throw new InvalidArgumentException(
-                    'A TUI command must implement Command or CommandKit.',
+                    'A TUI command must implement Command, '
+                        . 'ConcurrentCommand or CommandKit.',
                 );
             }
 
@@ -80,20 +83,25 @@ final class Tui
                 : [$command];
 
             foreach ($members as $member) {
-                if (
-                    !$member instanceof SlashCommand
-                    && !$member instanceof RunsWhileWorking
-                ) {
-                    throw new InvalidArgumentException(
-                        'A TUI command must be runnable as a Slash command.',
-                    );
-                }
-
-                $this->commands[] = $member;
+                $this->mount($member);
             }
         }
 
         return $this;
+    }
+
+    private function mount(mixed $command): void
+    {
+        if (
+            !$command instanceof Command
+            && !$command instanceof ConcurrentCommand
+        ) {
+            throw new InvalidArgumentException(
+                'A TUI command must implement Command or ConcurrentCommand.',
+            );
+        }
+
+        $this->commands[] = $command;
     }
 
     public function run(): void

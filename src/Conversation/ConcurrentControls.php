@@ -5,25 +5,21 @@ declare(strict_types=1);
 namespace NeuronTui\Conversation;
 
 use NeuronTui\Command\Command;
+use NeuronTui\Command\ConcurrentCommand;
 use NeuronTui\Tui\ConversationView;
 
 /**
- * What a command allowed to run while the Agent is working may do.
+ * What a Concurrent command may do while it runs.
  *
- * The four verbs that ask nothing of the conversation: a command holding
- * these cannot open a Picker, cannot put a prompt to the Agent and cannot
- * reach it at all, because it may well be running while the Agent is
- * answering. What it can do is report, list what may be typed here, and
+ * The four verbs that keep their meaning while a Turn is under way: a command
+ * holding these cannot open a Picker, cannot put a prompt to the Agent and
+ * cannot reach it at all. It can report, list what may be typed here, and
  * leave.
- *
- * These are not the Controls with some verbs closed off at runtime: they are
- * fewer verbs, so a command of that kind is stopped where it is written
- * rather than where it runs.
  */
-final readonly class LimitedControls
+final readonly class ConcurrentControls
 {
     /**
-     * @param list<Command> $mounted the commands mounted here
+     * @param list<Command|ConcurrentCommand> $mounted the commands mounted here
      *
      * @internal the Conversation TUI builds these, a command receives them
      */
@@ -52,11 +48,10 @@ final readonly class LimitedControls
     /**
      * The commands mounted on this terminal, in the order they were mounted.
      *
-     * Reading what may be typed here is one of the things that keep their
-     * meaning while an answer is on its way, which is why `/help` is among
-     * the commands that run then.
+     * Reading what may be typed here keeps its meaning while an answer is on
+     * its way, which is why `/help` is a Concurrent command.
      *
-     * @return list<Command>
+     * @return list<Command|ConcurrentCommand>
      */
     public function commands(): array
     {

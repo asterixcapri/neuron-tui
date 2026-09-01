@@ -30,15 +30,15 @@ use NeuronAI\Testing\RequestRecord;
 use NeuronAI\Tools\Tool;
 use NeuronTui\Command\AbstractCommandKit;
 use NeuronTui\Command\Clear;
+use NeuronTui\Command\Command;
+use NeuronTui\Command\ConcurrentCommand;
 use NeuronTui\Command\Help;
 use NeuronTui\Command\Leave;
 use NeuronTui\Command\Resume;
-use NeuronTui\Command\RunsWhileWorking;
 use NeuronTui\Command\SessionKit;
-use NeuronTui\Command\SlashCommand;
 use NeuronTui\Conversation\ChoiceOption;
+use NeuronTui\Conversation\ConcurrentControls;
 use NeuronTui\Conversation\Controls;
-use NeuronTui\Conversation\LimitedControls;
 use NeuronTui\Tui;
 use NeuronTui\Session\FileSessionProvider;
 use NeuronTui\Session\InMemorySessionProvider;
@@ -100,7 +100,8 @@ final class TuiTest extends TestCase
 
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage(
-            'A TUI command must implement Command or CommandKit.',
+            'A TUI command must implement Command, '
+                . 'ConcurrentCommand or CommandKit.',
         );
 
         $tui->addCommand([new \stdClass()]);
@@ -1771,10 +1772,10 @@ MARKDOWN;
     }
 
     /**
-     * A command that says it runs while the Agent is working is carried out
-     * there and then, and the answer on its way is none the worse for it.
+     * A Concurrent command is carried out during a Turn, and the answer on
+     * its way is none the worse for it.
      */
-    public function testACommandThatRunsWhileWorkingIsCarriedOutMidTurn(): void
+    public function testAConcurrentCommandIsCarriedOutMidTurn(): void
     {
         $ran = false;
         $midTurnDisplay = null;
@@ -1792,9 +1793,9 @@ MARKDOWN;
         $agent = new Agent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 24);
-        $command = $this->commandThatRunsWhileWorking(
+        $command = $this->concurrentCommand(
             static function (
-                LimitedControls $controls,
+                ConcurrentControls $controls,
                 string $arguments,
             ) use (&$ran): void {
                 $ran = true;
@@ -1909,7 +1910,7 @@ MARKDOWN;
      * A kit carries commands of both kinds, and what arrived in one is
      * mounted like anything else — the mid-turn permission included.
      */
-    public function testAKitCanCarryACommandThatRunsWhileWorking(): void
+    public function testAKitCanCarryAConcurrentCommand(): void
     {
         $agent = new Agent();
         $agent->setAiProvider(new FakeAIProvider());
@@ -3659,7 +3660,7 @@ MARKDOWN;
      * Each string is typed a moment after the one before it, so a test can
      * write a name and then delete part of it.
      *
-     * @param list<SlashCommand|RunsWhileWorking> $commands
+     * @param list<Command|ConcurrentCommand> $commands
      */
     private static function screenAfterTyping(
         array $commands,
@@ -3709,8 +3710,8 @@ MARKDOWN;
     private static function commandNamed(
         string $name,
         string $description,
-    ): SlashCommand {
-        return new class($name, $description) implements SlashCommand {
+    ): Command {
+        return new class($name, $description) implements Command {
             public function __construct(
                 private readonly string $commandName,
                 private readonly string $description,
@@ -3736,9 +3737,9 @@ MARKDOWN;
     }
 
     /**
-     * While the Agent works the list carries what will actually run: a
-     * command the TUI would turn away is never offered there, and the whole
-     * list is back under the same name once the turn has finished.
+     * During a Turn the list carries the Concurrent commands: one the TUI
+     * would turn away is never offered there, and the whole list is back
+     * under the same name once the Turn has finished.
      */
     public function testTheListIsNarrowedToWhatRunsForAsLongAsTheTurnLasts(): void
     {
@@ -3758,9 +3759,9 @@ MARKDOWN;
         $agent = new Agent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
-        $whileWorking = $this->commandThatRunsWhileWorking(
+        $concurrent = $this->concurrentCommand(
             static function (
-                LimitedControls $controls,
+                ConcurrentControls $controls,
                 string $arguments,
             ): void {
             },
@@ -3809,7 +3810,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([$refused, $whileWorking])->run();
+        ))->addCommand([$refused, $concurrent])->run();
 
         self::assertIsString($midTurnDisplay);
         self::assertStringContainsString('/pulse', $midTurnDisplay);
@@ -4327,8 +4328,8 @@ MARKDOWN;
     private function commandThat(
         Closure $run,
         string $name = '/probe',
-    ): SlashCommand {
-        return new class($run, $name) implements SlashCommand {
+    ): Command {
+        return new class($run, $name) implements Command {
             /**
              * @param Closure(Controls, string): void $run
              */
@@ -4356,18 +4357,18 @@ MARKDOWN;
     }
 
     /**
-     * A command that says it may run while the Agent is working, and does
-     * what the test tells it to with the fewer Controls it is handed.
+     * A Concurrent command that does what the test tells it to with the
+     * controls that remain valid while a Turn is under way.
      *
-     * @param Closure(LimitedControls, string): void $run
+     * @param Closure(ConcurrentControls, string): void $run
      */
-    private function commandThatRunsWhileWorking(
+    private function concurrentCommand(
         Closure $run,
         string $name = '/probe',
-    ): RunsWhileWorking {
-        return new class($run, $name) implements RunsWhileWorking {
+    ): ConcurrentCommand {
+        return new class($run, $name) implements ConcurrentCommand {
             /**
-             * @param Closure(LimitedControls, string): void $run
+             * @param Closure(ConcurrentControls, string): void $run
              */
             public function __construct(
                 private readonly Closure $run,
@@ -4382,11 +4383,11 @@ MARKDOWN;
 
             public function describe(): string
             {
-                return 'Does what the test says, working or not.';
+                return 'Does what the test says, during a Turn or not.';
             }
 
             public function run(
-                LimitedControls $controls,
+                ConcurrentControls $controls,
                 string $arguments,
             ): void {
                 ($this->run)($controls, $arguments);
@@ -4397,7 +4398,7 @@ MARKDOWN;
     /**
      * The commands Neuron TUI ships for the Sessions of one provider.
      *
-     * @return list<SlashCommand|RunsWhileWorking>
+     * @return list<Command|ConcurrentCommand>
      */
     private static function sessionCommands(
         SessionProvider $sessions,
