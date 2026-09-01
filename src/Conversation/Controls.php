@@ -6,6 +6,7 @@ namespace NeuronTui\Conversation;
 
 use Closure;
 use NeuronAI\Agent\Agent;
+use NeuronTui\Command\Command;
 use NeuronTui\Tui\ConversationView;
 
 /**

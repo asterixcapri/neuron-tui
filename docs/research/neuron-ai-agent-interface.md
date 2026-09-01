@@ -393,8 +393,8 @@ La forma precisa, poi registrata nell'ADR 0003, è:
 namespace NeuronTui;
 
 use NeuronAI\Agent\Agent;
-use NeuronTui\Conversation\Command;
-use NeuronTui\Conversation\CommandKit;
+use NeuronTui\Command\Command;
+use NeuronTui\Command\CommandKit;
 use Symfony\Component\Tui\Terminal\TerminalInterface;
 
 final class Tui

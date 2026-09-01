@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronTui\Conversation;
 
+use NeuronTui\Command\Command;
 use NeuronTui\Tui\ConversationView;
 
 /**

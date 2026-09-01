@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace NeuronTui\Conversation;
+namespace NeuronTui\Command;
 
 /**
  * A kit whose members are built once and then sieved.

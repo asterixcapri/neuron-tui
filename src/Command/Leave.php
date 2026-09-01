@@ -2,10 +2,9 @@
 
 declare(strict_types=1);
 
-namespace NeuronTui\Conversation\Commands;
+namespace NeuronTui\Command;
 
 use NeuronTui\Conversation\LimitedControls;
-use NeuronTui\Conversation\RunsWhileWorking;
 
 /**
  * Leaves the terminal.

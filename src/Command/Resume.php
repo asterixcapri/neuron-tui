@@ -2,13 +2,12 @@
 
 declare(strict_types=1);
 
-namespace NeuronTui\Conversation\Commands;
+namespace NeuronTui\Command;
 
 use DateTimeImmutable;
 use NeuronTui\Conversation\ChoiceOption;
 use NeuronTui\Conversation\Controls;
 use NeuronTui\Conversation\SessionMetadata;
-use NeuronTui\Conversation\SlashCommand;
 use NeuronTui\Session\SessionProvider;
 
 /**

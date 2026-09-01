@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace NeuronTui\Tui;
 
-use NeuronTui\Conversation\Command;
-use NeuronTui\Conversation\RunsWhileWorking;
+use NeuronTui\Command\Command;
+use NeuronTui\Command\RunsWhileWorking;
 use Symfony\Component\Tui\Style\Style;
 use Symfony\Component\Tui\Widget\AbstractWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
