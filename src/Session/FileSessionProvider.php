@@ -31,9 +31,9 @@ final readonly class FileSessionProvider implements SessionProvider
      * extension it takes as arguments. Passing them on both sides — opening a
      * Session and finding which ones exist — keeps the two from drifting.
      */
-    private const string FILE_PREFIX = 'neuron_';
+    private const string FILE_PREFIX = '';
 
-    private const string FILE_EXTENSION = '.chat';
+    private const string FILE_EXTENSION = '.json';
 
     /**
      * The directory is asked for rather than guessed, so a conversation only
