@@ -27,7 +27,7 @@ interface CommandKit
     /**
      * The commands this kit mounts, once what was left out is gone.
      *
-     * @return list<SlashCommand|RunsWhileWorking>
+     * @return list<Command|ConcurrentCommand>
      */
     public function commands(): array;
 

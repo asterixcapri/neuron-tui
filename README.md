@@ -49,9 +49,9 @@ does what its application needs:
 
 ```php
 use NeuronTui\Conversation\Controls;
-use NeuronTui\Command\SlashCommand;
+use NeuronTui\Command\Command;
 
-final class Review implements SlashCommand
+final class Review implements Command
 {
     public function name(): string
     {
@@ -131,20 +131,20 @@ soon as the draft stops being a name: a space, a line break, or the slash
 deleted. A slash in the middle of a message shows nothing and stays text for
 the Agent.
 
-### Commands that run while the Agent is working
+### Concurrent commands
 
 A command is refused while the Agent is answering, and can be typed again once
 the turn has finished: one that replaced the conversation meanwhile would have
-the answer on its way land where it does not belong. A command that changes
-nothing of the sort says so by implementing
-`NeuronTui\Command\RunsWhileWorking` instead of
-`NeuronTui\Command\SlashCommand`, and is carried out at any time.
+the answer on its way land where it does not belong. A command whose
+synchronous run may overlap a Turn says so by implementing
+`NeuronTui\Command\ConcurrentCommand` instead of
+`NeuronTui\Command\Command`, and is carried out at any time.
 
 ```php
-use NeuronTui\Conversation\LimitedControls;
-use NeuronTui\Command\RunsWhileWorking;
+use NeuronTui\Conversation\ConcurrentControls;
+use NeuronTui\Command\ConcurrentCommand;
 
-final class Version implements RunsWhileWorking
+final class Version implements ConcurrentCommand
 {
     public function name(): string
     {
@@ -156,16 +156,16 @@ final class Version implements RunsWhileWorking
         return 'Says which build is answering.';
     }
 
-    public function run(LimitedControls $controls, string $arguments): void
+    public function run(ConcurrentControls $controls, string $arguments): void
     {
         $controls->say('Build ' . MyApp::VERSION);
     }
 }
 ```
 
-Both interfaces extend `NeuronTui\Command\Command`, which carries the
-name and the description; what changes is what `run()` is handed. In exchange
-for running at any time, such a command receives the **LimitedControls**: only
+Both interfaces carry the name, description and `run()` contract; what changes
+is what `run()` is handed. In exchange for overlapping a Turn, such a command
+receives the **ConcurrentControls**: only
 `say()`, `warn()`, `commands()` and `stop()`. No `choose()`, because nobody
 should be picking from a list while answers and tool calls scroll underneath;
 no `agent()`, no `ask()` and no `useAgent()`, because the Agent is busy
@@ -185,8 +185,8 @@ prefers `/quit` to `/exit` writes no command of its own:
 | --- | --- | --- |
 | `NeuronTui\Command\Clear` | `/clear` | Starts a new Session, leaving the current one stored. |
 | `NeuronTui\Command\Resume` | `/resume` | Lets you choose a stored Session to resume. |
-| `NeuronTui\Command\Leave` | `/exit` | Closes the Conversation TUI. Runs while the Agent is working. |
-| `NeuronTui\Command\Help` | `/help` | Lists what can be typed here. Runs while the Agent is working. |
+| `NeuronTui\Command\Leave` | `/exit` | Closes the Conversation TUI. Concurrent. |
+| `NeuronTui\Command\Help` | `/help` | Lists what can be typed here. Concurrent. |
 
 ```php
 use NeuronTui\Command\Clear;
@@ -320,10 +320,10 @@ an application may supply. The Session provider:
 `NeuronTui\Session\Session` to list a Session with, and
 `NeuronTui\Session\InMemorySessionProvider` and
 `NeuronTui\Session\FileSessionProvider` as the two shipped providers. And the
-Slash commands it mounts: `NeuronTui\Command\SlashCommand` to implement,
-`NeuronTui\Command\RunsWhileWorking` for a command that runs while the
-Agent is answering, `NeuronTui\Command\Command` behind both,
-`NeuronTui\Conversation\Controls` and `NeuronTui\Conversation\LimitedControls`
+Slash commands it mounts: `NeuronTui\Command\Command` to implement,
+`NeuronTui\Command\ConcurrentCommand` for a command whose synchronous run may
+overlap a Turn,
+`NeuronTui\Conversation\Controls` and `NeuronTui\Conversation\ConcurrentControls`
 as what each is handed while it runs, and
 `NeuronTui\Conversation\ChoiceOption` for each option offered by `choose()`,
 `NeuronTui\Command\Clear`,
@@ -385,11 +385,10 @@ them.
 - Any command the Host Application mounted, by the name it answers to —
   including `Clear`, `Resume`, `Leave` and `Help` when it mounted them.
 
-A command is refused while the Agent is working, so an arriving answer cannot
-land in the wrong Session; a command that says in its type that it runs while
-the Agent works — `Leave` and `Help` among the ones shipped — is carried out at
-any time. Unknown Slash commands stay in the composer so they can be corrected
-and are never sent to the Agent.
+A `Command` is refused while a Turn is under way, so an arriving answer cannot
+land in the wrong Session; a `ConcurrentCommand` — `Leave` and `Help` among
+the ones shipped — is carried out at any time. Unknown Slash commands stay in
+the composer so they can be corrected and are never sent to the Agent.
 
 ## Development
 

@@ -37,14 +37,25 @@ What it does is code someone wrote, and that code is free to send the Agent
 a prompt of its own.
 _Avoid_: Message, prompt, action
 
+**Concurrent command**:
+A Slash command whose synchronous run may overlap a Turn. It receives only
+Concurrent Controls, so it cannot reach the Agent, put a prompt to it, open a
+Picker or replace the conversation while an answer is on its way.
+_Avoid_: Async command, background command, command that runs while working
+
 **Controls**:
 What a Slash command may do while it runs: say something in the conversation,
 put a prompt to the Agent, offer a Picker, reach the Agent itself, put another
 Agent in charge of answering, list the mounted commands, leave the terminal. A
-command that declares in its type that it runs while the Agent is working is
-given fewer of them — saying, warning, listing and leaving — because there is
-no list to open and no Agent to reach while an answer is on its way.
+Concurrent command instead receives Concurrent Controls: saying, warning,
+listing and leaving, the operations whose meaning remains stable while an
+answer is on its way.
 _Avoid_: Context, facade, API
+
+**Concurrent Controls**:
+What a Concurrent command may do while its synchronous run overlaps a Turn:
+say, warn, list the mounted commands and leave the terminal.
+_Avoid_: Limited Controls, async controls, background controls
 
 **Command kit**:
 A group of Slash commands mounted in one go, carrying between them whatever

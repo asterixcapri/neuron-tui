@@ -7,6 +7,7 @@ namespace NeuronTui\Conversation;
 use Closure;
 use NeuronAI\Agent\Agent;
 use NeuronTui\Command\Command;
+use NeuronTui\Command\ConcurrentCommand;
 use NeuronTui\Tui\ConversationView;
 
 /**
@@ -25,7 +26,7 @@ final readonly class Controls
      * @param Closure(): Agent      $answering  the Agent answering right now
      * @param Closure(string): void $putToAgent how a prompt reaches the Agent
      * @param Closure(Agent): void  $answerFrom how another Agent takes over
-     * @param list<Command>         $mounted    the commands mounted here
+     * @param list<Command|ConcurrentCommand> $mounted the commands mounted here
      *
      * @internal the Conversation TUI builds these, a command receives them
      */
@@ -118,7 +119,7 @@ final readonly class Controls
      * TUI is the one that has it, and a Host Application would have to build
      * it before it existed.
      *
-     * @return list<Command>
+     * @return list<Command|ConcurrentCommand>
      */
     public function commands(): array
     {
