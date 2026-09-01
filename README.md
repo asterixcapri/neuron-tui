@@ -123,9 +123,9 @@ While a name is being written after a slash, the mounted commands are shown
 above the composer, each with the line it describes itself with. Nothing is
 mounted or configured to get them: they are the commands the Host Application
 already mounted, so a terminal without commands shows none. The keys stay with
-the composer meanwhile — Enter sends what is written, as it always did — and
-only the ones that mean something there are taken: ↑↓ choose a line, Tab
-writes the chosen name and a space, so what follows is typed as arguments, and
+the composer meanwhile, and the ones that mean something there are taken: ↑↓
+choose a line, Enter writes the chosen full name and runs it immediately, Tab
+writes the chosen name and a space so what follows is typed as arguments, and
 Escape takes the list away leaving the draft where it was. The list goes as
 soon as the draft stops being a name: a space, a line break, or the slash
 deleted. A slash in the middle of a message shows nothing and stays text for
@@ -373,12 +373,13 @@ them.
 
 ## Keys
 
-- Enter sends a message.
+- Enter sends a message, or runs the selected Command suggestion while its
+  list is open.
 - Shift+Enter inserts a line break.
 - Escape closes the Command suggestions while they are open, and clears the
   unsent draft otherwise.
-- ↑↓ choose a line of the Command suggestions, and Tab completes the chosen
-  name.
+- ↑↓ choose a line of the Command suggestions, Enter runs it, and Tab
+  completes its name for arguments.
 - PageUp and PageDown browse the History.
 - Ctrl+C closes the Conversation TUI, mounted commands or not.
 - Any command the Host Application mounted, by the name it answers to —

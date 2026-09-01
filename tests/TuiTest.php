@@ -3374,18 +3374,17 @@ MARKDOWN;
     }
 
     /**
-     * Enter is never intercepted: it sends what is written.
+     * Enter takes the first suggestion already selected for a prefix and
+     * submits its full name through normal Slash command dispatch.
      */
-    public function testEnterStillSendsWhileTheSuggestionsAreOpen(): void
+    public function testEnterRunsTheAutomaticallySelectedSuggestion(): void
     {
-        $provider = new FakeAIProvider();
         $agent = new Agent();
-        $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
-        $sent = null;
+        $arguments = null;
         EventLoop::delay(
             0.05,
-            static fn () => $terminal->simulateInput('/help'),
+            static fn () => $terminal->simulateInput('/al'),
         );
         EventLoop::delay(
             0.1,
@@ -3397,32 +3396,91 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.2,
-            static function () use (&$sent, $terminal): void {
-                $sent = AnsiUtils::stripAnsiCodes($terminal->getOutput());
-                $terminal->simulateInput("\x03");
-            },
+            static fn () => $terminal->simulateInput("\x03"),
         );
 
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([new Help()])->run();
+        ))->addCommand([
+                $this->commandThat(
+                    static function (
+                        Controls $controls,
+                        string $written,
+                    ) use (&$arguments): void {
+                        $arguments = $written;
+                        $controls->say('Alpha ran.');
+                    },
+                    '/alpha',
+                ),
+                self::commandNamed('/album', 'The second match.'),
+            ])->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
-        self::assertStringContainsString(
-            '/help — Lists what can be typed here.',
-            $display,
-        );
-        // The command was taken and the composer emptied, so the band that
-        // was open while the name was written is gone with the draft.
-        self::assertIsString($sent);
-        self::assertStringNotContainsString(
-            ' → /help',
-            $sent,
-        );
+        self::assertStringContainsString('Alpha ran.', $display);
         self::assertStringNotContainsString('Unknown Slash command', $display);
-        $provider->assertNothingSent();
+        self::assertSame('', $arguments);
+    }
+
+    /**
+     * After navigation Enter takes the suggestion under the arrow, not the
+     * first match or the unfinished prefix.
+     */
+    public function testEnterRunsTheArrowSelectedSuggestion(): void
+    {
+        $agent = new Agent();
+        $terminal = new VirtualTerminal(rows: 30);
+        $ran = null;
+        $arguments = null;
+        $command = static function (string $name) use (
+            &$ran,
+            &$arguments,
+        ): Closure {
+            return static function (
+                Controls $controls,
+                string $written,
+            ) use ($name, &$ran, &$arguments): void {
+                $ran = $name;
+                $arguments = $written;
+                $controls->say($name . ' ran.');
+            };
+        };
+        EventLoop::delay(
+            0.05,
+            static fn () => $terminal->simulateInput('/al'),
+        );
+        EventLoop::delay(
+            0.1,
+            static fn () => $terminal->simulateInput("\x1b[B"),
+        );
+        EventLoop::delay(
+            0.15,
+            static fn () => $terminal->simulateInput("\r"),
+        );
+        EventLoop::delay(
+            0.2,
+            static fn () => self::forceRepaint($terminal),
+        );
+        EventLoop::delay(
+            0.25,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new Tui(
+            $agent,
+            terminal: $terminal,
+        ))->addCommand([
+                $this->commandThat($command('/alpha'), '/alpha'),
+                $this->commandThat($command('/album'), '/album'),
+            ])->run();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+
+        self::assertStringContainsString('/album ran.', $display);
+        self::assertStringNotContainsString('Unknown Slash command', $display);
+        self::assertSame('/album', $ran);
+        self::assertSame('', $arguments);
     }
 
     /**
@@ -4196,6 +4254,47 @@ MARKDOWN;
     }
 
     /**
+     * Once Escape dismisses a selectable list, its old selection cannot
+     * replace the draft when Enter follows.
+     */
+    public function testEnterSubmitsTheDraftUnchangedAfterSuggestionsAreDismissed(): void
+    {
+        $agent = new Agent();
+        $terminal = new VirtualTerminal(rows: 30);
+        EventLoop::delay(
+            0.05,
+            static fn () => $terminal->simulateInput('/al'),
+        );
+        EventLoop::delay(
+            0.1,
+            static fn () => $terminal->simulateInput("\x1b"),
+        );
+        EventLoop::delay(
+            0.15,
+            static fn () => $terminal->simulateInput("\r"),
+        );
+        EventLoop::delay(
+            0.2,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new Tui(
+            $agent,
+            terminal: $terminal,
+        ))->addCommand([
+                self::commandNamed('/alpha', 'The first match.'),
+                self::commandNamed('/album', 'The second match.'),
+            ])->run();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+
+        self::assertStringContainsString(
+            'Unknown Slash command: /al',
+            $display,
+        );
+    }
+
+    /**
      * A list longer than the band is scrolled through rather than cut: the
      * last name is reached with the arrows, and the counter says where one is.
      */
@@ -4266,10 +4365,12 @@ MARKDOWN;
         self::assertIsString($open);
         self::assertStringContainsString('↑↓ moves', $open);
         self::assertStringContainsString('Tab completes', $open);
+        self::assertStringContainsString('Enter runs', $open);
         self::assertStringNotContainsString('ready · Enter sends', $open);
         self::assertIsString($closed);
         self::assertStringContainsString('ready · Enter sends', $closed);
         self::assertStringNotContainsString('Tab completes', $closed);
+        self::assertStringNotContainsString('Enter runs', $closed);
     }
 
     /**
