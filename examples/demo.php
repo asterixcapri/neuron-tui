@@ -3,8 +3,6 @@
 declare(strict_types=1);
 
 use NeuronAI\Agent\Agent;
-use NeuronAI\Agent\Middleware\TodoPlanning;
-use NeuronAI\Agent\Nodes\InferenceNode;
 use NeuronAI\HttpClient\AmpHttpClient;
 use NeuronAI\Providers\OpenAI\Responses\OpenAIResponses;
 use NeuronAI\Tools\Toolkits\Calculator\CalculatorToolkit;
@@ -37,17 +35,18 @@ if ($model === '') {
     exit(1);
 }
 
-$agent = new Agent();
-$agent->toolMaxRuns(PHP_INT_MAX);
-$agent->addMiddleware(InferenceNode::class, new TodoPlanning());
-$agent->setAiProvider(new OpenAIResponses(
-    key: $openAiKey,
-    model: $model,
-    httpClient: new AmpHttpClient(),
-));
-$agent->addTool(new FileSystemToolkit());
-$agent->addTool(new CalendarToolkit());
-$agent->addTool(new CalculatorToolkit());
+$agent = Agent::make()
+    ->toolMaxRuns(PHP_INT_MAX)
+    ->setAiProvider(new OpenAIResponses(
+        key: $openAiKey,
+        model: $model,
+        httpClient: new AmpHttpClient(),
+    ))
+    ->addTool([
+        new FileSystemToolkit(),
+        new CalendarToolkit(),
+        new CalculatorToolkit(),
+    ]);
 
 if ($jinaKey !== '') {
     $agent->addTool(new JinaToolkit($jinaKey));
