@@ -39,7 +39,7 @@ final class ConversationView
         'Enter queues · Shift+Enter adds a line';
 
     private const string SUGGESTING_STATUS =
-        'suggesting · ↑↓ moves · Tab completes · Enter sends';
+        'suggesting · ↑↓ moves · Tab completes · Enter runs';
 
     /**
      * Where the keys the suggestions answer are listened for: before the
@@ -71,8 +71,7 @@ final class ConversationView
     private readonly CommandSuggestions $suggestions;
 
     /**
-     * The keys the suggestions answer while they are on screen. Enter is
-     * not among them and never will be: it sends what is written.
+     * The keys the suggestions answer while they are on screen.
      */
     private readonly Keybindings $keys;
 
@@ -141,6 +140,7 @@ final class ConversationView
             'suggestion-previous' => [Key::UP],
             'suggestion-next' => [Key::DOWN],
             'suggestion-complete' => [Key::TAB],
+            'suggestion-run' => [Key::ENTER],
             'suggestion-close' => [Key::ESCAPE],
         ]);
         $this->tui->addListener(
@@ -501,8 +501,8 @@ final class ConversationView
      * composer keeps it throughout, and a key is taken from it only where
      * the suggestions have an answer for it — Tab excepted, which is never
      * the composer's. ↑↓ cost the composer nothing meanwhile, a name being
-     * written being one line by definition. Enter is never taken: it sends
-     * what is written, list or no list.
+     * written being one line by definition. Enter replaces a selectable
+     * draft before the composer submits it through its usual path.
      */
     private function handleSuggestionKeys(InputEvent $event): void
     {
@@ -532,6 +532,19 @@ final class ConversationView
             // complete it does nothing at all.
             $event->stopPropagation();
             $this->complete();
+
+            return;
+        }
+
+        if ($this->keys->matches($data, 'suggestion-run')) {
+            $chosen = $this->suggestions->chosenName();
+
+            if ($chosen !== null) {
+                // Leave Enter to the composer after replacing the prefix:
+                // its ordinary submit event remains the one command parsing
+                // and dispatch listen to.
+                $this->writeDraft($chosen);
+            }
 
             return;
         }
@@ -603,7 +616,7 @@ final class ConversationView
      *
      * There is one of these per writing state the TUI can be read in, and
      * the suggestions are the third: while there is a list to move through,
-     * the line names the keys that move, complete and send. The line that
+     * the line names the keys that move, complete and run. The line that
      * says nothing matches is not one of them, nothing there being
      * choosable. Choosing replaces this line with the Picker footer.
      */

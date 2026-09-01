@@ -29,11 +29,11 @@ use Symfony\Component\Tui\Widget\TextWidget;
  * being nothing is itself worth reading before Enter is pressed.
  *
  * The keys are asked for from outside: whoever holds them says which line is
- * chosen, asks for the name a completion would write, or takes the band away
- * for an Escape. Two questions answer for all of them: whether anything is on
- * screen at all, which is what Escape takes away, and whether what is on
- * screen is a list rather than the one line that says nothing matches, which
- * is what ↑↓ and Tab have to work on.
+ * chosen, asks for the name a completion or immediate run would write, or
+ * takes the band away for an Escape. Two questions answer for all of them:
+ * whether anything is on screen at all, which is what Escape takes away, and
+ * whether what is on screen is a list rather than the one line that says
+ * nothing matches, which is what ↑↓, Tab and Enter have to work on.
  *
  * While the Agent works the list carries the commands that run there and
  * nothing else. The Conversation TUI turns away a command that does not say
@@ -219,13 +219,13 @@ final class CommandSuggestions
     }
 
     /**
-     * Whether there is a list on screen to move through and complete from.
+     * Whether there is a list on screen to move through and take from.
      *
      * The one line that says nothing matches is not one: it is read, not
      * chosen from. So this is the answer to every question the keys ask —
-     * whether ↑↓ have anywhere to go, whether Tab has anything to write,
-     * whether Escape has a list to take away — and to what the status line
-     * says while there is one.
+     * whether ↑↓ have anywhere to go, whether Tab or Enter has a name to
+     * take, whether Escape has a list to take away — and to what the status
+     * line says while there is one.
      */
     public function isListOpen(): bool
     {
@@ -233,8 +233,8 @@ final class CommandSuggestions
     }
 
     /**
-     * The name a completion would write, or nothing where there is no list
-     * to complete from.
+     * The selected full command name, or nothing where there is no list to
+     * take from.
      */
     public function chosenName(): ?string
     {
