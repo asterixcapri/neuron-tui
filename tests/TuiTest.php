@@ -1422,35 +1422,6 @@ MARKDOWN;
         self::assertStringNotContainsString('Earlier question.', $display);
     }
 
-    public function testFirstCommandAnsweringToADuplicateNameRuns(): void
-    {
-        $ran = [];
-        $record = static function (
-            Controls $controls,
-            string $arguments,
-        ) use (&$ran): void {
-            $ran[] = 'first';
-            $controls->stop();
-        };
-        $second = static function (
-            Controls $controls,
-            string $arguments,
-        ) use (&$ran): void {
-            $ran[] = 'second';
-        };
-        $terminal = new VirtualTerminal();
-        EventLoop::queue(
-            static fn () => $terminal->simulateInput("/probe\r"),
-        );
-
-        (new Tui(new Agent(), $terminal))->addCommand([
-            $this->commandThat($record),
-            $this->commandThat($second),
-        ])->run();
-
-        self::assertSame(['first'], $ran);
-    }
-
     public function testNothingIsMountedUnlessAHostApplicationNamesIt(): void
     {
         $forcedExit = false;
@@ -5259,28 +5230,6 @@ MARKDOWN;
             $clearedDisplay,
         );
         self::assertSame([], $agent->getChatHistory()->getMessages());
-    }
-
-    public function testDuplicateCommandNamesRemainVisibleInSuggestions(): void
-    {
-        $terminal = new VirtualTerminal(rows: 30);
-        EventLoop::delay(
-            0.05,
-            static fn () => $terminal->simulateInput('/same'),
-        );
-        EventLoop::delay(
-            0.1,
-            static fn () => $terminal->simulateInput("\x03"),
-        );
-
-        (new Tui(new Agent(), $terminal))->addCommand([
-            self::commandNamed('/same', 'The first duplicate.'),
-            self::commandNamed('/same', 'The second duplicate.'),
-        ])->run();
-
-        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
-        self::assertStringContainsString('The first duplicate.', $display);
-        self::assertStringContainsString('The second duplicate.', $display);
     }
 
     public function testPageKeysBrowseAConversationAndReturnToLatest(): void

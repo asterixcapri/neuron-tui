@@ -66,7 +66,7 @@ final class ConversationRuntime
             $this->terminal,
             $title,
             $subtitle,
-            $this->mounted(),
+            $this->commands,
         );
         $this->workingIndicator = $this->view->workingIndicator();
         $this->turns = new TurnQueue();
@@ -215,7 +215,7 @@ final class ConversationRuntime
                 $this->send(new MessageForAgent($prompt));
             },
             $this->answerFrom(...),
-            $this->mounted(),
+            $this->commands,
         );
     }
 
@@ -228,17 +228,7 @@ final class ConversationRuntime
      */
     private function limitedControls(): LimitedControls
     {
-        return new LimitedControls($this->view, $this->mounted());
-    }
-
-    /**
-     * The mounted commands, in the order the Host Application named them.
-     *
-     * @return list<Command>
-     */
-    private function mounted(): array
-    {
-        return $this->commands;
+        return new LimitedControls($this->view, $this->commands);
     }
 
     /**

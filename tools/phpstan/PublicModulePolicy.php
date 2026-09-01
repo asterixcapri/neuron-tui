@@ -15,8 +15,9 @@ namespace NeuronTui\PHPStan;
  * the two interfaces a command may implement — one for a command that expects
  * the Agent to stand still, one for a command that runs while it works — the
  * one they both extend, the Controls, full or fewer, each is handed while it
- * runs, and the choice option passed to the waiting Controls. Every other
- * name under
+ * runs, the kit contract and base class used to group commands, the Session
+ * kit shipped by the library, and the choice option passed to the waiting
+ * Controls. Every other name under
  * the `NeuronTui` namespace — the internal modules, the test suite, this
  * tooling — carries no stability promise and may be reshaped without notice,
  * so a Host Application may not name any of them.
@@ -31,6 +32,8 @@ final class PublicModulePolicy
     private const array PUBLIC_MODULES = [
         'NeuronTui\Tui',
         'NeuronTui\Conversation\Command',
+        'NeuronTui\Conversation\CommandKit',
+        'NeuronTui\Conversation\AbstractCommandKit',
         'NeuronTui\Conversation\SlashCommand',
         'NeuronTui\Conversation\RunsWhileWorking',
         'NeuronTui\Conversation\ChoiceOption',
@@ -40,6 +43,7 @@ final class PublicModulePolicy
         'NeuronTui\Conversation\Commands\Help',
         'NeuronTui\Conversation\Commands\Leave',
         'NeuronTui\Conversation\Commands\Sessions',
+        'NeuronTui\Conversation\Commands\SessionKit',
         'NeuronTui\Session\SessionProvider',
         'NeuronTui\Session\FileSessionProvider',
         'NeuronTui\Session\InMemorySessionProvider',
