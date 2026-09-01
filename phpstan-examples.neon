@@ -5,7 +5,7 @@ parameters:
     tmpDir: .phpstan-examples.cache
     # The example scripts are named one by one rather than as a directory.
     # The examples are a separate Composer project whose vendor directory,
-    # when installed, links asterixcapri/neuron-cli back to this repository —
+    # when installed, links asterixcapri/neuron-tui back to this repository —
     # a cycle any directory walk follows until it exhausts memory.
     paths:
         - examples/demo.php
@@ -23,10 +23,10 @@ parameters:
 
 services:
     -
-        class: NeuronCli\PHPStan\PublicModuleOnlyRule
+        class: NeuronTui\PHPStan\PublicModuleOnlyRule
         tags:
             - phpstan.rules.rule
     -
-        class: NeuronCli\PHPStan\PublicModuleOnlyExtension
+        class: NeuronTui\PHPStan\PublicModuleOnlyExtension
         tags:
             - phpstan.restrictedClassNameUsageExtension

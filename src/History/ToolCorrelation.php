@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\History;
+namespace NeuronTui\History;
 
 use NeuronAI\Tools\ToolInterface;
 

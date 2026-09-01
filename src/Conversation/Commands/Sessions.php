@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Conversation\Commands;
+namespace NeuronTui\Conversation\Commands;
 
-use NeuronCli\Conversation\ChoiceOption;
-use NeuronCli\Conversation\Controls;
-use NeuronCli\Conversation\SlashCommand;
-use NeuronCli\Session\SessionProvider;
+use NeuronTui\Conversation\ChoiceOption;
+use NeuronTui\Conversation\Controls;
+use NeuronTui\Conversation\SlashCommand;
+use NeuronTui\Session\SessionProvider;
 
 /**
  * Offers the stored Sessions so a person can return to one.
  *
- * One of the commands Neuron CLI ships: a Host Application mounts it the way
+ * One of the commands Neuron TUI ships: a Host Application mounts it the way
  * it mounts one of its own, under `/sessions` or under whatever name it
  * prefers.
  *

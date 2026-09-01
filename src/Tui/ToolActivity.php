@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Tui;
+namespace NeuronTui\Tui;
 
 use NeuronAI\Tools\ToolInterface;
-use NeuronCli\History\ToolActivityText;
-use NeuronCli\History\ToolCorrelation;
+use NeuronTui\History\ToolActivityText;
+use NeuronTui\History\ToolCorrelation;
 
 /**
  * Paints one group of tool calls and results as they happen.

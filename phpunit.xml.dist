@@ -5,7 +5,7 @@
          colors="true"
          cacheDirectory=".phpunit.cache">
     <testsuites>
-        <testsuite name="Neuron CLI">
+        <testsuite name="Neuron TUI">
             <directory>tests</directory>
         </testsuite>
     </testsuites>

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\History;
+namespace NeuronTui\History;
 
 use NeuronAI\Chat\Enums\MessageRole;
 use NeuronAI\Chat\Messages\ContentBlocks\AudioContent;
@@ -15,7 +15,7 @@ use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Tools\ToolInterface;
-use NeuronCli\Tui\DisplayableText;
+use NeuronTui\Tui\DisplayableText;
 
 /**
  * The Agent's messages as the one ordered stream of entries a person sees.

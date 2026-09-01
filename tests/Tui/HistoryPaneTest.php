@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Tests\Tui;
+namespace NeuronTui\Tests\Tui;
 
-use NeuronCli\Tui\ConversationStyleSheet;
-use NeuronCli\Tui\HistoryPane;
+use NeuronTui\Tui\ConversationStyleSheet;
+use NeuronTui\Tui\HistoryPane;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;

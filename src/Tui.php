@@ -2,19 +2,19 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli;
+namespace NeuronTui;
 
 use NeuronAI\Agent\Agent;
-use NeuronCli\Conversation\CommandKit;
-use NeuronCli\Conversation\ConversationRuntime;
-use NeuronCli\Conversation\RunsWhileWorking;
-use NeuronCli\Conversation\SlashCommand;
+use NeuronTui\Conversation\CommandKit;
+use NeuronTui\Conversation\ConversationRuntime;
+use NeuronTui\Conversation\RunsWhileWorking;
+use NeuronTui\Conversation\SlashCommand;
 use Symfony\Component\Tui\Terminal\TerminalInterface;
 
 /**
  * Configures and starts a Conversation TUI.
  */
-final class NeuronCli
+final class Tui
 {
     private readonly ConversationRuntime $runtime;
 

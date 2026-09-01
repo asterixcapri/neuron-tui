@@ -6,7 +6,7 @@ one is just constructing it again with the same key. What Neuron does not
 offer is a way to find out **which** keys exist — the key is a constructor
 argument on each adapter, and `ChatHistoryInterface` has no listing operation.
 
-So Neuron CLI owns a **Session provider** seam with three operations — start a
+So Neuron TUI owns a **Session provider** seam with three operations — start a
 Session, list the Sessions, and resume one by key — and switches Session by
 calling `Agent::setChatHistory()` with the History the provider returns. The
 provider mints the key and opens the empty History together when a Session is

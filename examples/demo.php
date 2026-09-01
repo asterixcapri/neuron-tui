@@ -11,12 +11,12 @@ use NeuronAI\Tools\Toolkits\Calculator\CalculatorToolkit;
 use NeuronAI\Tools\Toolkits\Calendar\CalendarToolkit;
 use NeuronAI\Tools\Toolkits\FileSystem\FileSystemToolkit;
 use NeuronAI\Tools\Toolkits\Jina\JinaToolkit;
-use NeuronCli\Conversation\Commands\Clear;
-use NeuronCli\Conversation\Commands\Help;
-use NeuronCli\Conversation\Commands\Leave;
-use NeuronCli\Conversation\Commands\Sessions;
-use NeuronCli\NeuronCli;
-use NeuronCli\Session\FileSessionProvider;
+use NeuronTui\Conversation\Commands\Clear;
+use NeuronTui\Conversation\Commands\Help;
+use NeuronTui\Conversation\Commands\Leave;
+use NeuronTui\Conversation\Commands\Sessions;
+use NeuronTui\Tui;
+use NeuronTui\Session\FileSessionProvider;
 use Symfony\Component\Dotenv\Dotenv;
 
 require_once __DIR__ . '/vendor/autoload.php';
@@ -57,9 +57,9 @@ $sessionProvider = new FileSessionProvider(__DIR__ . '/sessions');
 
 $agent->setChatHistory($sessionProvider->start());
 
-$tui = new NeuronCli(
+$tui = new Tui(
     agent: $agent,
-    title: 'Neuron CLI Demo',
+    title: 'Neuron TUI Demo',
     subtitle: "OpenAI Responses · {$model}",
     commands: [
         new Clear($sessionProvider),
