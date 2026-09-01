@@ -54,12 +54,9 @@ and it can be taken with some of them left out.
 _Avoid_: Toolkit, bundle, plugin, pack
 
 **Session**:
-One conversation, identified by a key and held by a single History, that
-outlives the TUI process and can be reopened. No Agent owns it: any Agent
-can be handed it and carry it on. Where they live is named on the commands
-that use them, and the provider that keeps them in memory writes nothing
-anywhere, so until a Host Application says otherwise a Session ends with the
-process.
+One conversation, identified by a key and held by a single History, that can
+outlive the TUI process and be reopened. Its title and last-used time identify
+it to a person; a provider may also report its storage size.
 _Avoid_: Chat, thread
 
 **Session provider**:
