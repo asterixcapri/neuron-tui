@@ -40,6 +40,7 @@ use NeuronTui\Conversation\LimitedControls;
 use NeuronTui\Conversation\RunsWhileWorking;
 use NeuronTui\Conversation\SlashCommand;
 use NeuronTui\Tui;
+use NeuronTui\Session\FileSessionProvider;
 use NeuronTui\Session\InMemorySessionProvider;
 use NeuronTui\Session\Session;
 use NeuronTui\Session\SessionProvider;
@@ -4723,6 +4724,79 @@ MARKDOWN;
                 && (string) $request->messages[0]->getContent()
                     === 'The earlier subject',
         );
+    }
+
+    public function testResumeShowsTheRealFileSessionSizeAndResumesIt(): void
+    {
+        $directory = sys_get_temp_dir()
+            . '/neuron-tui-resume-'
+            . bin2hex(random_bytes(6));
+
+        try {
+            $sessions = new FileSessionProvider($directory);
+            $earlier = $sessions->start();
+            $earlier->addMessage(new UserMessage('The stored subject'));
+            $earlier->addMessage(new AssistantMessage('The stored answer.'));
+            $files = glob($directory . '/*.json') ?: [];
+            self::assertCount(1, $files);
+            $contents = file_get_contents($files[0]);
+            self::assertIsString($contents);
+            $storedBytes = strlen($contents);
+            self::assertLessThan(1_024, $storedBytes);
+
+            $agent = new Agent();
+            $terminal = new VirtualTerminal(rows: 30);
+            $pickerDisplay = null;
+            EventLoop::delay(
+                0.04,
+                static fn () => $terminal->simulateInput("/resume\r"),
+            );
+            EventLoop::delay(
+                0.1,
+                static function () use (&$pickerDisplay, $terminal): void {
+                    $pickerDisplay = AnsiUtils::stripAnsiCodes(
+                        $terminal->getOutput(),
+                    );
+                    $terminal->clearOutput();
+                    $terminal->simulateInput("\r");
+                },
+            );
+            EventLoop::delay(
+                0.16,
+                static fn () => $terminal->simulateInput("\x03"),
+            );
+
+            (new Tui(
+                $agent,
+                terminal: $terminal,
+            ))->addCommand(self::sessionCommands($sessions))->run();
+
+            self::assertIsString($pickerDisplay);
+            self::assertStringContainsString(
+                'The stored subject',
+                $pickerDisplay,
+            );
+            self::assertStringContainsString(
+                'just now · ' . $storedBytes . 'B',
+                $pickerDisplay,
+            );
+            self::assertSame(
+                ['The stored subject', 'The stored answer.'],
+                array_map(
+                    static fn (Message $message): string => (string) $message
+                        ->getContent(),
+                    $agent->getChatHistory()->getMessages(),
+                ),
+            );
+        } finally {
+            foreach (glob($directory . '/*') ?: [] as $path) {
+                unlink($path);
+            }
+
+            if (is_dir($directory)) {
+                rmdir($directory);
+            }
+        }
     }
 
     /**

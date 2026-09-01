@@ -29,6 +29,8 @@ final class InMemorySessionProviderTest extends TestCase
 
         self::assertCount(1, $listed);
         self::assertSame('The subject', $listed[0]->title);
+        self::assertObjectHasProperty('storageSize', $listed[0]);
+        self::assertNull($listed[0]->storageSize);
         self::assertSame($started, $provider->resume($listed[0]->key));
     }
 

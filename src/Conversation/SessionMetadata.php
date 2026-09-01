@@ -16,6 +16,19 @@ final readonly class SessionMetadata
         Session $session,
         DateTimeImmutable $now,
     ): string {
+        $relativeAge = self::relativeAge($session, $now);
+
+        if ($session->storageSize === null) {
+            return $relativeAge;
+        }
+
+        return $relativeAge . ' · ' . self::storageSize($session->storageSize);
+    }
+
+    private static function relativeAge(
+        Session $session,
+        DateTimeImmutable $now,
+    ): string {
         $age = $now->getTimestamp() - $session->lastUsedAt->getTimestamp();
 
         if ($age <= 0) {
@@ -35,5 +48,24 @@ final readonly class SessionMetadata
         };
 
         return $amount . ' ' . $unit . ($amount === 1 ? '' : 's') . ' ago';
+    }
+
+    private static function storageSize(int $bytes): string
+    {
+        $units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB'];
+        $size = (float) $bytes;
+        $unit = 0;
+
+        while ($size >= 1_024 && $unit < count($units) - 1) {
+            $size /= 1_024;
+            ++$unit;
+        }
+
+        $amount = rtrim(
+            rtrim(number_format($size, 1, '.', ''), '0'),
+            '.',
+        );
+
+        return $amount . $units[$unit];
     }
 }
