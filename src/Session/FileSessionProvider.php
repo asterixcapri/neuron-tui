@@ -10,6 +10,7 @@ use InvalidArgumentException;
 use NeuronAI\Chat\History\ChatHistoryInterface;
 use NeuronAI\Chat\History\FileChatHistory;
 use NeuronTui\History\HistoryProjection;
+use RuntimeException;
 
 /**
  * Provides the Sessions of an Agent from a directory, one file per Session.
@@ -21,8 +22,8 @@ use NeuronTui\History\HistoryProjection;
  *
  * Listing them stays on the same footing: a Session is read by reopening the
  * conversation through Neuron AI, never by parsing what it stored. The file
- * itself is asked one thing only — when it was last written — because that is
- * the one fact the conversation does not carry.
+ * itself supplies the two facts the conversation does not carry: when it was
+ * last written and how many bytes it occupies.
  */
 final readonly class FileSessionProvider implements SessionProvider
 {
@@ -70,6 +71,7 @@ final readonly class FileSessionProvider implements SessionProvider
                 $key,
                 $this->lastWrittenTo($path),
                 $title,
+                $this->storageSizeOf($path),
             );
         }
 
@@ -141,5 +143,18 @@ final readonly class FileSessionProvider implements SessionProvider
 
         return (new DateTimeImmutable('@' . $writtenAt))
             ->setTimezone(new DateTimeZone(date_default_timezone_get()));
+    }
+
+    private function storageSizeOf(string $path): int
+    {
+        $size = filesize($path);
+
+        if ($size === false) {
+            throw new RuntimeException(
+                'The Session file size could not be read.',
+            );
+        }
+
+        return $size;
     }
 }

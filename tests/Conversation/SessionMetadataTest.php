@@ -53,4 +53,45 @@ final class SessionMetadataTest extends TestCase
         yield 'one year' => ['2025-09-01 12:00:00 UTC', '1 year ago'];
         yield 'years' => ['2024-09-01 12:00:00 UTC', '2 years ago'];
     }
+
+    #[DataProvider('storageSizes')]
+    public function testItPresentsAvailableStorageSizeBesideRelativeAge(
+        ?int $storageSize,
+        string $expected,
+    ): void {
+        $session = new Session(
+            'session-key',
+            new DateTimeImmutable('2026-09-01 11:59:40 UTC'),
+            'The opening words',
+            $storageSize,
+        );
+
+        self::assertSame(
+            $expected,
+            SessionMetadata::format(
+                $session,
+                new DateTimeImmutable('2026-09-01 12:00:00 UTC'),
+            ),
+        );
+    }
+
+    /**
+     * @return Generator<string, array{?int, string}>
+     */
+    public static function storageSizes(): Generator
+    {
+        yield 'absent' => [null, '20 seconds ago'];
+        yield 'zero bytes' => [0, '20 seconds ago · 0B'];
+        yield 'bytes' => [999, '20 seconds ago · 999B'];
+        yield 'exact kilobyte' => [1_024, '20 seconds ago · 1KB'];
+        yield 'fractional kilobytes' => [30_515, '20 seconds ago · 29.8KB'];
+        yield 'exact megabyte' => [1_048_576, '20 seconds ago · 1MB'];
+        yield 'fractional megabytes' => [1_572_864, '20 seconds ago · 1.5MB'];
+        yield 'exact gigabyte' => [1_073_741_824, '20 seconds ago · 1GB'];
+        yield 'fractional gigabytes' => [
+            1_610_612_736,
+            '20 seconds ago · 1.5GB',
+        ];
+        yield 'larger unit' => [1_099_511_627_776, '20 seconds ago · 1TB'];
+    }
 }
