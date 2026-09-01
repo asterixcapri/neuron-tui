@@ -3,6 +3,12 @@
     "description": "Reusable terminal user interface for conversations with Neuron AI Agents.",
     "type": "library",
     "license": "MIT",
+    "authors": [
+        {
+            "name": "Alessandro Astarita",
+            "email": "aleast@caprionline.it"
+        }
+    ],
     "require": {
         "php": "^8.4.1",
         "amphp/amp": "^3.1",
@@ -23,15 +29,11 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "NeuronTui\\PHPStan\\": "tools/phpstan/",
             "NeuronTui\\Tests\\": "tests/"
         }
     },
     "scripts": {
-        "stan": [
-            "phpstan analyse --no-progress --memory-limit=512M",
-            "phpstan analyse -c phpstan-examples.neon --no-progress --memory-limit=512M"
-        ],
+        "stan": "phpstan analyse --no-progress --memory-limit=512M",
         "test": "phpunit"
     },
     "config": {
