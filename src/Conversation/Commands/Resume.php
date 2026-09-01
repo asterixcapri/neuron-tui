@@ -55,7 +55,12 @@ final readonly class Resume implements SlashCommand
         $options = [];
 
         foreach ($sessions as $session) {
-            $options[] = new ChoiceOption($session->key, $session->title);
+            $options[] = new ChoiceOption(
+                $session->key,
+                $session->title,
+                'Last used '
+                    . $session->lastUsedAt->format('j M Y, H:i'),
+            );
         }
 
         $chosen = $controls->choose('Sessions', $options);

@@ -4707,6 +4707,11 @@ MARKDOWN;
             'The earlier subject',
             $pickerDisplay,
         );
+        self::assertStringContainsString(
+            'Last used '
+                . $sessions->list()[0]->lastUsedAt->format('j M Y, H:i'),
+            $pickerDisplay,
+        );
         self::assertStringContainsString('❯ The earlier subject', $display);
         self::assertStringContainsString('● The earlier answer.', $display);
         self::assertStringNotContainsString(
