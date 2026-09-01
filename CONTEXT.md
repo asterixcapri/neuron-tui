@@ -77,10 +77,9 @@ _Avoid_: Menu, popup, dialog, Session picker
 
 **Command suggestions**:
 The mounted commands the composer shows while a person is writing a name after
-a slash, each under the line that describes it. Nothing is suspended and
-nothing changes hands: the draft stays where it was being written and the list
-is only ever a shorter way to type what could be typed by hand. So it is not
-the Picker, whatever the two look like.
+a slash, each under the line that describes it. The selected name can be
+completed for further writing or taken immediately; nothing is suspended, so
+this is not the Picker, whatever the two look like.
 _Avoid_: Picker, menu, autocomplete, palette, command palette
 
 **Turn**:
