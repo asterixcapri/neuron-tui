@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace NeuronTui;
 
+use InvalidArgumentException;
+use LogicException;
 use NeuronAI\Agent\Agent;
+use NeuronTui\Conversation\Command;
 use NeuronTui\Conversation\CommandKit;
 use NeuronTui\Conversation\ConversationRuntime;
 use NeuronTui\Conversation\RunsWhileWorking;
@@ -16,32 +19,101 @@ use Symfony\Component\Tui\Terminal\TerminalInterface;
  */
 final class Tui
 {
-    private readonly ConversationRuntime $runtime;
+    private string $title = 'Neuron AI';
+
+    private string $subtitle = 'Agent conversation';
+
+    /** @var list<SlashCommand|RunsWhileWorking> */
+    private array $commands = [];
+
+    private bool $started = false;
+
+    public function __construct(
+        private readonly Agent $agent,
+        private readonly ?TerminalInterface $terminal = null,
+    ) {}
+
+    public static function make(
+        Agent $agent,
+        ?TerminalInterface $terminal = null,
+    ): self {
+        return new self($agent, $terminal);
+    }
+
+    public function setTitle(string $title): self
+    {
+        $this->ensureNotStarted();
+        $this->title = $title;
+
+        return $this;
+    }
+
+    public function setSubtitle(string $subtitle): self
+    {
+        $this->ensureNotStarted();
+        $this->subtitle = $subtitle;
+
+        return $this;
+    }
 
     /**
-     * @param list<SlashCommand|RunsWhileWorking|CommandKit> $commands
-     *     everything that can be typed here after a slash: the Conversation
-     *     TUI mounts nothing on its own, and a kit stands for the commands it
-     *     carries
+     * @param Command|CommandKit|array<array-key, mixed> $commands
      */
-    public function __construct(
-        Agent $agent,
-        string $title = 'Neuron AI',
-        string $subtitle = 'Agent conversation',
-        ?TerminalInterface $terminal = null,
-        array $commands = [],
-    ) {
-        $this->runtime = new ConversationRuntime(
-            $agent,
-            $title,
-            $subtitle,
-            $terminal,
-            $commands,
-        );
+    public function addCommand(Command|CommandKit|array $commands): self
+    {
+        $this->ensureNotStarted();
+
+        $commands = is_array($commands) ? $commands : [$commands];
+
+        foreach ($commands as $command) {
+            if (
+                !$command instanceof Command
+                && !$command instanceof CommandKit
+            ) {
+                throw new InvalidArgumentException(
+                    'A TUI command must implement Command or CommandKit.',
+                );
+            }
+
+            $members = $command instanceof CommandKit
+                ? $command->commands()
+                : [$command];
+
+            foreach ($members as $member) {
+                if (
+                    !$member instanceof SlashCommand
+                    && !$member instanceof RunsWhileWorking
+                ) {
+                    throw new InvalidArgumentException(
+                        'A TUI command must be runnable as a Slash command.',
+                    );
+                }
+
+                $this->commands[] = $member;
+            }
+        }
+
+        return $this;
     }
 
     public function run(): void
     {
-        $this->runtime->run();
+        $this->ensureNotStarted();
+        $this->started = true;
+
+        (new ConversationRuntime(
+            $this->agent,
+            $this->title,
+            $this->subtitle,
+            $this->terminal,
+            $this->commands,
+        ))->run();
+    }
+
+    private function ensureNotStarted(): void
+    {
+        if ($this->started) {
+            throw new LogicException('A TUI instance can only be configured and run once.');
+        }
     }
 }

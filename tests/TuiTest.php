@@ -51,6 +51,100 @@ use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
 final class TuiTest extends TestCase
 {
+    public function testMakeAndConstructorExposeEquivalentTerminalBehaviour(): void
+    {
+        $fromConstructor = new VirtualTerminal();
+        EventLoop::delay(
+            0.05,
+            static fn () => $fromConstructor->simulateInput("\x03"),
+        );
+        (new Tui(new Agent(), $fromConstructor))->run();
+
+        $fromMake = new VirtualTerminal();
+        EventLoop::delay(
+            0.05,
+            static fn () => $fromMake->simulateInput("\x03"),
+        );
+        Tui::make(new Agent(), $fromMake)->run();
+
+        self::assertSame(
+            AnsiUtils::stripAnsiCodes($fromConstructor->getOutput()),
+            AnsiUtils::stripAnsiCodes($fromMake->getOutput()),
+        );
+    }
+
+    public function testFluentBrandingReturnsTheSameInstanceAndPreservesEmptyStrings(): void
+    {
+        $terminal = new VirtualTerminal();
+        $tui = Tui::make(new Agent(), $terminal);
+
+        self::assertSame($tui, $tui->setTitle(''));
+        self::assertSame($tui, $tui->setSubtitle(''));
+        self::assertSame($tui, $tui->addCommand(new Help()));
+
+        EventLoop::delay(
+            0.05,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+        $tui->run();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+        self::assertStringNotContainsString('Neuron AI', $display);
+        self::assertStringNotContainsString('Agent conversation', $display);
+    }
+
+    public function testAddCommandRejectsInvalidArrayMembersImmediately(): void
+    {
+        $tui = Tui::make(new Agent(), new VirtualTerminal());
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage(
+            'A TUI command must implement Command or CommandKit.',
+        );
+
+        $tui->addCommand([new \stdClass()]);
+    }
+
+    public function testConfigurationFreezesWhenRunBeginsAndInstanceRunsOnlyOnce(): void
+    {
+        $terminal = new VirtualTerminal();
+        $tui = Tui::make(new Agent(), $terminal);
+        $failures = [];
+
+        EventLoop::delay(
+            0.05,
+            static function () use ($tui, $terminal, &$failures): void {
+                foreach ([
+                    static fn () => $tui->setTitle('Late'),
+                    static fn () => $tui->setSubtitle('Late'),
+                    static fn () => $tui->addCommand(new Help()),
+                ] as $mutation) {
+                    try {
+                        $mutation();
+                    } catch (\LogicException $exception) {
+                        $failures[] = $exception->getMessage();
+                    }
+                }
+
+                $terminal->simulateInput("\x03");
+            },
+        );
+
+        $tui->run();
+
+        self::assertSame([
+            'A TUI instance can only be configured and run once.',
+            'A TUI instance can only be configured and run once.',
+            'A TUI instance can only be configured and run once.',
+        ], $failures);
+
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage(
+            'A TUI instance can only be configured and run once.',
+        );
+        $tui->run();
+    }
+
     public function testHostApplicationCanCustomizeConversationBranding(): void
     {
         $terminal = new VirtualTerminal();
@@ -59,12 +153,10 @@ final class TuiTest extends TestCase
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            new Agent(),
-            'Research Agent',
-            'Ask about the knowledge base',
-            $terminal,
-        ))->run();
+        (new Tui(new Agent(), $terminal))
+            ->setTitle('Research Agent')
+            ->setSubtitle('Ask about the knowledge base')
+            ->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -871,8 +963,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [new Leave()],
-        ))->run();
+        ))->addCommand([new Leave()])->run();
 
         self::assertIsString($intermediateDisplay);
         self::assertStringContainsString(
@@ -943,8 +1034,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: self::sessionCommands(new InMemorySessionProvider()),
-        ))->run();
+        ))->addCommand(self::sessionCommands(new InMemorySessionProvider()))->run();
 
         // `/sessions now` opens the picker on the Session being written in.
         self::assertIsString($afterSessions);
@@ -995,8 +1085,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [$command],
-        ))->run();
+        ))->addCommand([$command])->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertSame('two words', $arguments);
@@ -1028,8 +1117,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [$command],
-        ))->run();
+        ))->addCommand([$command])->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString(
@@ -1062,8 +1150,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [$command],
-        ))->run();
+        ))->addCommand([$command])->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('❯ Review this diff.', $display);
@@ -1108,8 +1195,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [$command],
-        ))->run();
+        ))->addCommand([$command])->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('The new one.', $display);
@@ -1156,8 +1242,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [$command],
-        ))->run();
+        ))->addCommand([$command])->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         // The conversation held by the Agent that answered first is still on
@@ -1213,8 +1298,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [$command],
-        ))->run();
+        ))->addCommand([$command])->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('The new one.', $display);
@@ -1255,8 +1339,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [$command],
-        ))->run();
+        ))->addCommand([$command])->run();
 
         self::assertFalse($forcedExit);
     }
@@ -1287,8 +1370,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [$command],
-        ))->run();
+        ))->addCommand([$command])->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString(
@@ -1326,8 +1408,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [$command],
-        ))->run();
+        ))->addCommand([$command])->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -1341,27 +1422,33 @@ MARKDOWN;
         self::assertStringNotContainsString('Earlier question.', $display);
     }
 
-    public function testTwoCommandsAnsweringToTheSameNameStopTheConstruction(): void
+    public function testFirstCommandAnsweringToADuplicateNameRuns(): void
     {
-        $doNothing = static function (
+        $ran = [];
+        $record = static function (
             Controls $controls,
             string $arguments,
-        ): void {
+        ) use (&$ran): void {
+            $ran[] = 'first';
+            $controls->stop();
         };
-
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage(
-            'Two Slash commands answer to /probe.',
+        $second = static function (
+            Controls $controls,
+            string $arguments,
+        ) use (&$ran): void {
+            $ran[] = 'second';
+        };
+        $terminal = new VirtualTerminal();
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("/probe\r"),
         );
 
-        new Tui(
-            new Agent(),
-            terminal: new VirtualTerminal(),
-            commands: [
-                $this->commandThat($doNothing),
-                $this->commandThat($doNothing),
-            ],
-        );
+        (new Tui(new Agent(), $terminal))->addCommand([
+            $this->commandThat($record),
+            $this->commandThat($second),
+        ])->run();
+
+        self::assertSame(['first'], $ran);
     }
 
     public function testNothingIsMountedUnlessAHostApplicationNamesIt(): void
@@ -1473,11 +1560,10 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [
+        ))->addCommand([
                 new Clear(new InMemorySessionProvider(), '/wipe'),
                 new Leave('/quit'),
-            ],
-        ))->run();
+            ])->run();
 
         // The name it was given is the only name it answers to.
         self::assertIsString($unknownDisplay);
@@ -1524,8 +1610,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [new Help(), new Leave(), $command],
-        ))->run();
+        ))->addCommand([new Help(), new Leave(), $command])->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -1568,8 +1653,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [new Leave()],
-        ))->run();
+        ))->addCommand([new Leave()])->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -1611,8 +1695,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [$command],
-        ))->run();
+        ))->addCommand([$command])->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -1650,8 +1733,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [$command],
-        ))->run();
+        ))->addCommand([$command])->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -1706,8 +1788,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [$command],
-        ))->run();
+        ))->addCommand([$command])->run();
 
         self::assertIsString($refusedDisplay);
         self::assertStringContainsString(
@@ -1771,8 +1852,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [$command],
-        ))->run();
+        ))->addCommand([$command])->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -1839,8 +1919,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [new Help(), new Leave()],
-        ))->run();
+        ))->addCommand([new Help(), new Leave()])->run();
 
         self::assertIsString($midTurnDisplay);
         self::assertStringContainsString(
@@ -1880,8 +1959,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [$kit],
-        ))->run();
+        ))->addCommand([$kit])->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -1945,8 +2023,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [$command],
-        ))->run();
+        ))->addCommand([$command])->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -2026,8 +2103,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [$command],
-        ))->run();
+        ))->addCommand([$command])->run();
 
         self::assertIsString($initialDisplay);
         self::assertStringContainsString('History remains visible.', $initialDisplay);
@@ -2122,8 +2198,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [$command],
-        ))->run();
+        ))->addCommand([$command])->run();
 
         self::assertIsString($withoutDescription);
         $withoutLines = explode("\n", str_replace("\r", '', $withoutDescription));
@@ -2186,8 +2261,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [$command],
-        ))->run();
+        ))->addCommand([$command])->run();
 
         self::assertIsString($pickerOutput);
         $display = str_replace(
@@ -2316,8 +2390,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [$command],
-        ))->run();
+        ))->addCommand([$command])->run();
 
         self::assertIsString($scrolledDisplay);
         self::assertStringContainsString('→ Label 9', $scrolledDisplay);
@@ -2407,8 +2480,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [$command],
-        ))->run();
+        ))->addCommand([$command])->run();
 
         self::assertIsString($initialDisplay);
         self::assertStringContainsString('→ Option one', $initialDisplay);
@@ -2532,8 +2604,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [$command],
-        ))->run();
+        ))->addCommand([$command])->run();
 
         self::assertIsString($shortDisplay);
         self::assertStringContainsString('Resizable (3 of 6)', $shortDisplay);
@@ -2621,8 +2692,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [$command],
-        ))->run();
+        ))->addCommand([$command])->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -2667,8 +2737,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [$command],
-        ))->run();
+        ))->addCommand([$command])->run();
 
         self::assertNull($chosen);
         self::assertSame(1, $completions);
@@ -2724,8 +2793,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [$command],
-        ))->run();
+        ))->addCommand([$command])->run();
 
         self::assertIsString($narrowedDisplay);
         self::assertStringContainsString('Claude Opus', $narrowedDisplay);
@@ -2806,8 +2874,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [$command],
-        ))->run();
+        ))->addCommand([$command])->run();
 
         self::assertIsString($shortDisplay);
         self::assertStringNotContainsString('Search:', $shortDisplay);
@@ -2880,8 +2947,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [$command],
-        ))->run();
+        ))->addCommand([$command])->run();
 
         self::assertIsString($filteredDisplay);
         self::assertStringContainsString('Models (1 of 3)', $filteredDisplay);
@@ -2989,8 +3055,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [$command],
-        ))->run();
+        ))->addCommand([$command])->run();
 
         self::assertIsString($emptyDisplay);
         self::assertStringContainsString('First opening (0 of 0)', $emptyDisplay);
@@ -3052,8 +3117,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [new Help(), new Leave()],
-        ))->run();
+        ))->addCommand([new Help(), new Leave()])->run();
 
         self::assertIsString($display);
         self::assertStringContainsString('/help', $display);
@@ -3101,8 +3165,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [new Help()],
-        ))->run();
+        ))->addCommand([new Help()])->run();
 
         self::assertIsString($display);
         $lines = preg_split('/\r\n|\r|\n/', $display);
@@ -3168,8 +3231,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: $commands,
-        ))->run();
+        ))->addCommand($commands)->run();
 
         self::assertIsString($display);
         self::assertStringContainsString('/cmd0', $display);
@@ -3257,8 +3319,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [new Help()],
-        ))->run();
+        ))->addCommand([new Help()])->run();
 
         self::assertIsString($open);
         self::assertStringContainsString(
@@ -3302,8 +3363,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [new Help()],
-        ))->run();
+        ))->addCommand([new Help()])->run();
 
         self::assertIsString($display);
         self::assertStringNotContainsString(
@@ -3375,8 +3435,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [new Help()],
-        ))->run();
+        ))->addCommand([new Help()])->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -3637,11 +3696,13 @@ MARKDOWN;
             },
         );
 
-        (new Tui(
-            new Agent(),
-            terminal: $terminal,
-            commands: $commands,
-        ))->run();
+        $tui = new Tui(new Agent(), $terminal);
+
+        foreach ($commands as $command) {
+            $tui->addCommand($command);
+        }
+
+        $tui->run();
 
         self::assertIsString($output);
 
@@ -3755,8 +3816,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [$refused, $whileWorking],
-        ))->run();
+        ))->addCommand([$refused, $whileWorking])->run();
 
         self::assertIsString($midTurnDisplay);
         self::assertStringContainsString('/pulse', $midTurnDisplay);
@@ -3820,8 +3880,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [$refused],
-        ))->run();
+        ))->addCommand([$refused])->run();
 
         self::assertIsString($midTurnDisplay);
         self::assertStringContainsString(
@@ -3873,8 +3932,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [$command],
-        ))->run();
+        ))->addCommand([$command])->run();
 
         self::assertIsString($choosingDisplay);
         // The picker is what is on screen, and the slash went to it.
@@ -4003,11 +4061,10 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [
+        ))->addCommand([
                 $this->commandThat($note('/alpha'), '/alpha'),
                 $this->commandThat($note('/album'), '/album'),
-            ],
-        ))->run();
+            ])->run();
 
         self::assertIsString($completed);
         // The name that was chosen, written whole, with the list gone.
@@ -4048,8 +4105,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [self::commandNamed('/alpha', 'The only one.')],
-        ))->run();
+        ))->addCommand([self::commandNamed('/alpha', 'The only one.')])->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -4140,8 +4196,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [new Help()],
-        ))->run();
+        ))->addCommand([new Help()])->run();
 
         self::assertIsString($closed);
         self::assertStringNotContainsString(
@@ -4235,8 +4290,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [new Help()],
-        ))->run();
+        ))->addCommand([new Help()])->run();
 
         self::assertIsString($open);
         self::assertStringContainsString('↑↓ moves', $open);
@@ -4382,8 +4436,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: self::sessionCommands(new InMemorySessionProvider()),
-        ))->run();
+        ))->addCommand(self::sessionCommands(new InMemorySessionProvider()))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -4443,8 +4496,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: self::sessionCommands($sessions),
-        ))->run();
+        ))->addCommand(self::sessionCommands($sessions))->run();
 
         self::assertIsString($clearedDisplay);
         self::assertStringContainsString('draft', $clearedDisplay);
@@ -4496,8 +4548,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: self::sessionCommands($sessions),
-        ))->run();
+        ))->addCommand(self::sessionCommands($sessions))->run();
 
         $listed = $sessions->list();
 
@@ -4576,8 +4627,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: self::sessionCommands($sessions),
-        ))->run();
+        ))->addCommand(self::sessionCommands($sessions))->run();
 
         self::assertIsString($refusedDisplay);
         self::assertStringContainsString(
@@ -4632,8 +4682,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: self::sessionCommands($sessions),
-        ))->run();
+        ))->addCommand(self::sessionCommands($sessions))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -4702,8 +4751,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: self::sessionCommands($sessions),
-        ))->run();
+        ))->addCommand(self::sessionCommands($sessions))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -4748,8 +4796,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: self::sessionCommands($sessions),
-        ))->run();
+        ))->addCommand(self::sessionCommands($sessions))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -4803,8 +4850,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: self::sessionCommands($sessions),
-        ))->run();
+        ))->addCommand(self::sessionCommands($sessions))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -4836,8 +4882,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: self::sessionCommands(new InMemorySessionProvider()),
-        ))->run();
+        ))->addCommand(self::sessionCommands(new InMemorySessionProvider()))->run();
 
         self::assertStringContainsString(
             'There is no earlier Session to return to yet.',
@@ -4891,8 +4936,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: self::sessionCommands($sessions),
-        ))->run();
+        ))->addCommand(self::sessionCommands($sessions))->run();
 
         self::assertIsString($narrowedDisplay);
         self::assertStringContainsString('Beta subject', $narrowedDisplay);
@@ -4930,8 +4974,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: self::sessionCommands($sessions),
-        ))->run();
+        ))->addCommand(self::sessionCommands($sessions))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -4980,8 +5023,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: self::sessionCommands($sessions),
-        ))->run();
+        ))->addCommand(self::sessionCommands($sessions))->run();
 
         self::assertIsString($refusedDisplay);
         self::assertStringContainsString(
@@ -5054,8 +5096,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [new SessionKit($sessions), new Leave()],
-        ))->run();
+        ))->addCommand([new SessionKit($sessions), new Leave()])->run();
 
         self::assertIsString($pickerDisplay);
         self::assertStringContainsString(
@@ -5128,11 +5169,10 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [
+        ))->addCommand([
                 (new SessionKit($sessions))->exclude([Clear::class]),
                 new Leave(),
-            ],
-        ))->run();
+            ])->run();
 
         self::assertIsString($refusedDisplay);
         self::assertStringContainsString(
@@ -5198,11 +5238,10 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: [
+        ))->addCommand([
                 (new SessionKit($sessions))->only([Clear::class]),
                 new Leave(),
-            ],
-        ))->run();
+            ])->run();
 
         self::assertIsString($refusedDisplay);
         self::assertStringContainsString(
@@ -5222,24 +5261,26 @@ MARKDOWN;
         self::assertSame([], $agent->getChatHistory()->getMessages());
     }
 
-    /**
-     * A command a kit brought is a mounted command like any other, so it
-     * stops the construction when it answers to a name already taken.
-     */
-    public function testACommandFromAKitClaimingATakenNameStopsTheBuild(): void
+    public function testDuplicateCommandNamesRemainVisibleInSuggestions(): void
     {
-        $sessions = new InMemorySessionProvider();
-
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage(
-            'Two Slash commands answer to /clear.',
+        $terminal = new VirtualTerminal(rows: 30);
+        EventLoop::delay(
+            0.05,
+            static fn () => $terminal->simulateInput('/same'),
+        );
+        EventLoop::delay(
+            0.1,
+            static fn () => $terminal->simulateInput("\x03"),
         );
 
-        new Tui(
-            new Agent(),
-            terminal: new VirtualTerminal(),
-            commands: [new Clear($sessions), new SessionKit($sessions)],
-        );
+        (new Tui(new Agent(), $terminal))->addCommand([
+            self::commandNamed('/same', 'The first duplicate.'),
+            self::commandNamed('/same', 'The second duplicate.'),
+        ])->run();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+        self::assertStringContainsString('The first duplicate.', $display);
+        self::assertStringContainsString('The second duplicate.', $display);
     }
 
     public function testPageKeysBrowseAConversationAndReturnToLatest(): void

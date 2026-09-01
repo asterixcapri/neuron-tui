@@ -57,16 +57,14 @@ $sessionProvider = new FileSessionProvider(__DIR__ . '/sessions');
 
 $agent->setChatHistory($sessionProvider->start());
 
-$tui = new Tui(
-    agent: $agent,
-    title: 'Neuron TUI Demo',
-    subtitle: "OpenAI Responses · {$model}",
-    commands: [
+$tui = Tui::make($agent)
+    ->setTitle('Neuron TUI Demo')
+    ->setSubtitle("OpenAI Responses · {$model}")
+    ->addCommand([
         new Clear($sessionProvider),
         new Sessions($sessionProvider),
         new Leave(),
         new Help(),
-    ],
-);
+    ]);
 
 $tui->run();
