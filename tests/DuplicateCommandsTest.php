@@ -6,10 +6,10 @@ namespace NeuronTui\Tests;
 
 use Closure;
 use NeuronAI\Agent\Agent;
-use NeuronTui\Conversation\AbstractCommandKit;
-use NeuronTui\Conversation\Commands\Help;
+use NeuronTui\Command\AbstractCommandKit;
+use NeuronTui\Command\Help;
+use NeuronTui\Command\SlashCommand;
 use NeuronTui\Conversation\Controls;
-use NeuronTui\Conversation\SlashCommand;
 use NeuronTui\Tui;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;

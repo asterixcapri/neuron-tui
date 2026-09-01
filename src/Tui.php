@@ -7,11 +7,11 @@ namespace NeuronTui;
 use InvalidArgumentException;
 use LogicException;
 use NeuronAI\Agent\Agent;
-use NeuronTui\Conversation\Command;
-use NeuronTui\Conversation\CommandKit;
+use NeuronTui\Command\Command;
+use NeuronTui\Command\CommandKit;
+use NeuronTui\Command\RunsWhileWorking;
+use NeuronTui\Command\SlashCommand;
 use NeuronTui\Conversation\ConversationRuntime;
-use NeuronTui\Conversation\RunsWhileWorking;
-use NeuronTui\Conversation\SlashCommand;
 use Symfony\Component\Tui\Terminal\TerminalInterface;
 
 /**

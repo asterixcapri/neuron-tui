@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
-namespace NeuronTui\Conversation;
+namespace NeuronTui\Command;
+
+use NeuronTui\Conversation\LimitedControls;
 
 /**
  * A command that runs whether or not the Agent is standing still.
