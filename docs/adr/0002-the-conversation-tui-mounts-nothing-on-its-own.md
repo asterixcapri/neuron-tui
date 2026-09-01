@@ -1,5 +1,8 @@
 # The Conversation TUI mounts nothing on its own
 
+_ADR 0003 supersedes only this decision's duplicate-name rule. The TUI still
+mounts nothing on its own and all other consequences remain in force._
+
 Neuron CLI used to answer three Slash commands — `/clear`, `/sessions` and
 `/exit` — carried out by the Conversation TUI itself, and the source said as
 much: a fixed set of commands does not justify a registry. That reasoning held
