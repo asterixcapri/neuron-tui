@@ -9,6 +9,8 @@ use NeuronTui\Session\Session;
 
 /**
  * Presents the recognition metadata shown beneath a Session title.
+ *
+ * @internal
  */
 final readonly class SessionMetadata
 {
