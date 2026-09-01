@@ -1,24 +1,25 @@
-# Neuron CLI
+# Neuron TUI
 
 Shared language for an interactive terminal conversation with a Neuron AI
 Agent.
 
 ## Language
 
-**Neuron CLI**:
-The reusable terminal module that runs a Conversation TUI for an Agent
+**Neuron TUI**:
+The reusable terminal Adapter through which a person converses with an Agent
 supplied by a Host Application.
-_Avoid_: Executable, command
+_Avoid_: Neuron CLI, executable, command
 
 **Agent**:
 A ready-to-use Neuron AI agent whose capabilities and dependencies have
-already been configured by the Host Application.
+already been configured by the Host Application. It may coordinate other
+Agents, but Neuron TUI sees only the Agent it converses with.
 _Avoid_: Bot, model
 
 **Host Application**:
 The application that configures the Agent and starts the terminal
 interaction.
-_Avoid_: Neuron CLI, library
+_Avoid_: Neuron TUI, library
 
 **Conversation TUI**:
 The interactive terminal interface through which a person converses with an
