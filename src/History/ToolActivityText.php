@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\History;
+namespace NeuronTui\History;
 
 use NeuronAI\Tools\ToolInterface;
-use NeuronCli\Tui\DisplayableText;
+use NeuronTui\Tui\DisplayableText;
 
 /**
  * How a tool call and its result are told to a person.

@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Tui;
+namespace NeuronTui\Tui;
 
 use Amp\DeferredFuture;
 use Closure;
 use InvalidArgumentException;
 use LogicException;
 use NeuronAI\Chat\Messages\Message;
-use NeuronCli\Conversation\ChoiceOption;
-use NeuronCli\Conversation\Command;
-use NeuronCli\History\EntryKind;
-use NeuronCli\History\HistoryProjection;
+use NeuronTui\Conversation\ChoiceOption;
+use NeuronTui\Conversation\Command;
+use NeuronTui\History\EntryKind;
+use NeuronTui\History\HistoryProjection;
 use Symfony\Component\Tui\Event\CancelEvent;
 use Symfony\Component\Tui\Event\ChangeEvent;
 use Symfony\Component\Tui\Event\InputEvent;

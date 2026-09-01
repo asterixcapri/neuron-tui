@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Session;
+namespace NeuronTui\Session;
 
 use DateTimeImmutable;
 use InvalidArgumentException;
 use NeuronAI\Chat\History\ChatHistoryInterface;
 use NeuronAI\Chat\History\InMemoryChatHistory;
-use NeuronCli\History\HistoryProjection;
+use NeuronTui\History\HistoryProjection;
 
 /**
  * Provides the Sessions of an Agent from memory, for as long as the process

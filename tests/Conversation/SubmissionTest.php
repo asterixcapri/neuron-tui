@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Tests\Conversation;
+namespace NeuronTui\Tests\Conversation;
 
-use NeuronCli\Conversation\MessageForAgent;
-use NeuronCli\Conversation\SlashCommandInput;
-use NeuronCli\Conversation\Submission;
+use NeuronTui\Conversation\MessageForAgent;
+use NeuronTui\Conversation\SlashCommandInput;
+use NeuronTui\Conversation\Submission;
 use PHPUnit\Framework\TestCase;
 
 final class SubmissionTest extends TestCase

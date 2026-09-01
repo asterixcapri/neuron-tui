@@ -1,6 +1,6 @@
-# Neuron CLI
+# Neuron TUI
 
-Neuron CLI is a reusable Conversation TUI for
+Neuron TUI is a reusable Conversation TUI for
 [Neuron AI](https://github.com/neuron-core/neuron-ai). A Host Application
 supplies a configured Agent; this library owns only the interactive terminal
 experience.
@@ -8,30 +8,30 @@ experience.
 ## Installation
 
 ```bash
-composer require asterixcapri/neuron-cli
+composer require asterixcapri/neuron-tui
 ```
 
-Neuron CLI requires PHP 8.4.1 or newer and an interactive TTY.
+Neuron TUI requires PHP 8.4.1 or newer and an interactive TTY.
 
 ## Usage
 
-Configure the Agent in your application, then pass it to `NeuronCli`:
+Configure the Agent in your application, then pass it to `Tui`:
 
 ```php
 use NeuronAI\Agent\Agent;
-use NeuronCli\NeuronCli;
+use NeuronTui\Tui;
 
 $agent = new Agent();
 $agent->setAiProvider($provider);
 
-(new NeuronCli($agent))->run();
+(new Tui($agent))->run();
 ```
 
 The default header uses generic Neuron AI branding. A title and subtitle can
 be supplied when the terminal should identify a particular Agent or product:
 
 ```php
-(new NeuronCli(
+(new Tui(
     agent: $agent,
     title: 'Research Agent',
     subtitle: 'Ask about the knowledge base',
@@ -49,8 +49,8 @@ commands it wants — its own, and the ones this library ships — so the termin
 does what its application needs:
 
 ```php
-use NeuronCli\Conversation\Controls;
-use NeuronCli\Conversation\SlashCommand;
+use NeuronTui\Conversation\Controls;
+use NeuronTui\Conversation\SlashCommand;
 
 final class Review implements SlashCommand
 {
@@ -78,7 +78,7 @@ final class Review implements SlashCommand
     }
 }
 
-(new NeuronCli(agent: $agent, commands: [new Review()]))->run();
+(new Tui(agent: $agent, commands: [new Review()]))->run();
 ```
 
 A command answers to a name, slash included, and describes itself in one
@@ -138,12 +138,12 @@ A command is refused while the Agent is answering, and can be typed again once
 the turn has finished: one that replaced the conversation meanwhile would have
 the answer on its way land where it does not belong. A command that changes
 nothing of the sort says so by implementing
-`NeuronCli\Conversation\RunsWhileWorking` instead of
-`NeuronCli\Conversation\SlashCommand`, and is carried out at any time.
+`NeuronTui\Conversation\RunsWhileWorking` instead of
+`NeuronTui\Conversation\SlashCommand`, and is carried out at any time.
 
 ```php
-use NeuronCli\Conversation\LimitedControls;
-use NeuronCli\Conversation\RunsWhileWorking;
+use NeuronTui\Conversation\LimitedControls;
+use NeuronTui\Conversation\RunsWhileWorking;
 
 final class Version implements RunsWhileWorking
 {
@@ -164,7 +164,7 @@ final class Version implements RunsWhileWorking
 }
 ```
 
-Both interfaces extend `NeuronCli\Conversation\Command`, which carries the
+Both interfaces extend `NeuronTui\Conversation\Command`, which carries the
 name and the description; what changes is what `run()` is handed. In exchange
 for running at any time, such a command receives the **LimitedControls**: only
 `say()`, `warn()`, `commands()` and `stop()`. No `choose()`, because nobody
@@ -178,28 +178,28 @@ reading what may be typed here change no conversation.
 
 ### The commands this library ships
 
-Four commands come with Neuron CLI, and they are mounted like any other. Each
+Four commands come with Neuron TUI, and they are mounted like any other. Each
 takes the name it answers to at construction, so a Host Application that
 prefers `/quit` to `/exit` writes no command of its own:
 
 | Class | Default name | What it does |
 | --- | --- | --- |
-| `NeuronCli\Conversation\Commands\Clear` | `/clear` | Starts a new Session, leaving the current one stored. |
-| `NeuronCli\Conversation\Commands\Sessions` | `/sessions` | Lists the stored Sessions and resumes the one chosen. |
-| `NeuronCli\Conversation\Commands\Leave` | `/exit` | Closes the Conversation TUI. Runs while the Agent is working. |
-| `NeuronCli\Conversation\Commands\Help` | `/help` | Lists what can be typed here. Runs while the Agent is working. |
+| `NeuronTui\Conversation\Commands\Clear` | `/clear` | Starts a new Session, leaving the current one stored. |
+| `NeuronTui\Conversation\Commands\Sessions` | `/sessions` | Lists the stored Sessions and resumes the one chosen. |
+| `NeuronTui\Conversation\Commands\Leave` | `/exit` | Closes the Conversation TUI. Runs while the Agent is working. |
+| `NeuronTui\Conversation\Commands\Help` | `/help` | Lists what can be typed here. Runs while the Agent is working. |
 
 ```php
-use NeuronCli\Conversation\Commands\Clear;
-use NeuronCli\Conversation\Commands\Help;
-use NeuronCli\Conversation\Commands\Leave;
-use NeuronCli\Conversation\Commands\Sessions;
-use NeuronCli\Session\InMemorySessionProvider;
+use NeuronTui\Conversation\Commands\Clear;
+use NeuronTui\Conversation\Commands\Help;
+use NeuronTui\Conversation\Commands\Leave;
+use NeuronTui\Conversation\Commands\Sessions;
+use NeuronTui\Session\InMemorySessionProvider;
 
 $sessions = new InMemorySessionProvider();
 $agent->setChatHistory($sessions->start());
 
-(new NeuronCli(agent: $agent, commands: [
+(new Tui(agent: $agent, commands: [
     new Clear($sessions),
     new Sessions($sessions),
     new Leave('/quit'),
@@ -227,14 +227,14 @@ is given the Session provider once and hands it to both the commands that
 touch the Sessions.
 
 ```php
-use NeuronCli\Conversation\Commands\Leave;
-use NeuronCli\Conversation\Commands\SessionKit;
-use NeuronCli\Session\FileSessionProvider;
+use NeuronTui\Conversation\Commands\Leave;
+use NeuronTui\Conversation\Commands\SessionKit;
+use NeuronTui\Session\FileSessionProvider;
 
 $sessions = new FileSessionProvider('/var/lib/my-app/sessions');
 $agent->setChatHistory($sessions->start());
 
-(new NeuronCli(agent: $agent, commands: [
+(new Tui(agent: $agent, commands: [
     new SessionKit($sessions),
     new Leave(),
 ]))->run();
@@ -245,7 +245,7 @@ ones kept, so an application in which conversations are not thrown away has
 `/sessions` without `/clear`:
 
 ```php
-use NeuronCli\Conversation\Commands\Clear;
+use NeuronTui\Conversation\Commands\Clear;
 
 commands: [
     (new SessionKit($sessions))->exclude([Clear::class]),
@@ -263,8 +263,8 @@ are the same thing — same listing, same rules, and the same stopped
 construction when two of them answer to one name.
 
 A Host Application groups commands of its own by extending
-`NeuronCli\Conversation\AbstractCommandKit` and naming them in `provide()`; the
-`NeuronCli\Conversation\CommandKit` interface is what the Conversation TUI
+`NeuronTui\Conversation\AbstractCommandKit` and naming them in `provide()`; the
+`NeuronTui\Conversation\CommandKit` interface is what the Conversation TUI
 mounts. Renaming a command stays the command's own business, so a kit is the
 short way in and writing its commands out by hand remains the way to give them
 names of one's own.
@@ -288,23 +288,23 @@ keeps them for the life of the process and writes nothing anywhere; keeping
 them on disk, or anywhere else, is a different provider passed the same way:
 
 ```php
-use NeuronCli\Session\FileSessionProvider;
+use NeuronTui\Session\FileSessionProvider;
 
 $sessions = new FileSessionProvider('/var/lib/my-app/sessions');
 $agent->setChatHistory($sessions->start());
 
-(new NeuronCli(agent: $agent, commands: [
+(new Tui(agent: $agent, commands: [
     new Clear($sessions),
     new Sessions($sessions),
 ]))->run();
 ```
 
 An application that keeps conversations in its own storage implements
-`NeuronCli\Session\SessionProvider` instead. It answers three questions:
+`NeuronTui\Session\SessionProvider` instead. It answers three questions:
 start a Session, list the Sessions, and resume one by its key. Starting and
 resuming return the Neuron AI chat history that the Host Application or a
 command installs on the Agent; saving, reloading and deserializing remain
-Neuron AI's work. Neuron CLI never deletes a stored conversation.
+Neuron AI's work. Neuron TUI never deletes a stored conversation.
 
 Starting a Session replaces the History configured on the Agent by the Host
 Application, because a provider builds every History it hands back. An
@@ -314,33 +314,33 @@ reaching that place. See
 [ADR 0002](docs/adr/0002-the-conversation-tui-mounts-nothing-on-its-own.md)
 for why the provider is named on the commands instead of on the terminal.
 
-`NeuronCli\NeuronCli` is the public module, and two seams are the dependencies
+`NeuronTui\Tui` is the public module, and two seams are the dependencies
 an application may supply. The Session provider:
-`NeuronCli\Session\SessionProvider` to implement,
-`NeuronCli\Session\Session` to list a Session with, and
-`NeuronCli\Session\InMemorySessionProvider` and
-`NeuronCli\Session\FileSessionProvider` as the two shipped providers. And the
-Slash commands it mounts: `NeuronCli\Conversation\SlashCommand` to implement,
-`NeuronCli\Conversation\RunsWhileWorking` for a command that runs while the
-Agent is answering, `NeuronCli\Conversation\Command` behind both,
-`NeuronCli\Conversation\Controls` and `NeuronCli\Conversation\LimitedControls`
+`NeuronTui\Session\SessionProvider` to implement,
+`NeuronTui\Session\Session` to list a Session with, and
+`NeuronTui\Session\InMemorySessionProvider` and
+`NeuronTui\Session\FileSessionProvider` as the two shipped providers. And the
+Slash commands it mounts: `NeuronTui\Conversation\SlashCommand` to implement,
+`NeuronTui\Conversation\RunsWhileWorking` for a command that runs while the
+Agent is answering, `NeuronTui\Conversation\Command` behind both,
+`NeuronTui\Conversation\Controls` and `NeuronTui\Conversation\LimitedControls`
 as what each is handed while it runs, and
-`NeuronCli\Conversation\ChoiceOption` for each option offered by `choose()`,
-`NeuronCli\Conversation\Commands\Clear`,
-`NeuronCli\Conversation\Commands\Sessions`,
-`NeuronCli\Conversation\Commands\Leave` and
-`NeuronCli\Conversation\Commands\Help` as the commands shipped ready to
-mount, and `NeuronCli\Conversation\CommandKit`,
-`NeuronCli\Conversation\AbstractCommandKit` and
-`NeuronCli\Conversation\Commands\SessionKit` for mounting a group of them in
+`NeuronTui\Conversation\ChoiceOption` for each option offered by `choose()`,
+`NeuronTui\Conversation\Commands\Clear`,
+`NeuronTui\Conversation\Commands\Sessions`,
+`NeuronTui\Conversation\Commands\Leave` and
+`NeuronTui\Conversation\Commands\Help` as the commands shipped ready to
+mount, and `NeuronTui\Conversation\CommandKit`,
+`NeuronTui\Conversation\AbstractCommandKit` and
+`NeuronTui\Conversation\Commands\SessionKit` for mounting a group of them in
 one line.
-Every other class under the `NeuronCli` namespace is annotated `@internal`, carries
+Every other class under the `NeuronTui` namespace is annotated `@internal`, carries
 no stability promise, and may be renamed, split, or removed in any release. Static analysis enforces this on the examples, which
 are the reference Host Application.
 
 The Host Application remains responsible for constructing the Agent,
 providers, credentials, tools, History persistence, and the script or
-framework command that launches the interaction. Neuron CLI does not provide
+framework command that launches the interaction. Neuron TUI does not provide
 a production executable or Symfony Console command.
 
 ## Demo
@@ -412,4 +412,4 @@ terminal. It requires no credentials and makes no network requests.
 
 ## License
 
-Neuron CLI is released under the MIT License.
+Neuron TUI is released under the MIT License.

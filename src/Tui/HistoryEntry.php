@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Tui;
+namespace NeuronTui\Tui;
 
 use Closure;
 use Symfony\Component\Tui\Render\RenderContext;

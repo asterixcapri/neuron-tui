@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Conversation;
+namespace NeuronTui\Conversation;
 
 /**
  * A group of Slash commands mounted in one line.

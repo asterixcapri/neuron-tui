@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Conversation;
+namespace NeuronTui\Conversation;
 
 /**
  * Input a person meant as a Slash command, read as a name and its arguments.

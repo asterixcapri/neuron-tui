@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Tests\Session;
+namespace NeuronTui\Tests\Session;
 
 use InvalidArgumentException;
 use NeuronAI\Chat\History\FileChatHistory;
 use NeuronAI\Chat\Messages\AssistantMessage;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\UserMessage;
-use NeuronCli\Session\FileSessionProvider;
-use NeuronCli\Session\Session;
+use NeuronTui\Session\FileSessionProvider;
+use NeuronTui\Session\Session;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 
@@ -21,7 +21,7 @@ final class FileSessionProviderTest extends TestCase
     protected function setUp(): void
     {
         $this->directory = sys_get_temp_dir()
-            . '/neuron-cli-sessions-'
+            . '/neuron-tui-sessions-'
             . bin2hex(random_bytes(6));
     }
 

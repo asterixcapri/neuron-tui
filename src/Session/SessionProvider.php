@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Session;
+namespace NeuronTui\Session;
 
 use NeuronAI\Chat\History\ChatHistoryInterface;
 
@@ -16,7 +16,7 @@ use NeuronAI\Chat\History\ChatHistoryInterface;
  * `list()` to `resume()` when a person chooses an existing Session.
  *
  * A Host Application that keeps conversations somewhere other than a
- * directory of files implements this and passes it to Neuron CLI.
+ * directory of files implements this and passes it to Neuron TUI.
  */
 interface SessionProvider
 {

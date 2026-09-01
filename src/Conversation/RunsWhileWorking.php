@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Conversation;
+namespace NeuronTui\Conversation;
 
 /**
  * A command that runs whether or not the Agent is standing still.

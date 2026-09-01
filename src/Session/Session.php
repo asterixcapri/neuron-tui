@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Session;
+namespace NeuronTui\Session;
 
 use DateTimeImmutable;
 

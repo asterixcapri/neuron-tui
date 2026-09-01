@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\History;
+namespace NeuronTui\History;
 
 /**
  * One item of the History as a person is meant to see it.

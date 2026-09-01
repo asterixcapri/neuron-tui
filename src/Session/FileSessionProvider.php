@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Session;
+namespace NeuronTui\Session;
 
 use DateTimeImmutable;
 use DateTimeZone;
 use InvalidArgumentException;
 use NeuronAI\Chat\History\ChatHistoryInterface;
 use NeuronAI\Chat\History\FileChatHistory;
-use NeuronCli\History\HistoryProjection;
+use NeuronTui\History\HistoryProjection;
 
 /**
  * Provides the Sessions of an Agent from a directory, one file per Session.

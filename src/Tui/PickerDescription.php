@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Tui;
+namespace NeuronTui\Tui;
 
 use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Ansi\TextWrapper;

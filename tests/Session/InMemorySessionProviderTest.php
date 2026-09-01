@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Tests\Session;
+namespace NeuronTui\Tests\Session;
 
 use InvalidArgumentException;
 use NeuronAI\Chat\Messages\UserMessage;
-use NeuronCli\Session\InMemorySessionProvider;
+use NeuronTui\Session\InMemorySessionProvider;
 use PHPUnit\Framework\TestCase;
 
 final class InMemorySessionProviderTest extends TestCase

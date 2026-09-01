@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Tui;
+namespace NeuronTui\Tui;
 
 use Symfony\Component\Tui\Widget\Util\StringUtils;
 
 /**
- * Makes text Neuron CLI does not control safe to put on a terminal.
+ * Makes text Neuron TUI does not control safe to put on a terminal.
  *
  * An Agent's answer, a tool's arguments and result, a queued message and a
  * file name all arrive as bytes nobody validated. Displaying them verbatim

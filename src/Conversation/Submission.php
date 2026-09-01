@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Conversation;
+namespace NeuronTui\Conversation;
 
 /**
  * Reads what a person typed and says what it is.

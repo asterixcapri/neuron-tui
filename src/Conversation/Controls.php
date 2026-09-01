@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Conversation;
+namespace NeuronTui\Conversation;
 
 use Closure;
 use NeuronAI\Agent\Agent;
-use NeuronCli\Tui\ConversationView;
+use NeuronTui\Tui\ConversationView;
 
 /**
  * What a Slash command may do while it runs.

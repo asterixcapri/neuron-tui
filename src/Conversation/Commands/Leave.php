@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Conversation\Commands;
+namespace NeuronTui\Conversation\Commands;
 
-use NeuronCli\Conversation\LimitedControls;
-use NeuronCli\Conversation\RunsWhileWorking;
+use NeuronTui\Conversation\LimitedControls;
+use NeuronTui\Conversation\RunsWhileWorking;
 
 /**
  * Leaves the terminal.
  *
- * One of the commands Neuron CLI ships: a Host Application mounts it the way
+ * One of the commands Neuron TUI ships: a Host Application mounts it the way
  * it mounts one of its own, under `/exit` or under whatever name it prefers.
  * A Host Application that mounts nothing leaves `Ctrl+C` as the only way out.
  *

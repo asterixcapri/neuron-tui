@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Tests\Conversation;
+namespace NeuronTui\Tests\Conversation;
 
 use Generator;
 use NeuronAI\Agent\Agent;
@@ -12,8 +12,8 @@ use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
 use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Tools\Tool;
-use NeuronCli\Conversation\AgentTurn;
-use NeuronCli\Tui\ConversationView;
+use NeuronTui\Conversation\AgentTurn;
+use NeuronTui\Tui\ConversationView;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
 use Symfony\Component\Tui\Ansi\AnsiUtils;

@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Tui;
+namespace NeuronTui\Tui;
 
-use NeuronCli\Conversation\Command;
-use NeuronCli\Conversation\RunsWhileWorking;
+use NeuronTui\Conversation\Command;
+use NeuronTui\Conversation\RunsWhileWorking;
 use Symfony\Component\Tui\Style\Style;
 use Symfony\Component\Tui\Widget\AbstractWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;

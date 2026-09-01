@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Tests\History;
+namespace NeuronTui\Tests\History;
 
 use NeuronAI\Chat\Enums\MessageRole;
 use NeuronAI\Chat\Enums\SourceType;
@@ -18,9 +18,9 @@ use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Tools\Tool;
-use NeuronCli\History\Entry;
-use NeuronCli\History\EntryKind;
-use NeuronCli\History\HistoryProjection;
+use NeuronTui\History\Entry;
+use NeuronTui\History\EntryKind;
+use NeuronTui\History\HistoryProjection;
 use PHPUnit\Framework\TestCase;
 
 final class HistoryProjectionTest extends TestCase

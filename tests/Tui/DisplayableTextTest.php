@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Tests\Tui;
+namespace NeuronTui\Tests\Tui;
 
-use NeuronCli\Tui\DisplayableText;
+use NeuronTui\Tui\DisplayableText;
 use PHPUnit\Framework\TestCase;
 
 final class DisplayableTextTest extends TestCase

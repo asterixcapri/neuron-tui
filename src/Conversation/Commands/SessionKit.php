@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Conversation\Commands;
+namespace NeuronTui\Conversation\Commands;
 
-use NeuronCli\Conversation\AbstractCommandKit;
-use NeuronCli\Session\SessionProvider;
+use NeuronTui\Conversation\AbstractCommandKit;
+use NeuronTui\Session\SessionProvider;
 
 /**
- * The commands Neuron CLI ships for the Sessions, mounted in one line.
+ * The commands Neuron TUI ships for the Sessions, mounted in one line.
  *
  * Both of them need to know where the conversations live, and they have to be
  * told the same place or they disagree about which Sessions exist. So the

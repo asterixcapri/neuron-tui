@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Conversation;
+namespace NeuronTui\Conversation;
 
 use Amp\Future;
 use InvalidArgumentException;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\History\ChatHistoryInterface;
 use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
-use NeuronCli\Tui\ConversationView;
-use NeuronCli\Tui\WorkingIndicator;
+use NeuronTui\Tui\ConversationView;
+use NeuronTui\Tui\WorkingIndicator;
 use Symfony\Component\Tui\Event\InputEvent;
 use Symfony\Component\Tui\Event\SubmitEvent;
 use Symfony\Component\Tui\Input\Key;
@@ -91,7 +91,7 @@ final class ConversationRuntime
             )
         ) {
             throw new \RuntimeException(
-                'Neuron CLI requires an interactive TTY.',
+                'Neuron TUI requires an interactive TTY.',
             );
         }
 
@@ -312,7 +312,7 @@ final class ConversationRuntime
      *
      * Two commands answering to the same name are a mistake in how the
      * terminal was built, so it is said at once instead of one of them
-     * silently winning. No name is reserved: the commands Neuron CLI ships
+     * silently winning. No name is reserved: the commands Neuron TUI ships
      * are mounted here like any other, and a Host Application is free to
      * leave any of them out.
      *

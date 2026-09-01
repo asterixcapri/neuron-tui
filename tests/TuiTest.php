@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace NeuronCli\Tests;
+namespace NeuronTui\Tests;
 
 use Closure;
 use Generator;
@@ -28,28 +28,28 @@ use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Testing\RequestRecord;
 use NeuronAI\Tools\Tool;
-use NeuronCli\Conversation\AbstractCommandKit;
-use NeuronCli\Conversation\ChoiceOption;
-use NeuronCli\Conversation\Commands\Clear;
-use NeuronCli\Conversation\Commands\Help;
-use NeuronCli\Conversation\Commands\Leave;
-use NeuronCli\Conversation\Commands\SessionKit;
-use NeuronCli\Conversation\Commands\Sessions;
-use NeuronCli\Conversation\Controls;
-use NeuronCli\Conversation\LimitedControls;
-use NeuronCli\Conversation\RunsWhileWorking;
-use NeuronCli\Conversation\SlashCommand;
-use NeuronCli\NeuronCli;
-use NeuronCli\Session\InMemorySessionProvider;
-use NeuronCli\Session\Session;
-use NeuronCli\Session\SessionProvider;
+use NeuronTui\Conversation\AbstractCommandKit;
+use NeuronTui\Conversation\ChoiceOption;
+use NeuronTui\Conversation\Commands\Clear;
+use NeuronTui\Conversation\Commands\Help;
+use NeuronTui\Conversation\Commands\Leave;
+use NeuronTui\Conversation\Commands\SessionKit;
+use NeuronTui\Conversation\Commands\Sessions;
+use NeuronTui\Conversation\Controls;
+use NeuronTui\Conversation\LimitedControls;
+use NeuronTui\Conversation\RunsWhileWorking;
+use NeuronTui\Conversation\SlashCommand;
+use NeuronTui\Tui;
+use NeuronTui\Session\InMemorySessionProvider;
+use NeuronTui\Session\Session;
+use NeuronTui\Session\SessionProvider;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Terminal\TerminalInterface;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
-final class NeuronCliTest extends TestCase
+final class TuiTest extends TestCase
 {
     public function testHostApplicationCanCustomizeConversationBranding(): void
     {
@@ -59,7 +59,7 @@ final class NeuronCliTest extends TestCase
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             new Agent(),
             'Research Agent',
             'Ask about the knowledge base',
@@ -87,7 +87,7 @@ final class NeuronCliTest extends TestCase
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(new Agent(), terminal: $terminal))->run();
+        (new Tui(new Agent(), terminal: $terminal))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         $lines = preg_split('/\r\n|\r|\n/', $display);
@@ -140,7 +140,7 @@ final class NeuronCliTest extends TestCase
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli($agent, terminal: $terminal))->run();
+        (new Tui($agent, terminal: $terminal))->run();
 
         $output = $terminal->getOutput();
         $display = AnsiUtils::stripAnsiCodes($output);
@@ -196,7 +196,7 @@ MARKDOWN;
 
             public function chat(Message ...$messages): Message
             {
-                throw new \LogicException('Neuron CLI must stream responses.');
+                throw new \LogicException('Neuron TUI must stream responses.');
             }
 
             protected function streamChunks(Message $response): Generator
@@ -240,7 +240,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli($agent, terminal: $terminal))->run();
+        (new Tui($agent, terminal: $terminal))->run();
 
         self::assertIsString($intermediateDisplay);
         self::assertStringContainsString('middle', $intermediateDisplay);
@@ -312,7 +312,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli($agent, terminal: $terminal))->run();
+        (new Tui($agent, terminal: $terminal))->run();
 
         self::assertIsString($displayAtProviderBoundary);
         self::assertStringContainsString(
@@ -391,7 +391,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli($agent, terminal: $terminal))->run();
+        (new Tui($agent, terminal: $terminal))->run();
 
         self::assertIsString($displayBeforeSecondChunk);
         self::assertStringContainsString(
@@ -447,7 +447,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli($agent, terminal: $terminal))->run();
+        (new Tui($agent, terminal: $terminal))->run();
 
         self::assertIsString($animatedDisplay);
         self::assertMatchesRegularExpression(
@@ -474,7 +474,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli($agent, terminal: $terminal))->run();
+        (new Tui($agent, terminal: $terminal))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('Empty response.', $display);
@@ -502,7 +502,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli($agent, terminal: $terminal))->run();
+        (new Tui($agent, terminal: $terminal))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('Empty response.', $display);
@@ -559,7 +559,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli($agent, terminal: $terminal))->run();
+        (new Tui($agent, terminal: $terminal))->run();
 
         self::assertIsString($queuedDisplay);
         self::assertStringContainsString(
@@ -601,7 +601,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli($agent, terminal: $terminal))->run();
+        (new Tui($agent, terminal: $terminal))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString(
@@ -661,7 +661,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli($agent, terminal: $terminal))->run();
+        (new Tui($agent, terminal: $terminal))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString(
@@ -707,7 +707,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli($agent, terminal: $terminal))->run();
+        (new Tui($agent, terminal: $terminal))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString(
@@ -756,7 +756,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli($agent, terminal: $terminal))->run();
+        (new Tui($agent, terminal: $terminal))->run();
 
         self::assertIsString($displayAtExecution);
         self::assertStringContainsString(
@@ -815,7 +815,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli($agent, terminal: $terminal))->run();
+        (new Tui($agent, terminal: $terminal))->run();
 
         self::assertIsString($displayDuringExecution);
         self::assertMatchesRegularExpression(
@@ -868,7 +868,7 @@ MARKDOWN;
             },
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [new Leave()],
@@ -940,7 +940,7 @@ MARKDOWN;
             },
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: self::sessionCommands(new InMemorySessionProvider()),
@@ -992,7 +992,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [$command],
@@ -1025,7 +1025,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [$command],
@@ -1059,7 +1059,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [$command],
@@ -1105,7 +1105,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [$command],
@@ -1153,7 +1153,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [$command],
@@ -1210,7 +1210,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [$command],
@@ -1252,7 +1252,7 @@ MARKDOWN;
             },
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [$command],
@@ -1284,7 +1284,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [$command],
@@ -1323,7 +1323,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [$command],
@@ -1354,7 +1354,7 @@ MARKDOWN;
             'Two Slash commands answer to /probe.',
         );
 
-        new NeuronCli(
+        new Tui(
             new Agent(),
             terminal: new VirtualTerminal(),
             commands: [
@@ -1401,7 +1401,7 @@ MARKDOWN;
             },
         );
 
-        (new NeuronCli($agent, terminal: $terminal))->run();
+        (new Tui($agent, terminal: $terminal))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -1470,7 +1470,7 @@ MARKDOWN;
             },
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [
@@ -1521,7 +1521,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [new Help(), new Leave(), $command],
@@ -1565,7 +1565,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [new Leave()],
@@ -1608,7 +1608,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [$command],
@@ -1647,7 +1647,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [$command],
@@ -1703,7 +1703,7 @@ MARKDOWN;
             },
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [$command],
@@ -1768,7 +1768,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [$command],
@@ -1836,7 +1836,7 @@ MARKDOWN;
             },
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [new Help(), new Leave()],
@@ -1877,7 +1877,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("/exit\r"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [$kit],
@@ -1942,7 +1942,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [$command],
@@ -2023,7 +2023,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [$command],
@@ -2119,7 +2119,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [$command],
@@ -2183,7 +2183,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [$command],
@@ -2313,7 +2313,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [$command],
@@ -2404,7 +2404,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [$command],
@@ -2529,7 +2529,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [$command],
@@ -2618,7 +2618,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [$command],
@@ -2664,7 +2664,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [$command],
@@ -2721,7 +2721,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [$command],
@@ -2803,7 +2803,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [$command],
@@ -2877,7 +2877,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [$command],
@@ -2986,7 +2986,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [$command],
@@ -3049,7 +3049,7 @@ MARKDOWN;
             },
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [new Help(), new Leave()],
@@ -3098,7 +3098,7 @@ MARKDOWN;
             },
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [new Help()],
@@ -3165,7 +3165,7 @@ MARKDOWN;
             },
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: $commands,
@@ -3254,7 +3254,7 @@ MARKDOWN;
             },
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [new Help()],
@@ -3299,7 +3299,7 @@ MARKDOWN;
             },
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [new Help()],
@@ -3336,7 +3336,7 @@ MARKDOWN;
             },
         );
 
-        (new NeuronCli($agent, terminal: $terminal))->run();
+        (new Tui($agent, terminal: $terminal))->run();
 
         self::assertIsString($display);
         self::assertStringContainsString('No commands match "/"', $display);
@@ -3372,7 +3372,7 @@ MARKDOWN;
             },
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [new Help()],
@@ -3637,7 +3637,7 @@ MARKDOWN;
             },
         );
 
-        (new NeuronCli(
+        (new Tui(
             new Agent(),
             terminal: $terminal,
             commands: $commands,
@@ -3752,7 +3752,7 @@ MARKDOWN;
             },
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [$refused, $whileWorking],
@@ -3817,7 +3817,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [$refused],
@@ -3870,7 +3870,7 @@ MARKDOWN;
             },
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [$command],
@@ -4000,7 +4000,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [
@@ -4045,7 +4045,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [self::commandNamed('/alpha', 'The only one.')],
@@ -4088,7 +4088,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli($agent, terminal: $terminal))->run();
+        (new Tui($agent, terminal: $terminal))->run();
 
         $provider->assertSent(
             static fn (RequestRecord $request): bool
@@ -4137,7 +4137,7 @@ MARKDOWN;
             },
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [new Help()],
@@ -4232,7 +4232,7 @@ MARKDOWN;
             },
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [new Help()],
@@ -4324,7 +4324,7 @@ MARKDOWN;
     }
 
     /**
-     * The commands Neuron CLI ships for the Sessions of one provider.
+     * The commands Neuron TUI ships for the Sessions of one provider.
      *
      * @return list<SlashCommand|RunsWhileWorking>
      */
@@ -4379,7 +4379,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: self::sessionCommands(new InMemorySessionProvider()),
@@ -4440,7 +4440,7 @@ MARKDOWN;
             },
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: self::sessionCommands($sessions),
@@ -4493,7 +4493,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: self::sessionCommands($sessions),
@@ -4573,7 +4573,7 @@ MARKDOWN;
             },
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: self::sessionCommands($sessions),
@@ -4629,7 +4629,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: self::sessionCommands($sessions),
@@ -4699,7 +4699,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: self::sessionCommands($sessions),
@@ -4745,7 +4745,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: self::sessionCommands($sessions),
@@ -4800,7 +4800,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: self::sessionCommands($sessions),
@@ -4833,7 +4833,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: self::sessionCommands(new InMemorySessionProvider()),
@@ -4888,7 +4888,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: self::sessionCommands($sessions),
@@ -4927,7 +4927,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: self::sessionCommands($sessions),
@@ -4977,7 +4977,7 @@ MARKDOWN;
             },
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: self::sessionCommands($sessions),
@@ -5051,7 +5051,7 @@ MARKDOWN;
             },
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [new SessionKit($sessions), new Leave()],
@@ -5125,7 +5125,7 @@ MARKDOWN;
             },
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [
@@ -5195,7 +5195,7 @@ MARKDOWN;
             },
         );
 
-        (new NeuronCli(
+        (new Tui(
             $agent,
             terminal: $terminal,
             commands: [
@@ -5235,7 +5235,7 @@ MARKDOWN;
             'Two Slash commands answer to /clear.',
         );
 
-        new NeuronCli(
+        new Tui(
             new Agent(),
             terminal: new VirtualTerminal(),
             commands: [new Clear($sessions), new SessionKit($sessions)],
@@ -5287,7 +5287,7 @@ MARKDOWN;
             },
         );
 
-        (new NeuronCli($agent, terminal: $terminal))->run();
+        (new Tui($agent, terminal: $terminal))->run();
 
         self::assertIsString($initialDisplay);
         self::assertStringContainsString('Answer 20', $initialDisplay);
@@ -5384,7 +5384,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli($agent, terminal: $terminal))->run();
+        (new Tui($agent, terminal: $terminal))->run();
 
         self::assertIsString($followingDisplay);
         self::assertStringContainsString('anchor 12', $followingDisplay);
@@ -5419,7 +5419,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new NeuronCli($agent, terminal: $terminal))->run();
+        (new Tui($agent, terminal: $terminal))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString(
@@ -5439,7 +5439,7 @@ MARKDOWN;
         $this->expectException(\LogicException::class);
         $this->expectExceptionMessage('Terminal could not initialize.');
 
-        (new NeuronCli(new Agent(), terminal: new FailingTerminal()))->run();
+        (new Tui(new Agent(), terminal: new FailingTerminal()))->run();
     }
 
     public function testDefaultTerminalRejectsNonInteractiveInput(): void
@@ -5450,10 +5450,10 @@ MARKDOWN;
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage(
-            'Neuron CLI requires an interactive TTY.',
+            'Neuron TUI requires an interactive TTY.',
         );
 
-        (new NeuronCli(new Agent()))->run();
+        (new Tui(new Agent()))->run();
     }
 }
 
