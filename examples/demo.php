@@ -5,7 +5,6 @@ declare(strict_types=1);
 use NeuronAI\Agent\Agent;
 use NeuronAI\HttpClient\AmpHttpClient;
 use NeuronAI\Providers\OpenAI\Responses\OpenAIResponses;
-use NeuronAI\Tools\Toolkits\Calculator\CalculatorToolkit;
 use NeuronAI\Tools\Toolkits\Calendar\CalendarToolkit;
 use NeuronAI\Tools\Toolkits\FileSystem\FileSystemToolkit;
 use NeuronAI\Tools\Toolkits\Jina\JinaToolkit;
@@ -45,7 +44,6 @@ $agent = Agent::make()
     ->addTool([
         new FileSystemToolkit(),
         new CalendarToolkit(),
-        new CalculatorToolkit(),
     ]);
 
 if ($jinaKey !== '') {
