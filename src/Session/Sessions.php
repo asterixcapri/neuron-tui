@@ -41,9 +41,9 @@ final readonly class Sessions
         $sessions = [];
 
         foreach ($this->storage->entries(self::NAMESPACE) as $document) {
-            $title = HistoryProjection::openingWords(
+            $title = (new HistoryProjection(
                 $this->history($document)->getMessages(),
-            );
+            ))->openingWords();
 
             if ($title === null) {
                 continue;

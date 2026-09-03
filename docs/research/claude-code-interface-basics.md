@@ -245,7 +245,7 @@ directory di lavoro, non alla sessione, e la fa attraversare `--clear`. In
 Neuron TUI la History appartiene all'Agent e la Session al Session provider,
 quindi la cronologia dei prompt non è né l'una né l'altra. La scelta più coerente
 col repository è **non inventare una terza persistenza**: dedurre la cronologia
-dalle voci `EntryKind::Person` che `HistoryProjection::entriesFor()` già produce,
+dalle voci `EntryKind::Person` che `entries()` di `HistoryProjection` già produce,
 per la Session corrente, e lasciare il "fra Session diverse" al momento in cui
 qualcuno lo chiederà. `Ctrl+R` è la versione ricca e può aspettare.
 
@@ -268,7 +268,7 @@ reasoning summary of the model (only available for reasoning models)»
 ([Neuron AI — Streaming](https://docs.neuron-ai.dev/agent/streaming)). Neuron TUI
 lo scarta due volte, di proposito e coerentemente: `AgentTurn::respond()` ignora
 tutto ciò che non è `TextChunk`/`ToolCallChunk`/`ToolResultChunk`, e
-`HistoryProjection::contents()` mappa `ReasoningContent → null`. Renderlo visibile
+`HistoryProjection` mappa `ReasoningContent → null`. Renderlo visibile
 significa toccare entrambi insieme — altrimenti il vivo e il ridipinto
 divergono — più un `EntryKind` e una classe di stile.
 
@@ -327,7 +327,7 @@ raccomandazione da discutere prima di implementare.
   Il doppio `Ctrl+L` che equivale a `/clear` è una raffinatezza da lasciare stare.
 - **`/export`** («copy the current conversation to your clipboard or save it as a
   plain-text file», [sessions](https://code.claude.com/docs/en/sessions)).
-  `HistoryProjection::entriesFor()` produce già esattamente la struttura che
+  `entries()` di `HistoryProjection` produce già esattamente la struttura che
   servirebbe; manca solo dove scrivere, e quello è di nuovo un argomento della
   Host Application.
 - **Realizzato dal seam pubblico — aprire una Session dalla riga di comando.**

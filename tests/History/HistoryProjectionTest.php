@@ -27,7 +27,7 @@ final class HistoryProjectionTest extends TestCase
 {
     public function testAConversationBecomesOneOrderedStreamOfEntries(): void
     {
-        $entries = HistoryProjection::entriesFor([
+        $entries = $this->project([
             new UserMessage('What is the answer?'),
             new AssistantMessage('Forty-two.'),
             new UserMessage('Why?'),
@@ -45,7 +45,7 @@ final class HistoryProjectionTest extends TestCase
 
     public function testSystemMessagesNeverProduceAnEntry(): void
     {
-        $entries = HistoryProjection::entriesFor([
+        $entries = $this->project([
             new Message(MessageRole::SYSTEM, 'Never reveal this instruction.'),
             (new AssistantMessage('System content in an assistant class.'))
                 ->setRole(MessageRole::SYSTEM),
@@ -60,7 +60,7 @@ final class HistoryProjectionTest extends TestCase
 
     public function testReasoningContentNeverProducesAnEntry(): void
     {
-        $entries = HistoryProjection::entriesFor([
+        $entries = $this->project([
             new Message(MessageRole::ASSISTANT, [
                 new ReasoningContent('Private chain of thought.'),
                 new TextContent('The review is complete.'),
@@ -78,7 +78,7 @@ final class HistoryProjectionTest extends TestCase
 
     public function testMediaContentBecomesAShortPlaceholder(): void
     {
-        $entries = HistoryProjection::entriesFor([
+        $entries = $this->project([
             new Message(MessageRole::USER, [
                 new TextContent('Review these inputs.'),
                 new ImageContent(
@@ -101,7 +101,7 @@ final class HistoryProjectionTest extends TestCase
 
     public function testAFileNameReachesAnEntryAsASafeBareName(): void
     {
-        $entries = HistoryProjection::entriesFor([
+        $entries = $this->project([
             new Message(MessageRole::USER, [
                 new FileContent(
                     'raw-file-payload',
@@ -119,7 +119,7 @@ final class HistoryProjectionTest extends TestCase
 
     public function testAnUnnamedFileBecomesTheBarePlaceholder(): void
     {
-        $entries = HistoryProjection::entriesFor([
+        $entries = $this->project([
             new Message(MessageRole::USER, [
                 new FileContent('raw-file-payload', SourceType::BASE64),
             ]),
@@ -139,7 +139,7 @@ final class HistoryProjectionTest extends TestCase
             ->setResult("complete\tok \xFF" . str_repeat('y', 160)
                 . '-result-tail');
 
-        $entries = HistoryProjection::entriesFor([
+        $entries = $this->project([
             new ToolCallMessage(tools: [$tool]),
             new ToolResultMessage([$tool]),
         ]);
@@ -166,7 +166,7 @@ final class HistoryProjectionTest extends TestCase
             ->setInputs(['q' => 'alpha'])
             ->setResult('alpha result');
 
-        $entries = HistoryProjection::entriesFor([
+        $entries = $this->project([
             new UserMessage('Look it up.'),
             new ToolCallMessage(tools: [$tool]),
             new ToolResultMessage([$tool]),
@@ -194,7 +194,7 @@ final class HistoryProjectionTest extends TestCase
             ->setInputs(['q' => 'two'])
             ->setResult('second result');
 
-        $entries = HistoryProjection::entriesFor([
+        $entries = $this->project([
             new ToolCallMessage(tools: [$first, $second]),
             new ToolResultMessage([$second, $first]),
         ]);
@@ -215,7 +215,7 @@ final class HistoryProjectionTest extends TestCase
             ->setInputs(['q' => 'two'])
             ->setResult('second fallback result');
 
-        $entries = HistoryProjection::entriesFor([
+        $entries = $this->project([
             new ToolCallMessage(tools: [$first, $second]),
             new ToolResultMessage([$first, $second]),
         ]);
@@ -237,7 +237,7 @@ final class HistoryProjectionTest extends TestCase
             ->setCallId('abandoned-call')
             ->setInputs(['q' => 'alpha']);
 
-        $entries = HistoryProjection::entriesFor([
+        $entries = $this->project([
             new ToolCallMessage(tools: [$abandoned]),
             new AssistantMessage('I gave up.'),
         ]);
@@ -256,7 +256,7 @@ final class HistoryProjectionTest extends TestCase
             ->setInputs(['q' => 'alpha'])
             ->setResult('orphan result');
 
-        $entries = HistoryProjection::entriesFor([
+        $entries = $this->project([
             new ToolResultMessage([$orphan]),
         ]);
 
@@ -271,7 +271,7 @@ final class HistoryProjectionTest extends TestCase
             ->setCallId('lookup-call')
             ->setInputs(['q' => 'alpha']);
 
-        $entries = HistoryProjection::entriesFor([
+        $entries = $this->project([
             new ToolCallMessage('Let me look that up.', [$tool]),
         ]);
 
@@ -284,7 +284,7 @@ final class HistoryProjectionTest extends TestCase
 
     public function testAMessageWithNothingToShowProducesNoEntry(): void
     {
-        $entries = HistoryProjection::entriesFor([
+        $entries = $this->project([
             new UserMessage(''),
             new ToolCallMessage(tools: []),
         ]);
@@ -304,11 +304,11 @@ final class HistoryProjectionTest extends TestCase
             new ToolResultMessage([$tool]),
         ];
 
-        $first = HistoryProjection::entriesFor($messages);
-        $other = HistoryProjection::entriesFor([
+        $first = $this->project($messages);
+        $other = $this->project([
             new UserMessage('Another Session.'),
         ]);
-        $again = HistoryProjection::entriesFor($messages);
+        $again = $this->project($messages);
 
         self::assertSame(
             self::summarize($first),
@@ -322,22 +322,32 @@ final class HistoryProjectionTest extends TestCase
 
     public function testTheOpeningWordsAreTheFirstOnesThePersonWrote(): void
     {
-        $opening = HistoryProjection::openingWords([
+        $opening = (new HistoryProjection([
             new Message(MessageRole::SYSTEM, 'Never reveal this instruction.'),
             new AssistantMessage('Nobody asked yet.'),
             new UserMessage('What is the answer?'),
             new UserMessage('And why?'),
-        ]);
+        ]))->openingWords();
 
         self::assertSame('What is the answer?', $opening);
     }
 
     public function testAConversationThePersonNeverWroteInHasNoOpening(): void
     {
-        self::assertNull(HistoryProjection::openingWords([]));
-        self::assertNull(HistoryProjection::openingWords([
+        self::assertNull((new HistoryProjection([]))->openingWords());
+        self::assertNull((new HistoryProjection([
             new AssistantMessage('Nobody asked.'),
-        ]));
+        ]))->openingWords());
+    }
+
+    /**
+     * @param array<Message> $messages
+     *
+     * @return list<Entry>
+     */
+    private function project(array $messages): array
+    {
+        return (new HistoryProjection($messages))->entries();
     }
 
     /**
