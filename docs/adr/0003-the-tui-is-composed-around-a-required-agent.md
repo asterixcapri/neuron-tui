@@ -16,7 +16,7 @@ rather than a second owner of the Agent.
 Configuration is accumulated before `run()`, and the terminal widgets and
 listeners are built once inside `run()`. The instance is frozen when that
 single run starts. `addCommand()` deliberately follows `Agent::addTool()`: it
-accepts one command, a `CommandKit`, or an array containing either, validates
+accepts one command, a `CommandKitInterface`, or an array containing either, validates
 each value as it is added, preserves order and does not reject duplicate names.
 The first command with a repeated name is the one reached; repeated entries may
 remain visible in command suggestions. This duplicate rule supersedes the
@@ -43,8 +43,8 @@ contrary rule in ADR 0002.
   public entry point.
 - `Tui::make($agent, $terminal)` and `new Tui($agent, $terminal)` are equivalent,
   while documentation leads with `make()`.
-- No command is mounted automatically. The Host Application adds every Slash
-  command it wants, as established by ADR 0002.
+- No Command is mounted automatically. The Host Application adds every Command
+  it wants, as established by ADR 0002.
 - The Agent passed at construction is the initial Agent. A mounted command may
   still put another Agent in charge through `Controls::useAgent()`.
 - Title and subtitle default to `Neuron AI` and `Agent conversation`; setters

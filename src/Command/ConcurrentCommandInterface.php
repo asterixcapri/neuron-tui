@@ -13,7 +13,7 @@ use NeuronTui\Conversation\ConcurrentControls;
  * receives ConcurrentControls: only the operations whose meaning remains
  * stable while an answer is on its way.
  */
-interface ConcurrentCommand
+interface ConcurrentCommandInterface
 {
     /**
      * The name it answers to, slash included: `/help`.

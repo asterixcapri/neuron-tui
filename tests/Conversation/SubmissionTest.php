@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace NeuronTui\Tests\Conversation;
 
 use NeuronTui\Conversation\MessageForAgent;
-use NeuronTui\Conversation\SlashCommandInput;
+use NeuronTui\Conversation\CommandInput;
 use NeuronTui\Conversation\Submission;
 use PHPUnit\Framework\TestCase;
 
@@ -34,7 +34,7 @@ final class SubmissionTest extends TestCase
     {
         $submission = Submission::interpret('/exit');
 
-        self::assertInstanceOf(SlashCommandInput::class, $submission);
+        self::assertInstanceOf(CommandInput::class, $submission);
         self::assertSame('/exit', $submission->name);
         self::assertSame('', $submission->arguments);
     }
@@ -43,7 +43,7 @@ final class SubmissionTest extends TestCase
     {
         $submission = Submission::interpret("/clear \n");
 
-        self::assertInstanceOf(SlashCommandInput::class, $submission);
+        self::assertInstanceOf(CommandInput::class, $submission);
         self::assertSame('/clear', $submission->name);
         self::assertSame('', $submission->arguments);
     }
@@ -52,7 +52,7 @@ final class SubmissionTest extends TestCase
     {
         $submission = Submission::interpret('/exit now');
 
-        self::assertInstanceOf(SlashCommandInput::class, $submission);
+        self::assertInstanceOf(CommandInput::class, $submission);
         self::assertSame('/exit', $submission->name);
         self::assertSame('now', $submission->arguments);
     }
@@ -61,7 +61,7 @@ final class SubmissionTest extends TestCase
     {
         $submission = Submission::interpret("/review  the  diff \t");
 
-        self::assertInstanceOf(SlashCommandInput::class, $submission);
+        self::assertInstanceOf(CommandInput::class, $submission);
         self::assertSame('/review', $submission->name);
         self::assertSame('the  diff', $submission->arguments);
     }
@@ -70,7 +70,7 @@ final class SubmissionTest extends TestCase
     {
         $submission = Submission::interpret("/exit\x0Cnow");
 
-        self::assertInstanceOf(SlashCommandInput::class, $submission);
+        self::assertInstanceOf(CommandInput::class, $submission);
         self::assertSame('/exit', $submission->name);
         self::assertSame('now', $submission->arguments);
     }
@@ -79,12 +79,12 @@ final class SubmissionTest extends TestCase
     {
         $submission = Submission::interpret("/unknown with\targuments");
 
-        self::assertInstanceOf(SlashCommandInput::class, $submission);
+        self::assertInstanceOf(CommandInput::class, $submission);
         self::assertSame('/unknown', $submission->name);
         self::assertSame("with\targuments", $submission->arguments);
     }
 
-    public function testTextMentioningASlashCommandIsStillAMessage(): void
+    public function testTextMentioningACommandIsStillAMessage(): void
     {
         $submission = Submission::interpret('Type /clear to start over');
 

@@ -16,7 +16,7 @@ use NeuronTui\Conversation\Controls;
  * Conversation TUI. It is refused while a Turn is under way, when those
  * Controls do not all have a stable meaning.
  */
-interface Command
+interface CommandInterface
 {
     /**
      * The name it answers to, slash included: `/review`.

@@ -42,7 +42,7 @@ Tui::make($agent)
 argument selects one of Symfony TUI's bundled fonts: `standard`, `big`,
 `small`, `slant`, or `mini`.
 
-A terminal built this way chats and nothing else: no Slash command is mounted
+A terminal built this way chats and nothing else: no Command is mounted
 unless the Host Application names it, so every name typed after a slash is
 unknown, and `Ctrl+C` is the way out.
 
@@ -76,9 +76,9 @@ does what its application needs:
 
 ```php
 use NeuronTui\Conversation\Controls;
-use NeuronTui\Command\Command;
+use NeuronTui\Command\CommandInterface;
 
-final class Review implements Command
+final class Review implements CommandInterface
 {
     public function name(): string
     {
@@ -164,14 +164,14 @@ A command is refused while the Agent is answering, and can be typed again once
 the turn has finished: one that replaced the conversation meanwhile would have
 the answer on its way land where it does not belong. A command whose
 synchronous run may overlap a Turn says so by implementing
-`NeuronTui\Command\ConcurrentCommand` instead of
-`NeuronTui\Command\Command`, and is carried out at any time.
+`NeuronTui\Command\ConcurrentCommandInterface` instead of
+`NeuronTui\Command\CommandInterface`, and is carried out at any time.
 
 ```php
 use NeuronTui\Conversation\ConcurrentControls;
-use NeuronTui\Command\ConcurrentCommand;
+use NeuronTui\Command\ConcurrentCommandInterface;
 
-final class Version implements ConcurrentCommand
+final class Version implements ConcurrentCommandInterface
 {
     public function name(): string
     {
@@ -243,7 +243,7 @@ with the line it describes itself by, the ones the Host Application wrote
 included.
 
 Leave any of the four out and the terminal simply does not answer to that name.
-Without `LeaveCommand` there is no Slash command to close the terminal, and
+Without `LeaveCommand` there is no Command to close the terminal, and
 `Ctrl+C` is the only way out.
 
 ### Command kits
@@ -292,7 +292,7 @@ same thing, with the same listing and rules.
 
 A Host Application groups commands of its own by extending
 `NeuronTui\Command\AbstractCommandKit` and naming them in `provide()`; the
-`NeuronTui\Command\CommandKit` interface is what the Conversation TUI
+`NeuronTui\Command\CommandKitInterface` interface is what the Conversation TUI
 mounts. Renaming a command stays the command's own business, so a kit is the
 short way in and writing its commands out by hand remains the way to give them
 names of one's own.

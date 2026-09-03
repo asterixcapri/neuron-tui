@@ -7,7 +7,7 @@ namespace NeuronTui\Tests;
 use Closure;
 use NeuronAI\Agent\Agent;
 use NeuronTui\Command\AbstractCommandKit;
-use NeuronTui\Command\Command;
+use NeuronTui\Command\CommandInterface;
 use NeuronTui\Command\HelpCommand;
 use NeuronTui\Conversation\Controls;
 use NeuronTui\Tui;
@@ -21,28 +21,28 @@ final class DuplicateCommandsTest extends TestCase
     public function testTheFirstDuplicateRunsForEveryWayCommandsCanBeAdded(): void
     {
         /**
-         * @var array<string, Closure(Tui, Command, Command): Tui>
+         * @var array<string, Closure(Tui, CommandInterface, CommandInterface): Tui>
          */
         $mount = [
             'separate calls' => static fn (
                 Tui $tui,
-                Command $first,
-                Command $second,
+                CommandInterface $first,
+                CommandInterface $second,
             ): Tui => $tui->addCommand($first)->addCommand($second),
             'one array' => static fn (
                 Tui $tui,
-                Command $first,
-                Command $second,
+                CommandInterface $first,
+                CommandInterface $second,
             ): Tui => $tui->addCommand([$first, $second]),
             'one kit' => static fn (
                 Tui $tui,
-                Command $first,
-                Command $second,
+                CommandInterface $first,
+                CommandInterface $second,
             ): Tui => $tui->addCommand(self::kit([$first, $second])),
             'array and kit' => static fn (
                 Tui $tui,
-                Command $first,
-                Command $second,
+                CommandInterface $first,
+                CommandInterface $second,
             ): Tui => $tui->addCommand([
                 $first,
                 self::kit([$second]),
@@ -96,7 +96,7 @@ final class DuplicateCommandsTest extends TestCase
             'Kit member of the combination.',
         ];
         $commands = array_map(
-            static fn (string $description): Command => self::command(
+            static fn (string $description): CommandInterface => self::command(
                 '/clear',
                 $description,
             ),
@@ -152,17 +152,17 @@ final class DuplicateCommandsTest extends TestCase
             ...$descriptions,
             'Lists what can be typed here.',
         ], $help);
-        self::assertStringNotContainsString('Unknown Slash command', $help);
+        self::assertStringNotContainsString('Unknown Command', $help);
     }
 
     /**
-     * @param list<Command> $commands
+     * @param list<CommandInterface> $commands
      */
     private static function kit(array $commands): AbstractCommandKit
     {
         return new class($commands) extends AbstractCommandKit {
             /**
-             * @param list<Command> $commands
+             * @param list<CommandInterface> $commands
              */
             public function __construct(
                 private readonly array $commands,
@@ -170,7 +170,7 @@ final class DuplicateCommandsTest extends TestCase
             }
 
             /**
-             * @return list<Command>
+             * @return list<CommandInterface>
              */
             protected function provide(): array
             {
@@ -186,8 +186,8 @@ final class DuplicateCommandsTest extends TestCase
         string $name,
         string $description,
         ?Closure $run = null,
-    ): Command {
-        return new class($name, $description, $run) implements Command {
+    ): CommandInterface {
+        return new class($name, $description, $run) implements CommandInterface {
             /**
              * @param Closure(Controls, string): void|null $run
              */

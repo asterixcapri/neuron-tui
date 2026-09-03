@@ -8,8 +8,8 @@ use Amp\Future;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\History\ChatHistoryInterface;
 use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
-use NeuronTui\Command\Command;
-use NeuronTui\Command\ConcurrentCommand;
+use NeuronTui\Command\CommandInterface;
+use NeuronTui\Command\ConcurrentCommandInterface;
 use NeuronTui\Tui\ConversationView;
 use NeuronTui\Tui\WorkingIndicator;
 use Symfony\Component\Tui\Event\InputEvent;
@@ -43,7 +43,7 @@ final class ConversationRuntime
     /**
      * The mounted commands in the order the Host Application added them.
      *
-     * @var list<Command|ConcurrentCommand>
+     * @var list<CommandInterface|ConcurrentCommandInterface>
      */
     private readonly array $commands;
 
@@ -51,7 +51,7 @@ final class ConversationRuntime
     private ?Future $response = null;
 
     /**
-     * @param list<Command|ConcurrentCommand> $commands everything that
+     * @param list<CommandInterface|ConcurrentCommandInterface> $commands everything that
      *     can be typed here after a slash; the Conversation TUI mounts
      *     nothing on its own
      */
@@ -110,7 +110,7 @@ final class ConversationRuntime
 
         $submission = Submission::interpret($event->getValue());
 
-        if ($submission instanceof SlashCommandInput) {
+        if ($submission instanceof CommandInput) {
             $this->carryOut($submission);
 
             return;
@@ -138,25 +138,25 @@ final class ConversationRuntime
      * The name is looked for among the commands mounted when the terminal was
      * built, and there is nowhere else to look: the Conversation TUI answers
      * to nothing on its own. A name no command answers to is said in the
-     * conversation rather than sent to the Agent, because the Slash namespace
+     * conversation rather than sent to the Agent, because the Command namespace
      * is answered locally.
      *
      * Whether a command may overlap a Turn is read from its type: an answer
      * already on its way would land in a conversation a command had meanwhile
      * replaced, so only a Concurrent command runs there.
      */
-    private function carryOut(SlashCommandInput $input): void
+    private function carryOut(CommandInput $input): void
     {
         $command = $this->commandNamed($input->name);
 
         if ($command === null) {
-            $this->view->showUnknownSlashCommand($input->name);
+            $this->view->showUnknownCommand($input->name);
 
             return;
         }
 
         if (
-            !$command instanceof ConcurrentCommand
+            !$command instanceof ConcurrentCommandInterface
             && $this->refusedWhileWorking($input->name)
         ) {
             return;
@@ -183,14 +183,14 @@ final class ConversationRuntime
      * meanwhile, which is what lets a person answer the list.
      */
     private function runSafely(
-        Command|ConcurrentCommand $command,
+        CommandInterface|ConcurrentCommandInterface $command,
         string $arguments,
     ): void {
         $conversation = $this->agent->getChatHistory();
         $failure = null;
 
         try {
-            if ($command instanceof ConcurrentCommand) {
+            if ($command instanceof ConcurrentCommandInterface) {
                 $command->run($this->concurrentControls(), $arguments);
             } else {
                 $command->run($this->controls(), $arguments);
@@ -308,7 +308,7 @@ final class ConversationRuntime
      * complete terminal composition. Scanning from the beginning makes the
      * first command with a name the stable recipient of matching input.
      */
-    private function commandNamed(string $name): Command|ConcurrentCommand|null
+    private function commandNamed(string $name): CommandInterface|ConcurrentCommandInterface|null
     {
         foreach ($this->commands as $command) {
             if ($command->name() === $name) {

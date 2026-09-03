@@ -7,9 +7,9 @@ namespace NeuronTui;
 use InvalidArgumentException;
 use LogicException;
 use NeuronAI\Agent\Agent;
-use NeuronTui\Command\Command;
-use NeuronTui\Command\CommandKit;
-use NeuronTui\Command\ConcurrentCommand;
+use NeuronTui\Command\CommandInterface;
+use NeuronTui\Command\CommandKitInterface;
+use NeuronTui\Command\ConcurrentCommandInterface;
 use NeuronTui\Conversation\ConversationRuntime;
 use Symfony\Component\Tui\Terminal\TerminalInterface;
 
@@ -34,7 +34,7 @@ final class Tui
 
     private string $figletFont = 'standard';
 
-    /** @var list<Command|ConcurrentCommand> */
+    /** @var list<CommandInterface|ConcurrentCommandInterface> */
     private array $commands = [];
 
     private bool $started = false;
@@ -88,10 +88,10 @@ final class Tui
     }
 
     /**
-     * @param Command|ConcurrentCommand|CommandKit|array<array-key, mixed> $commands
+     * @param CommandInterface|ConcurrentCommandInterface|CommandKitInterface|array<array-key, mixed> $commands
      */
     public function addCommand(
-        Command|ConcurrentCommand|CommandKit|array $commands,
+        CommandInterface|ConcurrentCommandInterface|CommandKitInterface|array $commands,
     ): self
     {
         $this->ensureNotStarted();
@@ -100,17 +100,17 @@ final class Tui
 
         foreach ($commands as $command) {
             if (
-                !$command instanceof Command
-                && !$command instanceof ConcurrentCommand
-                && !$command instanceof CommandKit
+                !$command instanceof CommandInterface
+                && !$command instanceof ConcurrentCommandInterface
+                && !$command instanceof CommandKitInterface
             ) {
                 throw new InvalidArgumentException(
-                    'A TUI command must implement Command, '
-                        . 'ConcurrentCommand or CommandKit.',
+                    'A TUI command must implement CommandInterface, '
+                        . 'ConcurrentCommandInterface or CommandKitInterface.',
                 );
             }
 
-            $members = $command instanceof CommandKit
+            $members = $command instanceof CommandKitInterface
                 ? $command->commands()
                 : [$command];
 
@@ -125,11 +125,12 @@ final class Tui
     private function mount(mixed $command): void
     {
         if (
-            !$command instanceof Command
-            && !$command instanceof ConcurrentCommand
+            !$command instanceof CommandInterface
+            && !$command instanceof ConcurrentCommandInterface
         ) {
             throw new InvalidArgumentException(
-                'A TUI command must implement Command or ConcurrentCommand.',
+                'A TUI command must implement CommandInterface '
+                    . 'or ConcurrentCommandInterface.',
             );
         }
 
