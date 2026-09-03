@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace NeuronTui\Conversation;
 
-use NeuronTui\Command\Command;
-use NeuronTui\Command\ConcurrentCommand;
+use NeuronTui\Command\CommandInterface;
+use NeuronTui\Command\ConcurrentCommandInterface;
 use NeuronTui\Tui\ConversationView;
 
 /**
@@ -19,7 +19,7 @@ use NeuronTui\Tui\ConversationView;
 final readonly class ConcurrentControls
 {
     /**
-     * @param list<Command|ConcurrentCommand> $mounted the commands mounted here
+     * @param list<CommandInterface|ConcurrentCommandInterface> $mounted the commands mounted here
      *
      * @internal the Conversation TUI builds these, a command receives them
      */
@@ -51,7 +51,7 @@ final readonly class ConcurrentControls
      * Reading what may be typed here keeps its meaning while an answer is on
      * its way, which is why `/help` is a Concurrent command.
      *
-     * @return list<Command|ConcurrentCommand>
+     * @return list<CommandInterface|ConcurrentCommandInterface>
      */
     public function commands(): array
     {

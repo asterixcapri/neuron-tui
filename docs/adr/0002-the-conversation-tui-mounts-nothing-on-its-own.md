@@ -3,10 +3,10 @@
 _ADR 0003 supersedes only this decision's duplicate-name rule. The TUI still
 mounts nothing on its own and all other consequences remain in force._
 
-The package used to answer three Slash commands — `/clear`, `/sessions` and
+The package used to answer three Commands — `/clear`, `/sessions` and
 `/exit` — carried out by the Conversation TUI itself, and the source said as
 much: a fixed set of commands does not justify a registry. That reasoning held
-only while the set was fixed. Once a Host Application can mount a Slash command
+only while the set was fixed. Once a Host Application can mount a Command
 of its own, a registry exists anyway, and keeping three commands outside it
 would mean two ways of answering a name, two places to look one up, and three
 names a Host Application may not use.
@@ -52,7 +52,7 @@ Nothing had been released, so the interface break costs nobody anything.
 - The screen is repainted from the Agent's History whenever a command changed
   it, so a command need not — and cannot usefully — tell the TUI what it did.
 - Which commands a turn under way does not hold back is carried by the type of
-  a command: one implementing `ConcurrentCommand` rather than `Command` is
+  a command: one implementing `ConcurrentCommandInterface` rather than `CommandInterface` is
   carried out at any time, and is handed the `ConcurrentControls` in exchange.
   The Conversation TUI names no class of its own to decide it, so a Host
   Application's own command to close the terminal runs mid-turn on the same

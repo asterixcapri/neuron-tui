@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace NeuronTui\Tui;
 
-use NeuronTui\Command\Command;
-use NeuronTui\Command\ConcurrentCommand;
+use NeuronTui\Command\CommandInterface;
+use NeuronTui\Command\ConcurrentCommandInterface;
 use Symfony\Component\Tui\Style\Style;
 use Symfony\Component\Tui\Widget\AbstractWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
@@ -145,7 +145,7 @@ final class CommandSuggestions
     private ?AbstractWidget $onScreen = null;
 
     /**
-     * @param list<Command|ConcurrentCommand> $commands
+     * @param list<CommandInterface|ConcurrentCommandInterface> $commands
      *     the mounted commands, in the order the Host Application named them
      */
     public function __construct(array $commands)
@@ -159,8 +159,8 @@ final class CommandSuggestions
         $this->suggestibleWhileWorking = self::suggestible(array_values(
             array_filter(
                 $commands,
-                static fn (Command|ConcurrentCommand $command): bool
-                    => $command instanceof ConcurrentCommand,
+                static fn (CommandInterface|ConcurrentCommandInterface $command): bool
+                    => $command instanceof ConcurrentCommandInterface,
             ),
         ));
         $this->list = new SelectListWidget([], self::VISIBLE_LINES);
@@ -458,7 +458,7 @@ final class CommandSuggestions
      * the same string: the one a completion would write, the whole safe one
      * a draft is matched against, and the shortened one a line is read on.
      *
-     * @param list<Command|ConcurrentCommand> $commands
+     * @param list<CommandInterface|ConcurrentCommandInterface> $commands
      *
      * @return list<array{
      *     answersTo: string,

@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace NeuronTuiDemo;
 
-use NeuronTui\Command\Command;
+use NeuronTui\Command\CommandInterface;
 use NeuronTui\Conversation\ChoiceOption;
 use NeuronTui\Conversation\Controls;
 
-final readonly class ModelCommand implements Command
+final readonly class ModelCommand implements CommandInterface
 {
     public function name(): string
     {

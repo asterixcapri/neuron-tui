@@ -7,7 +7,7 @@ namespace NeuronTui\Conversation;
 /**
  * Reads what a person typed and says what it is.
  *
- * Everything a person submits is one of two things: a Slash command, name and
+ * Everything a person submits is one of two things: a Command, name and
  * arguments apart, or a message for the Agent. Deciding which is this module's
  * whole responsibility, so nothing downstream inspects raw input again.
  *
@@ -34,7 +34,7 @@ final class Submission
      */
     public static function interpret(
         string $input,
-    ): SlashCommandInput|MessageForAgent {
+    ): CommandInput|MessageForAgent {
         if (!str_starts_with($input, '/')) {
             return new MessageForAgent($input);
         }
@@ -43,7 +43,7 @@ final class Submission
         // it ends at the first whitespace, or at the end of the input.
         $endOfName = strcspn($input, self::WHITESPACE);
 
-        return new SlashCommandInput(
+        return new CommandInput(
             substr($input, 0, $endOfName),
             trim(substr($input, $endOfName), self::WHITESPACE),
         );

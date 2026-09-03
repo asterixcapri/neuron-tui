@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace NeuronTui\Command;
 
 /**
- * A group of Slash commands mounted in one line.
+ * A group of Commands mounted in one line.
  *
  * A kit carries whatever its members need to work — the Session provider, for
  * the kit this library ships — so a Host Application names that thing once
@@ -22,12 +22,12 @@ namespace NeuronTui\Command;
  * The name avoids "toolkit", which in Neuron AI means a group of tools for
  * the model.
  */
-interface CommandKit
+interface CommandKitInterface
 {
     /**
      * The commands this kit mounts, once what was left out is gone.
      *
-     * @return list<Command|ConcurrentCommand>
+     * @return list<CommandInterface|ConcurrentCommandInterface>
      */
     public function commands(): array;
 
