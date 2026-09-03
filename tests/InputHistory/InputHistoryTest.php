@@ -63,7 +63,8 @@ final class InputHistoryTest extends TestCase
 
     public function testOnlyConsecutiveExactDuplicateSubmissionsCollapse(): void
     {
-        $storage = new InMemoryStorage();
+        $stored = new InMemoryStorage();
+        $storage = new CountingStorage($stored);
         $history = new InputHistory($storage);
 
         $history->record('same');
@@ -74,8 +75,9 @@ final class InputHistoryTest extends TestCase
 
         self::assertSame(
             ['same', 'different', 'same'],
-            $storage->read('input-history', 'entries')?->data,
+            $stored->read('input-history', 'entries')?->data,
         );
+        self::assertSame(3, $storage->writes);
     }
 
     public function testEditingOrSubmittingLeavesNavigation(): void

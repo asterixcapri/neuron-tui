@@ -124,6 +124,7 @@ final class ConversationRuntime
             return;
         }
 
+        $this->inputHistory->record($event->getValue());
         $submission = Submission::interpret($event->getValue());
 
         if ($submission instanceof CommandInput) {
@@ -132,7 +133,6 @@ final class ConversationRuntime
             return;
         }
 
-        $this->inputHistory->record($event->getValue());
         $this->send($submission);
     }
 
