@@ -26,9 +26,8 @@ use NeuronTui\Tui\DisplayableText;
  * its result is the History's business, not something callers arrange between
  * themselves — a result may arrive out of order, or never arrive at all.
  *
- * The projection reads the messages and keeps nothing, so it can be asked for
- * the stream at any moment: opening the TUI, starting a new Session, or
- * returning to one.
+ * The projection is a snapshot that can be built at any moment: opening the
+ * TUI, starting a new Session, or returning to one.
  *
  * @internal
  */
@@ -52,25 +51,20 @@ final class HistoryProjection
      */
     private array $entries = [];
 
-    private function __construct()
+    /** @param array<Message> $messages */
+    public function __construct(array $messages)
     {
         $this->correlation = new ToolCorrelation();
-    }
-
-    /**
-     * @param array<Message> $messages
-     *
-     * @return list<Entry>
-     */
-    public static function entriesFor(array $messages): array
-    {
-        $projection = new self();
 
         foreach ($messages as $message) {
-            $projection->read($message);
+            $this->read($message);
         }
+    }
 
-        return array_values($projection->entries);
+    /** @return list<Entry> */
+    public function entries(): array
+    {
+        return array_values($this->entries);
     }
 
     /**
@@ -80,11 +74,10 @@ final class HistoryProjection
      * list, and it is read here so that a title says exactly what the
      * History would have shown.
      *
-     * @param array<Message> $messages
      */
-    public static function openingWords(array $messages): ?string
+    public function openingWords(): ?string
     {
-        foreach (self::entriesFor($messages) as $entry) {
+        foreach ($this->entries() as $entry) {
             if ($entry->kind === EntryKind::Person) {
                 return $entry->text;
             }
@@ -132,7 +125,7 @@ final class HistoryProjection
 
     private function say(EntryKind $kind, Message $message): void
     {
-        $contents = self::contents($message);
+        $contents = $this->contents($message);
 
         if ($contents === '') {
             return;
@@ -166,7 +159,7 @@ final class HistoryProjection
         );
     }
 
-    private static function contents(Message $message): string
+    private function contents(Message $message): string
     {
         $contents = [];
 
@@ -175,7 +168,7 @@ final class HistoryProjection
                 $block instanceof ReasoningContent => null,
                 $block instanceof TextContent => $block->getContent(),
                 $block instanceof ImageContent => '[Image]',
-                $block instanceof FileContent => self::filePlaceholder($block),
+                $block instanceof FileContent => $this->filePlaceholder($block),
                 $block instanceof AudioContent => '[Audio]',
                 $block instanceof VideoContent => '[Video]',
                 default => null,
@@ -189,7 +182,7 @@ final class HistoryProjection
         return implode("\n\n", $contents);
     }
 
-    private static function filePlaceholder(FileContent $file): string
+    private function filePlaceholder(FileContent $file): string
     {
         if ($file->filename === null) {
             return '[File]';
