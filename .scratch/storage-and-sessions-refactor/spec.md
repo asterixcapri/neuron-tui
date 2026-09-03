@@ -55,7 +55,7 @@ interface StorageInterface
 ```
 
 `StoredDocument` carries the logical key, decoded JSON data and caller-owned
-lowercase string metadata, and calculates the byte size of its data's JSON
+camelCase string metadata, and calculates the byte size of its data's JSON
 representation. `create()` creates a document under a new
 adapter-generated opaque key. A missing document reads as `null`; `write()`
 creates or replaces one known namespace/key document atomically, data and
