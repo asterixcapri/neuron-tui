@@ -18,6 +18,11 @@
             }
         }
     ],
+    "autoload": {
+        "psr-4": {
+            "NeuronTuiDemo\\": "src/"
+        }
+    },
     "scripts": {
         "demo": "php demo.php"
     },

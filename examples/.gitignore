@@ -1,4 +1,4 @@
 /.env
 /vendor/
-/sessions/
+/.sessions/
 /.neuron/
