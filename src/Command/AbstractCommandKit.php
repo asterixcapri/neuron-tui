@@ -17,7 +17,7 @@ namespace NeuronTui\Command;
  * kept is decided by class, and a command of a class deriving from a named
  * one is that command as far as this is concerned.
  */
-abstract class AbstractCommandKit implements CommandKit
+abstract class AbstractCommandKit implements CommandKitInterface
 {
     /**
      * The classes to leave out.
@@ -37,7 +37,7 @@ abstract class AbstractCommandKit implements CommandKit
     /**
      * Everything this kit is made of, before anything is left out.
      *
-     * @return list<Command|ConcurrentCommand>
+     * @return list<CommandInterface|ConcurrentCommandInterface>
      */
     abstract protected function provide(): array;
 
@@ -80,7 +80,7 @@ abstract class AbstractCommandKit implements CommandKit
      * Being left out wins over being kept, so a class named to both is gone:
      * the two asked for together can only have meant that.
      */
-    private function keeps(Command|ConcurrentCommand $command): bool
+    private function keeps(CommandInterface|ConcurrentCommandInterface $command): bool
     {
         foreach ($this->excluded as $class) {
             if ($command instanceof $class) {

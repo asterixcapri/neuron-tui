@@ -8,7 +8,7 @@ use InvalidArgumentException;
 use NeuronTui\Tui\DisplayableText;
 
 /**
- * One value a Slash command offers through the Picker.
+ * One value a Command offers through the Picker.
  *
  * The key belongs to the command and comes back untouched when this option
  * is chosen. The label names it on screen; the optional detail explains it

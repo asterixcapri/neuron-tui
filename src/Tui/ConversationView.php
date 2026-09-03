@@ -9,8 +9,8 @@ use Closure;
 use InvalidArgumentException;
 use LogicException;
 use NeuronAI\Chat\Messages\Message;
-use NeuronTui\Command\Command;
-use NeuronTui\Command\ConcurrentCommand;
+use NeuronTui\Command\CommandInterface;
+use NeuronTui\Command\ConcurrentCommandInterface;
 use NeuronTui\Conversation\ChoiceOption;
 use NeuronTui\History\EntryKind;
 use NeuronTui\History\HistoryProjection;
@@ -97,7 +97,7 @@ final class ConversationView
     private bool $leaving = false;
 
     /**
-     * @param list<Command|ConcurrentCommand> $commands
+     * @param list<CommandInterface|ConcurrentCommandInterface> $commands
      *     the mounted commands, in the order the Host Application named
      *     them, which are what the Command suggestions have to offer
      */
@@ -377,7 +377,7 @@ final class ConversationView
     }
 
     /**
-     * Shows a line a Slash command said.
+     * Shows a line a Command said.
      */
     public function showNotice(string $text): void
     {
@@ -389,9 +389,9 @@ final class ConversationView
         $this->history->addMessage('Error', $message, 'error');
     }
 
-    public function showUnknownSlashCommand(string $command): void
+    public function showUnknownCommand(string $command): void
     {
-        $this->showError('Unknown Slash command: ' . $command);
+        $this->showError('Unknown Command: ' . $command);
     }
 
     /**

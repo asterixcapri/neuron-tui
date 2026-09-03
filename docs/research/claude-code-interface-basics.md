@@ -37,7 +37,7 @@ appartiene alla Host Application, o appartiene al livello Agent di Neuron, e non
 Ordine consigliato aggiornato: **P0** interruzione del Turn · riga di stato viva.
 **P1** approvazione dei tool · cronologia dei prompt · pensiero del modello
 visibile · `/compact`. **P2** ridisegno `Ctrl+L` · `/export`. `/help`, Command
-suggestions, Slash command estendibili e apertura di una History scelta dalla
+suggestions, Command estendibili e apertura di una History scelta dalla
 Host Application sono nel frattempo presenti. **Fuori scope**: tutto il resto.
 
 ---
@@ -53,7 +53,7 @@ riferimenti ai simboli sono mantenuti aggiornati.
 | Editing readline: `Ctrl+A/E/K/U/W/Y`, `Alt+B/F`, `Alt+Y`, undo ([interactive-mode, "Text editing"](https://code.claude.com/docs/en/interactive-mode)) | Presente **gratis**: mappa di default di `EditorWidget` (`cursor_line_start`=`ctrl+a`, `delete_to_line_end`=`ctrl+k`, `yank`=`ctrl+y`, `yank_pop`=`alt+y`, `undo`=`ctrl+-`…) |
 | Incolla in modalità paste ([interactive-mode](https://code.claude.com/docs/en/interactive-mode)) | Presente: bracketed paste abilitato da `Symfony\Component\Tui\Terminal\Terminal` |
 | `Esc` svuota la bozza non inviata ([interactive-mode, `Esc`+`Esc`](https://code.claude.com/docs/en/interactive-mode)) | Presente, ma con un solo `Esc` (`ConversationView::clearDraft`) |
-| Messaggi accodati mentre l'Agent lavora: «If you send a command while Claude is responding, it queues and runs after the current turn finishes» ([commands](https://code.claude.com/docs/en/commands)) | I prompt sono accodati da `TurnQueue`; un `ConcurrentCommand` gira subito, mentre un normale `Command` viene rifiutato durante il Turn |
+| Messaggi accodati mentre l'Agent lavora: «If you send a command while Claude is responding, it queues and runs after the current turn finishes» ([commands](https://code.claude.com/docs/en/commands)) | I prompt sono accodati da `TurnQueue`; un `ConcurrentCommandInterface` gira subito, mentre un normale `CommandInterface` viene rifiutato durante il Turn |
 | Streaming del testo, attività dei tool con durata | Presente: `AgentTurn::respond()` su `TextChunk` / `ToolCallChunk` / `ToolResultChunk`, reso da `ToolActivity` e `ToolActivityText` |
 | Indicatore di lavoro con secondi trascorsi | Presente: `WorkingIndicator` |
 | `/clear` apre una conversazione nuova conservando la precedente ([sessions, "Manage context within a session"](https://code.claude.com/docs/en/sessions)) | Fornito da `Command\ClearCommand`; è presente quando la Host Application lo monta |
@@ -75,7 +75,7 @@ decisione intenzionale della Conversation TUI, registrata nell'ADR 0002.
 | `--resume` / `/resume` picker | comando **ResumeCommand** + **Picker** |
 | transcript in `~/.claude/projects/...` | **History**, posseduta dall'Agent, raggiunta da un **Session provider** |
 | turn | **Turn** |
-| slash command | **Slash command** |
+| command | **Command** |
 | status line | la riga `.status` della Conversation TUI |
 | spinner / "esc to interrupt" | **Working indicator** |
 | `settings.json`, `CLAUDE.md` | **Host Application** (Neuron TUI non legge configurazione) |
@@ -127,7 +127,7 @@ commands»; e `?` su input vuoto apre un pannello con le scorciatoie
 «Commands are only recognized at the start of your message» e «Text following the
 command name becomes its arguments» ([commands](https://code.claude.com/docs/en/commands)) —
 regole che `Submission::interpret()` implementa: produce uno
-`SlashCommandInput` con nome e argomenti separati.
+`CommandInput` con nome e argomenti separati.
 
 **Stato in Neuron TUI.** La Host Application può montare `Command\HelpCommand`, che
 elenca tutti i comandi montati attraverso `ConcurrentControls::commands()` e può
@@ -307,7 +307,7 @@ raccomandazione da discutere prima di implementare.
 
 ### P2 — Il resto del "basic", in ordine decrescente
 
-- **Realizzato — Slash command estendibili dalla Host Application.** Claude Code
+- **Realizzato — Command estendibili dalla Host Application.** Claude Code
   ha reso i
   comandi personalizzati un caso di skill: un file Markdown in
   `~/.claude/skills/<nome>/SKILL.md` o `.claude/skills/<nome>/SKILL.md` diventa
@@ -315,10 +315,10 @@ raccomandazione da discutere prima di implementare.
   `disable-model-invocation`, `user-invocable`…) e sostituzione di `$ARGUMENTS`,
   `$ARGUMENTS[N]`, `$N` ([skills](https://code.claude.com/docs/en/skills)).
   Neuron TUI non copia le skill — quelle sono file di *prompt*, cioè materia
-  dell'Agent — ma espone `Command` e `ConcurrentCommand`: entrambi dichiarano
+  dell'Agent — ma espone `CommandInterface` e `ConcurrentCommandInterface`: entrambi dichiarano
   nome, descrizione e `run()`, con Controls diversi a seconda che possano girare
   durante un Turn. `Tui::addCommand()` monta un comando, un array o un
-  `CommandKit`; il package non ne monta nessuno d'ufficio. La decisione è
+  `CommandKitInterface`; il package non ne monta nessuno d'ufficio. La decisione è
   registrata negli ADR 0002 e 0003.
 - **`Ctrl+L` ridisegna lo schermo** («Forces a full terminal redraw, keeping input
   and conversation history», [interactive-mode](https://code.claude.com/docs/en/interactive-mode)).
@@ -529,7 +529,7 @@ Versione verificata: dichiarata `neuron-core/neuron-ai:^3.15.26`, fissata da
 |---|---|---|
 | `/help` | realizzato, da montare esplicitamente | nessuno |
 | Command suggestions | realizzati | nessuno |
-| Slash command estendibili | realizzati con `Command`, `ConcurrentCommand` e `CommandKit` | nessuno |
+| Command estendibili | realizzati con `CommandInterface`, `ConcurrentCommandInterface` e `CommandKitInterface` | nessuno |
 | Aprire una Session all'avvio | già consentito configurando la History dell'Agent prima di `Tui::make()` | la CLI appartiene alla Host Application |
 | `Esc` interrompe il Turn | P0, da fare | semantica della risposta parziale e della coda |
 | Riga di stato con Session e token | P0, da fare | accesso ai metadati della Session corrente |

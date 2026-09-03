@@ -18,7 +18,7 @@ use NeuronTui\History\HistoryProjection;
  * nothing: no directory, no credentials, no decision about where a
  * conversation should live. It is the promise Neuron AI already makes to an
  * Agent given no History at all — a conversation that works completely and
- * ends with the process — extended to all three Slash commands. A Host
+ * ends with the process — extended to all three Commands. A Host
  * Application that wants its conversations kept passes a provider that keeps
  * them.
  *

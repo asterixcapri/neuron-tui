@@ -21,7 +21,7 @@ use NeuronTui\Session\SessionProvider;
  * conversation instead. The Sessions become ChoiceOptions here, while their
  * keys and titles are still something known.
  */
-final readonly class ResumeCommand implements Command
+final readonly class ResumeCommand implements CommandInterface
 {
     /**
      * @param SessionProvider $sessions the place the conversations live

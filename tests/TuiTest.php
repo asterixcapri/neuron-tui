@@ -30,8 +30,8 @@ use NeuronAI\Testing\RequestRecord;
 use NeuronAI\Tools\Tool;
 use NeuronTui\Command\AbstractCommandKit;
 use NeuronTui\Command\ClearCommand;
-use NeuronTui\Command\Command;
-use NeuronTui\Command\ConcurrentCommand;
+use NeuronTui\Command\CommandInterface;
+use NeuronTui\Command\ConcurrentCommandInterface;
 use NeuronTui\Command\HelpCommand;
 use NeuronTui\Command\LeaveCommand;
 use NeuronTui\Command\ResumeCommand;
@@ -101,8 +101,8 @@ final class TuiTest extends TestCase
 
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage(
-            'A TUI command must implement Command, '
-                . 'ConcurrentCommand or CommandKit.',
+            'A TUI command must implement CommandInterface, '
+                . 'ConcurrentCommandInterface or CommandKitInterface.',
         );
 
         $tui->addCommand([new \stdClass()]);
@@ -967,7 +967,7 @@ MARKDOWN;
         );
     }
 
-    public function testSlashCommandsAndEscapeRemainLocal(): void
+    public function testCommandsAndEscapeRemainLocal(): void
     {
         $intermediateDisplay = null;
         $forcedExit = false;
@@ -1018,7 +1018,7 @@ MARKDOWN;
 
         self::assertIsString($intermediateDisplay);
         self::assertStringContainsString(
-            'Unknown Slash command: /unknown',
+            'Unknown Command: /unknown',
             $intermediateDisplay,
         );
         self::assertStringContainsString('/unknown', $intermediateDisplay);
@@ -1090,7 +1090,7 @@ MARKDOWN;
         // `/resume now` opens the picker on the Session being written in.
         self::assertIsString($afterResume);
         self::assertStringNotContainsString(
-            'Unknown Slash command',
+            'Unknown Command',
             $afterResume,
         );
         self::assertStringContainsString('A question', $afterResume);
@@ -1098,7 +1098,7 @@ MARKDOWN;
         // screen instead of an unknown command reaching the conversation.
         self::assertIsString($afterClear);
         self::assertStringNotContainsString(
-            'Unknown Slash command',
+            'Unknown Command',
             $afterClear,
         );
         self::assertStringNotContainsString('An answer.', $afterClear);
@@ -1141,7 +1141,7 @@ MARKDOWN;
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertSame('two words', $arguments);
         self::assertStringContainsString('The command ran.', $display);
-        self::assertStringNotContainsString('Unknown Slash command', $display);
+        self::assertStringNotContainsString('Unknown Command', $display);
         $provider->assertNothingSent();
     }
 
@@ -1515,15 +1515,15 @@ MARKDOWN;
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
         self::assertStringContainsString(
-            'Unknown Slash command: /clear',
+            'Unknown Command: /clear',
             $display,
         );
         self::assertStringContainsString(
-            'Unknown Slash command: /resume',
+            'Unknown Command: /resume',
             $display,
         );
         self::assertStringContainsString(
-            'Unknown Slash command: /exit',
+            'Unknown Command: /exit',
             $display,
         );
         // Without the command that leaves, Ctrl+C is the way out.
@@ -1590,7 +1590,7 @@ MARKDOWN;
         // The name it was given is the only name it answers to.
         self::assertIsString($unknownDisplay);
         self::assertStringContainsString(
-            'Unknown Slash command: /clear',
+            'Unknown Command: /clear',
             $unknownDisplay,
         );
         self::assertStringContainsString(
@@ -1651,7 +1651,7 @@ MARKDOWN;
             '/probe — Does what the test says.',
             $display,
         );
-        self::assertStringNotContainsString('Unknown Slash command', $display);
+        self::assertStringNotContainsString('Unknown Command', $display);
         $provider->assertNothingSent();
     }
 
@@ -1680,7 +1680,7 @@ MARKDOWN;
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
         self::assertStringContainsString(
-            'Unknown Slash command: /help',
+            'Unknown Command: /help',
             $display,
         );
         $provider->assertNothingSent();
@@ -3426,7 +3426,7 @@ MARKDOWN;
 
     /**
      * Enter takes the first suggestion already selected for a prefix and
-     * submits its full name through normal Slash command dispatch.
+     * submits its full name through normal Command dispatch.
      */
     public function testEnterRunsTheAutomaticallySelectedSuggestion(): void
     {
@@ -3450,7 +3450,7 @@ MARKDOWN;
         ));
 
         self::assertStringContainsString('Alpha ran.', $display);
-        self::assertStringNotContainsString('Unknown Slash command', $display);
+        self::assertStringNotContainsString('Unknown Command', $display);
         self::assertSame('', $arguments);
     }
 
@@ -3492,7 +3492,7 @@ MARKDOWN;
         ));
 
         self::assertStringContainsString('/album ran.', $display);
-        self::assertStringNotContainsString('Unknown Slash command', $display);
+        self::assertStringNotContainsString('Unknown Command', $display);
         self::assertSame('/album', $ran);
         self::assertSame('', $arguments);
     }
@@ -3709,7 +3709,7 @@ MARKDOWN;
      * Each string is typed a moment after the one before it, so a test can
      * write a name and then delete part of it.
      *
-     * @param list<Command|ConcurrentCommand> $commands
+     * @param list<CommandInterface|ConcurrentCommandInterface> $commands
      */
     private static function screenAfterTyping(
         array $commands,
@@ -3759,8 +3759,8 @@ MARKDOWN;
     private static function commandNamed(
         string $name,
         string $description,
-    ): Command {
-        return new class($name, $description) implements Command {
+    ): CommandInterface {
+        return new class($name, $description) implements CommandInterface {
             public function __construct(
                 private readonly string $commandName,
                 private readonly string $description,
@@ -4154,7 +4154,7 @@ MARKDOWN;
 
         // What was sent is what was written, and nothing was written: `/zz`.
         self::assertStringContainsString(
-            'Unknown Slash command: /zz',
+            'Unknown Command: /zz',
             $display,
         );
         self::assertStringNotContainsString("\t", $display);
@@ -4284,7 +4284,7 @@ MARKDOWN;
         ));
 
         self::assertStringContainsString(
-            'Unknown Slash command: /al',
+            'Unknown Command: /al',
             $display,
         );
     }
@@ -4377,8 +4377,8 @@ MARKDOWN;
     private function commandThat(
         Closure $run,
         string $name = '/probe',
-    ): Command {
-        return new class($run, $name) implements Command {
+    ): CommandInterface {
+        return new class($run, $name) implements CommandInterface {
             /**
              * @param Closure(Controls, string): void $run
              */
@@ -4414,8 +4414,8 @@ MARKDOWN;
     private function concurrentCommand(
         Closure $run,
         string $name = '/probe',
-    ): ConcurrentCommand {
-        return new class($run, $name) implements ConcurrentCommand {
+    ): ConcurrentCommandInterface {
+        return new class($run, $name) implements ConcurrentCommandInterface {
             /**
              * @param Closure(ConcurrentControls, string): void $run
              */
@@ -4447,7 +4447,7 @@ MARKDOWN;
     /**
      * The commands Neuron TUI ships for the Sessions of one provider.
      *
-     * @return list<Command|ConcurrentCommand>
+     * @return list<CommandInterface|ConcurrentCommandInterface>
      */
     private static function sessionCommands(
         SessionProvider $sessions,
@@ -5317,12 +5317,12 @@ MARKDOWN;
 
         self::assertIsString($refusedDisplay);
         self::assertStringContainsString(
-            'Unknown Slash command: /clear',
+            'Unknown Command: /clear',
             $refusedDisplay,
         );
         self::assertIsString($pickerDisplay);
         self::assertStringNotContainsString(
-            'Unknown Slash command: /resume',
+            'Unknown Command: /resume',
             $pickerDisplay,
         );
         self::assertStringContainsString(
@@ -5386,13 +5386,13 @@ MARKDOWN;
 
         self::assertIsString($refusedDisplay);
         self::assertStringContainsString(
-            'Unknown Slash command: /resume',
+            'Unknown Command: /resume',
             $refusedDisplay,
         );
         self::assertIsString($clearedDisplay);
         self::assertStringContainsString('draft', $clearedDisplay);
         self::assertStringNotContainsString(
-            'Unknown Slash command: /clear',
+            'Unknown Command: /clear',
             $clearedDisplay,
         );
         self::assertStringNotContainsString(

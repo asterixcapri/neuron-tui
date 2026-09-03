@@ -20,7 +20,7 @@ use NeuronTui\Conversation\ConcurrentControls;
  * It is Concurrent: reading what may be typed here changes nothing, so there
  * is no reason to wait for a Turn to finish before asking.
  */
-final readonly class HelpCommand implements ConcurrentCommand
+final readonly class HelpCommand implements ConcurrentCommandInterface
 {
     /**
      * @param string $name the name it answers to, slash included
