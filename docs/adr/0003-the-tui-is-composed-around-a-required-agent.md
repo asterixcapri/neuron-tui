@@ -12,10 +12,11 @@ rather than a second owner of the Agent.
 Configuration is accumulated before `run()`, and the terminal widgets and
 listeners are built once inside `run()`. The instance is frozen when that
 single run starts. `addCommand()` deliberately follows `Agent::addTool()`: it
-accepts one command or an array, validates each value as it is added, preserves
-order and does not reject duplicate names. The first command with a repeated
-name is the one reached; repeated entries may remain visible in command
-suggestions. This duplicate rule supersedes the contrary rule in ADR 0002.
+accepts one command, a `CommandKit`, or an array containing either, validates
+each value as it is added, preserves order and does not reject duplicate names.
+The first command with a repeated name is the one reached; repeated entries may
+remain visible in command suggestions. This duplicate rule supersedes the
+contrary rule in ADR 0002.
 
 ## Considered options
 
@@ -34,7 +35,8 @@ suggestions. This duplicate rule supersedes the contrary rule in ADR 0002.
 ## Consequences
 
 - The public entry point is `final class NeuronTui\Tui`; the complete package
-  and namespace rename is made without a `NeuronCli` compatibility layer.
+  and namespace rename is made without a compatibility layer for the former
+  public entry point.
 - `Tui::make($agent, $terminal)` and `new Tui($agent, $terminal)` are equivalent,
   while documentation leads with `make()`.
 - No command is mounted automatically. The Host Application adds every Slash
