@@ -16,13 +16,11 @@ final class InMemoryStorage extends AbstractStorage
      */
     private array $documents = [];
 
-    public function read(
+    protected function readDocument(
         string $namespace,
         string $key,
     ): ?StoredDocument
     {
-        $this->guardIdentifier($namespace, 'namespace');
-        $this->guardIdentifier($key, 'key');
         $document = $this->documents[$namespace][$key] ?? null;
 
         return $document === null
@@ -34,16 +32,12 @@ final class InMemoryStorage extends AbstractStorage
      * @param array<array-key, mixed> $data
      * @param array<string, string> $metadata
      */
-    public function write(
+    protected function writeDocument(
         string $namespace,
         string $key,
         array $data,
-        array $metadata = [],
+        array $metadata,
     ): StoredDocument {
-        $this->guardIdentifier($namespace, 'namespace');
-        $this->guardIdentifier($key, 'key');
-        $this->guardMetadata($metadata);
-
         $normalized = json_decode(
             json_encode($data, JSON_THROW_ON_ERROR),
             true,
@@ -67,18 +61,14 @@ final class InMemoryStorage extends AbstractStorage
         );
     }
 
-    public function delete(string $namespace, string $key): void
+    protected function deleteDocument(string $namespace, string $key): void
     {
-        $this->guardIdentifier($namespace, 'namespace');
-        $this->guardIdentifier($key, 'key');
-
         unset($this->documents[$namespace][$key]);
     }
 
     /** @return list<StoredDocument> */
-    public function entries(string $namespace): array
+    protected function readEntries(string $namespace): iterable
     {
-        $this->guardIdentifier($namespace, 'namespace');
         $documents = $this->documents[$namespace] ?? [];
 
         $entries = [];

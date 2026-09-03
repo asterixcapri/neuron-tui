@@ -13,14 +13,11 @@ final class FileStorage extends AbstractStorage
 
     public function __construct(private readonly string $root) {}
 
-    public function read(
+    protected function readDocument(
         string $namespace,
         string $key,
     ): ?StoredDocument
     {
-        $this->guardIdentifier($namespace, 'namespace');
-        $this->guardIdentifier($key, 'key');
-
         if (!is_dir($this->root)) {
             return null;
         }
@@ -44,16 +41,12 @@ final class FileStorage extends AbstractStorage
      * @param array<array-key, mixed> $data
      * @param array<string, string> $metadata
      */
-    public function write(
+    protected function writeDocument(
         string $namespace,
         string $key,
         array $data,
-        array $metadata = [],
+        array $metadata,
     ): StoredDocument {
-        $this->guardIdentifier($namespace, 'namespace');
-        $this->guardIdentifier($key, 'key');
-        $this->guardMetadata($metadata);
-
         $directory = $this->namespaceDirectory($namespace);
         $path = $this->path($directory, $key);
 
@@ -94,11 +87,8 @@ final class FileStorage extends AbstractStorage
         }
     }
 
-    public function delete(string $namespace, string $key): void
+    protected function deleteDocument(string $namespace, string $key): void
     {
-        $this->guardIdentifier($namespace, 'namespace');
-        $this->guardIdentifier($key, 'key');
-
         if (!is_dir($this->root)) {
             return;
         }
@@ -129,10 +119,8 @@ final class FileStorage extends AbstractStorage
     }
 
     /** @return list<StoredDocument> */
-    public function entries(string $namespace): array
+    protected function readEntries(string $namespace): iterable
     {
-        $this->guardIdentifier($namespace, 'namespace');
-
         if (!is_dir($this->root)) {
             return [];
         }
@@ -154,7 +142,6 @@ final class FileStorage extends AbstractStorage
                 0,
                 -strlen(self::FILE_EXTENSION),
             );
-            $this->guardIdentifier($key, 'key');
             $entries[] = $this->storedDocument($path, $key);
         }
 
