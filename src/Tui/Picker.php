@@ -282,10 +282,12 @@ final class Picker
     /** Matches the wrapping performed by Symfony's TextWidget renderer. */
     private function textHeight(TextWidget $text, int $columns): int
     {
-        return count($text->render(new RenderContext(
+        $context = new RenderContext(
             max(1, $columns),
             1,
-        )));
+        );
+
+        return count($text->render($context));
     }
 
     private static function contains(string $text, string $filter): bool
