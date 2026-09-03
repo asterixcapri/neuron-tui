@@ -16,6 +16,22 @@ final class InMemoryStorage extends AbstractStorage
      */
     private array $documents = [];
 
+    /**
+     * @param array<array-key, mixed> $data
+     * @param array<string, string> $metadata
+     */
+    protected function createDocument(
+        string $namespace,
+        array $data,
+        array $metadata,
+    ): StoredDocument {
+        do {
+            $key = bin2hex(random_bytes(16));
+        } while (isset($this->documents[$namespace][$key]));
+
+        return $this->writeDocument($namespace, $key, $data, $metadata);
+    }
+
     protected function readDocument(
         string $namespace,
         string $key,
