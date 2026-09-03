@@ -172,8 +172,8 @@ no `agent()`, no `ask()` and no `useAgent()`, because the Agent is busy
 answering. The restriction is in the type, so a Picker opened from such a
 command does not compile rather than being merely discouraged.
 
-`Leave` and `Help` are the two shipped commands that run this way: leaving and
-reading what may be typed here change no conversation.
+`LeaveCommand` and `HelpCommand` are the two shipped commands that run this
+way: leaving and reading what may be typed here change no conversation.
 
 ### The commands this library ships
 
@@ -183,39 +183,40 @@ prefers `/quit` to `/exit` writes no command of its own:
 
 | Class | Default name | What it does |
 | --- | --- | --- |
-| `NeuronTui\Command\Clear` | `/clear` | Starts a new Session, leaving the current one stored. |
-| `NeuronTui\Command\Resume` | `/resume` | Lets you choose a stored Session to resume. |
-| `NeuronTui\Command\Leave` | `/exit` | Closes the Conversation TUI. Concurrent. |
-| `NeuronTui\Command\Help` | `/help` | Lists what can be typed here. Concurrent. |
+| `NeuronTui\Command\ClearCommand` | `/clear` | Starts a new Session, leaving the current one stored. |
+| `NeuronTui\Command\ResumeCommand` | `/resume` | Lets you choose a stored Session to resume. |
+| `NeuronTui\Command\LeaveCommand` | `/exit` | Closes the Conversation TUI. Concurrent. |
+| `NeuronTui\Command\HelpCommand` | `/help` | Lists what can be typed here. Concurrent. |
 
 ```php
-use NeuronTui\Command\Clear;
-use NeuronTui\Command\Help;
-use NeuronTui\Command\Leave;
-use NeuronTui\Command\Resume;
+use NeuronTui\Command\ClearCommand;
+use NeuronTui\Command\HelpCommand;
+use NeuronTui\Command\LeaveCommand;
+use NeuronTui\Command\ResumeCommand;
 use NeuronTui\Session\InMemorySessionProvider;
 
 $sessions = new InMemorySessionProvider();
 $agent->setChatHistory($sessions->start());
 
 Tui::make($agent)->addCommand([
-    new Clear($sessions),
-    new Resume($sessions),
-    new Leave('/quit'),
-    new Help(),
+    new ClearCommand($sessions),
+    new ResumeCommand($sessions),
+    new LeaveCommand('/quit'),
+    new HelpCommand(),
 ])->run();
 ```
 
 The two commands that touch the Sessions receive the Session provider, because
 the place conversations live is named where it is needed. Passing the same
-provider to both is what makes them agree on which conversations exist. `Help`
-receives no list of commands: the one it shows contains itself, so the Conversation TUI
-hands it over while it runs rather than the Host Application building it
-beforehand. Typing `/help` lists every mounted command with the line it
-describes itself by, the ones the Host Application wrote included.
+provider to both is what makes them agree on which conversations exist.
+`HelpCommand` receives no list of commands: the one it shows contains itself,
+so the Conversation TUI hands it over while it runs rather than the Host
+Application building it beforehand. Typing `/help` lists every mounted command
+with the line it describes itself by, the ones the Host Application wrote
+included.
 
-Leave any of the four out and the terminal simply does not answer to that
-name. Without `Leave` there is no Slash command to close the terminal, and
+Leave any of the four out and the terminal simply does not answer to that name.
+Without `LeaveCommand` there is no Slash command to close the terminal, and
 `Ctrl+C` is the only way out.
 
 ### Command kits
@@ -226,7 +227,7 @@ is given the Session provider once and hands it to both the commands that
 touch the Sessions.
 
 ```php
-use NeuronTui\Command\Leave;
+use NeuronTui\Command\LeaveCommand;
 use NeuronTui\Command\SessionKit;
 use NeuronTui\Session\FileSessionProvider;
 
@@ -235,7 +236,7 @@ $agent->setChatHistory($sessions->start());
 
 Tui::make($agent)->addCommand([
     new SessionKit($sessions),
-    new Leave(),
+    new LeaveCommand(),
 ])->run();
 ```
 
@@ -244,16 +245,16 @@ ones kept, so an application in which conversations are not thrown away has
 `/resume` without `/clear`:
 
 ```php
-use NeuronTui\Command\Clear;
+use NeuronTui\Command\ClearCommand;
 
 Tui::make($agent)->addCommand([
-    (new SessionKit($sessions))->exclude([Clear::class]),
-    new Leave(),
+    (new SessionKit($sessions))->exclude([ClearCommand::class]),
+    new LeaveCommand(),
 ])->run();
 
 // The other way round, keeping only what is named:
 Tui::make($agent)
-    ->addCommand((new SessionKit($sessions))->only([Clear::class]))
+    ->addCommand((new SessionKit($sessions))->only([ClearCommand::class]))
     ->run();
 ```
 
@@ -271,11 +272,11 @@ names of one's own.
 
 ## Sessions
 
-A Session is one conversation with the Agent. `Clear` starts a fresh one
+A Session is one conversation with the Agent. `ClearCommand` starts a fresh one
 without leaving the terminal: the screen and the composer empty, and the
 conversation that was on screen stays where it is stored.
 
-`Resume` lists the Sessions of this Agent in the Picker, most recently used
+`ResumeCommand` lists the Sessions of this Agent in the Picker, most recently used
 first, each labelled with the first thing the person wrote in it. While the
 list is open the composer takes no text: the arrow keys move through it,
 typing narrows it, Enter chooses one and resumes it, and Escape leaves the
@@ -294,8 +295,8 @@ $sessions = new FileSessionProvider('/var/lib/my-app/sessions');
 $agent->setChatHistory($sessions->start());
 
 Tui::make($agent)->addCommand([
-    new Clear($sessions),
-    new Resume($sessions),
+    new ClearCommand($sessions),
+    new ResumeCommand($sessions),
 ])->run();
 ```
 
@@ -326,10 +327,10 @@ overlap a Turn,
 `NeuronTui\Conversation\Controls` and `NeuronTui\Conversation\ConcurrentControls`
 as what each is handed while it runs, and
 `NeuronTui\Conversation\ChoiceOption` for each option offered by `choose()`,
-`NeuronTui\Command\Clear`,
-`NeuronTui\Command\Resume`,
-`NeuronTui\Command\Leave` and
-`NeuronTui\Command\Help` as the commands shipped ready to
+`NeuronTui\Command\ClearCommand`,
+`NeuronTui\Command\ResumeCommand`,
+`NeuronTui\Command\LeaveCommand` and
+`NeuronTui\Command\HelpCommand` as the commands shipped ready to
 mount, and `NeuronTui\Command\CommandKit`,
 `NeuronTui\Command\AbstractCommandKit` and
 `NeuronTui\Command\SessionKit` for mounting a group of them in
@@ -346,9 +347,10 @@ a production executable or Symfony Console command.
 ## Demo
 
 `examples/` is a standalone Composer project acting as a Host Application. It
-connects the Conversation TUI to OpenAI's Responses API and consumes this
-library through a local path repository. Install its dependencies, create the
-local environment file, add your credentials and model, then start it:
+connects the Conversation TUI to OpenAI or Anthropic and consumes this library
+through a local path repository. Install its dependencies, create the local
+environment file, add the credentials for the providers you want to use, then
+start it:
 
 ```bash
 cd examples
@@ -366,10 +368,11 @@ GitHub. Anonymous downloads are throttled, so a fresh install may report HTTP
 composer config --global github-oauth.github.com <token>
 ```
 
-The demo reads `examples/.env` through Symfony Dotenv. Existing process environment
-variables take precedence over values from `examples/.env`. It mounts the
-commands this library ships, so `/exit` or Ctrl+C closes it and `/help` lists
-them.
+The demo reads `examples/.env` through Symfony Dotenv. Existing process
+environment variables take precedence over values from `examples/.env`. It
+starts with an inexpensive OpenAI model; `/model` opens a Picker that can also
+switch to other OpenAI and Anthropic models. It mounts the commands this
+library ships, so `/exit` or Ctrl+C closes it and `/help` lists them.
 
 ## Keys
 
@@ -383,12 +386,14 @@ them.
 - PageUp and PageDown browse the History.
 - Ctrl+C closes the Conversation TUI, mounted commands or not.
 - Any command the Host Application mounted, by the name it answers to —
-  including `Clear`, `Resume`, `Leave` and `Help` when it mounted them.
+  including `ClearCommand`, `ResumeCommand`, `LeaveCommand` and `HelpCommand`
+  when it mounted them.
 
 A `Command` is refused while a Turn is under way, so an arriving answer cannot
-land in the wrong Session; a `ConcurrentCommand` — `Leave` and `Help` among
-the ones shipped — is carried out at any time. Unknown Slash commands stay in
-the composer so they can be corrected and are never sent to the Agent.
+land in the wrong Session; a `ConcurrentCommand` — `LeaveCommand` and
+`HelpCommand` among the ones shipped — is carried out at any time. Unknown Slash
+commands stay in the composer so they can be corrected and are never sent to
+the Agent.
 
 ## Development
 

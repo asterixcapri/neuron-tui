@@ -44,7 +44,8 @@ Host Application sono nel frattempo presenti. **Fuori scope**: tutto il resto.
 
 ## 1. Cosa Neuron TUI ha già
 
-Verificato leggendo `src/` alla revisione `978e649`.
+Verificato originariamente leggendo `src/` alla revisione `978e649`; i
+riferimenti ai simboli sono mantenuti aggiornati.
 
 | Comportamento di Claude Code | Stato in Neuron TUI |
 |---|---|
@@ -55,10 +56,10 @@ Verificato leggendo `src/` alla revisione `978e649`.
 | Messaggi accodati mentre l'Agent lavora: «If you send a command while Claude is responding, it queues and runs after the current turn finishes» ([commands](https://code.claude.com/docs/en/commands)) | I prompt sono accodati da `TurnQueue`; un `ConcurrentCommand` gira subito, mentre un normale `Command` viene rifiutato durante il Turn |
 | Streaming del testo, attività dei tool con durata | Presente: `AgentTurn::respond()` su `TextChunk` / `ToolCallChunk` / `ToolResultChunk`, reso da `ToolActivity` e `ToolActivityText` |
 | Indicatore di lavoro con secondi trascorsi | Presente: `WorkingIndicator` |
-| `/clear` apre una conversazione nuova conservando la precedente ([sessions, "Manage context within a session"](https://code.claude.com/docs/en/sessions)) | Fornito da `Command\Clear`; è presente quando la Host Application lo monta |
-| `/resume` con picker: elenco, ricerca digitando, `↑↓`, `Enter`, `Esc` ([sessions, "Use the session picker"](https://code.claude.com/docs/en/sessions)) | Fornito da `Command\Resume` + `Tui\Picker`, ordinato dal più recente e corredato da titolo, età e — quando disponibile — dimensione persistita |
-| `/help` e scoperta dei comandi ([commands](https://code.claude.com/docs/en/commands)) | Fornito da `Command\Help`; i Command suggestions compaiono e si filtrano mentre si scrive un nome, con `↑↓`, `Tab`, `Enter` ed `Esc` |
-| `/exit` ([commands](https://code.claude.com/docs/en/commands)) | Fornito da `Command\Leave`; è presente quando la Host Application lo monta |
+| `/clear` apre una conversazione nuova conservando la precedente ([sessions, "Manage context within a session"](https://code.claude.com/docs/en/sessions)) | Fornito da `Command\ClearCommand`; è presente quando la Host Application lo monta |
+| `/resume` con picker: elenco, ricerca digitando, `↑↓`, `Enter`, `Esc` ([sessions, "Use the session picker"](https://code.claude.com/docs/en/sessions)) | Fornito da `Command\ResumeCommand` + `Tui\Picker`, ordinato dal più recente e corredato da titolo, età e — quando disponibile — dimensione persistita |
+| `/help` e scoperta dei comandi ([commands](https://code.claude.com/docs/en/commands)) | Fornito da `Command\HelpCommand`; i Command suggestions compaiono e si filtrano mentre si scrive un nome, con `↑↓`, `Tab`, `Enter` ed `Esc` |
+| `/exit` ([commands](https://code.claude.com/docs/en/commands)) | Fornito da `Command\LeaveCommand`; è presente quando la Host Application lo monta |
 | Markdown ed evidenziazione della sintassi nelle risposte | Presente: `MarkdownWidget` + `tempest/highlight` |
 
 Il confronto è più lusinghiero di quanto sembri: sul piano dell'*editing*
@@ -71,7 +72,7 @@ decisione intenzionale della Conversation TUI, registrata nell'ADR 0002.
 | Claude Code | Neuron TUI |
 |---|---|
 | session | **Session** |
-| `--resume` / `/resume` picker | comando **Resume** + **Picker** |
+| `--resume` / `/resume` picker | comando **ResumeCommand** + **Picker** |
 | transcript in `~/.claude/projects/...` | **History**, posseduta dall'Agent, raggiunta da un **Session provider** |
 | turn | **Turn** |
 | slash command | **Slash command** |
@@ -128,7 +129,7 @@ command name becomes its arguments» ([commands](https://code.claude.com/docs/en
 regole che `Submission::interpret()` implementa: produce uno
 `SlashCommandInput` con nome e argomenti separati.
 
-**Stato in Neuron TUI.** La Host Application può montare `Command\Help`, che
+**Stato in Neuron TUI.** La Host Application può montare `Command\HelpCommand`, che
 elenca tutti i comandi montati attraverso `ConcurrentControls::commands()` e può
 girare anche durante un Turn. `CommandSuggestions` mostra i nomi mentre si scrive
 all'inizio del composer, li filtra e permette di scegliere, completare o eseguire

@@ -8,7 +8,7 @@ use Closure;
 use NeuronAI\Agent\Agent;
 use NeuronTui\Command\AbstractCommandKit;
 use NeuronTui\Command\Command;
-use NeuronTui\Command\Help;
+use NeuronTui\Command\HelpCommand;
 use NeuronTui\Conversation\Controls;
 use NeuronTui\Tui;
 use PHPUnit\Framework\TestCase;
@@ -142,7 +142,7 @@ final class DuplicateCommandsTest extends TestCase
             ->addCommand([$commands[1], $commands[2]])
             ->addCommand(self::kit([$commands[3], $commands[4]]))
             ->addCommand([$commands[5], self::kit([$commands[6]])])
-            ->addCommand(new Help())
+            ->addCommand(new HelpCommand())
             ->run();
 
         self::assertIsString($suggestions);

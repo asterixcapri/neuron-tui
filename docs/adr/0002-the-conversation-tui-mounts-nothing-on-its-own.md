@@ -13,19 +13,20 @@ names a Host Application may not use.
 
 So the decision is inverted. **The Conversation TUI mounts nothing on its own.**
 A terminal built without naming a command is a terminal where every name after
-a slash is unknown, and where `Ctrl+C` is the way out. `Clear`, `Resume`, `Leave`
-and `Help` are shipped with the library as classes a Host Application mounts
-exactly as it mounts its own, each taking the name it answers to at construction
-so `/quit` costs nothing but an argument.
+a slash is unknown, and where `Ctrl+C` is the way out. `ClearCommand`,
+`ResumeCommand`, `LeaveCommand` and `HelpCommand` are shipped with the library
+as classes a Host Application mounts exactly as it mounts its own, each taking
+the name it answers to at construction so `/quit` costs nothing but an
+argument.
 
 Two things follow from the commands being ordinary.
 
 **The Session provider leaves the constructor of the Conversation TUI.** The
-place conversations live is what `Clear` and `Resume` need, so they are the
-ones that receive it, and the TUI stops knowing about it altogether. Opening a
-conversation becomes installing a History on the Agent — something a command
-already does through `Controls::agent()` and the Neuron AI API — rather than a
-verb of its own.
+place conversations live is what `ClearCommand` and `ResumeCommand` need, so
+they are the ones that receive it, and the TUI stops knowing about it
+altogether. Opening a conversation becomes installing a History on the Agent —
+something a command already does through `Controls::agent()` and the Neuron AI
+API — rather than a verb of its own.
 
 **The conversation is reconciled after every command.** Since a command may
 replace the History on the Agent without saying so, the Conversation TUI reads
@@ -42,8 +43,9 @@ Nothing had been released, so the interface break costs nobody anything.
   and is left with `Ctrl+C`. `/clear`, `/resume`, `/exit` and `/help` are unknown
   names until a Host Application mounts the commands that answer them.
 - `Tui` no longer takes a Session provider. A Host Application that wants
-  Sessions passes its provider to `Clear` and to `Resume`, and passing the
-  same one to both is what makes the two agree on which conversations exist.
+  Sessions passes its provider to `ClearCommand` and to `ResumeCommand`, and
+  passing the same one to both is what makes the two agree on which
+  conversations exist.
 - No name is reserved any more: a Host Application may mount a command of its
   own under `/clear`. ADR 0003 defines what happens when more than one mounted
   command answers to the same name.
@@ -54,7 +56,7 @@ Nothing had been released, so the interface break costs nobody anything.
   carried out at any time, and is handed the `ConcurrentControls` in exchange.
   The Conversation TUI names no class of its own to decide it, so a Host
   Application's own command to close the terminal runs mid-turn on the same
-  terms as the shipped `Leave`.
+  terms as the shipped `LeaveCommand`.
 - The screen is reconciled by comparing the History the command was handed with
   the one the Agent holds afterwards, so a command that changed a History in
   place rather than replacing it leaves the screen as it was.
