@@ -10,6 +10,9 @@ use NeuronAI\Chat\History\ChatHistoryInterface;
 use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
 use NeuronTui\Command\CommandInterface;
 use NeuronTui\Command\ConcurrentCommandInterface;
+use NeuronTui\Session\Sessions;
+use NeuronTui\Storage\InMemoryStorage;
+use NeuronTui\Storage\StorageInterface;
 use NeuronTui\Tui\ConversationView;
 use NeuronTui\Tui\WorkingIndicator;
 use Symfony\Component\Tui\Event\InputEvent;
@@ -40,6 +43,8 @@ final class ConversationRuntime
 
     private readonly AgentTurn $agentTurn;
 
+    private readonly Sessions $sessions;
+
     /**
      * The mounted commands in the order the Host Application added them.
      *
@@ -63,8 +68,11 @@ final class ConversationRuntime
         array $commands = [],
         ?string $figlet = null,
         string $figletFont = 'standard',
+        ?StorageInterface $storage = null,
     ) {
         $this->commands = $commands;
+        $this->sessions = new Sessions($storage ?? new InMemoryStorage());
+        $this->agent->setChatHistory($this->sessions->start());
         $this->terminal = $terminal ?? new Terminal();
         $this->view = new ConversationView(
             $this->terminal,
@@ -222,6 +230,7 @@ final class ConversationRuntime
             },
             $this->answerFrom(...),
             $this->commands,
+            $this->sessions,
         );
     }
 

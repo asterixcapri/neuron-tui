@@ -13,8 +13,8 @@ use NeuronTui\Tui\ConversationView;
  *
  * The four verbs that keep their meaning while a Turn is under way: a command
  * holding these cannot open a Picker, cannot put a prompt to the Agent and
- * cannot reach it at all. It can report, list what may be typed here, and
- * leave.
+ * cannot reach the Agent or Sessions at all. It can report, list what may be
+ * typed here, and leave.
  */
 final readonly class ConcurrentControls
 {
