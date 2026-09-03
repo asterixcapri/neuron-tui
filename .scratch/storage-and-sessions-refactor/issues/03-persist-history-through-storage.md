@@ -8,5 +8,5 @@
 
 - [ ] A storage-backed History extends Neuron AI's abstract History and supplies only storage-backed loading, saving and clearing behaviour.
 - [ ] Messages written through one History instance are deserialized with their supported content intact when another instance opens the same namespace/key.
-- [ ] Replacing, trimming and clearing History update the opaque stored value consistently, including an empty History.
-- [ ] Neuron AI remains responsible for message serialization semantics, deserialization, trimming and usage calculation; no Host-supplied History implementation or factory is introduced.
+- [ ] Replacing, trimming and clearing History update the stored JSON document consistently, including an empty History.
+- [ ] Neuron AI remains responsible for message representation, deserialization, trimming and usage calculation while the storage adapter owns JSON encoding; no Host-supplied History implementation or factory is introduced.

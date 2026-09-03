@@ -97,10 +97,7 @@ final class SessionCompositionTest extends TestCase
         );
         self::assertSame([], $agent->getChatHistory()->getMessages());
 
-        $index = $storage->read('sessions', '_index.json');
-        self::assertNotNull($index);
-        $entries = json_decode($index, true, flags: JSON_THROW_ON_ERROR);
-        self::assertIsArray($entries);
+        $entries = iterator_to_array($storage->entries('sessions'));
         self::assertCount(1, $entries);
     }
 

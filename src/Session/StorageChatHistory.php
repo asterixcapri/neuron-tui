@@ -4,39 +4,39 @@ declare(strict_types=1);
 
 namespace NeuronTui\Session;
 
+use DateTimeImmutable;
+use DateTimeZone;
 use NeuronAI\Chat\History\AbstractChatHistory;
 use NeuronAI\Chat\History\HistoryTrimmer;
 use NeuronAI\Chat\History\HistoryTrimmerInterface;
 use NeuronAI\Chat\Messages\Message;
 use NeuronTui\Storage\StorageInterface;
+use NeuronTui\Storage\StoredDocument;
 use UnexpectedValueException;
 
 use function array_is_list;
 use function is_array;
-use function json_decode;
-use function json_encode;
-
-use const JSON_THROW_ON_ERROR;
 
 /**
- * Neuron AI History persisted as one opaque storage value.
+ * Neuron AI History persisted as one JSON storage document.
  *
  * @internal Sessions owns this bridge between its storage and the Agent.
  */
 final class StorageChatHistory extends AbstractChatHistory
 {
+    public const string LAST_USED_AT = 'last-used-at';
+
     public function __construct(
         private readonly StorageInterface $storage,
         private readonly string $namespace,
         private readonly string $key,
         int $contextWindow = 50000,
         HistoryTrimmerInterface $trimmer = new HistoryTrimmer(),
-        private readonly ?Sessions $sessions = null,
-        private readonly ?string $sessionKey = null,
+        ?StoredDocument $document = null,
     ) {
         parent::__construct($contextWindow, $trimmer);
 
-        $this->load();
+        $this->load($document);
     }
 
     /**
@@ -44,34 +44,35 @@ final class StorageChatHistory extends AbstractChatHistory
      */
     protected function setMessages(array $messages): void
     {
-        $this->write(json_encode($messages, JSON_THROW_ON_ERROR));
+        $this->storage->write(
+            $this->namespace,
+            $this->key,
+            $messages,
+            $this->metadata(),
+        );
     }
 
     protected function clear(): void
     {
-        $this->write('[]');
+        $this->storage->write(
+            $this->namespace,
+            $this->key,
+            [],
+            $this->metadata(),
+        );
     }
 
-    private function write(string $value): void
+    private function load(?StoredDocument $document): void
     {
-        $this->storage->write($this->namespace, $this->key, $value);
+        $document ??= $this->storage->read($this->namespace, $this->key);
 
-        if ($this->sessions !== null && $this->sessionKey !== null) {
-            $this->sessions->recordUse($this->sessionKey);
-        }
-    }
-
-    private function load(): void
-    {
-        $value = $this->storage->read($this->namespace, $this->key);
-
-        if ($value === null) {
+        if ($document === null) {
             return;
         }
 
-        $messages = json_decode($value, true, flags: JSON_THROW_ON_ERROR);
+        $messages = $document->data;
 
-        if (!is_array($messages) || !array_is_list($messages)) {
+        if (!array_is_list($messages)) {
             throw new UnexpectedValueException(
                 'A stored Chat History must be a JSON array.',
             );
@@ -87,5 +88,16 @@ final class StorageChatHistory extends AbstractChatHistory
 
         /** @var list<array<string, mixed>> $messages */
         $this->history = $this->deserializeMessages($messages);
+    }
+
+    /** @return array{last-used-at: string} */
+    public static function metadata(): array
+    {
+        return [
+            self::LAST_USED_AT => (new DateTimeImmutable(
+                'now',
+                new DateTimeZone('UTC'),
+            ))->format('Y-m-d\TH:i:s.uP'),
+        ];
     }
 }

@@ -24,29 +24,50 @@ writes nothing outside the process.
 
 ## Storage
 
-Add `NeuronTui\Storage\StorageInterface` with exactly this persistence surface:
+Add `NeuronTui\Storage\StorageInterface` for namespaced JSON documents:
 
 ```php
 interface StorageInterface
 {
-    public function read(string $namespace, string $key): ?string;
+    public function create(
+        string $namespace,
+        array $data,
+        array $metadata = [],
+    ): StoredDocument;
+
+    public function read(
+        string $namespace,
+        string $key,
+    ): ?StoredDocument;
 
     public function write(
         string $namespace,
         string $key,
-        string $value,
-    ): void;
+        array $data,
+        array $metadata = [],
+    ): StoredDocument;
+
+    public function delete(string $namespace, string $key): void;
+
+    /** @return iterable<StoredDocument> */
+    public function entries(string $namespace): iterable;
 }
 ```
 
-The value is opaque to the storage. The module owning a namespace owns its
-serialization and keys. A missing value reads as `null`; a write replaces one
-namespace/key value atomically.
+`StoredDocument` carries the logical key, decoded JSON data and caller-owned
+lowercase string metadata, and calculates the byte size of its data's JSON
+representation. `create()` creates a document under a new
+adapter-generated opaque key. A missing document reads as `null`; `write()`
+creates or replaces one known namespace/key document atomically, data and
+metadata together. `delete()` is idempotent. Key generation, serialization,
+physical filenames and discovery belong to the storage adapter; metadata
+meaning, document interpretation and ordering belong to the module owning the
+namespace.
 
 Ship `InMemoryStorage` and `FileStorage`. `FileStorage` receives its root
-directory explicitly, separates namespaces on disk, and prevents a namespace
-or key from escaping that root. Do not add listing, deletion, transactions,
-TTL, queries or remote adapters.
+directory explicitly, separates namespaces on disk, appends `.json` to logical
+keys, and prevents a namespace or key from escaping that root. Do not add
+transactions, TTL, queries or remote adapters.
 
 ## Sessions
 
@@ -56,20 +77,25 @@ module constructed from `StorageInterface`.
 
 `Sessions` retains the existing public behaviour:
 
-- `start()` mints a new key and returns its empty `ChatHistoryInterface`;
+- `start()` asks storage to create a new keyed document and returns its empty
+  `ChatHistoryInterface`;
 - `list()` returns non-empty Sessions, most recently used first;
 - `resume($key)` returns the History of a known Session and rejects an unknown
   key;
 - Session title, last-used time and optional storage size retain their current
   user-facing meanings.
 
-Maintain any key index required by `list()` inside the `sessions` namespace.
-An empty Session remains absent from `list()`.
+Sessions store last-used time as caller-owned document metadata rather than
+deriving it from adapter-specific filesystem, database or object metadata.
+
+Discover Sessions through the storage namespace. An empty Session remains
+absent from `list()`.
 
 Add an internal storage-backed Chat History extending Neuron AI's
 `AbstractChatHistory`. It supplies only loading, saving and clearing through
-`StorageInterface`; message serialization, deserialization, trimming and usage
-calculation continue to come from Neuron AI. No History factory or
+`StorageInterface`; message representation, deserialization, trimming and usage
+calculation continue to come from Neuron AI while JSON encoding belongs to the
+storage adapter. No History factory or
 `ChatHistoryInterface` implementation is supplied by the Host Application.
 
 The Conversation Runtime constructs exactly one `Sessions` instance and
