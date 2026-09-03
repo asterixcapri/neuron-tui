@@ -106,6 +106,8 @@ final class ConversationView
         string $title,
         string $subtitle,
         array $commands = [],
+        ?string $figlet = null,
+        string $figletFont = 'standard',
     ) {
         $this->tui = new Tui(
             ConversationStyleSheet::create(),
@@ -149,7 +151,7 @@ final class ConversationView
             self::SUGGESTION_KEYS_PRIORITY,
         );
 
-        $this->build($title, $subtitle);
+        $this->build($title, $subtitle, $figlet, $figletFont);
     }
 
     /**
@@ -463,10 +465,20 @@ final class ConversationView
         $this->history->scrollDown();
     }
 
-    private function build(string $titleText, string $subtitleText): void
-    {
+    private function build(
+        string $titleText,
+        string $subtitleText,
+        ?string $figletText,
+        string $figletFont,
+    ): void {
         $header = new ContainerWidget();
         $header->addStyleClass('header');
+        if ($figletText !== null) {
+            $figlet = new TextWidget($figletText);
+            $figlet->addStyleClass('figlet');
+            $figlet->setStyle(new Style(font: $figletFont));
+            $header->add($figlet);
+        }
         $title = new TextWidget('✦ ' . $titleText);
         $title->addStyleClass('title');
         $subtitle = new TextWidget($subtitleText);

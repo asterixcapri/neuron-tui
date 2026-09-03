@@ -24,6 +24,11 @@ final class ConversationStyleSheet
                 border: new Border(0, 0, 1, 0, 'normal', 'gray'),
                 padding: new Padding(0, 1, 1, 1),
             ),
+            '.figlet' => new Style(
+                padding: new Padding(0, 0, 1, 0),
+                color: 'magenta',
+                bold: true,
+            ),
             '.title' => new Style(color: 'magenta', bold: true),
             '.subtitle' => new Style(color: 'gray', dim: true),
             '.history' => new Style(
