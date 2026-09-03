@@ -1,5 +1,9 @@
 # The TUI is composed around a required Agent
 
+_ADR 0005 supersedes only the decision that the Host Application owns History
+and Sessions. The Host still supplies the configured Agent, and the remaining
+composition decisions below continue to hold._
+
 Neuron TUI follows Neuron AI's fluent construction style without copying the
 Agent's subclass-based configuration model. `NeuronTui\Tui` is final, receives
 a ready-to-use concrete `Agent` when it is constructed, offers `make()` as the

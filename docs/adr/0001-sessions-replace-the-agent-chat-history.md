@@ -1,3 +1,7 @@
+---
+status: superseded by ADR-0005
+---
+
 # Sessions replace the Agent's chat history
 
 Neuron AI already persists a conversation: `FileChatHistory`, `SQLChatHistory`
