@@ -4,10 +4,10 @@
 
 **Blocked by:** 02/Navigate and edit Input history.
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Recognized Commands, unknown Commands and Commands refused while a Turn is running are recorded and can be recalled in submission order.
-- [ ] A queued Message becomes recallable as soon as it is submitted, while remaining in the queue under the existing queue rules.
-- [ ] Blank submissions create no entry and cause no Storage write.
-- [ ] Message submission, Command dispatch, unknown and refused Command handling, and queue behaviour remain unchanged.
-- [ ] Focused tests, static analysis and the complete test suite pass.
+- [x] Recognized Commands, unknown Commands and Commands refused while a Turn is running are recorded and can be recalled in submission order.
+- [x] A queued Message becomes recallable as soon as it is submitted, while remaining in the queue under the existing queue rules.
+- [x] Blank submissions create no entry and cause no Storage write.
+- [x] Message submission, Command dispatch, unknown and refused Command handling, and queue behaviour remain unchanged.
+- [x] Focused tests, static analysis and the complete test suite pass.
