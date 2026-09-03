@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronTui\Session;
 
+use Closure;
 use NeuronAI\Chat\History\AbstractChatHistory;
 use NeuronAI\Chat\History\HistoryTrimmer;
 use NeuronAI\Chat\History\HistoryTrimmerInterface;
@@ -31,6 +32,7 @@ final class StorageChatHistory extends AbstractChatHistory
         private readonly string $key,
         int $contextWindow = 50000,
         HistoryTrimmerInterface $trimmer = new HistoryTrimmer(),
+        private readonly ?Closure $afterWrite = null,
     ) {
         parent::__construct($contextWindow, $trimmer);
 
@@ -42,16 +44,21 @@ final class StorageChatHistory extends AbstractChatHistory
      */
     protected function setMessages(array $messages): void
     {
-        $this->storage->write(
-            $this->namespace,
-            $this->key,
-            json_encode($messages, JSON_THROW_ON_ERROR),
-        );
+        $this->write(json_encode($messages, JSON_THROW_ON_ERROR));
     }
 
     protected function clear(): void
     {
-        $this->storage->write($this->namespace, $this->key, '[]');
+        $this->write('[]');
+    }
+
+    private function write(string $value): void
+    {
+        $this->storage->write($this->namespace, $this->key, $value);
+
+        if ($this->afterWrite !== null) {
+            ($this->afterWrite)();
+        }
     }
 
     private function load(): void
