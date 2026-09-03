@@ -20,11 +20,11 @@ final readonly class SessionMetadata
     ): string {
         $relativeAge = self::relativeAge($session, $now);
 
-        if ($session->storageSize === null) {
+        if ($session->size === null) {
             return $relativeAge;
         }
 
-        return $relativeAge . ' · ' . self::storageSize($session->storageSize);
+        return $relativeAge . ' · ' . self::formatSize($session->size);
     }
 
     private static function relativeAge(
@@ -52,7 +52,7 @@ final readonly class SessionMetadata
         return $amount . ' ' . $unit . ($amount === 1 ? '' : 's') . ' ago';
     }
 
-    private static function storageSize(int $bytes): string
+    private static function formatSize(int $bytes): string
     {
         $units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB'];
         $size = (float) $bytes;

@@ -101,7 +101,7 @@ final class SessionsTest extends TestCase
 
         self::assertSame('The older subject', $listed[0]->title);
         self::assertGreaterThan($listed[1]->lastUsedAt, $listed[0]->lastUsedAt);
-        self::assertGreaterThan(0, $listed[0]->storageSize);
+        self::assertGreaterThan(0, $listed[0]->size);
     }
 
     public function testUnknownKeysAreRejectedWithoutCreatingAHistory(): void
@@ -141,7 +141,7 @@ final class SessionsTest extends TestCase
             $listed[0]->key,
         );
         self::assertNotNull($document);
-        self::assertSame($document->size(), $listed[0]->storageSize);
+        self::assertSame($document->size(), $listed[0]->size);
     }
 
     public function testLegacyFilesAreNeitherDiscoveredNorMigrated(): void
