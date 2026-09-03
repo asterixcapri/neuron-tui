@@ -31,25 +31,30 @@ The sequence of messages owned by the Agent and represented by the TUI,
 including messages that predate the TUI startup.
 _Avoid_: Transcript, TUI log
 
-**Slash command**:
+**Input history**:
+The sequence of earlier composer inputs that a person can recall for editing
+or resubmission. It is TUI state rather than part of the Agent's History.
+_Avoid_: History, conversation history, prompt history
+
+**Command**:
 Input beginning with `/` whose effect the TUI decides rather than the model.
 What it does is code someone wrote, and that code is free to send the Agent
 a prompt of its own.
 _Avoid_: Message, prompt, action
 
 **Concurrent command**:
-A Slash command whose synchronous run may overlap a Turn. It receives only
+A Command whose synchronous run may overlap a Turn. It receives only
 Concurrent Controls, so it cannot reach the Agent, put a prompt to it, open a
 Picker or replace the conversation while an answer is on its way.
 _Avoid_: Async command, background command, command that runs while working
 
 **Controls**:
-What a Slash command may do while it runs: say something in the conversation,
+What a Command may do while it runs: say something in the conversation,
 put a prompt to the Agent, offer a Picker, reach the Agent itself, put another
-Agent in charge of answering, list the mounted commands, leave the terminal. A
-Concurrent command instead receives Concurrent Controls: saying, warning,
-listing and leaving, the operations whose meaning remains stable while an
-answer is on its way.
+Agent in charge of answering, reach the Sessions, list the mounted commands,
+leave the terminal. A Concurrent command instead receives Concurrent Controls:
+saying, warning, listing and leaving, the operations whose meaning remains
+stable while an answer is on its way.
 _Avoid_: Context, facade, API
 
 **Concurrent Controls**:
@@ -58,7 +63,7 @@ say, warn, list the mounted commands and leave the terminal.
 _Avoid_: Limited Controls, async controls, background controls
 
 **Command kit**:
-A group of Slash commands mounted in one go, carrying between them whatever
+A group of Commands mounted in one go, carrying between them whatever
 they need to work. A Conversation TUI mounts nothing on its own, so a kit is
 the short way for a Host Application to say yes to several commands at once,
 and it can be taken with some of them left out.
@@ -66,24 +71,20 @@ _Avoid_: Toolkit, bundle, plugin, pack
 
 **Session**:
 One conversation, identified by a key and held by a single History, that
-outlives the TUI process and can be reopened. No Agent owns it: any Agent
-can be handed it and carry it on. Where they live is named on the commands
-that use them, and the provider that keeps them in memory writes nothing
-anywhere, so until a Host Application says otherwise a Session ends with the
-process. Its title and last-used time identify it to a person; a provider may
-also report its storage size.
+may outlive the TUI process and can be reopened. No Agent owns it: any Agent
+can be handed it and carry it on. Its title and last-used time identify it to
+a person; its storage may also report its size.
 _Avoid_: Chat, thread
 
-**Session provider**:
-The place the Sessions come from. It is the only thing that mints a key,
-knows which Sessions exist, starts a new one, and can resume an existing one
-by its key.
-_Avoid_: Store, repository, storage, archive
+**Sessions**:
+The collection within which Session keys are minted and resolved. It is where
+a new Session starts and where an existing one is found to be resumed.
+_Avoid_: Session provider, repository, archive
 
 **Picker**:
 The state the Conversation TUI is in while a person is choosing from a list
 rather than writing to the Agent. Sessions are one of the things chosen this
-way, not the only one. Writing the name of a Slash command is not this state,
+way, not the only one. Writing the name of a Command is not this state,
 however much of a list is on screen meanwhile.
 _Avoid_: Menu, popup, dialog, Session picker
 
