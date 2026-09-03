@@ -61,6 +61,8 @@ final class ConversationRuntime
         string $subtitle = 'Agent conversation',
         ?TerminalInterface $terminal = null,
         array $commands = [],
+        ?string $figlet = null,
+        string $figletFont = 'standard',
     ) {
         $this->commands = $commands;
         $this->terminal = $terminal ?? new Terminal();
@@ -69,6 +71,8 @@ final class ConversationRuntime
             $title,
             $subtitle,
             $this->commands,
+            $figlet,
+            $figletFont,
         );
         $this->workingIndicator = $this->view->workingIndicator();
         $this->turns = new TurnQueue();

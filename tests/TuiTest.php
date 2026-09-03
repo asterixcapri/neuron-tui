@@ -81,6 +81,7 @@ final class TuiTest extends TestCase
 
         self::assertSame($tui, $tui->setTitle(''));
         self::assertSame($tui, $tui->setSubtitle(''));
+        self::assertSame($tui, $tui->setFiglet(''));
         self::assertSame($tui, $tui->addCommand(new HelpCommand()));
 
         EventLoop::delay(
@@ -119,6 +120,7 @@ final class TuiTest extends TestCase
                 foreach ([
                     static fn () => $tui->setTitle('Late'),
                     static fn () => $tui->setSubtitle('Late'),
+                    static fn () => $tui->setFiglet('Late'),
                     static fn () => $tui->addCommand(new HelpCommand()),
                 ] as $mutation) {
                     try {
@@ -135,6 +137,7 @@ final class TuiTest extends TestCase
         $tui->run();
 
         self::assertSame([
+            'A TUI instance can only be configured and run once.',
             'A TUI instance can only be configured and run once.',
             'A TUI instance can only be configured and run once.',
             'A TUI instance can only be configured and run once.',
@@ -171,6 +174,50 @@ final class TuiTest extends TestCase
             'ready · Enter sends · Shift+Enter adds a line · Ctrl+C exits',
             $display,
         );
+    }
+
+    public function testHostApplicationCanAddAFigletBanner(): void
+    {
+        $terminal = new VirtualTerminal();
+        EventLoop::delay(
+            0.05,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        Tui::make(new Agent(), $terminal)
+            ->setFiglet('Neuron', 'standard')
+            ->run();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+
+        self::assertStringContainsString('| \\ | |', $display);
+        self::assertStringContainsString('✦ Neuron AI', $display);
+
+        $lines = preg_split('/\r\n|\r|\n/', $display);
+        self::assertIsArray($lines);
+        $titleLine = array_find_key(
+            $lines,
+            static fn (string $line): bool => str_contains(
+                $line,
+                '✦ Neuron AI',
+            ),
+        );
+        self::assertIsInt($titleLine);
+        self::assertSame('', trim($lines[$titleLine - 1]));
+        self::assertNotSame('', trim($lines[$titleLine - 2]));
+    }
+
+    public function testSetFigletRejectsAnUnknownFontImmediately(): void
+    {
+        $tui = Tui::make(new Agent(), new VirtualTerminal());
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage(
+            'Unknown FIGlet font "unknown". Available fonts: '
+                . 'standard, big, small, slant, mini.',
+        );
+
+        $tui->setFiglet('Neuron', 'unknown');
     }
 
     public function testComposerFrameIncludesPromptFromLeftEdge(): void

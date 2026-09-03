@@ -18,9 +18,21 @@ use Symfony\Component\Tui\Terminal\TerminalInterface;
  */
 final class Tui
 {
+    private const array FIGLET_FONTS = [
+        'standard',
+        'big',
+        'small',
+        'slant',
+        'mini',
+    ];
+
     private string $title = 'Neuron AI';
 
     private string $subtitle = 'Agent conversation';
+
+    private ?string $figlet = null;
+
+    private string $figletFont = 'standard';
 
     /** @var list<Command|ConcurrentCommand> */
     private array $commands = [];
@@ -51,6 +63,26 @@ final class Tui
     {
         $this->ensureNotStarted();
         $this->subtitle = $subtitle;
+
+        return $this;
+    }
+
+    public function setFiglet(
+        string $text,
+        string $font = 'standard',
+    ): self {
+        $this->ensureNotStarted();
+
+        if (!in_array($font, self::FIGLET_FONTS, true)) {
+            throw new InvalidArgumentException(sprintf(
+                'Unknown FIGlet font "%s". Available fonts: %s.',
+                $font,
+                implode(', ', self::FIGLET_FONTS),
+            ));
+        }
+
+        $this->figlet = $text;
+        $this->figletFont = $font;
 
         return $this;
     }
@@ -115,6 +147,8 @@ final class Tui
             $this->subtitle,
             $this->terminal,
             $this->commands,
+            $this->figlet,
+            $this->figletFont,
         ))->run();
     }
 

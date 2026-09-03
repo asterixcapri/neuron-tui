@@ -22,6 +22,7 @@ $agent = DemoAgent::make();
 $agent->setChatHistory($sessionProvider->start());
 
 $tui = Tui::make($agent)
+    ->setFiglet('NeuronTUI')
     ->setTitle('Neuron TUI Demo')
     ->setSubtitle('Powered by Neuron AI')
     ->addCommand([

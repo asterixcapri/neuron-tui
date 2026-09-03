@@ -34,8 +34,13 @@ be supplied when the terminal should identify a particular Agent or product:
 Tui::make($agent)
     ->setTitle('Research Agent')
     ->setSubtitle('Ask about the knowledge base')
+    ->setFiglet('Research', 'slant')
     ->run();
 ```
+
+`setFiglet()` adds an optional ASCII-art banner above the title. Its second
+argument selects one of Symfony TUI's bundled fonts: `standard`, `big`,
+`small`, `slant`, or `mini`.
 
 A terminal built this way chats and nothing else: no Slash command is mounted
 unless the Host Application names it, so every name typed after a slash is
