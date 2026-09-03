@@ -41,7 +41,29 @@ A terminal built this way chats and nothing else: no Slash command is mounted
 unless the Host Application names it, so every name typed after a slash is
 unknown, and `Ctrl+C` is the way out.
 
-## Slash commands
+## Demo
+
+`examples/` is a standalone Composer project acting as a Host Application. It
+connects the Conversation TUI to OpenAI or Anthropic and consumes this library
+through a local path repository. Install its dependencies, create the local
+environment file, add the credentials for the providers you want to use, then
+start it:
+
+```bash
+cd examples
+composer install
+cp .env.example .env
+# Edit .env
+php demo.php
+```
+
+The demo reads `examples/.env` through Symfony Dotenv. Existing process
+environment variables take precedence over values from `examples/.env`. It
+starts with an inexpensive OpenAI model; `/model` opens a Picker that can also
+switch to other OpenAI and Anthropic models. It mounts the commands this
+library ships, so `/exit` or Ctrl+C closes it and `/help` lists them.
+
+## Commands
 
 The Conversation TUI mounts nothing on its own. A Host Application mounts the
 commands it wants — its own, and the ones this library ships — so the terminal
@@ -276,12 +298,12 @@ A Session is one conversation with the Agent. `ClearCommand` starts a fresh one
 without leaving the terminal: the screen and the composer empty, and the
 conversation that was on screen stays where it is stored.
 
-`ResumeCommand` lists the Sessions of this Agent in the Picker, most recently used
-first, each labelled with the first thing the person wrote in it. While the
-list is open the composer takes no text: the arrow keys move through it,
+`ResumeCommand` lists the Sessions of this Agent in the Picker, most recently
+used first, each labelled with the first thing the person wrote in it. While
+the list is open the composer takes no text: the arrow keys move through it,
 typing narrows it, Enter chooses one and resumes it, and Escape leaves the
-current one alone. Resuming paints that conversation and the Agent
-answers with its context. A Session nobody wrote in is not listed.
+current one alone. Resuming paints that conversation and the Agent answers
+with its context. A Session nobody wrote in is not listed.
 
 Sessions come from a **Session provider**, which is an argument of the commands
 that use it rather than of the Conversation TUI. `InMemorySessionProvider`
@@ -305,95 +327,8 @@ An application that keeps conversations in its own storage implements
 start a Session, list the Sessions, and resume one by its key. Starting and
 resuming return the Neuron AI chat history that the Host Application or a
 command installs on the Agent; saving, reloading and deserializing remain
-Neuron AI's work. Neuron TUI never deletes a stored conversation.
-
-Starting a Session replaces the History configured on the Agent by the Host
-Application, because a provider builds every History it hands back. An
-application that keeps its conversations somewhere passes the Session provider
-reaching that place. See
-[ADR 0001](docs/adr/0001-sessions-replace-the-agent-chat-history.md), and
-[ADR 0002](docs/adr/0002-the-conversation-tui-mounts-nothing-on-its-own.md)
-for why the provider is named on the commands instead of on the terminal.
-
-`NeuronTui\Tui` is the public module, and two seams are the dependencies
-an application may supply. The Session provider:
-`NeuronTui\Session\SessionProvider` to implement,
-`NeuronTui\Session\Session` to list a Session with, and
-`NeuronTui\Session\InMemorySessionProvider` and
-`NeuronTui\Session\FileSessionProvider` as the two shipped providers. And the
-Slash commands it mounts: `NeuronTui\Command\Command` to implement,
-`NeuronTui\Command\ConcurrentCommand` for a command whose synchronous run may
-overlap a Turn,
-`NeuronTui\Conversation\Controls` and `NeuronTui\Conversation\ConcurrentControls`
-as what each is handed while it runs, and
-`NeuronTui\Conversation\ChoiceOption` for each option offered by `choose()`,
-`NeuronTui\Command\ClearCommand`,
-`NeuronTui\Command\ResumeCommand`,
-`NeuronTui\Command\LeaveCommand` and
-`NeuronTui\Command\HelpCommand` as the commands shipped ready to
-mount, and `NeuronTui\Command\CommandKit`,
-`NeuronTui\Command\AbstractCommandKit` and
-`NeuronTui\Command\SessionKit` for mounting a group of them in
-one line.
-Every other class under the `NeuronTui` namespace is annotated `@internal`,
-carries no stability promise, and may be renamed, split, or removed in any
-release.
-
-The Host Application remains responsible for constructing the Agent,
-providers, credentials, tools, History persistence, and the script or
-framework command that launches the interaction. Neuron TUI does not provide
-a production executable or Symfony Console command.
-
-## Demo
-
-`examples/` is a standalone Composer project acting as a Host Application. It
-connects the Conversation TUI to OpenAI or Anthropic and consumes this library
-through a local path repository. Install its dependencies, create the local
-environment file, add the credentials for the providers you want to use, then
-start it:
-
-```bash
-cd examples
-composer install
-cp .env.example .env
-# Edit .env
-composer demo
-```
-
-Packagist only publishes metadata: the archives themselves are served by
-GitHub. Anonymous downloads are throttled, so a fresh install may report HTTP
-429. Store a personal access token once to raise the limit:
-
-```bash
-composer config --global github-oauth.github.com <token>
-```
-
-The demo reads `examples/.env` through Symfony Dotenv. Existing process
-environment variables take precedence over values from `examples/.env`. It
-starts with an inexpensive OpenAI model; `/model` opens a Picker that can also
-switch to other OpenAI and Anthropic models. It mounts the commands this
-library ships, so `/exit` or Ctrl+C closes it and `/help` lists them.
-
-## Keys
-
-- Enter sends a message, or runs the selected Command suggestion while its
-  list is open.
-- Shift+Enter inserts a line break.
-- Escape closes the Command suggestions while they are open, and clears the
-  unsent draft otherwise.
-- ↑↓ choose a line of the Command suggestions, Enter runs it, and Tab
-  completes its name for arguments.
-- PageUp and PageDown browse the History.
-- Ctrl+C closes the Conversation TUI, mounted commands or not.
-- Any command the Host Application mounted, by the name it answers to —
-  including `ClearCommand`, `ResumeCommand`, `LeaveCommand` and `HelpCommand`
-  when it mounted them.
-
-A `Command` is refused while a Turn is under way, so an arriving answer cannot
-land in the wrong Session; a `ConcurrentCommand` — `LeaveCommand` and
-`HelpCommand` among the ones shipped — is carried out at any time. Unknown Slash
-commands stay in the composer so they can be corrected and are never sent to
-the Agent.
+Neuron AI's work. Such an adapter could store Sessions in a database or in
+S3-compatible object storage. Neuron TUI never deletes a stored conversation.
 
 ## Development
 
