@@ -9,31 +9,96 @@ use PHPUnit\Framework\TestCase;
 
 final class InMemoryStorageTest extends TestCase
 {
-    public function testAMissingValueIsNull(): void
+    public function testCreateReturnsANewOpaqueKeyAndStoredDocument(): void
+    {
+        $storage = new InMemoryStorage();
+        $first = $storage->create('sessions', ['value' => 'one']);
+        $second = $storage->create('sessions', ['value' => 'two']);
+
+        self::assertNotSame($first->key, $second->key);
+        self::assertSame(['value' => 'one'], $first->data);
+        self::assertSame(
+            $first->data,
+            $storage->read('sessions', $first->key)?->data,
+        );
+    }
+
+    public function testAMissingDocumentIsNull(): void
     {
         self::assertNull((new InMemoryStorage())->read('history', 'current'));
     }
 
-    public function testValuesAreIsolatedByNamespaceAndKey(): void
+    public function testDocumentsAreIsolatedByNamespaceAndKey(): void
     {
         $storage = new InMemoryStorage();
 
-        $storage->write('sessions', 'first', 'one');
-        $storage->write('sessions', 'second', 'two');
-        $storage->write('input-history', 'first', 'three');
+        $storage->write('sessions', 'first', ['value' => 'one']);
+        $storage->write('sessions', 'second', ['value' => 'two']);
+        $storage->write('input-history', 'first', ['value' => 'three']);
 
-        self::assertSame('one', $storage->read('sessions', 'first'));
-        self::assertSame('two', $storage->read('sessions', 'second'));
-        self::assertSame('three', $storage->read('input-history', 'first'));
+        self::assertSame(
+            ['value' => 'one'],
+            $storage->read('sessions', 'first')?->data,
+        );
+        self::assertSame(
+            ['value' => 'two'],
+            $storage->read('sessions', 'second')?->data,
+        );
+        self::assertSame(
+            ['value' => 'three'],
+            $storage->read('input-history', 'first')?->data,
+        );
     }
 
     public function testWritingAnExistingValueReplacesIt(): void
     {
         $storage = new InMemoryStorage();
-        $storage->write('sessions', 'known', 'before');
+        $storage->write('sessions', 'known', ['value' => 'before']);
 
-        $storage->write('sessions', 'known', 'after');
+        $written = $storage->write(
+            'sessions',
+            'known',
+            ['value' => 'after'],
+        );
 
-        self::assertSame('after', $storage->read('sessions', 'known'));
+        self::assertSame(
+            ['value' => 'after'],
+            $written->data,
+        );
+    }
+
+    public function testEntriesExposeLogicalKeysAndJsonDocumentBehaviour(): void
+    {
+        $storage = new InMemoryStorage();
+        $storage->write('sessions', 'first', ['value' => 'one']);
+        $storage->write('sessions', 'second', ['value' => 'two']);
+
+        $entries = iterator_to_array($storage->entries('sessions'));
+
+        self::assertSame(['first', 'second'], array_column($entries, 'key'));
+        self::assertSame(
+            strlen('{"value":"two"}'),
+            $entries[1]->size(),
+        );
+    }
+
+    public function testMetadataRoundTripsAndDeleteIsIdempotent(): void
+    {
+        $storage = new InMemoryStorage();
+        $document = $storage->create(
+            'sessions',
+            ['value'],
+            ['last-used-at' => '2026-09-03T12:00:00+00:00'],
+        );
+
+        self::assertSame(
+            ['last-used-at' => '2026-09-03T12:00:00+00:00'],
+            $document->metadata,
+        );
+
+        $storage->delete('sessions', $document->key);
+        $storage->delete('sessions', $document->key);
+
+        self::assertNull($storage->read('sessions', $document->key));
     }
 }
