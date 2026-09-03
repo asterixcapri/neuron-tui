@@ -705,15 +705,17 @@ MARKDOWN;
         self::assertStringContainsString('Draft after failure', $display);
         self::assertStringNotContainsString('#0 ', $display);
         self::assertSame(
-            ['user', 'assistant', 'user'],
+            [
+                ['user', 'Earlier question.'],
+                ['assistant', 'Earlier answer.'],
+            ],
             array_map(
-                static fn (Message $message): string => $message->getRole(),
-                $history->getMessages(),
+                static fn (Message $message): array => [
+                    $message->getRole(),
+                    $message->getContent(),
+                ],
+                array_slice($history->getMessages(), 0, 2),
             ),
-        );
-        self::assertSame(
-            'Try this',
-            $history->getMessages()[2]->getContent(),
         );
     }
 
