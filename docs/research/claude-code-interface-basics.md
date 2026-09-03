@@ -1,27 +1,32 @@
-# Clonare Claude Code come *interfaccia*: quali funzionalità basiche valgono per neuron-cli
+# Clonare Claude Code come *interfaccia*: quali funzionalità basiche valgono per Neuron TUI
 
 Ricerca del 18 agosto 2026. Fonti primarie: documentazione ufficiale Claude Code
 (Anthropic), documentazione e sorgente ufficiali di Neuron AI, sorgente e blog
 ufficiali di Symfony. La domanda è deliberatamente ristretta alla **superficie di
 interazione** — Conversation TUI e riga di comando — non al modello.
 
+Aggiornata il 3 settembre 2026 contro la revisione `978e649`, dopo il rename del
+package e l'implementazione dei comandi programmabili, dei Command suggestions e
+del nuovo Picker. Le osservazioni sulle dipendenze restano fissate alle versioni
+indicate nelle rispettive sezioni.
+
 > Nota sulle URL: le pagine `https://docs.claude.com/en/docs/claude-code/...`
-> rispondono oggi con un `301` verso `https://code.claude.com/docs/en/...`
-> (verificato su `interactive-mode`). In questa nota si citano le URL finali.
+> rispondevano il 18 agosto 2026 con un `301` verso
+> `https://code.claude.com/docs/en/...` (verificato su `interactive-mode`). In
+> questa nota si citano le URL finali osservate allora.
 
 ## Risposta breve
 
-neuron-cli ha già, senza saperlo, buona parte della *tastiera* di Claude Code:
+Neuron TUI ha già, senza saperlo, buona parte della *tastiera* di Claude Code:
 l'`EditorWidget` di `symfony/tui` porta gratis quasi tutte le scorciatoie di
 editing readline che Claude Code documenta. Quello che manca non è la tastiera,
 sono **quattro comportamenti di conversazione**:
 
 1. **interrompere un Turn** in corso senza uccidere il processo;
 2. **approvare o rifiutare l'esecuzione di un tool** prima che parta;
-3. **sapere cosa si può digitare** (`/help`) e **riusare quello che si è già
-   digitato** (cronologia dei prompt);
+3. **riusare quello che si è già digitato** (cronologia dei prompt);
 4. **vedere lo stato della conversazione** (modello, contesto consumato, costo)
-   in una riga di stato che oggi esiste ma dice solo tre scorciatoie.
+   in una riga di stato che esiste già ma descrive soltanto i tasti attivi.
 
 Sono quattro cose piccole rispetto a ciò che Claude Code fa, e sono esattamente
 quelle senza cui una Conversation TUI non sembra Claude Code. Tutto il resto —
@@ -29,50 +34,53 @@ hook, MCP, permessi su file, memoria `CLAUDE.md`, output style, checkpoint — o
 appartiene alla Host Application, o appartiene al livello Agent di Neuron, e non
 è materia di un milestone "basic".
 
-Ordine consigliato: **P0** interruzione del Turn · `/help` · riga di stato viva.
+Ordine consigliato aggiornato: **P0** interruzione del Turn · riga di stato viva.
 **P1** approvazione dei tool · cronologia dei prompt · pensiero del modello
-visibile · `/compact`. **P2** Slash command estendibili · ridisegno `Ctrl+L` ·
-`/export` · aprire una Session dalla riga di comando. **Fuori scope**: tutto il
-resto.
+visibile · `/compact`. **P2** ridisegno `Ctrl+L` · `/export`. `/help`, Command
+suggestions, Slash command estendibili e apertura di una History scelta dalla
+Host Application sono nel frattempo presenti. **Fuori scope**: tutto il resto.
 
 ---
 
-## 1. Cosa neuron-cli ha già
+## 1. Cosa Neuron TUI ha già
 
-Verificato leggendo `src/` alla revisione `c15d964`.
+Verificato leggendo `src/` alla revisione `978e649`.
 
-| Comportamento di Claude Code | Stato in neuron-cli |
+| Comportamento di Claude Code | Stato in Neuron TUI |
 |---|---|
 | `Enter` invia, `Shift+Enter` va a capo ([interactive-mode, "Multiline input"](https://code.claude.com/docs/en/interactive-mode)) | Presente: `ComposerEditor` eredita `submit`=`Enter`, `new_line`=`shift+enter` da `EditorWidget` |
 | Editing readline: `Ctrl+A/E/K/U/W/Y`, `Alt+B/F`, `Alt+Y`, undo ([interactive-mode, "Text editing"](https://code.claude.com/docs/en/interactive-mode)) | Presente **gratis**: mappa di default di `EditorWidget` (`cursor_line_start`=`ctrl+a`, `delete_to_line_end`=`ctrl+k`, `yank`=`ctrl+y`, `yank_pop`=`alt+y`, `undo`=`ctrl+-`…) |
 | Incolla in modalità paste ([interactive-mode](https://code.claude.com/docs/en/interactive-mode)) | Presente: bracketed paste abilitato da `Symfony\Component\Tui\Terminal\Terminal` |
 | `Esc` svuota la bozza non inviata ([interactive-mode, `Esc`+`Esc`](https://code.claude.com/docs/en/interactive-mode)) | Presente, ma con un solo `Esc` (`ConversationView::clearDraft`) |
-| Messaggi accodati mentre l'Agent lavora: «If you send a command while Claude is responding, it queues and runs after the current turn finishes» ([commands](https://code.claude.com/docs/en/commands)) | Presente, con la stessa semantica: `TurnQueue`, con il blocco «Messages to be submitted after the current turn» |
+| Messaggi accodati mentre l'Agent lavora: «If you send a command while Claude is responding, it queues and runs after the current turn finishes» ([commands](https://code.claude.com/docs/en/commands)) | I prompt sono accodati da `TurnQueue`; un `ConcurrentCommand` gira subito, mentre un normale `Command` viene rifiutato durante il Turn |
 | Streaming del testo, attività dei tool con durata | Presente: `AgentTurn::respond()` su `TextChunk` / `ToolCallChunk` / `ToolResultChunk`, reso da `ToolActivity` e `ToolActivityText` |
 | Indicatore di lavoro con secondi trascorsi | Presente: `WorkingIndicator` |
-| `/clear` apre una conversazione nuova conservando la precedente ([sessions, "Manage context within a session"](https://code.claude.com/docs/en/sessions)) | Presente, con la stessa semantica: la Session precedente resta dov'è |
-| `/resume` con picker: elenco, ricerca digitando, `↑↓`, `Enter`, `Esc` ([sessions, "Use the session picker"](https://code.claude.com/docs/en/sessions)) | Presente: `/sessions` + `SessionPicker`, ordinato dal più recente, etichettato con le prime parole scritte |
-| `/exit` ([commands](https://code.claude.com/docs/en/commands)) | Presente |
+| `/clear` apre una conversazione nuova conservando la precedente ([sessions, "Manage context within a session"](https://code.claude.com/docs/en/sessions)) | Fornito da `Command\Clear`; è presente quando la Host Application lo monta |
+| `/resume` con picker: elenco, ricerca digitando, `↑↓`, `Enter`, `Esc` ([sessions, "Use the session picker"](https://code.claude.com/docs/en/sessions)) | Fornito da `Command\Resume` + `Tui\Picker`, ordinato dal più recente e corredato da titolo, età e — quando disponibile — dimensione persistita |
+| `/help` e scoperta dei comandi ([commands](https://code.claude.com/docs/en/commands)) | Fornito da `Command\Help`; i Command suggestions compaiono e si filtrano mentre si scrive un nome, con `↑↓`, `Tab`, `Enter` ed `Esc` |
+| `/exit` ([commands](https://code.claude.com/docs/en/commands)) | Fornito da `Command\Leave`; è presente quando la Host Application lo monta |
 | Markdown ed evidenziazione della sintassi nelle risposte | Presente: `MarkdownWidget` + `tempest/highlight` |
 
 Il confronto è più lusinghiero di quanto sembri: sul piano dell'*editing*
-neuron-cli è già quasi allineato, perché quella parte è del componente TUI.
+Neuron TUI è già quasi allineato, perché quella parte è del componente TUI.
+I comandi forniti dal package non sono montati automaticamente: questa è una
+decisione intenzionale della Conversation TUI, registrata nell'ADR 0002.
 
 ## 2. Il vocabolario, e come ci si mappa
 
-| Claude Code | neuron-cli |
+| Claude Code | Neuron TUI |
 |---|---|
 | session | **Session** |
-| `--resume` / `/resume` picker | **Session picker** + `/sessions` |
+| `--resume` / `/resume` picker | comando **Resume** + **Picker** |
 | transcript in `~/.claude/projects/...` | **History**, posseduta dall'Agent, raggiunta da un **Session provider** |
 | turn | **Turn** |
 | slash command | **Slash command** |
 | status line | la riga `.status` della Conversation TUI |
 | spinner / "esc to interrupt" | **Working indicator** |
-| `settings.json`, `CLAUDE.md` | **Host Application** (Neuron CLI non legge configurazione) |
+| `settings.json`, `CLAUDE.md` | **Host Application** (Neuron TUI non legge configurazione) |
 
 Nessun termine nuovo è necessario per le raccomandazioni che seguono, tranne uno
-(§3.5): una **Richiesta di approvazione** — e anche quello ha già un nome a
+(§3, P1.1): una **Richiesta di approvazione** — e anche quello ha già un nome a
 monte, `ApprovalRequest`, in Neuron AI.
 
 ---
@@ -87,10 +95,10 @@ done so far.» `Ctrl+C` invece «Interrupts a running operation. If nothing is
 running, the first press clears the prompt input and a second press exits Claude
 Code» ([interactive-mode, "General controls"](https://code.claude.com/docs/en/interactive-mode)).
 
-**Perché conta.** È la differenza fra una TUI e un `echo | agent`. Oggi in
-neuron-cli l'unica risposta a un Turn che va per le lunghe è `Ctrl+C`, che chiude
-tutto: `NeuronCli::handleInput()` lega `quit` a `Key::ctrl('c')` e chiama
-`view->stop()`. Un Turn sbagliato costa l'intera sessione di terminale.
+**Perché conta.** È la differenza fra una TUI e un `echo | agent`. In Neuron TUI
+l'unica risposta a un Turn che va per le lunghe è ancora `Ctrl+C`, che chiude
+tutto: `ConversationRuntime::handleInput()` lega `quit` a `Key::ctrl('c')` e
+chiama `view->stop()`. Un Turn sbagliato costa l'intera sessione di terminale.
 
 **Come si mappa.** `Escape` è oggi consumato dal composer (`select_cancel` →
 `clearDraft`). Il ramo naturale è: se `TurnQueue::isBusy()`, `Escape` interrompe
@@ -98,16 +106,17 @@ il Turn; altrimenti svuota la bozza — che è precisamente la disambiguazione d
 Claude Code. L'interruzione vive in `AgentTurn`: il generatore restituito da
 `AgentHandler::events()` è **pull-based** (`WorkflowHandler::events()` avanza il
 workflow solo quando il consumatore chiede l'evento successivo, come già
-documentato in [`docs/research/neuron-non-blocking-tools.md`](../../docs/research/neuron-non-blocking-tools.md)),
+documentato in [`neuron-non-blocking-tools.md`](neuron-non-blocking-tools.md)),
 quindi smettere di iterare è sufficiente per fermare l'inferenza al prossimo
 chunk. Il testo già ricevuto resta nella History — «Claude keeps the work done so
 far» si ottiene gratis. Va deciso, e scritto, cosa entra nella History
 dell'Agent per una risposta interrotta.
 
-**Costo.** Piccolo: un ramo in `handleInput()`, un flag letto dal ciclo `foreach`
-di `AgentTurn::respond()`, e la coda dei messaggi da svuotare o no.
+**Costo.** Piccolo: un ramo in `ConversationRuntime::handleInput()`, un flag
+letto dal ciclo `foreach` di `AgentTurn::respond()`, e la coda dei messaggi da
+svuotare o no.
 
-### P0.2 — `/help`
+### Realizzato — `/help` e Command suggestions
 
 **Cosa fa Claude Code.** «Type `/` in Claude Code to see all available commands,
 or type `/` followed by any letters to filter»; `/help` «Show help and available
@@ -116,22 +125,15 @@ commands»; e `?` su input vuoto apre un pannello con le scorciatoie
 [commands](https://code.claude.com/docs/en/commands)). Nota di forma utile:
 «Commands are only recognized at the start of your message» e «Text following the
 command name becomes its arguments» ([commands](https://code.claude.com/docs/en/commands)) —
-regole che `Submission::interpret()` implementa già per i tre comandi esistenti,
-salvo il fatto che oggi un comando con argomenti non è riconosciuto affatto
-(`"/exit now"` diventa un `UnknownSlashCommand`).
+regole che `Submission::interpret()` implementa: produce uno
+`SlashCommandInput` con nome e argomenti separati.
 
-**Perché conta.** neuron-cli ha tre Slash command e nessun modo per scoprirli se
-non leggere il README o la riga di stato, che ne cita uno solo (`READY_STATUS`
-nomina `/exit`). Un comando sconosciuto resta nel composer senza suggerire cosa
-si sarebbe potuto scrivere (`UnknownSlashCommand`).
-
-**Come si mappa.** Un quarto caso nell'enum `SlashCommand`, un ramo nel `match`
-di `NeuronCli::carryOut()`, e una nota nella History. Il completamento a menu
-mentre si digita `/` è la versione ricca; la versione basica è il solo `/help`.
-
-**Costo.** Minimo. È anche il banco di prova più economico per capire quanto
-costa aggiungere un Slash command con l'architettura attuale, che di proposito
-non ha registro.
+**Stato in Neuron TUI.** La Host Application può montare `Command\Help`, che
+elenca tutti i comandi montati attraverso `ConcurrentControls::commands()` e può
+girare anche durante un Turn. `CommandSuggestions` mostra i nomi mentre si scrive
+all'inizio del composer, li filtra e permette di scegliere, completare o eseguire
+con `↑↓`, `Tab` ed `Enter`. Un nome sconosciuto rimane nel composer per poter
+essere corretto. Nessun comando è montato automaticamente.
 
 ### P0.3 — Una riga di stato che dice qualcosa
 
@@ -142,20 +144,22 @@ sono `model.display_name`, `context_window.used_percentage`,
 `cost.total_duration_ms`, `session_id`, `session_name`
 ([statusline, "Available data"](https://code.claude.com/docs/en/statusline)).
 
-**Perché conta.** neuron-cli ha già il widget: `ConversationView` tiene un
-`TextWidget` `.status` con tre costanti (`READY_STATUS`, `WORKING_STATUS`,
-`CHOOSING_STATUS`) che elencano scorciatoie. È spazio già speso che non dice
-nulla sulla conversazione.
+**Perché conta.** Neuron TUI ha già il widget: `ConversationView` tiene un
+`TextWidget` `.status` con gli stati `READY_STATUS`, `WORKING_STATUS` e
+`SUGGESTING_STATUS`; il Picker sostituisce i controlli della conversazione con
+il proprio footer. È spazio già speso che non dice nulla sulla conversazione.
 
-**Come si mappa.** I dati esistono nel livello Agent installato (3.15.30):
+**Come si mappa.** I dati sui token esistono nel livello Agent 3.15.30:
 `ChatHistoryInterface::calculateTotalUsage(): int` restituisce il totale dei
 token della History, e `NeuronAI\Chat\Messages\Usage` porta `inputTokens`,
 `outputTokens`, `cachedInputTokens`, `reasoningTokens` con `getTotal()`. Il
-Session provider conosce già la Session corrente (chiave e titolo). Una riga di
-stato basica può quindi mostrare: titolo/chiave della Session, token della
-History, e — dopo P1.1 — lo stato dell'approvazione. Il costo in dollari **non**
-è calcolabile senza un listino: è un dato che appartiene alla Host Application,
-non a Neuron CLI, e va lasciato fuori dal milestone basic.
+`SessionProvider` elenca chiave, titolo, ultimo uso e dimensione, ma non espone
+una «Session corrente» e non raggiunge direttamente la TUI: dopo ADR 0002 vive
+nei comandi che lo usano. Una riga di stato basica può quindi mostrare subito i
+token della History; titolo e chiave richiedono invece un nuovo seam o metadati
+forniti dalla Host Application. Il costo in dollari **non** è calcolabile senza
+un listino: è un dato che appartiene alla Host Application, non a Neuron TUI, e
+va lasciato fuori dal milestone basic.
 
 **Costo.** Piccolo, ed è tutto dentro `ConversationView`.
 
@@ -172,8 +176,8 @@ ciclano con `Shift+Tab`, e `Esc` chiude il dialogo invece di interrompere
 ([interactive-mode](https://code.claude.com/docs/en/interactive-mode)).
 
 **Perché conta.** È la funzione che rende una TUI agentica usabile su una
-macchina vera. Ed è già segnalata come buco *dentro* neuron-cli:
-`NeuronCli::tick()` cattura `WorkflowInterrupt` e mostra letteralmente
+macchina vera. Ed è già segnalata come buco *dentro* Neuron TUI:
+`ConversationRuntime::tick()` cattura `WorkflowInterrupt` e mostra letteralmente
 «Human-in-the-loop interruptions are not supported.» Il messaggio esiste perché
 la demo (`examples/demo.php`) monta un `FileSystemToolkit` con un Bash che scrive
 davvero.
@@ -183,8 +187,7 @@ davvero.
 - il middleware `ToolApproval` intercetta la `ToolCallEvent` prima del `ToolNode`
   e lancia un `WorkflowInterrupt` con una `ApprovalRequest` contenente una
   `Action` per tool (`id`, `name`, `description` = gli argomenti in JSON,
-  `decision`) — sorgente installato,
-  `vendor/neuron-core/neuron-ai/src/Agent/Middleware/ToolApproval.php`;
+  `decision`) — [`ToolApproval` nel tag 3.15.30](https://github.com/neuron-core/neuron-ai/blob/3.15.30/src/Agent/Middleware/ToolApproval.php);
 - `Action` espone `approve()`, `reject($feedback)`, `edit()`, e `ActionDecision`
   ha i casi `Pending`, `Approved`, `Rejected`, `Edit`;
 - un tool rifiutato non viene disabilitato ma sostituito da un
@@ -195,28 +198,28 @@ davvero.
   sia un elenco di nomi/classi sia una callback condizionale sugli argomenti
   ([Neuron AI — Middleware](https://docs.neuron-ai.dev/agent/middleware));
 - la ripresa passa da `Agent::stream($messages, ?InterruptRequest $interrupt)`,
-  che neuron-cli oggi chiama sempre con il secondo argomento a `null`
+  che `AgentTurn` chiama senza una richiesta di ripresa
   ([Neuron AI — Interruption](https://docs.neuron-ai.dev/workflow/human-in-the-loop)).
 
 Una nota importante sul vincolo di persistenza: la documentazione ufficiale dice
 «Persistence is required» perché descrive il caso web, in cui la richiesta viene
-salvata e ripresa in un processo diverso. Nel sorgente installato,
+salvata e ripresa in un processo diverso. Nel sorgente 3.15.30 osservato,
 `Workflow::__construct()` fa `setPersistence($persistence ?? new InMemoryPersistence())`
 e solleva eccezione solo se si passa un `resumeToken` senza persistence. **Per una
 Conversation TUI, che riprende nello stesso processo e sulla stessa istanza di
 Agent, non serve che la Host Application configuri nulla.** Questo è ciò che rende
 la funzione fattibile in un milestone basic.
 
-Dal lato TUI il pezzo mancante è uno stato analogo al Session picker: una
-**Richiesta di approvazione** che prende i tasti finché non si è deciso, costruita
-sullo stesso `SelectListWidget` già usato dal picker. Le tre voci basiche
+Dal lato TUI il pezzo mancante è uno stato costruito sul `Picker` generico: una
+**Richiesta di approvazione** che prende i tasti finché non si è deciso. Le tre
+voci basiche
 corrispondono a quelle di Claude Code: approva una volta, approva e non chiedere
 più per questo tool *in questa Session*, rifiuta con una nota. La versione
-persistente delle regole (`allow`/`deny` su file) è fuori scope: Neuron CLI non
+persistente delle regole (`allow`/`deny` su file) è fuori scope: Neuron TUI non
 legge configurazione, e il posto di quelle regole è la Host Application.
 
 **Costo.** È la raccomandazione più grande della lista, ed è l'unica che tocca
-`TurnQueue`/`AgentTurn`/`NeuronCli` insieme. Va da sola in uno spec.
+`TurnQueue`/`AgentTurn`/`ConversationRuntime` insieme. Va da sola in uno spec.
 
 ### P1.2 — Cronologia dei prompt (`↑`/`↓`, e poi `Ctrl+R`)
 
@@ -230,14 +233,15 @@ cronologia solo quando il cursore è già sulla prima o ultima riga visiva
 ([interactive-mode, "Command history"](https://code.claude.com/docs/en/interactive-mode)).
 
 **Perché conta.** È la funzione che si sente mancare al secondo minuto d'uso. In
-neuron-cli `↑`/`↓` sono `cursor_up`/`cursor_down` dell'`EditorWidget` e basta.
+Neuron TUI `↑`/`↓` sono `cursor_up`/`cursor_down` dell'`EditorWidget` e basta
+quando i Command suggestions non sono aperti.
 
 **Come si mappa.** La regola «prima il cursore, poi la cronologia» è
 implementabile sovrascrivendo `getDefaultKeybindings()` in `ComposerEditor` o
 passando `setKeybindings()` — le due giunture esistono già ma non sono usate.
 La domanda di design vera è *dove vive la cronologia*: Claude Code la lega alla
 directory di lavoro, non alla sessione, e la fa attraversare `--clear`. In
-neuron-cli la History appartiene all'Agent e la Session al Session provider,
+Neuron TUI la History appartiene all'Agent e la Session al Session provider,
 quindi la cronologia dei prompt non è né l'una né l'altra. La scelta più coerente
 col repository è **non inventare una terza persistenza**: dedurre la cronologia
 dalle voci `EntryKind::Person` che `HistoryProjection::entriesFor()` già produce,
@@ -260,7 +264,7 @@ indicator che conta.
 
 **Come si mappa.** Neuron emette già `ReasoningChunk`, «contains chunks of the
 reasoning summary of the model (only available for reasoning models)»
-([Neuron AI — Streaming](https://docs.neuron-ai.dev/agent/streaming)). neuron-cli
+([Neuron AI — Streaming](https://docs.neuron-ai.dev/agent/streaming)). Neuron TUI
 lo scarta due volte, di proposito e coerentemente: `AgentTurn::respond()` ignora
 tutto ciò che non è `TextChunk`/`ToolCallChunk`/`ToolResultChunk`, e
 `HistoryProjection::contents()` mappa `ReasoningContent → null`. Renderlo visibile
@@ -276,11 +280,12 @@ summary, optionally focused on what you specify», accanto a `/clear` e `/contex
 ([sessions, "Manage context within a session"](https://code.claude.com/docs/en/sessions);
 [commands](https://code.claude.com/docs/en/commands)).
 
-**Perché conta.** È il gemello di `/clear` che neuron-cli già ha: `/clear` butta,
-`/compact` conserva.
+**Perché conta.** È il gemello di `/clear` che Neuron TUI già fornisce: `/clear`
+riparte senza il contesto precedente, `/compact` ne conserva un riassunto.
 
-**Come si mappa.** Il middleware `Summarization` esiste
-(`vendor/neuron-core/neuron-ai/src/Agent/Middleware/Summarization.php`): trova un
+**Come si mappa.** Il middleware
+[`Summarization`](https://github.com/neuron-core/neuron-ai/blob/3.15.30/src/Agent/Middleware/Summarization.php)
+esiste: trova un
 punto di taglio che non separa una `ToolCallMessage` dal suo risultato, riassume
 il prefisso e ricostruisce la History con il riassunto più gli ultimi
 `messagesToKeep` messaggi; si configura con `maxTokens` e `messagesToKeep` e si
@@ -288,10 +293,10 @@ attacca ai nodi di inferenza ([Neuron AI — Middleware](https://docs.neuron-ai.
 
 **Attenzione — e questo è un vincolo dell'ADR, non un dettaglio.**
 `Summarization::summarizeHistory()` chiama `flushAll()` sulla History. L'
-[ADR 0001](../../docs/adr/0001-sessions-replace-the-agent-chat-history.md) dice
+[ADR 0001](../adr/0001-sessions-replace-the-agent-chat-history.md) dice
 esplicitamente che «`flushAll()` is never called. On a persistent History it
 deletes the stored conversation rather than archiving it». Un `/compact` fatto
-montando quel middleware **viola la promessa che Neuron CLI non distrugge mai una
+montando quel middleware **viola la promessa che Neuron TUI non distrugge mai una
 conversazione memorizzata**. Se `/compact` si fa, va fatto come *nuova Session che
 comincia dal riassunto*, non come compattazione in loco — il che, non a caso, è
 la stessa forma di `/clear` che il repository ha già scelto. Questa è la
@@ -301,48 +306,46 @@ raccomandazione da discutere prima di implementare.
 
 ### P2 — Il resto del "basic", in ordine decrescente
 
-- **Slash command estendibili dalla Host Application.** Claude Code ha reso i
+- **Realizzato — Slash command estendibili dalla Host Application.** Claude Code
+  ha reso i
   comandi personalizzati un caso di skill: un file Markdown in
   `~/.claude/skills/<nome>/SKILL.md` o `.claude/skills/<nome>/SKILL.md` diventa
   `/<nome>`, con frontmatter (`description`, `argument-hint`, `allowed-tools`,
   `disable-model-invocation`, `user-invocable`…) e sostituzione di `$ARGUMENTS`,
   `$ARGUMENTS[N]`, `$N` ([skills](https://code.claude.com/docs/en/skills)).
-  neuron-cli ha la posizione opposta, scritta nel sorgente: «There are exactly
-  three of them and no way for a Host Application to add a fourth: a fixed set
-  does not justify a registry» (`src/Command/SlashCommand.php`). È una
-  decisione difendibile finché i comandi sono tre; smette di esserlo appena
-  arrivano `/help`, `/compact` e l'approvazione. La forma minima e coerente col
-  repository non è copiare le skill — quelle sono file di *prompt*, cioè materia
-  dell'Agent — ma **una seconda giuntura per la Host Application accanto al
-  Session provider**: un comando ha un nome, una riga di descrizione per `/help`,
-  e fa qualcosa quando lo si invoca. Va valutata come modifica architetturale con
-  il suo ADR, non infilata di lato.
+  Neuron TUI non copia le skill — quelle sono file di *prompt*, cioè materia
+  dell'Agent — ma espone `Command` e `ConcurrentCommand`: entrambi dichiarano
+  nome, descrizione e `run()`, con Controls diversi a seconda che possano girare
+  durante un Turn. `Tui::addCommand()` monta un comando, un array o un
+  `CommandKit`; il package non ne monta nessuno d'ufficio. La decisione è
+  registrata negli ADR 0002 e 0003.
 - **`Ctrl+L` ridisegna lo schermo** («Forces a full terminal redraw, keeping input
   and conversation history», [interactive-mode](https://code.claude.com/docs/en/interactive-mode)).
-  Quasi gratis: `TerminalInterface::clearScreen()` più `Tui::requestRender(true)`.
+  Quasi gratis: `TerminalInterface::clearScreen()` più
+  `Symfony\Component\Tui\Tui::requestRender(true)`.
   Il doppio `Ctrl+L` che equivale a `/clear` è una raffinatezza da lasciare stare.
 - **`/export`** («copy the current conversation to your clipboard or save it as a
   plain-text file», [sessions](https://code.claude.com/docs/en/sessions)).
   `HistoryProjection::entriesFor()` produce già esattamente la struttura che
   servirebbe; manca solo dove scrivere, e quello è di nuovo un argomento della
   Host Application.
-- **Aprire una Session dalla riga di comando.** Claude Code ha `claude --continue`
+- **Realizzato dal seam pubblico — aprire una Session dalla riga di comando.**
+  Claude Code ha `claude --continue`
   / `-c` (riprende la più recente nella directory corrente), `claude --resume` /
   `-r "<sessione>"` (per id o nome, o con picker interattivo), `--name` / `-n` per
   battezzarla e `--fork-session` per biforcarla
   ([sessions, "Resume a session"](https://code.claude.com/docs/en/sessions),
   [cli-reference](https://code.claude.com/docs/en/cli-reference)).
-  neuron-cli dichiara di non fornire un eseguibile, e giustamente: ma per
-  permettere alla Host Application di scrivere il proprio `--resume` basta che
-  `NeuronCli` accetti **quale Session aprire all'avvio**, oggi impossibile perché
-  `openSession()` è privato e la Session iniziale è sempre nuova. Un argomento
-  opzionale, e la Host Application fa il resto con il Session provider che già
-  possiede.
+  Neuron TUI non fornisce un eseguibile, e giustamente. La Host Application può
+  però risolvere la propria opzione `--resume` attraverso il `SessionProvider`,
+  installare la History scelta sull'Agent con `setChatHistory()` e poi passare
+  quell'Agent a `Tui::make()`: `ConversationRuntime` dipinge all'avvio la History
+  già presente. Non serve quindi un'opzione pubblica aggiuntiva sulla TUI.
 - **`/status` e `/context`** ([commands](https://code.claude.com/docs/en/commands)):
   ridondanti se si fa P0.3 bene.
 - **`Ctrl+C` in due tempi** — prima svuota il composer, poi esce
   ([interactive-mode](https://code.claude.com/docs/en/interactive-mode)). Oggi
-  neuron-cli esce al primo colpo, il che è più brutale di Claude Code ma anche
+  Neuron TUI esce al primo colpo, il che è più brutale di Claude Code ma anche
   più prevedibile. Cambiarlo solo insieme a P0.1, perché le due semantiche di
   `Esc` e `Ctrl+C` vanno decise insieme.
 
@@ -351,18 +354,18 @@ raccomandazione da discutere prima di implementare.
 ## 4. Fuori scope per un milestone "basic"
 
 Non perché siano poco importanti, ma perché **non sono interfaccia**, oppure
-appartengono a un livello che Neuron CLI ha deciso di non toccare.
+appartengono a un livello che Neuron TUI ha deciso di non toccare.
 
 | Funzione di Claude Code | Perché fuori scope |
 |---|---|
-| Memoria `CLAUDE.md`, `.claude/rules/`, auto memory ([memory](https://code.claude.com/docs/en/memory)) | È system prompt e istruzioni: materia dell'Agent, che la Host Application configura con `setInstructions()`. Una TUI che legge file di configurazione contraddirebbe la scelta, già presa, che Neuron CLI non scrive e non legge nulla senza che glielo si chieda |
+| Memoria `CLAUDE.md`, `.claude/rules/`, auto memory ([memory](https://code.claude.com/docs/en/memory)) | È system prompt e istruzioni: materia dell'Agent, che la Host Application configura con `setInstructions()`. Una TUI che legge file di configurazione contraddirebbe la scelta, già presa, che Neuron TUI non scrive e non legge nulla senza che glielo si chieda |
 | `settings.json` a cascata, managed settings ([settings/permissions](https://code.claude.com/docs/en/permissions)) | Stessa ragione. Il milestone basic vuole *il dialogo* di approvazione, non il motore di regole |
 | Hook (`PreToolUse` ecc.) | Livello Agent; e Neuron ha già middleware e `ObserverInterface`/`EventBus` per lo stesso scopo |
 | MCP ([mcp](https://code.claude.com/docs/en/mcp)) | Già in Neuron AI (`src/MCP/McpConnector`, `StdioTransport`, `StreamableHttpTransport`): è la Host Application che collega i server, la TUI non ha nulla da aggiungere |
 | Output styles ([output-styles](https://code.claude.com/docs/en/output-styles)) | Modificano il system prompt: Agent, non TUI |
 | Checkpoint e `/rewind` ([sessions](https://code.claude.com/docs/en/sessions)) | Richiedono snapshot del codice sul disco. Fuori dal dominio di una conversazione |
 | Subagent, agent team, `/background`, `/tasks` | Modello di esecuzione, non interfaccia |
-| Modalità shell `!`, menzione file `@` | Presuppongono che la TUI sappia cos'è un filesystem e un repository. neuron-cli è agnostico rispetto a cosa fa l'Agent |
+| Modalità shell `!`, menzione file `@` | Presuppongono che la TUI sappia cos'è un filesystem e un repository. Neuron TUI è agnostico rispetto a cosa fa l'Agent |
 | Modalità vim, emoji shortcode, dettatura vocale, suggerimenti di prompt | Lusso. `EditorWidget` non offre modalità vim e costruirla è sproporzionato |
 | Transcript viewer a schermo intero (`Ctrl+O`), fullscreen rendering | Il componente TUI installato **non ha alternate screen** (§5). Non è una scelta, è un limite |
 | Mouse | Idem (§5) |
@@ -373,11 +376,12 @@ appartengono a un livello che Neuron CLI ha deciso di non toccare.
 
 Il repository **usa già** `symfony/tui: ^8.1` con `php: ^8.4.1` in
 `composer.json`, e `composer.lock` fissa **v8.1.2** (accanto a
-`symfony/event-dispatcher` e `symfony/string` 8.1.2). L'ultima pubblicata è
-**v8.1.4** ([packagist](https://packagist.org/packages/symfony/tui)). La domanda
-"conviene adottarlo" non si pone; le domande utili sono altre tre.
+`symfony/event-dispatcher` e `symfony/string` 8.1.2). La versione pubblicata più
+recente è una circostanza esterna alla baseline: per firme e comportamento fa fede la
+**v8.1.2 fissata dal lockfile** ([packagist](https://packagist.org/packages/symfony/tui)).
+La domanda "conviene adottarlo" non si pone; le domande utili sono altre tre.
 
-### 5.1 Stato del componente: sperimentale, e senza documentazione ufficiale
+### 5.1 Stato osservato il 18 agosto 2026: sperimentale, e senza documentazione ufficiale
 
 Va detto chiaramente perché ha conseguenze pratiche:
 
@@ -394,12 +398,13 @@ Va detto chiaramente perché ha conseguenze pratiche:
   [New in Symfony 8.1: Tui Component](https://symfony.com/blog/new-in-symfony-8-1-tui-component)
   e [Introducing the Symfony Tui Component](https://symfony.com/blog/introducing-the-symfony-tui-component).
 
-Conseguenza per neuron-cli: un aggiornamento anche di patch può rompere. Lo si
+Conseguenza per Neuron TUI: un aggiornamento anche di patch può rompere. Lo si
 vede già — il ramo 8.2 registra un `[BC BREAK]` sul costruttore di
-`SelectListWidget`, cioè proprio il widget su cui poggiano il Session picker e su
-cui poggerebbe la Richiesta di approvazione. La copertura a terminale virtuale
-che il repository già ha (`VirtualTerminal`) è la difesa giusta, e va estesa a
-ogni nuovo stato della TUI.
+`SelectListWidget`, usato oggi dai Command suggestions. Il Picker generico usa
+invece il `PickerList` del package, che tratta ogni choice e i suoi dettagli come
+un blocco indivisibile. La copertura a terminale virtuale che il repository già
+ha (`VirtualTerminal`) è la difesa giusta, e va estesa a ogni nuovo stato della
+TUI.
 
 ### 5.2 Coperto gratis dal componente
 
@@ -407,12 +412,12 @@ ogni nuovo stato della TUI.
 |---|---|
 | Scorciatoie di editing readline | `EditorWidget` + `Util/KillRing`, `Util/WordNavigator`: `ctrl+a/e/k/u/w/y`, `alt+y`, `alt+b/f`, undo/redo, multilinea. **Già in uso** |
 | Nuove scorciatoie (`Esc` di interruzione, `Ctrl+L`, `Ctrl+R`) | `Input/Key` (costanti + `Key::ctrl()`, `alt()`, `shift()`…), `Input/Keybindings::matches()`, `KeyParser` che riconosce anche `shift+enter` e le varianti con modificatori. Nessun binding di default: si dichiarano |
-| Dialogo di approvazione dei tool | `SelectListWidget` (già usato dal Session picker) — stessa forma, stesso modo di registrare `onSelect`/`onCancel` |
+| Dialogo di approvazione dei tool | Il `Picker` generico di Neuron TUI, aperto attraverso `Controls::choose()` con `ChoiceOption`; per choice semplici resta disponibile `SelectListWidget` |
 | Pannello tipo `/config` | `SettingsListWidget` + `SettingItem`, oggi inutilizzati |
-| Indicatore di attesa annullabile | `LoaderWidget` e `CancellableLoaderWidget` (con `onCancel`), oggi inutilizzati: neuron-cli ha scritto il proprio `WorkingIndicator` |
+| Indicatore di attesa annullabile | `LoaderWidget` e `CancellableLoaderWidget` (con `onCancel`), oggi inutilizzati: Neuron TUI ha scritto il proprio `WorkingIndicator` |
 | Barre di avanzamento | `ProgressBarWidget`, inutilizzato |
-| Ridisegno `Ctrl+L` | `TerminalInterface::clearScreen()`, `Tui::requestRender(true)`, `processRender()` |
-| Non bloccare durante un Turn | Loop Revolt + Fiber, `Tui::onTick()` (ritorna `true` = occupato, `false` = inattivo), `scheduleInterval()`. Già sfruttato da `NeuronCli::tick()` con `Amp\async()` |
+| Ridisegno `Ctrl+L` | `TerminalInterface::clearScreen()`, `Symfony\Component\Tui\Tui::requestRender(true)`, `processRender()` |
+| Non bloccare durante un Turn | Loop Revolt + Fiber, `Symfony\Component\Tui\Tui::onTick()` (ritorna `true` = occupato, `false` = inattivo), `scheduleInterval()`. Già sfruttato da `ConversationRuntime::tick()` con `Amp\async()` |
 | Ridimensionamento del terminale | `Terminal` registra `EventLoop::onSignal(SIGWINCH, …)` e forza un repaint completo; gestito, con un commento esplicito sui multiplexer che rimandano SIGWINCH al reattach |
 | Incolla | Bracketed paste abilitato dal `Terminal`, `BracketedPasteTrait` |
 | Tema e stile | `StyleSheet` con selettori, cascata e pseudo-stati, `TailwindStylesheet`, `Style` immutabile con `flex`, `Border`, `Padding` |
@@ -432,10 +437,11 @@ non nel disegno.
   in `AgentTurn`/`TurnQueue`.
 - **Contenuto della riga di stato**: il widget c'è, i dati vengono da Neuron e dal
   Session provider.
-- **Stato "sto approvando"**: come `isChoosingSession()`, va aggiunto a
-  `ConversationView` e va gestito il cortocircuito in `handleInput()`.
-- **Tema configurabile**: `Tui::addStyleSheet()` esiste ma `ConversationView` non
-  lo espone; `ConversationStyleSheet::create()` è statico. Se si vuole un
+- **Stato "sto approvando"**: il `Picker` e `ConversationView::isChoosing()`
+  esistono già; resta da modellare la richiesta di approvazione e la ripresa
+  dell'Agent in `ConversationRuntime`.
+- **Tema configurabile**: `Symfony\Component\Tui\Tui::addStyleSheet()` esiste ma
+  `ConversationView` non lo espone; `ConversationStyleSheet::create()` è statico. Se si vuole un
   `/theme`, la giuntura va aperta.
 
 ### 5.4 Cosa non c'è, e non si ottiene aggiornando dentro `^8.1`
@@ -479,8 +485,8 @@ interaction» ([New in Symfony 8.1: Tui Component](https://symfony.com/blog/new-
 
 ## 6. Cosa abilita — e cosa non abilita — il livello Agent
 
-Versione verificata: dichiarata `neuron-core/neuron-ai:^3.15.26`, installata
-**3.15.30**.
+Versione verificata: dichiarata `neuron-core/neuron-ai:^3.15.26`, fissata da
+`composer.lock` a **3.15.30**.
 
 **Abilita già, senza modifiche a monte:**
 
@@ -502,39 +508,40 @@ Versione verificata: dichiarata `neuron-core/neuron-ai:^3.15.26`, installata
 
 - **elencare le conversazioni esistenti**: `ChatHistoryInterface` ha cinque metodi
   e nessuno è una chiave. È esattamente la ragione per cui esiste il Session
-  provider, come dice l'[ADR 0001](../../docs/adr/0001-sessions-replace-the-agent-chat-history.md).
+  provider, come dice l'[ADR 0001](../adr/0001-sessions-replace-the-agent-chat-history.md).
   Rinominare o cancellare una Session — cioè `/rename` e il `Ctrl+R` del picker di
   Claude Code ([sessions](https://code.claude.com/docs/en/sessions)) — richiede
-  operazioni nuove sul Session provider, e la promessa «Neuron CLI never deletes a
+  operazioni nuove sul Session provider, e la promessa «Neuron TUI never deletes a
   stored conversation» va rinegoziata prima, non dopo;
 - **costo in dollari**: nessun listino nel framework. Fuori scope;
 - **progresso incrementale dentro un tool**: il contratto consegna solo il
   risultato finale, come già documentato in
-  [`docs/research/neuron-non-blocking-tools.md`](../../docs/research/neuron-non-blocking-tools.md).
+  [`neuron-non-blocking-tools.md`](neuron-non-blocking-tools.md).
   Una TUI non può mostrare lo stdout di un Bash mentre gira, e questo è il limite
   più visibile rispetto a Claude Code.
 
 ---
 
-## 7. Riepilogo operativo
+## 7. Riepilogo operativo aggiornato
 
-| # | Funzione | Priorità | Dimensione | Blocca? |
-|---|---|---|---|---|
-| 1 | `Esc` interrompe il Turn | P0 | S | no |
-| 2 | `/help` | P0 | XS | no |
-| 3 | Riga di stato con Session e token | P0 | S | no |
-| 4 | Approvazione dei tool | P1 | L | serve uno spec proprio |
-| 5 | Cronologia dei prompt | P1 | M | decisione su dove vive |
-| 6 | Ragionamento visibile | P1 | S | tocca vivo + ridipinto |
-| 7 | `/compact` | P1 | M | **in conflitto con l'ADR 0001** |
-| 8 | Slash command estendibili | P2 | M | serve un ADR |
-| 9 | `Ctrl+L` | P2 | XS | no |
-| 10 | `/export` | P2 | S | dove scrivere: Host Application |
-| 11 | Aprire una Session all'avvio | P2 | XS | cambia l'interfaccia pubblica |
+| Funzione | Stato | Prossimo vincolo |
+|---|---|---|
+| `/help` | realizzato, da montare esplicitamente | nessuno |
+| Command suggestions | realizzati | nessuno |
+| Slash command estendibili | realizzati con `Command`, `ConcurrentCommand` e `CommandKit` | nessuno |
+| Aprire una Session all'avvio | già consentito configurando la History dell'Agent prima di `Tui::make()` | la CLI appartiene alla Host Application |
+| `Esc` interrompe il Turn | P0, da fare | semantica della risposta parziale e della coda |
+| Riga di stato con Session e token | P0, da fare | accesso ai metadati della Session corrente |
+| Approvazione dei tool | P1, da fare | serve uno spec proprio |
+| Cronologia dei prompt | P1, da fare | decisione su dove vive |
+| Ragionamento visibile | P1, da fare | vivo e ridipinto devono coincidere |
+| `/compact` | P1, da progettare | **in conflitto con l'ADR 0001** se modifica la History in loco |
+| `Ctrl+L` | P2, da fare | nessuno |
+| `/export` | P2, da progettare | la destinazione appartiene alla Host Application |
 
-Le prime tre si possono fare in sequenza senza toccare nessuna decisione già
-presa. La quarta è il vero salto di qualità. La settima e l'ottava non sono
-lavoro di implementazione: sono conversazioni di design da fare prima.
+Interruzione, status e approvazione restano il nucleo del salto di qualità. La
+compattazione non è solo implementazione: richiede prima una decisione sul
+rapporto fra riassunto e Session persistente.
 
 ---
 
@@ -555,8 +562,8 @@ lavoro di implementazione: sono conversazioni di design da fare prima.
 [Human in the loop / Interruption](https://docs.neuron-ai.dev/workflow/human-in-the-loop) ·
 [Streaming](https://docs.neuron-ai.dev/agent/streaming) ·
 [Chat history and memory](https://docs.neuron-ai.dev/agent/chat-history-and-memory) ·
-[Tools](https://docs.neuron-ai.dev/agent/tools) · sorgente installato 3.15.30 in
-`vendor/neuron-core/neuron-ai/`.
+[Tools](https://docs.neuron-ai.dev/agent/tools) · sorgente 3.15.30 verificato
+durante la ricerca; `composer.lock` conserva versione e commit osservati.
 
 **Symfony (ufficiali).** [packagist symfony/tui](https://packagist.org/packages/symfony/tui) ·
 [packagist symfony/console](https://packagist.org/packages/symfony/console) ·
@@ -565,10 +572,14 @@ lavoro di implementazione: sono conversazioni di design da fare prima.
 [Experimental features](https://symfony.com/doc/current/contributing/code/experimental.html) ·
 [Backward Compatibility Promise](https://symfony.com/doc/current/contributing/code/bc.html) ·
 [symfony-docs PR #22201 (aperta)](https://github.com/symfony/symfony-docs/pull/22201) ·
-[Console](https://symfony.com/doc/current/console.html) e i suoi helper ·
-sorgente installato `symfony/tui` v8.1.2 in `vendor/symfony/tui/`.
+[Console](https://symfony.com/doc/current/console.html) e i suoi helper · sorgente
+`symfony/tui` v8.1.2 verificato durante la ricerca e versione fissata in
+`composer.lock`.
 
 **Interne al repository.** `CONTEXT.md`, `README.md`,
-[ADR 0001](../../docs/adr/0001-sessions-replace-the-agent-chat-history.md),
-[`docs/research/neuron-non-blocking-tools.md`](../../docs/research/neuron-non-blocking-tools.md),
-`src/` alla revisione `c15d964`.
+[ADR 0001](../adr/0001-sessions-replace-the-agent-chat-history.md),
+[ADR 0002](../adr/0002-the-conversation-tui-mounts-nothing-on-its-own.md),
+[ADR 0003](../adr/0003-the-tui-is-composed-around-a-required-agent.md),
+[ADR 0004](../adr/0004-file-sessions-use-key-named-json.md),
+[`neuron-non-blocking-tools.md`](neuron-non-blocking-tools.md),
+`src/` alla revisione `978e649`.
