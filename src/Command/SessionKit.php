@@ -4,15 +4,11 @@ declare(strict_types=1);
 
 namespace NeuronTui\Command;
 
-use NeuronTui\Session\SessionProvider;
-
 /**
  * The commands Neuron TUI ships for the Sessions, mounted in one line.
  *
- * Both of them need to know where the conversations live, and they have to be
- * told the same place or they disagree about which Sessions exist. So the
- * provider is named here once and reaches both, which is the whole reason
- * this kit exists.
+ * Both commands reach the live Sessions owned by the Conversation Runtime
+ * through their Controls.
  *
  * An application in which conversations are not thrown away mounts it without
  * `ClearCommand`; one that only wants to return to an earlier conversation
@@ -22,18 +18,11 @@ use NeuronTui\Session\SessionProvider;
  */
 final class SessionKit extends AbstractCommandKit
 {
-    /**
-     * @param SessionProvider $sessions the place the conversations live
-     */
-    public function __construct(private readonly SessionProvider $sessions)
-    {
-    }
-
     protected function provide(): array
     {
         return [
-            new ClearCommand($this->sessions),
-            new ResumeCommand($this->sessions),
+            new ClearCommand(),
+            new ResumeCommand(),
         ];
     }
 }

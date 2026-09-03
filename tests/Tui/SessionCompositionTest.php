@@ -8,7 +8,11 @@ use Closure;
 use LogicException;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\History\InMemoryChatHistory;
+use NeuronTui\Command\ClearCommand;
 use NeuronTui\Command\CommandInterface;
+use NeuronTui\Command\ConcurrentCommandInterface;
+use NeuronTui\Command\ResumeCommand;
+use NeuronTui\Command\SessionKit;
 use NeuronTui\Conversation\ConcurrentControls;
 use NeuronTui\Conversation\Controls;
 use NeuronTui\Session\Sessions;
@@ -106,6 +110,24 @@ final class SessionCompositionTest extends TestCase
         self::assertNotContains(
             'sessions',
             get_class_methods(ConcurrentControls::class),
+        );
+    }
+
+    public function testSessionCommandsNeedNoParallelSessionDependency(): void
+    {
+        self::assertSame('/clear', (new ClearCommand())->name());
+        self::assertSame('/wipe', (new ClearCommand('/wipe'))->name());
+        self::assertSame('/resume', (new ResumeCommand())->name());
+        self::assertSame('/return', (new ResumeCommand('/return'))->name());
+
+        self::assertSame(
+            [ClearCommand::class, ResumeCommand::class],
+            array_map(
+                static fn (
+                    CommandInterface|ConcurrentCommandInterface $command,
+                ): string => $command::class,
+                (new SessionKit())->commands(),
+            ),
         );
     }
 

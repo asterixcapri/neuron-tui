@@ -8,7 +8,6 @@ use DateTimeImmutable;
 use NeuronTui\Conversation\ChoiceOption;
 use NeuronTui\Conversation\Controls;
 use NeuronTui\Conversation\SessionMetadata;
-use NeuronTui\Session\SessionProvider;
 
 /**
  * Offers the stored Sessions so a person can resume one.
@@ -23,14 +22,9 @@ use NeuronTui\Session\SessionProvider;
  */
 final readonly class ResumeCommand implements CommandInterface
 {
-    /**
-     * @param SessionProvider $sessions the place the conversations live
-     * @param string          $name     the name it answers to, slash included
-     */
-    public function __construct(
-        private SessionProvider $sessions,
-        private string $name = '/resume',
-    ) {
+    /** @param string $name the name it answers to, slash included */
+    public function __construct(private string $name = '/resume')
+    {
     }
 
     public function name(): string
@@ -45,7 +39,7 @@ final readonly class ResumeCommand implements CommandInterface
 
     public function run(Controls $controls, string $arguments): void
     {
-        $sessions = $this->sessions->list();
+        $sessions = $controls->sessions()->list();
 
         if ($sessions === []) {
             $controls->warn('There is no earlier Session to return to yet.');
@@ -70,6 +64,8 @@ final readonly class ResumeCommand implements CommandInterface
             return;
         }
 
-        $controls->agent()->setChatHistory($this->sessions->resume($chosen));
+        $controls->agent()->setChatHistory(
+            $controls->sessions()->resume($chosen),
+        );
     }
 }
