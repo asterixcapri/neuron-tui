@@ -14,6 +14,7 @@ use NeuronAI\Testing\FakeAIProvider;
 use NeuronTui\Command\ClearCommand;
 use NeuronTui\Command\CommandInterface;
 use NeuronTui\Command\ResumeCommand;
+use NeuronTui\Conversation\ChoiceOption;
 use NeuronTui\Conversation\Controls;
 use NeuronTui\Session\Sessions;
 use NeuronTui\Storage\FileStorage;
@@ -616,6 +617,221 @@ final class InputHistoryTest extends TestCase
         );
     }
 
+    public function testSuggestionArrowsDoNotNavigateInputHistory(): void
+    {
+        [$provider, $storage, $terminal, $agent] = $this->tuiWithHistory([
+            'stored input',
+        ]);
+        $display = null;
+
+        EventLoop::queue(static function () use ($terminal): void {
+            $terminal->simulateInput('/al');
+            $terminal->simulateInput("\x1b[B\x1b[A\x1b[B");
+        });
+        EventLoop::delay(
+            0.08,
+            static function () use ($terminal): void {
+                $terminal->clearOutput();
+                $terminal->simulateResize(80, 24);
+            },
+        );
+        EventLoop::delay(
+            0.12,
+            static function () use (&$display, $terminal): void {
+                $display = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("\x03");
+            },
+        );
+
+        (new Tui($agent, $terminal))
+            ->setStorage($storage)
+            ->addCommand([
+                self::commandNamed('/alpha', 'The first suggestion.'),
+                self::commandNamed('/album', 'The second suggestion.'),
+            ])
+            ->run();
+
+        self::assertIsString($display);
+        self::assertStringContainsString('→ /album', $display);
+        self::assertStringContainsString('❯ /al', $display);
+        self::assertStringNotContainsString('stored input', $display);
+        $provider->assertNothingSent();
+    }
+
+    public function testPickerArrowsDoNotNavigateInputHistory(): void
+    {
+        $agent = new Agent();
+        $agent->setAiProvider(new FakeAIProvider());
+        $storage = new InMemoryStorage();
+        $storage->write('input-history', 'entries', ['stored input']);
+        $terminal = new VirtualTerminal(rows: 24);
+        $command = new class() implements CommandInterface {
+            public ?string $chosen = null;
+
+            public function name(): string
+            {
+                return '/choose';
+            }
+
+            public function describe(): string
+            {
+                return 'Choose an option.';
+            }
+
+            public function run(Controls $controls, string $arguments): void
+            {
+                $this->chosen = $controls->choose('Options', [
+                    new ChoiceOption('first', 'First option'),
+                    new ChoiceOption('last', 'Last option'),
+                ]);
+            }
+        };
+
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("/choose\r"),
+        );
+        EventLoop::delay(
+            0.04,
+            static fn () => $terminal->simulateInput("\x1b[A\r"),
+        );
+        EventLoop::delay(
+            0.1,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new Tui($agent, $terminal))
+            ->setStorage($storage)
+            ->addCommand($command)
+            ->run();
+
+        self::assertSame('last', $command->chosen);
+    }
+
+    public function testPageKeysNeverNavigateInputHistory(): void
+    {
+        [$provider, $storage, $terminal, $agent] = $this->tuiWithHistory([
+            'stored input',
+        ]);
+
+        EventLoop::queue(static function () use ($terminal): void {
+            $terminal->simulateInput("\x1b[5~\x1b[6~");
+            $terminal->simulateInput("Fresh message\r");
+        });
+        EventLoop::delay(
+            0.2,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new Tui($agent, $terminal))->setStorage($storage)->run();
+
+        self::assertSame(
+            'Fresh message',
+            $provider->getRecorded()[0]->messages[0]->getContent(),
+        );
+    }
+
+    public function testRecalledCommandsRestoreSuggestionsAfterAnEdit(): void
+    {
+        [$provider, $storage, $terminal, $agent] = $this->tuiWithHistory([
+            '/probe',
+        ]);
+        $recalled = null;
+        $edited = null;
+
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("\x1b[A"),
+        );
+        EventLoop::delay(
+            0.06,
+            static function () use ($terminal): void {
+                $terminal->clearOutput();
+                $terminal->simulateResize(80, 24);
+            },
+        );
+        EventLoop::delay(
+            0.1,
+            static function () use (&$recalled, $terminal): void {
+                $recalled = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("\x7f");
+            },
+        );
+        EventLoop::delay(
+            0.16,
+            static function () use ($terminal): void {
+                $terminal->clearOutput();
+                $terminal->simulateResize(80, 24);
+            },
+        );
+        EventLoop::delay(
+            0.2,
+            static function () use (&$edited, $terminal): void {
+                $edited = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("\x03");
+            },
+        );
+
+        (new Tui($agent, $terminal))
+            ->setStorage($storage)
+            ->addCommand(self::commandNamed('/probe', 'Runs the probe.'))
+            ->run();
+
+        self::assertIsString($recalled);
+        self::assertStringContainsString('❯ /probe', $recalled);
+        self::assertStringNotContainsString('Runs the probe.', $recalled);
+        self::assertStringNotContainsString('suggesting ·', $recalled);
+        self::assertIsString($edited);
+        self::assertStringContainsString('❯ /prob', $edited);
+        self::assertStringContainsString('Runs the probe.', $edited);
+        self::assertStringContainsString('suggesting ·', $edited);
+        $provider->assertNothingSent();
+    }
+
+    public function testReturningFromARecallToEmptyRestoresSuggestions(): void
+    {
+        [$provider, $storage, $terminal, $agent] = $this->tuiWithHistory([
+            '/probe',
+        ]);
+        $display = null;
+
+        EventLoop::queue(static function () use ($terminal): void {
+            $terminal->simulateInput("\x1b[A\x1b[B");
+            $terminal->simulateInput('/');
+        });
+        EventLoop::delay(
+            0.08,
+            static function () use ($terminal): void {
+                $terminal->clearOutput();
+                $terminal->simulateResize(80, 24);
+            },
+        );
+        EventLoop::delay(
+            0.12,
+            static function () use (&$display, $terminal): void {
+                $display = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("\x03");
+            },
+        );
+
+        (new Tui($agent, $terminal))
+            ->setStorage($storage)
+            ->addCommand(self::commandNamed('/probe', 'Runs the probe.'))
+            ->run();
+
+        self::assertIsString($display);
+        self::assertStringContainsString('❯ /', $display);
+        self::assertStringContainsString('Runs the probe.', $display);
+        self::assertStringContainsString('suggesting ·', $display);
+        $provider->assertNothingSent();
+    }
+
     /**
      * @param list<string> $entries
      *
@@ -637,5 +853,32 @@ final class InputHistoryTest extends TestCase
             new VirtualTerminal(columns: $columns, rows: 24),
             $agent,
         ];
+    }
+
+    private static function commandNamed(
+        string $name,
+        string $description,
+    ): CommandInterface {
+        return new class($name, $description) implements CommandInterface {
+            public function __construct(
+                private readonly string $commandName,
+                private readonly string $description,
+            ) {
+            }
+
+            public function name(): string
+            {
+                return $this->commandName;
+            }
+
+            public function describe(): string
+            {
+                return $this->description;
+            }
+
+            public function run(Controls $controls, string $arguments): void
+            {
+            }
+        };
     }
 }
