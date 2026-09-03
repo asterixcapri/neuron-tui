@@ -10,6 +10,7 @@ use NeuronAI\Chat\History\ChatHistoryInterface;
 use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
 use NeuronTui\Command\CommandInterface;
 use NeuronTui\Command\ConcurrentCommandInterface;
+use NeuronTui\InputHistory\InputHistory;
 use NeuronTui\Session\Sessions;
 use NeuronTui\Storage\InMemoryStorage;
 use NeuronTui\Storage\StorageInterface;
@@ -45,6 +46,8 @@ final class ConversationRuntime
 
     private readonly Sessions $sessions;
 
+    private readonly InputHistory $inputHistory;
+
     /**
      * The mounted commands in the order the Host Application added them.
      *
@@ -71,7 +74,9 @@ final class ConversationRuntime
         ?StorageInterface $storage = null,
     ) {
         $this->commands = $commands;
-        $this->sessions = new Sessions($storage ?? new InMemoryStorage());
+        $storage ??= new InMemoryStorage();
+        $this->sessions = new Sessions($storage);
+        $this->inputHistory = new InputHistory($storage);
         $this->agent->setChatHistory($this->sessions->start());
         $this->terminal = $terminal ?? new Terminal();
         $this->view = new ConversationView(
@@ -124,6 +129,7 @@ final class ConversationRuntime
             return;
         }
 
+        $this->inputHistory->record($event->getValue());
         $this->send($submission);
     }
 
@@ -417,6 +423,7 @@ final class ConversationRuntime
     {
         $keys = new Keybindings([
             'quit' => [Key::ctrl('c')],
+            'recall-newest-input' => [Key::UP],
             'scroll-up' => [Key::PAGE_UP],
             'scroll-down' => [Key::PAGE_DOWN],
         ]);
@@ -431,6 +438,15 @@ final class ConversationRuntime
         // While a person is choosing from a list, the list owns the keys
         // that move through it, page keys included.
         if ($this->view->isChoosing()) {
+            return;
+        }
+
+        if (
+            $keys->matches($event->getData(), 'recall-newest-input')
+            && $this->view->recallInput($this->inputHistory->newest())
+        ) {
+            $event->stopPropagation();
+
             return;
         }
 
