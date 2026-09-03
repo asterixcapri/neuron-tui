@@ -4,22 +4,182 @@ declare(strict_types=1);
 
 namespace NeuronTui\Tests\Tui;
 
+use Generator;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\Messages\AssistantMessage;
+use NeuronAI\Chat\Messages\Message;
+use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronTui\Command\ClearCommand;
+use NeuronTui\Command\CommandInterface;
 use NeuronTui\Command\ResumeCommand;
+use NeuronTui\Conversation\Controls;
 use NeuronTui\Session\Sessions;
 use NeuronTui\Storage\FileStorage;
 use NeuronTui\Storage\InMemoryStorage;
 use NeuronTui\Tui;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
+use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
 final class InputHistoryTest extends TestCase
 {
+    public function testCommandsAreRecordedBeforeTheyAreDispatched(): void
+    {
+        $provider = new class(
+            new AssistantMessage('A slow answer.'),
+        ) extends FakeAIProvider {
+            protected function streamChunks(Message $response): Generator
+            {
+                \Amp\delay(0.3);
+                yield new TextChunk('slow-stream', 'A slow answer.');
+
+                return $response;
+            }
+        };
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        $storage = new InMemoryStorage();
+        $terminal = new VirtualTerminal(rows: 24);
+        $command = new class() implements CommandInterface {
+            /** @var list<string> */
+            public array $arguments = [];
+
+            public function name(): string
+            {
+                return '/probe';
+            }
+
+            public function describe(): string
+            {
+                return 'Record that the command ran.';
+            }
+
+            public function run(Controls $controls, string $arguments): void
+            {
+                $this->arguments[] = $arguments;
+            }
+        };
+
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("/probe accepted\r"),
+        );
+        EventLoop::delay(
+            0.03,
+            static fn () => $terminal->simulateInput("/unknown\r"),
+        );
+        EventLoop::delay(
+            0.06,
+            static function () use ($terminal): void {
+                $terminal->simulateInput("\x01\x0b");
+                $terminal->simulateInput("A question\r");
+            },
+        );
+        EventLoop::delay(
+            0.1,
+            static fn () => $terminal->simulateInput("/probe refused\r"),
+        );
+        EventLoop::delay(
+            0.42,
+            static function () use ($terminal): void {
+                $terminal->simulateInput("\x01\x0b");
+                $terminal->simulateInput(str_repeat("\x1b[A", 4));
+                $terminal->simulateInput(" recalled\r");
+            },
+        );
+        EventLoop::delay(
+            0.5,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new Tui($agent, $terminal))
+            ->setStorage($storage)
+            ->addCommand($command)
+            ->run();
+
+        self::assertSame(['accepted', 'accepted recalled'], $command->arguments);
+        self::assertSame(
+            [
+                '/probe accepted',
+                '/unknown',
+                'A question',
+                '/probe refused',
+                '/probe accepted recalled',
+            ],
+            $storage->read('input-history', 'entries')?->data,
+        );
+    }
+
+    public function testAQueuedMessageIsRecallableWhileItRemainsQueued(): void
+    {
+        $provider = new class(
+            new AssistantMessage('First answer.'),
+            new AssistantMessage('Second answer.'),
+        ) extends FakeAIProvider {
+            private int $turn = 0;
+
+            protected function streamChunks(Message $response): Generator
+            {
+                ++$this->turn;
+
+                if ($this->turn === 1) {
+                    \Amp\delay(0.3);
+                }
+
+                yield new TextChunk(
+                    'queued-stream',
+                    $response->getContent() ?? '',
+                );
+
+                return $response;
+            }
+        };
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        $storage = new InMemoryStorage();
+        $terminal = new VirtualTerminal(rows: 30);
+        $whileQueued = null;
+
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("First question\r"),
+        );
+        EventLoop::delay(
+            0.04,
+            static fn () => $terminal->simulateInput("Second question\r"),
+        );
+        EventLoop::delay(
+            0.08,
+            static function () use ($terminal): void {
+                $terminal->simulateInput("\x1b[A");
+                $terminal->simulateInput('-recalled');
+            },
+        );
+        EventLoop::delay(
+            0.14,
+            static function () use (&$whileQueued, $terminal): void {
+                $whileQueued = $terminal->getOutput();
+                $terminal->simulateInput("\x03");
+            },
+        );
+
+        (new Tui($agent, $terminal))->setStorage($storage)->run();
+
+        self::assertIsString($whileQueued);
+        $whileQueued = AnsiUtils::stripAnsiCodes($whileQueued);
+        self::assertStringContainsString('↳ Second question', $whileQueued);
+        self::assertStringContainsString(
+            '❯ Second question-recalled',
+            $whileQueued,
+        );
+        self::assertSame(
+            ['First question', 'Second question'],
+            $storage->read('input-history', 'entries')?->data,
+        );
+        self::assertCount(1, $provider->getRecorded());
+    }
+
     public function testClearingASessionKeepsItsInputHistoryAvailable(): void
     {
         $provider = new FakeAIProvider(

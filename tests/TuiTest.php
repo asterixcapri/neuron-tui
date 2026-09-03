@@ -4887,8 +4887,16 @@ MARKDOWN;
                 unlink($path);
             }
 
+            foreach (glob($directory . '/input-history/*') ?: [] as $path) {
+                unlink($path);
+            }
+
             if (is_dir($directory . '/sessions')) {
                 rmdir($directory . '/sessions');
+            }
+
+            if (is_dir($directory . '/input-history')) {
+                rmdir($directory . '/input-history');
             }
 
             if (is_dir($directory)) {
