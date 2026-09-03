@@ -15,11 +15,11 @@ A provider builds every History it hands back, so starting or resuming a
 Session replaces the History the Host Application configured on the Agent.
 
 The provider is therefore where a Host Application says where its conversations
-live, and it is the Host Application that says it. The default,
-`InMemorySessionProvider`, takes nothing: it keeps its Sessions in memory for
-the life of the process, which is the promise Neuron AI already makes to an
-Agent given no History at all. Nothing is written anywhere until a Host
-Application asks for it by passing a provider — `FileSessionProvider` over
+live, and it is the Host Application that says it. The shipped no-configuration
+provider, `InMemorySessionProvider`, takes nothing: it keeps its Sessions in
+memory for the life of the process, which is the promise Neuron AI already
+makes to an Agent given no History at all. Nothing is written anywhere until a
+Host Application asks for it by passing a provider — `FileSessionProvider` over
 Neuron's own `FileChatHistory`, or its own adapter over SQL or Eloquent. That
 second adapter is what makes the seam worth having.
 
