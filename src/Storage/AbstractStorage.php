@@ -15,19 +15,114 @@ abstract class AbstractStorage implements StorageInterface
      * @param array<array-key, mixed> $data
      * @param array<string, string> $metadata
      */
-    public function create(
+    final public function create(
         string $namespace,
         array $data,
         array $metadata = [],
     ): StoredDocument {
         $this->guardIdentifier($namespace, 'namespace');
+        $this->guardMetadata($metadata);
+
+        $document = $this->createDocument(
+            $namespace,
+            $data,
+            $metadata,
+        );
+        $this->guardIdentifier($document->key, 'key');
+
+        return $document;
+    }
+
+    final public function read(
+        string $namespace,
+        string $key,
+    ): ?StoredDocument {
+        $this->guardIdentifier($namespace, 'namespace');
+        $this->guardIdentifier($key, 'key');
+
+        return $this->readDocument($namespace, $key);
+    }
+
+    /**
+     * @param array<array-key, mixed> $data
+     * @param array<string, string> $metadata
+     */
+    final public function write(
+        string $namespace,
+        string $key,
+        array $data,
+        array $metadata = [],
+    ): StoredDocument {
+        $this->guardIdentifier($namespace, 'namespace');
+        $this->guardIdentifier($key, 'key');
+        $this->guardMetadata($metadata);
+
+        return $this->writeDocument(
+            $namespace,
+            $key,
+            $data,
+            $metadata,
+        );
+    }
+
+    final public function delete(string $namespace, string $key): void
+    {
+        $this->guardIdentifier($namespace, 'namespace');
+        $this->guardIdentifier($key, 'key');
+
+        $this->deleteDocument($namespace, $key);
+    }
+
+    /** @return iterable<StoredDocument> */
+    final public function entries(string $namespace): iterable
+    {
+        $this->guardIdentifier($namespace, 'namespace');
+
+        return $this->guardEntries($this->readEntries($namespace));
+    }
+
+    /**
+     * Adapters may replace this with a native atomic creation operation.
+     *
+     * @param array<array-key, mixed> $data
+     * @param array<string, string> $metadata
+     */
+    protected function createDocument(
+        string $namespace,
+        array $data,
+        array $metadata,
+    ): StoredDocument {
 
         do {
             $key = $this->newKey();
-        } while ($this->read($namespace, $key) !== null);
+        } while ($this->readDocument($namespace, $key) !== null);
 
-        return $this->write($namespace, $key, $data, $metadata);
+        return $this->writeDocument($namespace, $key, $data, $metadata);
     }
+
+    abstract protected function readDocument(
+        string $namespace,
+        string $key,
+    ): ?StoredDocument;
+
+    /**
+     * @param array<array-key, mixed> $data
+     * @param array<string, string> $metadata
+     */
+    abstract protected function writeDocument(
+        string $namespace,
+        string $key,
+        array $data,
+        array $metadata,
+    ): StoredDocument;
+
+    abstract protected function deleteDocument(
+        string $namespace,
+        string $key,
+    ): void;
+
+    /** @return iterable<StoredDocument> */
+    abstract protected function readEntries(string $namespace): iterable;
 
     final protected function guardIdentifier(
         string $identifier,
@@ -58,6 +153,20 @@ abstract class AbstractStorage implements StorageInterface
                     'Storage metadata must contain lowercase string pairs.',
                 );
             }
+        }
+    }
+
+    /**
+     * @param iterable<StoredDocument> $entries
+     *
+     * @return iterable<StoredDocument>
+     */
+    private function guardEntries(iterable $entries): iterable
+    {
+        foreach ($entries as $document) {
+            $this->guardIdentifier($document->key, 'key');
+
+            yield $document;
         }
     }
 }
