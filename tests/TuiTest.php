@@ -40,10 +40,10 @@ use NeuronTui\Conversation\ChoiceOption;
 use NeuronTui\Conversation\ConcurrentControls;
 use NeuronTui\Conversation\Controls;
 use NeuronTui\Tui;
-use NeuronTui\Session\FileSessionProvider;
-use NeuronTui\Session\InMemorySessionProvider;
 use NeuronTui\Session\Session;
-use NeuronTui\Session\SessionProvider;
+use NeuronTui\Session\Sessions;
+use NeuronTui\Storage\FileStorage;
+use NeuronTui\Storage\InMemoryStorage;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
@@ -1105,7 +1105,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand(self::sessionCommands(new InMemorySessionProvider()))->run();
+        ))->addCommand(self::sessionCommands())->run();
 
         // `/resume now` opens the picker on the Session being written in.
         self::assertIsString($afterResume);
@@ -1603,7 +1603,7 @@ MARKDOWN;
             $agent,
             terminal: $terminal,
         ))->addCommand([
-                new ClearCommand(new InMemorySessionProvider(), '/wipe'),
+                new ClearCommand('/wipe'),
                 new LeaveCommand('/quit'),
             ])->run();
 
@@ -4461,17 +4461,12 @@ MARKDOWN;
         };
     }
 
-    /**
-     * The commands Neuron TUI ships for the Sessions of one provider.
-     *
-     * @return list<CommandInterface|ConcurrentCommandInterface>
-     */
-    private static function sessionCommands(
-        SessionProvider $sessions,
-    ): array {
+    /** @return list<CommandInterface|ConcurrentCommandInterface> */
+    private static function sessionCommands(): array
+    {
         return [
-            new ClearCommand($sessions),
-            new ResumeCommand($sessions),
+            new ClearCommand(),
+            new ResumeCommand(),
             new LeaveCommand(),
         ];
     }
@@ -4520,7 +4515,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand(self::sessionCommands(new InMemorySessionProvider()))->run();
+        ))->addCommand(self::sessionCommands())->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -4547,15 +4542,22 @@ MARKDOWN;
 
     public function testClearOpensAnEmptySessionOverTheOneOnScreen(): void
     {
-        $earlier = new ExistingChatHistory([
-            new UserMessage('Earlier question.'),
-            new AssistantMessage('Earlier answer.'),
-        ]);
         $agent = new Agent();
-        $agent->setChatHistory($earlier);
-        $sessions = new InMemorySessionProvider();
+        $storage = new InMemoryStorage();
+        $sessions = new Sessions($storage);
+        $earlier = null;
+        $fillSession = $this->commandThat(
+            static function (Controls $controls) use (&$earlier): void {
+                $earlier = $controls->agent()->getChatHistory();
+                $earlier->addMessage(new UserMessage('Earlier question.'));
+                $earlier->addMessage(new AssistantMessage('Earlier answer.'));
+            },
+        );
         $terminal = new VirtualTerminal(rows: 24);
         $clearedDisplay = null;
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("/probe\r"),
+        );
         EventLoop::delay(
             0.04,
             static fn () => $terminal->simulateInput("/clear\r"),
@@ -4580,7 +4582,10 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand(self::sessionCommands($sessions))->run();
+        ))->setStorage($storage)->addCommand([
+            ...self::sessionCommands(),
+            $fillSession,
+        ])->run();
 
         self::assertIsString($clearedDisplay);
         self::assertStringContainsString('draft', $clearedDisplay);
@@ -4594,15 +4599,11 @@ MARKDOWN;
         );
         self::assertStringNotContainsString('/clear', $clearedDisplay);
         self::assertSame([], $agent->getChatHistory()->getMessages());
+        self::assertNotNull($earlier);
         self::assertCount(2, $earlier->getMessages());
-        // Nobody wrote in the Session that was just started, so there is
-        // nothing to return to until something is written — and what the
-        // provider then lists is the conversation the Agent is holding.
-        self::assertCount(0, $sessions->list());
-        $agent->getChatHistory()->addMessage(new UserMessage('Written later'));
         $listed = $sessions->list();
         self::assertCount(1, $listed);
-        self::assertSame('Written later', $listed[0]->title);
+        self::assertSame('Earlier question.', $listed[0]->title);
     }
 
     public function testClearLeavesTheConversationItReplacedStored(): void
@@ -4610,7 +4611,8 @@ MARKDOWN;
         $provider = new FakeAIProvider(new AssistantMessage('An answer.'));
         $agent = new Agent();
         $agent->setAiProvider($provider);
-        $sessions = new InMemorySessionProvider();
+        $storage = new InMemoryStorage();
+        $sessions = new Sessions($storage);
         $terminal = new VirtualTerminal(rows: 24);
         EventLoop::delay(
             0.03,
@@ -4632,7 +4634,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand(self::sessionCommands($sessions))->run();
+        ))->setStorage($storage)->addCommand(self::sessionCommands())->run();
 
         $listed = $sessions->list();
 
@@ -4647,8 +4649,8 @@ MARKDOWN;
             ),
         );
         self::assertSame([], $agent->getChatHistory()->getMessages());
-        // The Session the Agent was left holding is the newer one the
-        // provider minted, so writing in it lists it ahead of the other.
+        // The Session the Agent was left holding is the newer one Sessions
+        // minted, so writing in it lists it ahead of the other.
         $agent->getChatHistory()->addMessage(new UserMessage('Written later'));
         self::assertSame(
             ['Written later', 'A question'],
@@ -4682,7 +4684,8 @@ MARKDOWN;
                 $ongoing = $controls->agent()->getChatHistory();
             },
         );
-        $sessions = new InMemorySessionProvider();
+        $storage = new InMemoryStorage();
+        $sessions = new Sessions($storage);
         $terminal = new VirtualTerminal(rows: 24);
         EventLoop::queue(
             static fn () => $terminal->simulateInput("/probe\r"),
@@ -4720,8 +4723,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([
-            ...self::sessionCommands($sessions),
+        ))->setStorage($storage)->addCommand([
+            ...self::sessionCommands(),
             $remember,
         ])->run();
 
@@ -4744,7 +4747,8 @@ MARKDOWN;
         );
         $agent = new Agent();
         $agent->setAiProvider($provider);
-        $sessions = new InMemorySessionProvider();
+        $storage = new InMemoryStorage();
+        $sessions = new Sessions($storage);
         $earlier = $sessions->start();
         $earlier->addMessage(new UserMessage('The earlier subject'));
         $earlier->addMessage(new Message(MessageRole::ASSISTANT, [
@@ -4779,7 +4783,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand(self::sessionCommands($sessions))->run();
+        ))->setStorage($storage)->addCommand(self::sessionCommands())->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -4795,7 +4799,14 @@ MARKDOWN;
             'Private chain of thought.',
             $display,
         );
-        self::assertSame($earlier, $agent->getChatHistory());
+        self::assertSame(
+            ['The earlier subject', 'The earlier answer.'],
+            array_map(
+                static fn (Message $message): string => (string) $message
+                    ->getContent(),
+                array_slice($agent->getChatHistory()->getMessages(), 0, 2),
+            ),
+        );
         $provider->assertSent(
             static fn (RequestRecord $request): bool => array_map(
                 static fn (Message $message): string => $message->getRole(),
@@ -4813,13 +4824,16 @@ MARKDOWN;
             . bin2hex(random_bytes(6));
 
         try {
-            $sessions = new FileSessionProvider($directory);
+            $storage = new FileStorage($directory);
+            $sessions = new Sessions($storage);
             $earlier = $sessions->start();
             $earlier->addMessage(new UserMessage('The stored subject'));
             $earlier->addMessage(new AssistantMessage('The stored answer.'));
-            $files = glob($directory . '/*.json') ?: [];
-            self::assertCount(1, $files);
-            $contents = file_get_contents($files[0]);
+            $listed = $sessions->list();
+            self::assertCount(1, $listed);
+            $contents = file_get_contents(
+                $directory . '/sessions/' . $listed[0]->key . '.json',
+            );
             self::assertIsString($contents);
             $storedBytes = strlen($contents);
             self::assertLessThan(1_024, $storedBytes);
@@ -4849,7 +4863,7 @@ MARKDOWN;
             (new Tui(
                 $agent,
                 terminal: $terminal,
-            ))->addCommand(self::sessionCommands($sessions))->run();
+            ))->setStorage($storage)->addCommand(self::sessionCommands())->run();
 
             self::assertIsString($pickerDisplay);
             self::assertStringContainsString(
@@ -4869,8 +4883,12 @@ MARKDOWN;
                 ),
             );
         } finally {
-            foreach (glob($directory . '/*') ?: [] as $path) {
+            foreach (glob($directory . '/sessions/*') ?: [] as $path) {
                 unlink($path);
+            }
+
+            if (is_dir($directory . '/sessions')) {
+                rmdir($directory . '/sessions');
             }
 
             if (is_dir($directory)) {
@@ -4891,7 +4909,8 @@ MARKDOWN;
         $agent->setAiProvider(new FakeAIProvider(
             new AssistantMessage('A later answer.'),
         ));
-        $sessions = new InMemorySessionProvider();
+        $storage = new InMemoryStorage();
+        $sessions = new Sessions($storage);
         $earlier = $sessions->start();
         $earlier->addMessage(new UserMessage('The earlier subject'));
         $terminal = new VirtualTerminal(rows: 30);
@@ -4922,13 +4941,20 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand(self::sessionCommands($sessions))->run();
+        ))->setStorage($storage)->addCommand(self::sessionCommands())->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
         self::assertStringNotContainsString('Enter resumes', $display);
         self::assertStringContainsString('❯ The earlier subject', $display);
-        self::assertSame($earlier, $agent->getChatHistory());
+        self::assertSame(
+            ['The earlier subject'],
+            array_map(
+                static fn (Message $message): string => (string) $message
+                    ->getContent(),
+                $agent->getChatHistory()->getMessages(),
+            ),
+        );
     }
 
     /**
@@ -4940,7 +4966,8 @@ MARKDOWN;
     public function testASessionTitledWithANullByteIsListedAndResumed(): void
     {
         $agent = new Agent();
-        $sessions = new InMemorySessionProvider();
+        $storage = new InMemoryStorage();
+        $sessions = new Sessions($storage);
         $earlier = $sessions->start();
         $earlier->addMessage(new UserMessage("The earlier\x00 subject"));
         $terminal = new VirtualTerminal(rows: 24);
@@ -4967,7 +4994,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand(self::sessionCommands($sessions))->run();
+        ))->setStorage($storage)->addCommand(self::sessionCommands())->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -4977,7 +5004,14 @@ MARKDOWN;
             $pickerDisplay,
         );
         self::assertStringContainsString('❯ The earlier subject', $display);
-        self::assertSame($earlier, $agent->getChatHistory());
+        self::assertSame(
+            ["The earlier\x00 subject"],
+            array_map(
+                static fn (Message $message): string => (string) $message
+                    ->getContent(),
+                $agent->getChatHistory()->getMessages(),
+            ),
+        );
     }
 
     public function testEscapeLeavesTheSessionPickerWithTheSameSession(): void
@@ -4989,7 +5023,8 @@ MARKDOWN;
                 $ongoing = $controls->agent()->getChatHistory();
             },
         );
-        $sessions = new InMemorySessionProvider();
+        $storage = new InMemoryStorage();
+        $sessions = new Sessions($storage);
         $sessions->start()->addMessage(
             new UserMessage('The earlier subject'),
         );
@@ -5029,8 +5064,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([
-            ...self::sessionCommands($sessions),
+        ))->setStorage($storage)->addCommand([
+            ...self::sessionCommands(),
             $remember,
         ])->run();
 
@@ -5065,7 +5100,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand(self::sessionCommands(new InMemorySessionProvider()))->run();
+        ))->addCommand(self::sessionCommands())->run();
 
         self::assertStringContainsString(
             'There is no earlier Session to return to yet.',
@@ -5076,7 +5111,8 @@ MARKDOWN;
     public function testTypingNarrowsThePickerInsteadOfTheComposer(): void
     {
         $agent = new Agent();
-        $sessions = new InMemorySessionProvider();
+        $storage = new InMemoryStorage();
+        $sessions = new Sessions($storage);
         $sessions->start()->addMessage(
             new UserMessage('Alpha subject'),
         );
@@ -5119,18 +5155,26 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand(self::sessionCommands($sessions))->run();
+        ))->setStorage($storage)->addCommand(self::sessionCommands())->run();
 
         self::assertIsString($narrowedDisplay);
         self::assertStringContainsString('Beta subject', $narrowedDisplay);
         self::assertStringNotContainsString('Alpha subject', $narrowedDisplay);
-        self::assertSame($beta, $agent->getChatHistory());
+        self::assertSame(
+            ['Beta subject'],
+            array_map(
+                static fn (Message $message): string => (string) $message
+                    ->getContent(),
+                $agent->getChatHistory()->getMessages(),
+            ),
+        );
     }
 
     public function testArrowKeysChooseAnotherSessionInThePicker(): void
     {
         $agent = new Agent();
-        $sessions = new InMemorySessionProvider();
+        $storage = new InMemoryStorage();
+        $sessions = new Sessions($storage);
         $older = $sessions->start();
         $older->addMessage(new UserMessage('The older subject'));
         $sessions->start()->addMessage(
@@ -5157,12 +5201,19 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand(self::sessionCommands($sessions))->run();
+        ))->setStorage($storage)->addCommand(self::sessionCommands())->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
         self::assertStringContainsString('❯ The older subject', $display);
-        self::assertSame($older, $agent->getChatHistory());
+        self::assertSame(
+            ['The older subject'],
+            array_map(
+                static fn (Message $message): string => (string) $message
+                    ->getContent(),
+                $agent->getChatHistory()->getMessages(),
+            ),
+        );
     }
 
     public function testResumeIsRefusedWhileTheAgentIsWorking(): void
@@ -5181,7 +5232,8 @@ MARKDOWN;
         };
         $agent = new Agent();
         $agent->setAiProvider($provider);
-        $sessions = new InMemorySessionProvider();
+        $storage = new InMemoryStorage();
+        $sessions = new Sessions($storage);
         $sessions->start()->addMessage(
             new UserMessage('The earlier subject'),
         );
@@ -5206,7 +5258,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand(self::sessionCommands($sessions))->run();
+        ))->setStorage($storage)->addCommand(self::sessionCommands())->run();
 
         self::assertIsString($refusedDisplay);
         self::assertStringContainsString(
@@ -5227,7 +5279,8 @@ MARKDOWN;
     {
         $agent = new Agent();
         $agent->setAiProvider(new FakeAIProvider());
-        $sessions = new InMemorySessionProvider();
+        $storage = new InMemoryStorage();
+        $sessions = new Sessions($storage);
         $earlier = $sessions->start();
         $earlier->addMessage(new UserMessage('The earlier subject'));
         $earlier->addMessage(new AssistantMessage('The earlier answer.'));
@@ -5279,7 +5332,10 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([new SessionKit($sessions), new LeaveCommand()])->run();
+        ))->setStorage($storage)->addCommand([
+            new SessionKit(),
+            new LeaveCommand(),
+        ])->run();
 
         self::assertIsString($pickerDisplay);
         self::assertStringContainsString(
@@ -5298,8 +5354,8 @@ MARKDOWN;
             $clearedDisplay,
         );
         self::assertSame([], $agent->getChatHistory()->getMessages());
-        // Both commands reached the one provider the kit was given, so the
-        // Session the first resumed is the one the second left stored.
+        // Both commands reached the one Sessions instance the runtime owns,
+        // so the Session the first resumed is the one the second left stored.
         self::assertSame(
             ['The earlier subject'],
             array_map(
@@ -5313,7 +5369,8 @@ MARKDOWN;
     {
         $agent = new Agent();
         $agent->setAiProvider(new FakeAIProvider());
-        $sessions = new InMemorySessionProvider();
+        $storage = new InMemoryStorage();
+        $sessions = new Sessions($storage);
         $earlier = $sessions->start();
         $earlier->addMessage(new UserMessage('The earlier subject'));
         $terminal = new VirtualTerminal(rows: 30);
@@ -5352,8 +5409,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([
-                (new SessionKit($sessions))->exclude([ClearCommand::class]),
+        ))->setStorage($storage)->addCommand([
+                (new SessionKit())->exclude([ClearCommand::class]),
                 new LeaveCommand(),
             ])->run();
 
@@ -5377,7 +5434,7 @@ MARKDOWN;
     {
         $agent = new Agent();
         $agent->setAiProvider(new FakeAIProvider());
-        $sessions = new InMemorySessionProvider();
+        $storage = new InMemoryStorage();
         $agent->setChatHistory(new ExistingChatHistory([
             new UserMessage('The earlier subject'),
             new AssistantMessage('The earlier answer.'),
@@ -5421,8 +5478,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([
-                (new SessionKit($sessions))->only([ClearCommand::class]),
+        ))->setStorage($storage)->addCommand([
+                (new SessionKit())->only([ClearCommand::class]),
                 new LeaveCommand(),
             ])->run();
 
