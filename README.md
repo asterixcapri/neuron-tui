@@ -136,6 +136,8 @@ widgets of the Conversation TUI stay out of reach.
   History change through the Neuron AI API rather than through verbs here.
 - `commands()` returns the commands mounted on this terminal, the one asking
   included, so a command can list what may be typed here.
+- `sessions()` returns the live Sessions owned by this terminal, so a command
+  can start or resume a conversation without constructing parallel state.
 - `useAgent()` puts another Agent in charge of answering from here on. The
   conversation under way moves over with it: the new Agent is handed the
   History the old one was answering, nothing changes on the screen, and it is
@@ -220,22 +222,18 @@ use NeuronTui\Command\ClearCommand;
 use NeuronTui\Command\HelpCommand;
 use NeuronTui\Command\LeaveCommand;
 use NeuronTui\Command\ResumeCommand;
-use NeuronTui\Session\InMemorySessionProvider;
-
-$sessions = new InMemorySessionProvider();
-$agent->setChatHistory($sessions->start());
 
 Tui::make($agent)->addCommand([
-    new ClearCommand($sessions),
-    new ResumeCommand($sessions),
+    new ClearCommand(),
+    new ResumeCommand(),
     new LeaveCommand('/quit'),
     new HelpCommand(),
 ])->run();
 ```
 
-The two commands that touch the Sessions receive the Session provider, because
-the place conversations live is named where it is needed. Passing the same
-provider to both is what makes them agree on which conversations exist.
+The two commands that touch Sessions reach the live instance owned by the
+Conversation TUI through their Controls. The Host Application does not create
+a parallel Sessions dependency or install a History on the Agent.
 `HelpCommand` receives no list of commands: the one it shows contains itself,
 so the Conversation TUI hands it over while it runs rather than the Host
 Application building it beforehand. Typing `/help` lists every mounted command
@@ -248,23 +246,20 @@ Without `LeaveCommand` there is no Command to close the terminal, and
 
 ### Command kits
 
-A **Command kit** is a group of commands mounted in one line, carrying between
-them whatever they need to work. `SessionKit` is the one this library ships: it
-is given the Session provider once and hands it to both the commands that
-touch the Sessions.
+A **Command kit** is a group of commands mounted in one line. `SessionKit` is
+the one this library ships, grouping both commands that touch Sessions.
 
 ```php
 use NeuronTui\Command\LeaveCommand;
 use NeuronTui\Command\SessionKit;
-use NeuronTui\Session\FileSessionProvider;
+use NeuronTui\Storage\FileStorage;
 
-$sessions = new FileSessionProvider('/var/lib/my-app/sessions');
-$agent->setChatHistory($sessions->start());
+$storage = new FileStorage('/var/lib/my-app');
 
-Tui::make($agent)->addCommand([
-    new SessionKit($sessions),
-    new LeaveCommand(),
-])->run();
+Tui::make($agent)
+    ->setStorage($storage)
+    ->addCommand([new SessionKit(), new LeaveCommand()])
+    ->run();
 ```
 
 A kit can be taken with some of its commands left out, or with only the named
@@ -275,13 +270,13 @@ ones kept, so an application in which conversations are not thrown away has
 use NeuronTui\Command\ClearCommand;
 
 Tui::make($agent)->addCommand([
-    (new SessionKit($sessions))->exclude([ClearCommand::class]),
+    (new SessionKit())->exclude([ClearCommand::class]),
     new LeaveCommand(),
 ])->run();
 
 // The other way round, keeping only what is named:
 Tui::make($agent)
-    ->addCommand((new SessionKit($sessions))->only([ClearCommand::class]))
+    ->addCommand((new SessionKit())->only([ClearCommand::class]))
     ->run();
 ```
 
@@ -310,30 +305,27 @@ typing narrows it, Enter chooses one and resumes it, and Escape leaves the
 current one alone. Resuming paints that conversation and the Agent answers
 with its context. A Session nobody wrote in is not listed.
 
-Sessions come from a **Session provider**, which is an argument of the commands
-that use it rather than of the Conversation TUI. `InMemorySessionProvider`
-keeps them for the life of the process and writes nothing anywhere; keeping
-them on disk, or anywhere else, is a different provider passed the same way:
+The Conversation TUI owns one live `Sessions` instance. By default it stores
+everything in memory for the life of the process and creates no directories or
+files. To persist conversations, the Host Application configures one shared
+storage directory and explicitly mounts the Session commands it wants:
 
 ```php
-use NeuronTui\Session\FileSessionProvider;
+use NeuronTui\Command\SessionKit;
+use NeuronTui\Storage\FileStorage;
 
-$sessions = new FileSessionProvider('/var/lib/my-app/sessions');
-$agent->setChatHistory($sessions->start());
+$storage = new FileStorage('/var/lib/my-app');
 
-Tui::make($agent)->addCommand([
-    new ClearCommand($sessions),
-    new ResumeCommand($sessions),
-])->run();
+Tui::make($agent)
+    ->setStorage($storage)
+    ->addCommand(new SessionKit())
+    ->run();
 ```
 
-An application that keeps conversations in its own storage implements
-`NeuronTui\Session\SessionProvider` instead. It answers three questions:
-start a Session, list the Sessions, and resume one by its key. Starting and
-resuming return the Neuron AI chat history that the Host Application or a
-command installs on the Agent; saving, reloading and deserializing remain
-Neuron AI's work. Such an adapter could store Sessions in a database or in
-S3-compatible object storage. Neuron TUI never deletes a stored conversation.
+`FileStorage` separates each TUI-owned namespace beneath that root. The Host
+Application neither implements Neuron AI's `ChatHistoryInterface` nor installs
+a Session History on the Agent: the runtime starts its initial Session and
+owns History composition. Neuron TUI never deletes a stored conversation.
 
 ## Development
 
