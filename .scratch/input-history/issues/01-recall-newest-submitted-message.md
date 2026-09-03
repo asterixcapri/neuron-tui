@@ -4,9 +4,9 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Submitting a non-blank Message records its exact composer text through the configured Storage and Up recalls it from an empty composer with the cursor at the end.
-- [ ] Up with an empty composer and no stored entries is a no-op.
-- [ ] Input history is stored independently of the Agent's History and the Sessions namespace.
-- [ ] Focused tests, static analysis and the complete test suite pass.
+- [x] Submitting a non-blank Message records its exact composer text through the configured Storage and Up recalls it from an empty composer with the cursor at the end.
+- [x] Up with an empty composer and no stored entries is a no-op.
+- [x] Input history is stored independently of the Agent's History and the Sessions namespace.
+- [x] Focused tests, static analysis and the complete test suite pass.
