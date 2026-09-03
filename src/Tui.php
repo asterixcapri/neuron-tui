@@ -91,7 +91,7 @@ final class Tui
     }
 
     /**
-     * Configures the storage used by this terminal's Sessions.
+     * Configures the storage used by this terminal's persistent state.
      */
     public function setStorage(StorageInterface $storage): self
     {
