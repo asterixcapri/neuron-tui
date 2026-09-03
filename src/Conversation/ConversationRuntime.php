@@ -94,6 +94,7 @@ final class ConversationRuntime
             $this->agent->getChatHistory()->getMessages(),
         );
         $this->view->onSubmit($this->submit(...));
+        $this->view->onDraftChange($this->inputHistory->leave(...));
         $this->view->onInput($this->handleInput(...));
         $this->view->onTick($this->tick(...));
     }
@@ -117,6 +118,8 @@ final class ConversationRuntime
 
     private function submit(SubmitEvent $event): void
     {
+        $this->inputHistory->leave();
+
         if ($event->isBlank()) {
             return;
         }
@@ -423,7 +426,8 @@ final class ConversationRuntime
     {
         $keys = new Keybindings([
             'quit' => [Key::ctrl('c')],
-            'recall-newest-input' => [Key::UP],
+            'recall-older-input' => [Key::UP],
+            'recall-newer-input' => [Key::DOWN],
             'scroll-up' => [Key::PAGE_UP],
             'scroll-down' => [Key::PAGE_DOWN],
         ]);
@@ -441,11 +445,32 @@ final class ConversationRuntime
             return;
         }
 
+        if ($keys->matches($event->getData(), 'recall-older-input')) {
+            if (
+                $this->inputHistory->isNavigating()
+                || $this->view->isComposerEmpty()
+            ) {
+                $input = $this->inputHistory->older();
+
+                if ($input !== null) {
+                    $event->stopPropagation();
+                    $this->view->recallInput($input);
+                }
+            }
+
+            return;
+        }
+
         if (
-            $keys->matches($event->getData(), 'recall-newest-input')
-            && $this->view->recallInput($this->inputHistory->newest())
+            $keys->matches($event->getData(), 'recall-newer-input')
+            && $this->inputHistory->isNavigating()
         ) {
-            $event->stopPropagation();
+            $input = $this->inputHistory->newer();
+
+            if ($input !== null) {
+                $event->stopPropagation();
+                $this->view->recallInput($input);
+            }
 
             return;
         }

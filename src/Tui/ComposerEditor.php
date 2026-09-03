@@ -18,6 +18,9 @@ final class ComposerEditor extends EditorWidget
      */
     private const string TO_LINE_END = "\x05";
 
+    /** What the editor answers with a move to the following logical line. */
+    private const string TO_NEXT_LINE = "\x1b[B";
+
     /**
      * Writes the given text in place of the draft, leaving the cursor after
      * it so that whoever is writing carries on from its end.
@@ -28,6 +31,11 @@ final class ComposerEditor extends EditorWidget
     public function writeDraft(string $draft): void
     {
         $this->setText($draft);
+
+        for ($line = substr_count($draft, "\n"); $line > 0; --$line) {
+            $this->handleInput(self::TO_NEXT_LINE);
+        }
+
         $this->handleInput(self::TO_LINE_END);
     }
 

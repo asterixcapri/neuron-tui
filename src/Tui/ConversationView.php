@@ -163,6 +163,16 @@ final class ConversationView
     }
 
     /**
+     * @param Closure(): void $listener
+     */
+    public function onDraftChange(Closure $listener): void
+    {
+        $this->editor->onChange(
+            static fn (ChangeEvent $event) => $listener(),
+        );
+    }
+
+    /**
      * @param Closure(InputEvent): void $listener
      */
     public function onInput(Closure $listener): void
@@ -250,21 +260,21 @@ final class ConversationView
         $this->writeDraft('');
     }
 
-    /**
-     * Recalls an earlier input only when nothing is currently being written.
-     *
-     * Returns whether the composer accepted the recalled value.
-     */
-    public function recallInput(?string $input): bool
+    public function isComposerEmpty(): bool
     {
-        if ($input === null || $this->editor->getText() !== '') {
-            return false;
-        }
+        return $this->editor->getText() === '';
+    }
 
-        $this->writeDraft($input);
+    /**
+     * Replaces the composer with a recalled input without treating it as a
+     * freshly typed Command prefix.
+     */
+    public function recallInput(string $input): void
+    {
+        $this->editor->writeDraft($input);
+        $this->suggestions->dismiss();
+        $this->showStatus();
         $this->tui->requestRender();
-
-        return true;
     }
 
     /**
