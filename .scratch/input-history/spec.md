@@ -1,7 +1,7 @@
 # Persistent Input history
 
-Add Claude Code-style recall of earlier composer inputs after the shared
-storage and TUI-owned Sessions refactor is complete.
+Add simple recall of earlier composer inputs after the shared storage and
+TUI-owned Sessions refactor is complete.
 
 Depends on: [`storage-and-sessions-refactor`](../storage-and-sessions-refactor/spec.md).
 
@@ -28,31 +28,23 @@ by the configured `StorageInterface`.
 - While Command suggestions are open, Up and Down continue to move through the
   suggestions and do not navigate Input history.
 - While a Picker is open, its existing key ownership remains unchanged.
-- Otherwise, Up and Down first move through logical and visually wrapped rows
-  of a multiline composer value.
-- Up enters or advances toward older Input history only after the cursor cannot
-  move farther upward. Down advances toward newer Input history only after the
-  cursor cannot move farther downward.
-- Recalling with Up places the cursor at the lower edge of the recalled value;
-  recalling with Down places it at the upper edge, matching the direction from
-  which the value was entered.
+- Otherwise, Up enters Input history only while the composer is empty and
+  recalls the newest stored entry.
+- A non-empty composer value written by the person keeps the editor's ordinary
+  Up and Down behaviour and cannot enter Input history.
+- Once Input history navigation has begun, Up advances toward older entries and
+  Down advances toward newer entries until the recalled value is edited or
+  submitted.
+- Every recalled value places the cursor at the end of its text.
 - Repeated movement at the oldest entry leaves it selected.
-- Moving past the newest entry restores the draft that was present when
-  navigation began, then exits history navigation.
+- Moving past the newest entry restores the empty composer and exits history
+  navigation.
 - Editing a recalled value turns it into the current draft and exits history
   navigation without altering stored entries.
 - Navigation with no stored entries is a no-op.
 
-## Presentation
-
-While a stored entry is selected, show `History <position>/<total>` adjacent to
-the composer in the style of the existing status and frame. Positions are
-one-based in chronological order: the newest of three entries is `History 3/3`.
-Hide the indicator when the saved draft is restored or history navigation is
-otherwise exited.
-
 Programmatic recall of a Command must not open Command suggestions. Once the
-person edits the recalled value or returns to the saved draft, ordinary
+person edits the recalled value or returns to the empty composer, ordinary
 suggestion rules apply again.
 
 ## Persistence
@@ -62,14 +54,18 @@ once when the Conversation Runtime starts, keep navigation in memory, and write
 when a submission changes the stored entries. Arrow-key navigation performs no
 storage reads or writes.
 
-With `InMemoryStorage`, entries last for the TUI process. With `FileStorage`,
-they survive closing and reopening the TUI with the same storage root. They are
-shared by all Sessions using that storage.
+With `InMemoryStorage`, entries last as long as that storage instance. With
+`FileStorage`, they survive closing and reopening the TUI with the same storage
+root. They are shared by all Sessions using that storage.
 
 ## Boundaries
 
 - Reverse search such as Claude Code's Ctrl+R is out of scope.
 - Configurable keybindings and history-size limits are out of scope.
+- Entering Input history from a non-empty draft, preserving that draft and
+  navigating logical or visually wrapped composer rows before entering Input
+  history are out of scope.
+- Input history has no position or count indicator in the composer.
 - Input history contains text only; attachments or paste-marker restoration are
   out of scope.
 - Session persistence and Command terminology are established by the dependent
@@ -77,13 +73,15 @@ shared by all Sessions using that storage.
 
 ## Completion criteria
 
-- Tests exercise draft preservation, both directions, both bounds, cursor-edge
-  precedence, multiline and wrapped input, indicator positions and editing a
+- Tests exercise entry from an empty composer, refusal to enter from a non-empty
+  composer, both directions, both bounds, cursor placement and editing a
   recalled value.
+- Tests prove multiline and visually wrapped drafts retain the editor's existing
+  Up and Down behaviour rather than entering Input history.
 - Tests exercise Commands, unknown/refused Commands, queued Messages,
   consecutive duplicates and blank submissions.
 - Tests prove Input history survives Session changes and file-backed process
-  recreation while the in-memory adapter writes nothing.
+  recreation, while the default in-memory composition writes nothing to disk.
 - Existing Command suggestions, Picker navigation, Page Up/Down scrolling,
   submission and queue behaviour remain covered and unchanged.
 - Static analysis and the complete test suite pass.
