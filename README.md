@@ -78,7 +78,7 @@ does what its application needs:
 use NeuronTui\Conversation\Controls;
 use NeuronTui\Command\CommandInterface;
 
-final class Review implements CommandInterface
+final class ReviewCommand implements CommandInterface
 {
     public function name(): string
     {
@@ -104,7 +104,7 @@ final class Review implements CommandInterface
     }
 }
 
-Tui::make($agent)->addCommand(new Review())->run();
+Tui::make($agent)->addCommand(new ReviewCommand())->run();
 ```
 
 A command answers to a name, slash included, and describes itself in one
