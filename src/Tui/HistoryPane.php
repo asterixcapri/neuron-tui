@@ -75,13 +75,15 @@ final class HistoryPane
         $message->add($label);
         $message->add($markdown);
 
-        return $this->add(new HistoryEntry(
+        $entry = new HistoryEntry(
             $this->terminal,
             $message,
             $markdown,
             self::MESSAGE_RESERVED_COLUMNS + mb_strwidth($speaker, 'UTF-8'),
             $this->paintedHeightChanged(...),
-        ));
+        );
+
+        return $this->add($entry);
     }
 
     /**
@@ -92,13 +94,15 @@ final class HistoryPane
         $note = new TextWidget($text);
         $note->addStyleClass($style);
 
-        return $this->add(new HistoryEntry(
+        $entry = new HistoryEntry(
             $this->terminal,
             $note,
             $note,
             self::NOTE_RESERVED_COLUMNS,
             $this->paintedHeightChanged(...),
-        ));
+        );
+
+        return $this->add($entry);
     }
 
     public function remove(HistoryEntry $entry): void

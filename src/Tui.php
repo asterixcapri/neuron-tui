@@ -156,7 +156,7 @@ final class Tui
         $this->ensureNotStarted();
         $this->started = true;
 
-        (new ConversationRuntime(
+        $runtime = new ConversationRuntime(
             $this->agent,
             $this->title,
             $this->subtitle,
@@ -165,7 +165,8 @@ final class Tui
             $this->figlet,
             $this->figletFont,
             $this->storage,
-        ))->run();
+        );
+        $runtime->run();
     }
 
     private function ensureNotStarted(): void
