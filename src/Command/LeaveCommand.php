@@ -17,7 +17,7 @@ use NeuronTui\Conversation\ConcurrentControls;
  * way can spoil, so it receives only the Controls that remain meaningful
  * while a Turn is under way.
  */
-final readonly class Leave implements ConcurrentCommand
+final readonly class LeaveCommand implements ConcurrentCommand
 {
     /**
      * @param string $name the name it answers to, slash included

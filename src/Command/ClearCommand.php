@@ -17,7 +17,7 @@ use NeuronTui\Session\SessionProvider;
  * key stays behind the provider seam, and nothing here ever deletes what the
  * new Session replaced.
  */
-final readonly class Clear implements Command
+final readonly class ClearCommand implements Command
 {
     /**
      * @param SessionProvider $sessions the place the conversations live

@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-use NeuronTui\Command\Clear;
-use NeuronTui\Command\Help;
-use NeuronTui\Command\Leave;
-use NeuronTui\Command\Resume;
+use NeuronTui\Command\ClearCommand;
+use NeuronTui\Command\HelpCommand;
+use NeuronTui\Command\LeaveCommand;
+use NeuronTui\Command\ResumeCommand;
 use NeuronTui\Tui;
 use NeuronTui\Session\FileSessionProvider;
 use NeuronTuiDemo\DemoAgent;
@@ -25,11 +25,11 @@ $tui = Tui::make($agent)
     ->setTitle('Neuron TUI Demo')
     ->setSubtitle('Powered by Neuron AI')
     ->addCommand([
-        new Clear($sessionProvider),
-        new Resume($sessionProvider),
+        new ClearCommand($sessionProvider),
+        new ResumeCommand($sessionProvider),
         new ModelCommand(),
-        new Leave(),
-        new Help(),
+        new LeaveCommand(),
+        new HelpCommand(),
     ]);
 
 $tui->run();

@@ -15,10 +15,10 @@ use NeuronTui\Session\SessionProvider;
  * this kit exists.
  *
  * An application in which conversations are not thrown away mounts it without
- * `Clear`; one that only wants to return to an earlier conversation keeps
- * `Resume` alone. Names are the commands' own business, so a kit is the
- * short way in and writing the two commands out by hand remains the way to
- * rename them.
+ * `ClearCommand`; one that only wants to return to an earlier conversation
+ * keeps `ResumeCommand` alone. Names are the commands' own business, so a kit
+ * is the short way in and writing the two commands out by hand remains the way
+ * to rename them.
  */
 final class SessionKit extends AbstractCommandKit
 {
@@ -32,8 +32,8 @@ final class SessionKit extends AbstractCommandKit
     protected function provide(): array
     {
         return [
-            new Clear($this->sessions),
-            new Resume($this->sessions),
+            new ClearCommand($this->sessions),
+            new ResumeCommand($this->sessions),
         ];
     }
 }

@@ -29,12 +29,12 @@ use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Testing\RequestRecord;
 use NeuronAI\Tools\Tool;
 use NeuronTui\Command\AbstractCommandKit;
-use NeuronTui\Command\Clear;
+use NeuronTui\Command\ClearCommand;
 use NeuronTui\Command\Command;
 use NeuronTui\Command\ConcurrentCommand;
-use NeuronTui\Command\Help;
-use NeuronTui\Command\Leave;
-use NeuronTui\Command\Resume;
+use NeuronTui\Command\HelpCommand;
+use NeuronTui\Command\LeaveCommand;
+use NeuronTui\Command\ResumeCommand;
 use NeuronTui\Command\SessionKit;
 use NeuronTui\Conversation\ChoiceOption;
 use NeuronTui\Conversation\ConcurrentControls;
@@ -81,7 +81,7 @@ final class TuiTest extends TestCase
 
         self::assertSame($tui, $tui->setTitle(''));
         self::assertSame($tui, $tui->setSubtitle(''));
-        self::assertSame($tui, $tui->addCommand(new Help()));
+        self::assertSame($tui, $tui->addCommand(new HelpCommand()));
 
         EventLoop::delay(
             0.05,
@@ -119,7 +119,7 @@ final class TuiTest extends TestCase
                 foreach ([
                     static fn () => $tui->setTitle('Late'),
                     static fn () => $tui->setSubtitle('Late'),
-                    static fn () => $tui->addCommand(new Help()),
+                    static fn () => $tui->addCommand(new HelpCommand()),
                 ] as $mutation) {
                     try {
                         $mutation();
@@ -967,7 +967,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([new Leave()])->run();
+        ))->addCommand([new LeaveCommand()])->run();
 
         self::assertIsString($intermediateDisplay);
         self::assertStringContainsString(
@@ -1536,8 +1536,8 @@ MARKDOWN;
             $agent,
             terminal: $terminal,
         ))->addCommand([
-                new Clear(new InMemorySessionProvider(), '/wipe'),
-                new Leave('/quit'),
+                new ClearCommand(new InMemorySessionProvider(), '/wipe'),
+                new LeaveCommand('/quit'),
             ])->run();
 
         // The name it was given is the only name it answers to.
@@ -1585,7 +1585,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([new Help(), new Leave(), $command])->run();
+        ))->addCommand([new HelpCommand(), new LeaveCommand(), $command])->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -1628,7 +1628,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([new Leave()])->run();
+        ))->addCommand([new LeaveCommand()])->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -1894,7 +1894,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([new Help(), new Leave()])->run();
+        ))->addCommand([new HelpCommand(), new LeaveCommand()])->run();
 
         self::assertIsString($midTurnDisplay);
         self::assertStringContainsString(
@@ -1920,7 +1920,7 @@ MARKDOWN;
         $kit = new class() extends AbstractCommandKit {
             protected function provide(): array
             {
-                return [new Help(), new Leave()];
+                return [new HelpCommand(), new LeaveCommand()];
             }
         };
         EventLoop::queue(
@@ -3092,7 +3092,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([new Help(), new Leave()])->run();
+        ))->addCommand([new HelpCommand(), new LeaveCommand()])->run();
 
         self::assertIsString($display);
         self::assertStringContainsString('/help', $display);
@@ -3140,7 +3140,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([new Help()])->run();
+        ))->addCommand([new HelpCommand()])->run();
 
         self::assertIsString($display);
         $lines = preg_split('/\r\n|\r|\n/', $display);
@@ -3294,7 +3294,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([new Help()])->run();
+        ))->addCommand([new HelpCommand()])->run();
 
         self::assertIsString($open);
         self::assertStringContainsString(
@@ -3338,7 +3338,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([new Help()])->run();
+        ))->addCommand([new HelpCommand()])->run();
 
         self::assertIsString($display);
         self::assertStringNotContainsString(
@@ -3456,7 +3456,7 @@ MARKDOWN;
     public function testTheSuggestionsNarrowToWhatIsBeingWritten(): void
     {
         $display = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
-            [new Help(), new Leave()],
+            [new HelpCommand(), new LeaveCommand()],
             '/hel',
         ));
 
@@ -3470,7 +3470,7 @@ MARKDOWN;
     public function testDeletingWidensTheSuggestionsAgain(): void
     {
         $display = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
-            [new Help(), new Leave()],
+            [new HelpCommand(), new LeaveCommand()],
             '/hel',
             "\x7f\x7f\x7f",
         ));
@@ -3485,7 +3485,7 @@ MARKDOWN;
     public function testTheMatchIgnoresTheCaseOfWhatIsWritten(): void
     {
         $display = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
-            [new Help()],
+            [new HelpCommand()],
             '/HEL',
         ));
 
@@ -4192,7 +4192,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([new Help()])->run();
+        ))->addCommand([new HelpCommand()])->run();
 
         self::assertIsString($closed);
         self::assertStringNotContainsString(
@@ -4308,7 +4308,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([new Help()])->run();
+        ))->addCommand([new HelpCommand()])->run();
 
         self::assertIsString($open);
         self::assertStringContainsString('↑↓ moves', $open);
@@ -4406,9 +4406,9 @@ MARKDOWN;
         SessionProvider $sessions,
     ): array {
         return [
-            new Clear($sessions),
-            new Resume($sessions),
-            new Leave(),
+            new ClearCommand($sessions),
+            new ResumeCommand($sessions),
+            new LeaveCommand(),
         ];
     }
 
@@ -5190,7 +5190,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([new SessionKit($sessions), new Leave()])->run();
+        ))->addCommand([new SessionKit($sessions), new LeaveCommand()])->run();
 
         self::assertIsString($pickerDisplay);
         self::assertStringContainsString(
@@ -5264,8 +5264,8 @@ MARKDOWN;
             $agent,
             terminal: $terminal,
         ))->addCommand([
-                (new SessionKit($sessions))->exclude([Clear::class]),
-                new Leave(),
+                (new SessionKit($sessions))->exclude([ClearCommand::class]),
+                new LeaveCommand(),
             ])->run();
 
         self::assertIsString($refusedDisplay);
@@ -5333,8 +5333,8 @@ MARKDOWN;
             $agent,
             terminal: $terminal,
         ))->addCommand([
-                (new SessionKit($sessions))->only([Clear::class]),
-                new Leave(),
+                (new SessionKit($sessions))->only([ClearCommand::class]),
+                new LeaveCommand(),
             ])->run();
 
         self::assertIsString($refusedDisplay);
