@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronTui\Tests\Storage;
 
+use InvalidArgumentException;
 use NeuronTui\Storage\InMemoryStorage;
 use PHPUnit\Framework\TestCase;
 
@@ -100,5 +101,17 @@ final class InMemoryStorageTest extends TestCase
         $storage->delete('sessions', $document->key);
 
         self::assertNull($storage->read('sessions', $document->key));
+    }
+
+    public function testMetadataNamesMustBePortable(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        (new InMemoryStorage())->write(
+            'sessions',
+            'known',
+            ['value'],
+            ['Last-Used-At' => '2026-09-03T12:00:00+00:00'],
+        );
     }
 }

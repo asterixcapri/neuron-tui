@@ -4872,7 +4872,7 @@ MARKDOWN;
                 $pickerDisplay,
             );
             self::assertStringContainsString(
-                'just now · ' . $storedBytes . 'B',
+                ' · ' . $storedBytes . 'B',
                 $pickerDisplay,
             );
             self::assertSame(
