@@ -82,7 +82,7 @@ module constructed from `StorageInterface`.
 - `list()` returns non-empty Sessions, most recently used first;
 - `resume($key)` returns the History of a known Session and rejects an unknown
   key;
-- Session title, last-used time and optional storage size retain their current
+- Session title, last-used time and optional size retain their current
   user-facing meanings.
 
 Sessions store last-used time as caller-owned document metadata rather than

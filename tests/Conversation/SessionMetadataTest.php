@@ -74,16 +74,16 @@ final class SessionMetadataTest extends TestCase
         yield 'years' => ['2024-09-01 12:00:00 UTC', '2 years ago'];
     }
 
-    #[DataProvider('storageSizes')]
-    public function testItPresentsAvailableStorageSizeBesideRelativeAge(
-        ?int $storageSize,
+    #[DataProvider('sizes')]
+    public function testItPresentsAvailableSizeBesideRelativeAge(
+        ?int $size,
         string $expected,
     ): void {
         $session = new Session(
             'session-key',
             new DateTimeImmutable('2026-09-01 11:59:40 UTC'),
             'The opening words',
-            $storageSize,
+            $size,
         );
 
         self::assertSame(
@@ -98,7 +98,7 @@ final class SessionMetadataTest extends TestCase
     /**
      * @return Generator<string, array{?int, string}>
      */
-    public static function storageSizes(): Generator
+    public static function sizes(): Generator
     {
         yield 'absent' => [null, '20 seconds ago'];
         yield 'zero bytes' => [0, '20 seconds ago · 0B'];
