@@ -121,11 +121,13 @@ final class Sessions
             $this->storage,
             self::NAMESPACE,
             $this->payloadKey($key),
-            afterWrite: fn () => $this->recordUse($key),
+            sessions: $this,
+            sessionKey: $key,
         );
     }
 
-    private function recordUse(string $key): void
+    /** @internal Called by this module's storage-backed History. */
+    public function recordUse(string $key): void
     {
         $index = $this->index();
 
