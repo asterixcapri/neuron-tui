@@ -66,15 +66,6 @@ final class InputHistory
         );
     }
 
-    public function newest(): ?string
-    {
-        if ($this->entries === []) {
-            return null;
-        }
-
-        return $this->entries[array_key_last($this->entries)];
-    }
-
     /**
      * Moves toward older inputs, entering navigation at the newest one.
      */
