@@ -26,6 +26,12 @@ final class InputHistory
 
     public function __construct(private readonly StorageInterface $storage)
     {
+        $this->entries = $this->loadEntries();
+    }
+
+    /** @return list<string> */
+    private function loadEntries(): array
+    {
         $document = $this->storage->read(self::NAMESPACE, self::KEY);
         $entries = $document->data ?? [];
 
@@ -44,7 +50,7 @@ final class InputHistory
         }
 
         /** @var list<string> $entries */
-        $this->entries = $entries;
+        return $entries;
     }
 
     public function record(string $input): void
