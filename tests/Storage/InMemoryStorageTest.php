@@ -89,11 +89,11 @@ final class InMemoryStorageTest extends TestCase
         $document = $storage->create(
             'sessions',
             ['value'],
-            ['last-used-at' => '2026-09-03T12:00:00+00:00'],
+            ['lastUsedAt' => '2026-09-03T12:00:00+00:00'],
         );
 
         self::assertSame(
-            ['last-used-at' => '2026-09-03T12:00:00+00:00'],
+            ['lastUsedAt' => '2026-09-03T12:00:00+00:00'],
             $document->metadata,
         );
 
@@ -111,7 +111,7 @@ final class InMemoryStorageTest extends TestCase
             'sessions',
             'known',
             ['value'],
-            ['Last-Used-At' => '2026-09-03T12:00:00+00:00'],
+            ['LastUsedAt' => '2026-09-03T12:00:00+00:00'],
         );
     }
 }
