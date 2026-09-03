@@ -24,8 +24,6 @@ use function is_array;
  */
 final class StorageChatHistory extends AbstractChatHistory
 {
-    public const string LAST_USED_AT = 'last-used-at';
-
     public function __construct(
         private readonly StorageInterface $storage,
         private readonly string $namespace,
@@ -44,22 +42,12 @@ final class StorageChatHistory extends AbstractChatHistory
      */
     protected function setMessages(array $messages): void
     {
-        $this->storage->write(
-            $this->namespace,
-            $this->key,
-            $messages,
-            $this->metadata(),
-        );
+        $this->persist($messages);
     }
 
     protected function clear(): void
     {
-        $this->storage->write(
-            $this->namespace,
-            $this->key,
-            [],
-            $this->metadata(),
-        );
+        $this->persist([]);
     }
 
     private function load(?StoredDocument $document): void
@@ -90,14 +78,19 @@ final class StorageChatHistory extends AbstractChatHistory
         $this->history = $this->deserializeMessages($messages);
     }
 
-    /** @return array{last-used-at: string} */
-    public static function metadata(): array
+    /** @param list<Message> $messages */
+    private function persist(array $messages): void
     {
-        return [
-            self::LAST_USED_AT => (new DateTimeImmutable(
-                'now',
-                new DateTimeZone('UTC'),
-            ))->format('Y-m-d\TH:i:s.uP'),
-        ];
+        $lastUsedAt = new DateTimeImmutable(
+            'now',
+            new DateTimeZone('UTC'),
+        );
+
+        $this->storage->write(
+            $this->namespace,
+            $this->key,
+            $messages,
+            ['lastUsedAt' => $lastUsedAt->format('Y-m-d\TH:i:s.uP')],
+        );
     }
 }

@@ -133,10 +133,10 @@ abstract class AbstractStorage implements StorageInterface
             if (
                 !is_string($name)
                 || !is_string($value)
-                || preg_match('/^[a-z0-9][a-z0-9-]*$/D', $name) !== 1
+                || preg_match('/^[a-z][a-zA-Z0-9]*$/D', $name) !== 1
             ) {
                 throw new InvalidArgumentException(
-                    'Storage metadata must contain lowercase string pairs.',
+                    'Storage metadata must contain camelCase string pairs.',
                 );
             }
         }

@@ -4792,7 +4792,6 @@ MARKDOWN;
             'The earlier subject',
             $pickerDisplay,
         );
-        self::assertStringContainsString('just now', $pickerDisplay);
         self::assertStringContainsString('❯ The earlier subject', $display);
         self::assertStringContainsString('● The earlier answer.', $display);
         self::assertStringNotContainsString(

@@ -26,11 +26,7 @@ final readonly class Sessions
      */
     public function start(): ChatHistoryInterface
     {
-        $document = $this->storage->create(
-            self::NAMESPACE,
-            [],
-            StorageChatHistory::metadata(),
-        );
+        $document = $this->storage->create(self::NAMESPACE, []);
 
         return $this->history($document);
     }
@@ -99,8 +95,7 @@ final readonly class Sessions
 
     private function lastUsedAt(StoredDocument $document): DateTimeImmutable
     {
-        $value = $document->metadata[StorageChatHistory::LAST_USED_AT]
-            ?? null;
+        $value = $document->metadata['lastUsedAt'] ?? null;
         $lastUsedAt = $value === null
             ? false
             : DateTimeImmutable::createFromFormat(

@@ -8,7 +8,7 @@ namespace NeuronTui\Storage;
  * Persists JSON documents under namespaced logical keys.
  *
  * Adapters own JSON encoding, physical naming and discovery. Caller-owned
- * metadata uses lowercase string names and string values for portability.
+ * Metadata uses camelCase names and string values.
  */
 interface StorageInterface
 {
