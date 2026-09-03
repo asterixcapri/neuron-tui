@@ -36,6 +36,11 @@ The sequence of earlier composer inputs that a person can recall for editing
 or resubmission. It is TUI state rather than part of the Agent's History.
 _Avoid_: History, conversation history, prompt history
 
+**Storage**:
+The collection of namespaced JSON documents in which TUI-owned state may
+outlive the module using it. Documents are identified by logical keys.
+_Avoid_: Blob store, filesystem, database
+
 **Command**:
 Input beginning with `/` whose effect the TUI decides rather than the model.
 What it does is code someone wrote, and that code is free to send the Agent

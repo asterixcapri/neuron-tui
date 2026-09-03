@@ -4,17 +4,22 @@ declare(strict_types=1);
 
 namespace NeuronTui\Storage;
 
-use InvalidArgumentException;
 use RuntimeException;
+use UnexpectedValueException;
 
-final readonly class FileStorage implements StorageInterface
+final class FileStorage extends AbstractStorage
 {
-    public function __construct(private string $root) {}
+    private const string FILE_EXTENSION = '.json';
 
-    public function read(string $namespace, string $key): ?string
+    public function __construct(private readonly string $root) {}
+
+    public function read(
+        string $namespace,
+        string $key,
+    ): ?StoredDocument
     {
-        $this->guardComponent($namespace, 'namespace');
-        $this->guardComponent($key, 'key');
+        $this->guardIdentifier($namespace, 'namespace');
+        $this->guardIdentifier($key, 'key');
 
         if (!is_dir($this->root)) {
             return null;
@@ -26,48 +31,44 @@ final readonly class FileStorage implements StorageInterface
             return null;
         }
 
-        $path = $directory . DIRECTORY_SEPARATOR . $key;
+        $path = $this->path($directory, $key);
 
-        if (is_link($path)) {
-            throw new RuntimeException('A storage key cannot be a symbolic link.');
-        }
-
-        if (!file_exists($path)) {
+        if (!file_exists($path) && !is_link($path)) {
             return null;
         }
 
-        if (!is_file($path)) {
-            throw new RuntimeException('The stored value is not a regular file.');
-        }
-
-        $value = file_get_contents($path);
-
-        if ($value === false) {
-            throw new RuntimeException('The stored value could not be read.');
-        }
-
-        return $value;
+        return $this->storedDocument($path, $key);
     }
 
+    /**
+     * @param array<array-key, mixed> $data
+     * @param array<string, string> $metadata
+     */
     public function write(
         string $namespace,
         string $key,
-        string $value,
-    ): void {
-        $this->guardComponent($namespace, 'namespace');
-        $this->guardComponent($key, 'key');
+        array $data,
+        array $metadata = [],
+    ): StoredDocument {
+        $this->guardIdentifier($namespace, 'namespace');
+        $this->guardIdentifier($key, 'key');
+        $this->guardMetadata($metadata);
 
         $directory = $this->namespaceDirectory($namespace);
-        $path = $directory . DIRECTORY_SEPARATOR . $key;
+        $path = $this->path($directory, $key);
 
         if (is_link($path)) {
             throw new RuntimeException('A storage key cannot be a symbolic link.');
         }
 
         if (file_exists($path) && !is_file($path)) {
-            throw new RuntimeException('The stored value is not a regular file.');
+            throw new RuntimeException('The stored document is not a regular file.');
         }
 
+        $encoded = json_encode(
+            ['metadata' => $metadata, 'data' => $data],
+            JSON_THROW_ON_ERROR,
+        );
         $temporary = tempnam($directory, '.neuron-tui-');
 
         if ($temporary === false) {
@@ -75,20 +76,147 @@ final readonly class FileStorage implements StorageInterface
         }
 
         try {
-            $written = file_put_contents($temporary, $value, LOCK_EX);
+            $written = file_put_contents($temporary, $encoded, LOCK_EX);
 
-            if ($written === false || $written !== strlen($value)) {
-                throw new RuntimeException('The stored value could not be written.');
+            if ($written === false || $written !== strlen($encoded)) {
+                throw new RuntimeException('The stored document could not be written.');
             }
 
             if (!rename($temporary, $path)) {
-                throw new RuntimeException('The stored value could not be replaced.');
+                throw new RuntimeException('The stored document could not be replaced.');
             }
+
+            return $this->storedDocument($path, $key);
         } finally {
             if (file_exists($temporary)) {
                 unlink($temporary);
             }
         }
+    }
+
+    public function delete(string $namespace, string $key): void
+    {
+        $this->guardIdentifier($namespace, 'namespace');
+        $this->guardIdentifier($key, 'key');
+
+        if (!is_dir($this->root)) {
+            return;
+        }
+
+        $directory = $this->existingNamespaceDirectory($namespace);
+
+        if ($directory === null) {
+            return;
+        }
+
+        $path = $this->path($directory, $key);
+
+        if (!file_exists($path) && !is_link($path)) {
+            return;
+        }
+
+        if (is_link($path) || !is_file($path)) {
+            throw new RuntimeException(
+                'A stored document must be a regular file.',
+            );
+        }
+
+        if (!unlink($path)) {
+            throw new RuntimeException(
+                'The stored document could not be deleted.',
+            );
+        }
+    }
+
+    /** @return list<StoredDocument> */
+    public function entries(string $namespace): array
+    {
+        $this->guardIdentifier($namespace, 'namespace');
+
+        if (!is_dir($this->root)) {
+            return [];
+        }
+
+        $directory = $this->existingNamespaceDirectory($namespace);
+
+        if ($directory === null) {
+            return [];
+        }
+
+        $paths = glob(
+            $directory . DIRECTORY_SEPARATOR . '*' . self::FILE_EXTENSION,
+        ) ?: [];
+        $entries = [];
+
+        foreach ($paths as $path) {
+            $key = substr(
+                basename($path),
+                0,
+                -strlen(self::FILE_EXTENSION),
+            );
+            $this->guardIdentifier($key, 'key');
+            $entries[] = $this->storedDocument($path, $key);
+        }
+
+        return $entries;
+    }
+
+    private function path(string $directory, string $key): string
+    {
+        return $directory
+            . DIRECTORY_SEPARATOR
+            . $key
+            . self::FILE_EXTENSION;
+    }
+
+    private function storedDocument(
+        string $path,
+        string $key,
+    ): StoredDocument {
+        if (is_link($path)) {
+            throw new RuntimeException('A storage key cannot be a symbolic link.');
+        }
+
+        if (!is_file($path)) {
+            throw new RuntimeException('The stored document is not a regular file.');
+        }
+
+        $encoded = file_get_contents($path);
+
+        if ($encoded === false) {
+            throw new RuntimeException('The stored document could not be read.');
+        }
+
+        $document = json_decode($encoded, true, flags: JSON_THROW_ON_ERROR);
+
+        if (
+            !is_array($document)
+            || !isset($document['metadata'], $document['data'])
+            || !is_array($document['metadata'])
+            || !is_array($document['data'])
+        ) {
+            throw new UnexpectedValueException(
+                'A stored document must contain metadata and data.',
+            );
+        }
+
+        $metadata = [];
+
+        foreach ($document['metadata'] as $name => $value) {
+            if (!is_string($name) || !is_string($value)) {
+                throw new UnexpectedValueException(
+                    'Stored document metadata must contain string pairs.',
+                );
+            }
+
+            $metadata[$name] = $value;
+        }
+
+        return new StoredDocument(
+            $key,
+            $document['data'],
+            $metadata,
+        );
     }
 
     private function namespaceDirectory(string $namespace): string
@@ -161,21 +289,5 @@ final readonly class FileStorage implements StorageInterface
         }
 
         return $resolved;
-    }
-
-    private function guardComponent(string $component, string $name): void
-    {
-        if (
-            $component === ''
-            || $component === '.'
-            || $component === '..'
-            || str_contains($component, "\0")
-            || str_contains($component, '/')
-            || str_contains($component, '\\')
-        ) {
-            throw new InvalidArgumentException(
-                sprintf('The storage %s is not a safe path component.', $name),
-            );
-        }
     }
 }

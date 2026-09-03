@@ -48,7 +48,7 @@ final class SessionsTest extends TestCase
         self::assertCount(2, array_unique($keys));
 
         foreach ($keys as $key) {
-            self::assertMatchesRegularExpression('/^[a-f0-9]{16}$/D', $key);
+            self::assertMatchesRegularExpression('/^[a-f0-9]{32}$/D', $key);
         }
     }
 
@@ -57,7 +57,7 @@ final class SessionsTest extends TestCase
         $storage = new InMemoryStorage();
         $sessions = new Sessions($storage);
         $sessions->start();
-        $key = $this->indexedKeys($storage)[0];
+        $key = iterator_to_array($storage->entries('sessions'))[0]->key;
 
         self::assertSame([], $sessions->list());
         self::assertSame([], $sessions->resume($key)->getMessages());
@@ -101,7 +101,7 @@ final class SessionsTest extends TestCase
 
         self::assertSame('The older subject', $listed[0]->title);
         self::assertGreaterThan($listed[1]->lastUsedAt, $listed[0]->lastUsedAt);
-        self::assertNull($listed[0]->storageSize);
+        self::assertGreaterThan(0, $listed[0]->storageSize);
     }
 
     public function testUnknownKeysAreRejectedWithoutCreatingAHistory(): void
@@ -119,11 +119,11 @@ final class SessionsTest extends TestCase
             );
         }
 
-        self::assertNull($storage->read('sessions', 'unknown.json'));
-        self::assertNull($storage->read('sessions', '_index.json'));
+        self::assertNull($storage->read('sessions', 'unknown'));
+        self::assertSame([], iterator_to_array($storage->entries('sessions')));
     }
 
-    public function testFilePayloadIsKeyNamedJsonAndReportsItsExactSize(): void
+    public function testFilePayloadIsKeyNamedJsonAndReportsItsDataSize(): void
     {
         $sessions = new Sessions(new FileStorage($this->directory));
         $history = $sessions->start();
@@ -136,7 +136,12 @@ final class SessionsTest extends TestCase
         $contents = file_get_contents($path);
         self::assertIsString($contents);
         self::assertJson($contents);
-        self::assertSame(strlen($contents), $listed[0]->storageSize);
+        $document = (new FileStorage($this->directory))->read(
+            'sessions',
+            $listed[0]->key,
+        );
+        self::assertNotNull($document);
+        self::assertSame($document->size(), $listed[0]->storageSize);
     }
 
     public function testLegacyFilesAreNeitherDiscoveredNorMigrated(): void
@@ -160,27 +165,6 @@ final class SessionsTest extends TestCase
         self::assertFileDoesNotExist(
             $this->directory . '/sessions/legacy-key.json',
         );
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function indexedKeys(InMemoryStorage $storage): array
-    {
-        $value = $storage->read('sessions', '_index.json');
-        self::assertNotNull($value);
-        $entries = json_decode($value, true, flags: JSON_THROW_ON_ERROR);
-        self::assertIsArray($entries);
-        $keys = [];
-
-        foreach ($entries as $entry) {
-            self::assertIsArray($entry);
-            self::assertArrayHasKey('key', $entry);
-            self::assertIsString($entry['key']);
-            $keys[] = $entry['key'];
-        }
-
-        return $keys;
     }
 
     private function removeDirectory(string $directory): void

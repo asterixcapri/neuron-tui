@@ -34,7 +34,7 @@ final class StorageChatHistoryTest extends TestCase
     public function testMessagesRoundTripWithTheirSupportedContent(): void
     {
         $storage = new InMemoryStorage();
-        $history = new StorageChatHistory($storage, 'sessions', 'known.json');
+        $history = new StorageChatHistory($storage, 'sessions', 'known');
         $question = new UserMessage([
             (new TextContent('What is shown?'))->setMetadata(['part' => 1]),
             new ImageContent(
@@ -65,7 +65,7 @@ final class StorageChatHistoryTest extends TestCase
         $reopened = new StorageChatHistory(
             $storage,
             'sessions',
-            'known.json',
+            'known',
         );
 
         $messages = $reopened->getMessages();
@@ -90,26 +90,33 @@ final class StorageChatHistoryTest extends TestCase
     public function testSavingReplacesOnlyTheSelectedStorageValue(): void
     {
         $storage = new InMemoryStorage();
-        $storage->write('sessions', 'other.json', 'untouched');
+        $storage->write('sessions', 'other', ['untouched']);
         $history = new StorageChatHistory(
             $storage,
             'sessions',
-            'current.json',
+            'current',
         );
 
         $history->addMessage(new UserMessage('First'));
-        $first = $storage->read('sessions', 'current.json');
+        $first = $storage->read('sessions', 'current');
         $history->addMessage(new AssistantMessage('Second'));
 
         self::assertNotNull($first);
-        self::assertStringContainsString('First', $first);
-        self::assertSame(
-            json_encode($history->jsonSerialize(), JSON_THROW_ON_ERROR),
-            $storage->read('sessions', 'current.json'),
+        self::assertStringContainsString(
+            'First',
+            json_encode($first->data, JSON_THROW_ON_ERROR),
         );
         self::assertSame(
-            'untouched',
-            $storage->read('sessions', 'other.json'),
+            json_decode(
+                json_encode($history->jsonSerialize(), JSON_THROW_ON_ERROR),
+                true,
+                flags: JSON_THROW_ON_ERROR,
+            ),
+            $storage->read('sessions', 'current')?->data,
+        );
+        self::assertSame(
+            ['untouched'],
+            $storage->read('sessions', 'other')?->data,
         );
     }
 
@@ -130,7 +137,7 @@ final class StorageChatHistoryTest extends TestCase
         $history = new StorageChatHistory(
             $storage,
             'sessions',
-            'trimmed.json',
+            'trimmed',
             trimmer: $trimmer,
         );
 
@@ -146,7 +153,7 @@ final class StorageChatHistoryTest extends TestCase
                 (new StorageChatHistory(
                     $storage,
                     'sessions',
-                    'trimmed.json',
+                    'trimmed',
                 ))->getMessages(),
             ),
         );
@@ -158,19 +165,19 @@ final class StorageChatHistoryTest extends TestCase
         $history = new StorageChatHistory(
             $storage,
             'sessions',
-            'cleared.json',
+            'cleared',
         );
         $history->addMessage(new UserMessage('Remove me'));
 
         $history->flushAll();
 
-        self::assertSame('[]', $storage->read('sessions', 'cleared.json'));
+        self::assertSame([], $storage->read('sessions', 'cleared')?->data);
         self::assertSame(
             [],
             (new StorageChatHistory(
                 $storage,
                 'sessions',
-                'cleared.json',
+                'cleared',
             ))->getMessages(),
         );
     }

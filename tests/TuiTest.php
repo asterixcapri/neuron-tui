@@ -4817,7 +4817,7 @@ MARKDOWN;
         );
     }
 
-    public function testResumeShowsTheRealFileSessionSizeAndResumesIt(): void
+    public function testResumeShowsTheSessionDataSizeAndResumesIt(): void
     {
         $directory = sys_get_temp_dir()
             . '/neuron-tui-resume-'
@@ -4831,11 +4831,12 @@ MARKDOWN;
             $earlier->addMessage(new AssistantMessage('The stored answer.'));
             $listed = $sessions->list();
             self::assertCount(1, $listed);
-            $contents = file_get_contents(
-                $directory . '/sessions/' . $listed[0]->key . '.json',
+            $document = $storage->read(
+                'sessions',
+                $listed[0]->key,
             );
-            self::assertIsString($contents);
-            $storedBytes = strlen($contents);
+            self::assertNotNull($document);
+            $storedBytes = $document->size();
             self::assertLessThan(1_024, $storedBytes);
 
             $agent = new Agent();
