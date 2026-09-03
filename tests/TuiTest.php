@@ -4471,7 +4471,7 @@ MARKDOWN;
         ];
     }
 
-    public function testTheDefaultSessionProviderWritesNothingToDisk(): void
+    public function testTheDefaultStorageWritesNothingToDisk(): void
     {
         $provider = new FakeAIProvider(new AssistantMessage('An answer.'));
         $agent = new Agent();
