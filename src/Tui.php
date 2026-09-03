@@ -11,6 +11,7 @@ use NeuronTui\Command\CommandInterface;
 use NeuronTui\Command\CommandKitInterface;
 use NeuronTui\Command\ConcurrentCommandInterface;
 use NeuronTui\Conversation\ConversationRuntime;
+use NeuronTui\Storage\StorageInterface;
 use Symfony\Component\Tui\Terminal\TerminalInterface;
 
 /**
@@ -36,6 +37,8 @@ final class Tui
 
     /** @var list<CommandInterface|ConcurrentCommandInterface> */
     private array $commands = [];
+
+    private ?StorageInterface $storage = null;
 
     private bool $started = false;
 
@@ -83,6 +86,17 @@ final class Tui
 
         $this->figlet = $text;
         $this->figletFont = $font;
+
+        return $this;
+    }
+
+    /**
+     * Configures the storage used by this terminal's Sessions.
+     */
+    public function setStorage(StorageInterface $storage): self
+    {
+        $this->ensureNotStarted();
+        $this->storage = $storage;
 
         return $this;
     }
@@ -150,6 +164,7 @@ final class Tui
             $this->commands,
             $this->figlet,
             $this->figletFont,
+            $this->storage,
         ))->run();
     }
 

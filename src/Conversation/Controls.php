@@ -8,6 +8,7 @@ use Closure;
 use NeuronAI\Agent\Agent;
 use NeuronTui\Command\CommandInterface;
 use NeuronTui\Command\ConcurrentCommandInterface;
+use NeuronTui\Session\Sessions;
 use NeuronTui\Tui\ConversationView;
 
 /**
@@ -27,6 +28,7 @@ final readonly class Controls
      * @param Closure(string): void $putToAgent how a prompt reaches the Agent
      * @param Closure(Agent): void  $answerFrom how another Agent takes over
      * @param list<CommandInterface|ConcurrentCommandInterface> $mounted the commands mounted here
+     * @param Sessions $sessions the Sessions owned by this Conversation Runtime
      *
      * @internal the Conversation TUI builds these, a command receives them
      */
@@ -36,6 +38,7 @@ final readonly class Controls
         private Closure $putToAgent,
         private Closure $answerFrom,
         private array $mounted,
+        private Sessions $sessions,
     ) {
     }
 
@@ -87,10 +90,11 @@ final readonly class Controls
     /**
      * The Agent answering the conversation.
      *
-     * Its provider, its instructions, its tools and its History are the Host
-     * Application's own business, changed through the Neuron AI API rather
-     * than through verbs duplicated here. After another Agent has been put
-     * in charge, this is that one.
+     * Its provider, its instructions and its tools are the Host Application's
+     * own business, changed through the Neuron AI API rather than through
+     * verbs duplicated here. The Conversation Runtime owns its History
+     * through Sessions. After another Agent has been put in charge, this is
+     * that one.
      */
     public function agent(): Agent
     {
@@ -124,6 +128,14 @@ final readonly class Controls
     public function commands(): array
     {
         return $this->mounted;
+    }
+
+    /**
+     * The one live Sessions instance owned by this Conversation Runtime.
+     */
+    public function sessions(): Sessions
+    {
+        return $this->sessions;
     }
 
     /**
