@@ -277,7 +277,7 @@ final class InputHistoryTest extends TestCase
         );
     }
 
-    public function testTuisShareHistoryThroughOneInMemoryStorage(): void
+    public function testTuisShareInputHistoryThroughOneInMemoryStorage(): void
     {
         $storage = new InMemoryStorage();
         $firstProvider = new FakeAIProvider(
@@ -321,7 +321,7 @@ final class InputHistoryTest extends TestCase
         );
     }
 
-    public function testFileStorageRestoresHistoryInANewRuntime(): void
+    public function testFileStorageRestoresInputHistoryInANewRuntime(): void
     {
         $directory = sys_get_temp_dir()
             . '/neuron-tui-input-history-'
@@ -386,7 +386,7 @@ final class InputHistoryTest extends TestCase
         }
     }
 
-    public function testDefaultHistoryStaysInMemoryAndWritesNothingToDisk(): void
+    public function testDefaultInputHistoryStaysInMemoryAndWritesNothingToDisk(): void
     {
         $workingDirectory = getcwd();
         self::assertIsString($workingDirectory);
@@ -485,168 +485,178 @@ final class InputHistoryTest extends TestCase
         );
     }
 
-    public function testHistoryMovesBothWaysAndPastNewestRestoresEmpty(): void
+    public function testInputHistoryMovesBothWaysAndPastNewestRestoresEmpty(): void
     {
-        [$provider, $storage, $terminal, $agent] = $this->tuiWithHistory([
+        $fixture = $this->tuiWithInputHistory([
             'oldest',
             'middle',
             'newest',
         ]);
 
-        EventLoop::queue(static function () use ($terminal): void {
-            $terminal->simulateInput(str_repeat("\x1b[A", 4));
-            $terminal->simulateInput(str_repeat("\x1b[B", 3));
-            $terminal->simulateInput("After history\r");
+        EventLoop::queue(static function () use ($fixture): void {
+            $fixture->terminal->simulateInput(str_repeat("\x1b[A", 4));
+            $fixture->terminal->simulateInput(str_repeat("\x1b[B", 3));
+            $fixture->terminal->simulateInput("After history\r");
         });
         EventLoop::delay(
             0.2,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn () => $fixture->terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, $terminal))->setStorage($storage)->run();
+        (new Tui($fixture->agent, $fixture->terminal))
+            ->setStorage($fixture->storage)
+            ->run();
 
         self::assertSame(
             'After history',
-            $provider->getRecorded()[0]->messages[0]->getContent(),
+            $fixture->provider->getRecorded()[0]->messages[0]->getContent(),
         );
     }
 
     public function testEditingARecallMakesItAnOrdinaryDraft(): void
     {
-        [$provider, $storage, $terminal, $agent] = $this->tuiWithHistory([
+        $fixture = $this->tuiWithInputHistory([
             'older',
             'newest',
         ]);
 
-        EventLoop::queue(static function () use ($terminal): void {
-            $terminal->simulateInput("\x1b[A");
-            $terminal->simulateInput('-edited');
-            $terminal->simulateInput("\x1b[A");
-            $terminal->simulateInput('prefix-');
-            $terminal->simulateInput("\r");
+        EventLoop::queue(static function () use ($fixture): void {
+            $fixture->terminal->simulateInput("\x1b[A");
+            $fixture->terminal->simulateInput('-edited');
+            $fixture->terminal->simulateInput("\x1b[A");
+            $fixture->terminal->simulateInput('prefix-');
+            $fixture->terminal->simulateInput("\r");
         });
         EventLoop::delay(
             0.2,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn () => $fixture->terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, $terminal))->setStorage($storage)->run();
+        (new Tui($fixture->agent, $fixture->terminal))
+            ->setStorage($fixture->storage)
+            ->run();
 
         self::assertSame(
             'prefix-newest-edited',
-            $provider->getRecorded()[0]->messages[0]->getContent(),
+            $fixture->provider->getRecorded()[0]->messages[0]->getContent(),
         );
         self::assertSame(
             ['older', 'newest', 'prefix-newest-edited'],
-            $storage->read('input-history', 'entries')?->data,
+            $fixture->storage->read('input-history', 'entries')?->data,
         );
     }
 
     public function testMultilineRecallPlacesTheCursorAtTheEnd(): void
     {
-        [$provider, $storage, $terminal, $agent] = $this->tuiWithHistory([
+        $fixture = $this->tuiWithInputHistory([
             "first line\nsecond line",
         ]);
 
-        EventLoop::queue(static function () use ($terminal): void {
-            $terminal->simulateInput("\x1b[A");
-            $terminal->simulateInput("!\r");
+        EventLoop::queue(static function () use ($fixture): void {
+            $fixture->terminal->simulateInput("\x1b[A");
+            $fixture->terminal->simulateInput("!\r");
         });
         EventLoop::delay(
             0.2,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn () => $fixture->terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, $terminal))->setStorage($storage)->run();
+        (new Tui($fixture->agent, $fixture->terminal))
+            ->setStorage($fixture->storage)
+            ->run();
 
         self::assertSame(
             "first line\nsecond line!",
-            $provider->getRecorded()[0]->messages[0]->getContent(),
+            $fixture->provider->getRecorded()[0]->messages[0]->getContent(),
         );
     }
 
     public function testArrowsKeepTheirEditorBehaviourInAMultilineDraft(): void
     {
-        [$provider, $storage, $terminal, $agent] = $this->tuiWithHistory([
+        $fixture = $this->tuiWithInputHistory([
             'stored input',
         ]);
 
-        EventLoop::queue(static function () use ($terminal): void {
-            $terminal->simulateInput('first');
-            $terminal->simulateInput("\x1b[13;2u");
-            $terminal->simulateInput('second');
-            $terminal->simulateInput("\x1b[A!");
-            $terminal->simulateInput("\x1b[B?\r");
+        EventLoop::queue(static function () use ($fixture): void {
+            $fixture->terminal->simulateInput('first');
+            $fixture->terminal->simulateInput("\x1b[13;2u");
+            $fixture->terminal->simulateInput('second');
+            $fixture->terminal->simulateInput("\x1b[A!");
+            $fixture->terminal->simulateInput("\x1b[B?\r");
         });
         EventLoop::delay(
             0.2,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn () => $fixture->terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, $terminal))->setStorage($storage)->run();
+        (new Tui($fixture->agent, $fixture->terminal))
+            ->setStorage($fixture->storage)
+            ->run();
 
         self::assertSame(
             "first!\nsecond?",
-            $provider->getRecorded()[0]->messages[0]->getContent(),
+            $fixture->provider->getRecorded()[0]->messages[0]->getContent(),
         );
     }
 
     public function testArrowsKeepTheirEditorBehaviourInAVisuallyWrappedDraft(): void
     {
-        [$provider, $storage, $terminal, $agent] = $this->tuiWithHistory(
+        $fixture = $this->tuiWithInputHistory(
             ['stored input'],
             columns: 30,
         );
         $draft = str_repeat('wrapped ', 8);
 
-        EventLoop::queue(static function () use ($terminal, $draft): void {
-            $terminal->simulateInput($draft);
-            $terminal->simulateInput("\x1b[A[");
-            $terminal->simulateInput("\x1b[B]\r");
+        EventLoop::queue(static function () use ($fixture, $draft): void {
+            $fixture->terminal->simulateInput($draft);
+            $fixture->terminal->simulateInput("\x1b[A[");
+            $fixture->terminal->simulateInput("\x1b[B]\r");
         });
         EventLoop::delay(
             0.2,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn () => $fixture->terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, $terminal))->setStorage($storage)->run();
+        (new Tui($fixture->agent, $fixture->terminal))
+            ->setStorage($fixture->storage)
+            ->run();
 
         self::assertSame(
             '[' . $draft . ']',
-            $provider->getRecorded()[0]->messages[0]->getContent(),
+            $fixture->provider->getRecorded()[0]->messages[0]->getContent(),
         );
     }
 
     public function testSuggestionArrowsDoNotNavigateInputHistory(): void
     {
-        [$provider, $storage, $terminal, $agent] = $this->tuiWithHistory([
+        $fixture = $this->tuiWithInputHistory([
             'stored input',
         ]);
         $display = null;
 
-        EventLoop::queue(static function () use ($terminal): void {
-            $terminal->simulateInput('/al');
-            $terminal->simulateInput("\x1b[B\x1b[A\x1b[B");
+        EventLoop::queue(static function () use ($fixture): void {
+            $fixture->terminal->simulateInput('/al');
+            $fixture->terminal->simulateInput("\x1b[B\x1b[A\x1b[B");
         });
         EventLoop::delay(
             0.08,
-            static function () use ($terminal): void {
-                $terminal->clearOutput();
-                $terminal->simulateResize(80, 24);
+            static function () use ($fixture): void {
+                $fixture->terminal->clearOutput();
+                $fixture->terminal->simulateResize(80, 24);
             },
         );
         EventLoop::delay(
             0.12,
-            static function () use (&$display, $terminal): void {
+            static function () use (&$display, $fixture): void {
                 $display = AnsiUtils::stripAnsiCodes(
-                    $terminal->getOutput(),
+                    $fixture->terminal->getOutput(),
                 );
-                $terminal->simulateInput("\x03");
+                $fixture->terminal->simulateInput("\x03");
             },
         );
 
-        (new Tui($agent, $terminal))
-            ->setStorage($storage)
+        (new Tui($fixture->agent, $fixture->terminal))
+            ->setStorage($fixture->storage)
             ->addCommand([
                 self::commandNamed('/alpha', 'The first suggestion.'),
                 self::commandNamed('/album', 'The second suggestion.'),
@@ -657,7 +667,7 @@ final class InputHistoryTest extends TestCase
         self::assertStringContainsString('→ /album', $display);
         self::assertStringContainsString('❯ /al', $display);
         self::assertStringNotContainsString('stored input', $display);
-        $provider->assertNothingSent();
+        $fixture->provider->assertNothingSent();
     }
 
     public function testPickerArrowsDoNotNavigateInputHistory(): void
@@ -711,73 +721,75 @@ final class InputHistoryTest extends TestCase
 
     public function testPageKeysNeverNavigateInputHistory(): void
     {
-        [$provider, $storage, $terminal, $agent] = $this->tuiWithHistory([
+        $fixture = $this->tuiWithInputHistory([
             'stored input',
         ]);
 
-        EventLoop::queue(static function () use ($terminal): void {
-            $terminal->simulateInput("\x1b[5~\x1b[6~");
-            $terminal->simulateInput("Fresh message\r");
+        EventLoop::queue(static function () use ($fixture): void {
+            $fixture->terminal->simulateInput("\x1b[5~\x1b[6~");
+            $fixture->terminal->simulateInput("Fresh message\r");
         });
         EventLoop::delay(
             0.2,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn () => $fixture->terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, $terminal))->setStorage($storage)->run();
+        (new Tui($fixture->agent, $fixture->terminal))
+            ->setStorage($fixture->storage)
+            ->run();
 
         self::assertSame(
             'Fresh message',
-            $provider->getRecorded()[0]->messages[0]->getContent(),
+            $fixture->provider->getRecorded()[0]->messages[0]->getContent(),
         );
     }
 
     public function testRecalledCommandsRestoreSuggestionsAfterAnEdit(): void
     {
-        [$provider, $storage, $terminal, $agent] = $this->tuiWithHistory([
+        $fixture = $this->tuiWithInputHistory([
             '/probe',
         ]);
         $recalled = null;
         $edited = null;
 
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("\x1b[A"),
+            static fn () => $fixture->terminal->simulateInput("\x1b[A"),
         );
         EventLoop::delay(
             0.06,
-            static function () use ($terminal): void {
-                $terminal->clearOutput();
-                $terminal->simulateResize(80, 24);
+            static function () use ($fixture): void {
+                $fixture->terminal->clearOutput();
+                $fixture->terminal->simulateResize(80, 24);
             },
         );
         EventLoop::delay(
             0.1,
-            static function () use (&$recalled, $terminal): void {
+            static function () use (&$recalled, $fixture): void {
                 $recalled = AnsiUtils::stripAnsiCodes(
-                    $terminal->getOutput(),
+                    $fixture->terminal->getOutput(),
                 );
-                $terminal->simulateInput("\x7f");
+                $fixture->terminal->simulateInput("\x7f");
             },
         );
         EventLoop::delay(
             0.16,
-            static function () use ($terminal): void {
-                $terminal->clearOutput();
-                $terminal->simulateResize(80, 24);
+            static function () use ($fixture): void {
+                $fixture->terminal->clearOutput();
+                $fixture->terminal->simulateResize(80, 24);
             },
         );
         EventLoop::delay(
             0.2,
-            static function () use (&$edited, $terminal): void {
+            static function () use (&$edited, $fixture): void {
                 $edited = AnsiUtils::stripAnsiCodes(
-                    $terminal->getOutput(),
+                    $fixture->terminal->getOutput(),
                 );
-                $terminal->simulateInput("\x03");
+                $fixture->terminal->simulateInput("\x03");
             },
         );
 
-        (new Tui($agent, $terminal))
-            ->setStorage($storage)
+        (new Tui($fixture->agent, $fixture->terminal))
+            ->setStorage($fixture->storage)
             ->addCommand(self::commandNamed('/probe', 'Runs the probe.'))
             ->run();
 
@@ -789,39 +801,39 @@ final class InputHistoryTest extends TestCase
         self::assertStringContainsString('❯ /prob', $edited);
         self::assertStringContainsString('Runs the probe.', $edited);
         self::assertStringContainsString('suggesting ·', $edited);
-        $provider->assertNothingSent();
+        $fixture->provider->assertNothingSent();
     }
 
     public function testReturningFromARecallToEmptyRestoresSuggestions(): void
     {
-        [$provider, $storage, $terminal, $agent] = $this->tuiWithHistory([
+        $fixture = $this->tuiWithInputHistory([
             '/probe',
         ]);
         $display = null;
 
-        EventLoop::queue(static function () use ($terminal): void {
-            $terminal->simulateInput("\x1b[A\x1b[B");
-            $terminal->simulateInput('/');
+        EventLoop::queue(static function () use ($fixture): void {
+            $fixture->terminal->simulateInput("\x1b[A\x1b[B");
+            $fixture->terminal->simulateInput('/');
         });
         EventLoop::delay(
             0.08,
-            static function () use ($terminal): void {
-                $terminal->clearOutput();
-                $terminal->simulateResize(80, 24);
+            static function () use ($fixture): void {
+                $fixture->terminal->clearOutput();
+                $fixture->terminal->simulateResize(80, 24);
             },
         );
         EventLoop::delay(
             0.12,
-            static function () use (&$display, $terminal): void {
+            static function () use (&$display, $fixture): void {
                 $display = AnsiUtils::stripAnsiCodes(
-                    $terminal->getOutput(),
+                    $fixture->terminal->getOutput(),
                 );
-                $terminal->simulateInput("\x03");
+                $fixture->terminal->simulateInput("\x03");
             },
         );
 
-        (new Tui($agent, $terminal))
-            ->setStorage($storage)
+        (new Tui($fixture->agent, $fixture->terminal))
+            ->setStorage($fixture->storage)
             ->addCommand(self::commandNamed('/probe', 'Runs the probe.'))
             ->run();
 
@@ -829,30 +841,15 @@ final class InputHistoryTest extends TestCase
         self::assertStringContainsString('❯ /', $display);
         self::assertStringContainsString('Runs the probe.', $display);
         self::assertStringContainsString('suggesting ·', $display);
-        $provider->assertNothingSent();
+        $fixture->provider->assertNothingSent();
     }
 
-    /**
-     * @param list<string> $entries
-     *
-     * @return array{FakeAIProvider, InMemoryStorage, VirtualTerminal, Agent}
-     */
-    private function tuiWithHistory(
+    /** @param list<string> $entries */
+    private function tuiWithInputHistory(
         array $entries,
         int $columns = 80,
-    ): array {
-        $provider = new FakeAIProvider(new AssistantMessage('An answer.'));
-        $agent = new Agent();
-        $agent->setAiProvider($provider);
-        $storage = new InMemoryStorage();
-        $storage->write('input-history', 'entries', $entries);
-
-        return [
-            $provider,
-            $storage,
-            new VirtualTerminal(columns: $columns, rows: 24),
-            $agent,
-        ];
+    ): InputHistoryTuiFixture {
+        return new InputHistoryTuiFixture($entries, $columns);
     }
 
     private static function commandNamed(
@@ -880,5 +877,30 @@ final class InputHistoryTest extends TestCase
             {
             }
         };
+    }
+}
+
+/** @internal */
+final readonly class InputHistoryTuiFixture
+{
+    public FakeAIProvider $provider;
+
+    public Agent $agent;
+
+    public InMemoryStorage $storage;
+
+    public VirtualTerminal $terminal;
+
+    /** @param list<string> $entries */
+    public function __construct(array $entries, int $columns)
+    {
+        $this->provider = new FakeAIProvider(
+            new AssistantMessage('An answer.'),
+        );
+        $this->agent = new Agent();
+        $this->agent->setAiProvider($this->provider);
+        $this->storage = new InMemoryStorage();
+        $this->storage->write('input-history', 'entries', $entries);
+        $this->terminal = new VirtualTerminal(columns: $columns, rows: 24);
     }
 }
