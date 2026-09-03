@@ -2,6 +2,10 @@
 
 Ricerca del 31 luglio 2026. Fonti: codice e discussioni ufficiali Neuron AI, documentazione ufficiale Amp. Nel repository non era presente una convenzione per le note di ricerca, quindi questa nota inaugura `docs/research/`.
 
+Aggiornata il 3 settembre 2026 per il rename del package a Neuron TUI. Il
+contratto studiato e le versioni di Neuron AI restano quelli della ricerca
+originale.
+
 ## Risposta breve
 
 Neuron AI 3.15.x non offre un contratto asincrono per i tool: non esistono `executeAsync()`, un tipo di risultato futuro o chunk di avanzamento durante l'esecuzione. `ToolInterface::execute()` restituisce `void`, mentre il risultato leggibile è una `string` ([ToolInterface 3.15.26, righe 65-86](https://github.com/neuron-core/neuron-ai/blob/3.15.26/src/Tools/ToolInterface.php#L65-L86)).
@@ -10,11 +14,11 @@ Un tool personalizzato può però essere **cooperativamente non bloccante**. La 
 
 Questa possibilità non rende automaticamente non bloccanti i tool esistenti. Una callback che usa `sleep()`, `stream_get_contents()`, `file_get_contents()` o altro I/O PHP sincrono blocca ancora l'intero processo. Amp chiarisce esplicitamente che le coroutine sono cooperative e che una funzione di I/O bloccante ferma tutto il processo ([Amp: motivazione e modello cooperativo](https://amphp.org/amp)).
 
-Per la demo di neuron-cli, quindi, **non occorre modificare il core di Neuron** per mantenere animata la TUI durante Bash: occorre sostituire il `BashTool` integrato con un tool basato su `Amp\Process`. Non è invece possibile rendere genericamente cooperativo qualunque tool sincrono limitandosi ad avvolgerlo in `Amp\async()`.
+Per la demo di Neuron TUI, quindi, **non occorre modificare il core di Neuron** per mantenere animata la TUI durante Bash: occorre sostituire il `BashTool` integrato con un tool basato su `Amp\Process`. Non è invece possibile rendere genericamente cooperativo qualunque tool sincrono limitandosi ad avvolgerlo in `Amp\async()`.
 
 ## Versioni verificate
 
-La dipendenza dichiarata dall'applicazione è `neuron-core/neuron-ai:^3.15.26`, ma il lockfile e `vendor/` contengono attualmente **3.15.30**, commit `14efa3479513c032b54f51613e23fe5f16b516a8`.
+La dipendenza dichiarata dal package è `neuron-core/neuron-ai:^3.15.26`, mentre `composer.lock` fissa **3.15.30**, commit `14efa3479513c032b54f51613e23fe5f16b516a8`. La ricerca originale ha verificato il sorgente corrispondente anche nell'installazione locale allora presente.
 
 Sono stati confrontati i tag ufficiali `3.15.26` (`ae5be8f065b19c9b7a5adff596b1d04fc07daf67`) e `3.15.30`. Fra questi tag non cambiano `Tool`, `ToolInterface`, `ToolNode`, `ParallelToolNode`, `AgentHandler`, `WorkflowHandler` o `AsyncExecutor`; le conclusioni valgono quindi per entrambe le patch. Il confronto `3.15.0..3.15.30` mostra lo stesso contratto di esecuzione dei tool per tutta la serie 3.15.x.
 
@@ -78,7 +82,7 @@ L'opzione sceglie `ParallelToolNode` al posto del normale `ToolNode` ([Agent 3.1
 
 Il comportamento è nel [ParallelToolNode 3.15.26, righe 40-100](https://github.com/neuron-core/neuron-ai/blob/3.15.26/src/Agent/Nodes/ParallelToolNode.php#L40-L100). La documentazione ufficiale conferma che serve per più tool richiesti dal modello nella stessa risposta e richiede `pcntl` e `spatie/fork` ([Tools: Parallel Tool Calls](https://docs.neuron-ai.dev/agent/tools#parallel-tool-calls)). Il maintainer ha inoltre confermato che l'opzione inietta il `ParallelToolNode` dedicato ([issue ufficiale #528](https://github.com/neuron-core/neuron-ai/issues/528#issuecomment-4161264554)).
 
-È quindi parallelismo fra più tool, basato su processi, non non-blocking I/O del singolo tool. Nell'installazione attuale di neuron-cli `spatie/fork` non è presente, quindi l'opzione farebbe comunque fallback sequenziale.
+È quindi parallelismo fra più tool, basato su processi, non non-blocking I/O del singolo tool. Nel lockfile di Neuron TUI `spatie/fork` non è presente, quindi l'opzione farebbe comunque fallback sequenziale.
 
 ### `Workflow\Executor\AsyncExecutor`
 
@@ -105,7 +109,7 @@ Gli esperimenti sono stati eseguiti sul pacchetto installato 3.15.30. Il codice 
 
 Queste prove non sostituiscono il contratto sorgente, ma confermano la distinzione operativa: **attendere internamente con Amp funziona; restituire un oggetto asincrono a Neuron no**.
 
-## Implicazioni per neuron-cli
+## Implicazioni per Neuron TUI
 
 La soluzione più piccola che cambia davvero l'esperienza è un tool Bash compatibile con lo schema del toolkit, ma implementato con `Amp\Process`:
 
@@ -116,6 +120,6 @@ La soluzione più piccola che cambia davvero l'esperienza è un tool Bash compat
 
 Durante queste attese il loop Revolt rimane disponibile allo spinner della TUI. Neuron continua a ricevere un array già risolto e non richiede modifiche.
 
-Se neuron-cli usa direttamente Amp deve dichiarare le dipendenze necessarie. Neuron 3.15.26 tiene `amphp/amp`, `amphp/http-client` e `spatie/fork` soltanto in `require-dev` ([composer.json 3.15.26, righe 12-36](https://github.com/neuron-core/neuron-ai/blob/3.15.26/composer.json#L12-L36)). Amp raccomanda di non affidarsi alle dipendenze transitive e di dichiarare quelle usate dall'applicazione ([Amp: dipendenze](https://amphp.org/installation#dependencies)). neuron-cli dichiara già `amphp/amp`; se adotta `Amp\Process` dovrebbe dichiarare direttamente anche `amphp/process`.
+Se Neuron TUI usa direttamente Amp deve dichiarare le dipendenze necessarie. Neuron 3.15.26 tiene `amphp/amp`, `amphp/http-client` e `spatie/fork` soltanto in `require-dev` ([composer.json 3.15.26, righe 12-36](https://github.com/neuron-core/neuron-ai/blob/3.15.26/composer.json#L12-L36)). Amp raccomanda di non affidarsi alle dipendenze transitive e di dichiarare quelle usate dall'applicazione ([Amp: dipendenze](https://amphp.org/installation#dependencies)). Neuron TUI dichiara già `amphp/amp`; se adotta `Amp\Process` dovrebbe dichiarare direttamente anche `amphp/process` invece di affidarsi alla copia transitiva presente nel lockfile.
 
 Limite finale: questa modifica rende cooperativo Bash, non l'intero ecosistema dei tool. Per tool terzi che fanno I/O bloccante servono una riscrittura con librerie non bloccanti oppure l'offload in un vero processo/thread. Avvolgere la stessa funzione bloccante in una Fiber non introduce preemption e non mantiene vivo il loop.
