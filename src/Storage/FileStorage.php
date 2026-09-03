@@ -13,6 +13,22 @@ final class FileStorage extends AbstractStorage
 
     public function __construct(private readonly string $root) {}
 
+    /**
+     * @param array<array-key, mixed> $data
+     * @param array<string, string> $metadata
+     */
+    protected function createDocument(
+        string $namespace,
+        array $data,
+        array $metadata,
+    ): StoredDocument {
+        do {
+            $key = bin2hex(random_bytes(16));
+        } while ($this->readDocument($namespace, $key) !== null);
+
+        return $this->writeDocument($namespace, $key, $data, $metadata);
+    }
+
     protected function readDocument(
         string $namespace,
         string $key,

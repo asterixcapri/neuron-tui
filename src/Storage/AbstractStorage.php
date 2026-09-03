@@ -7,7 +7,7 @@ namespace NeuronTui\Storage;
 use InvalidArgumentException;
 
 /**
- * Common portable identifier, metadata and key-generation behaviour.
+ * Common portable identifier and metadata behaviour.
  */
 abstract class AbstractStorage implements StorageInterface
 {
@@ -82,23 +82,14 @@ abstract class AbstractStorage implements StorageInterface
     }
 
     /**
-     * Adapters may replace this with a native atomic creation operation.
-     *
      * @param array<array-key, mixed> $data
      * @param array<string, string> $metadata
      */
-    protected function createDocument(
+    abstract protected function createDocument(
         string $namespace,
         array $data,
         array $metadata,
-    ): StoredDocument {
-
-        do {
-            $key = $this->newKey();
-        } while ($this->readDocument($namespace, $key) !== null);
-
-        return $this->writeDocument($namespace, $key, $data, $metadata);
-    }
+    ): StoredDocument;
 
     abstract protected function readDocument(
         string $namespace,
@@ -133,11 +124,6 @@ abstract class AbstractStorage implements StorageInterface
                 sprintf('The storage %s is not a safe identifier.', $name),
             );
         }
-    }
-
-    final protected function newKey(): string
-    {
-        return bin2hex(random_bytes(16));
     }
 
     /** @param array<array-key, mixed> $metadata */
