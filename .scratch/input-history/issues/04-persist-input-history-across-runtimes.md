@@ -4,10 +4,10 @@
 
 **Blocked by:** 02/Navigate and edit Input history.
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Clearing or changing a Session leaves the same Input history available to the Conversation TUI.
-- [ ] Conversation TUI instances sharing one InMemoryStorage instance share its Input history for that instance's lifetime.
-- [ ] FileStorage restores Input history after Conversation Runtime recreation with the same storage root.
-- [ ] The default in-memory composition creates no files or directories on disk while retaining entries for its live Conversation TUI.
-- [ ] Focused tests, static analysis and the complete test suite pass.
+- [x] Clearing or changing a Session leaves the same Input history available to the Conversation TUI.
+- [x] Conversation TUI instances sharing one InMemoryStorage instance share its Input history for that instance's lifetime.
+- [x] FileStorage restores Input history after Conversation Runtime recreation with the same storage root.
+- [x] The default in-memory composition creates no files or directories on disk while retaining entries for its live Conversation TUI.
+- [x] Focused tests, static analysis and the complete test suite pass.
