@@ -251,6 +251,23 @@ final class ConversationView
     }
 
     /**
+     * Recalls an earlier input only when nothing is currently being written.
+     *
+     * Returns whether the composer accepted the recalled value.
+     */
+    public function recallInput(?string $input): bool
+    {
+        if ($input === null || $this->editor->getText() !== '') {
+            return false;
+        }
+
+        $this->writeDraft($input);
+        $this->tui->requestRender();
+
+        return true;
+    }
+
+    /**
      * Puts the TUI in the Picker and waits there for an answer, which is the
      * key of the line a person chose, or nothing if they cancelled.
      *
