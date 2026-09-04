@@ -7,11 +7,11 @@ namespace NeuronTui;
 use InvalidArgumentException;
 use LogicException;
 use NeuronAI\Agent\Agent;
-use NeuronTui\Command\CommandInterface;
-use NeuronTui\Command\CommandKitInterface;
+use NeuronInteraction\Command\CommandInterface;
+use NeuronInteraction\Command\CommandKitInterface;
 use NeuronTui\Command\ConcurrentCommandInterface;
 use NeuronTui\Conversation\ConversationRuntime;
-use NeuronTui\Storage\StorageInterface;
+use NeuronInteraction\Storage\StorageInterface;
 use Symfony\Component\Tui\Terminal\TerminalInterface;
 
 /**
@@ -102,7 +102,7 @@ final class Tui
     }
 
     /**
-     * @param CommandInterface|ConcurrentCommandInterface|CommandKitInterface|array<array-key, mixed> $commands
+     * @param CommandInterface|ConcurrentCommandInterface|CommandKitInterface<CommandInterface|ConcurrentCommandInterface>|array<array-key, mixed> $commands
      */
     public function addCommand(
         CommandInterface|ConcurrentCommandInterface|CommandKitInterface|array $commands,

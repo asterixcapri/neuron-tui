@@ -6,11 +6,11 @@ namespace NeuronTui\Tests;
 
 use Closure;
 use NeuronAI\Agent\Agent;
-use NeuronTui\Command\AbstractCommandKit;
-use NeuronTui\Command\CommandArguments;
-use NeuronTui\Command\CommandInterface;
+use NeuronInteraction\Command\AbstractCommandKit;
+use NeuronInteraction\Command\CommandArguments;
+use NeuronInteraction\Command\CommandInterface;
 use NeuronTui\Command\HelpCommand;
-use NeuronTui\Command\CommandControlsInterface;
+use NeuronInteraction\Command\CommandControlsInterface;
 use NeuronTui\Tui;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
@@ -158,10 +158,13 @@ final class DuplicateCommandsTest extends TestCase
 
     /**
      * @param list<CommandInterface> $commands
+     * @return AbstractCommandKit<CommandInterface>
      */
     private static function kit(array $commands): AbstractCommandKit
     {
-        return new class($commands) extends AbstractCommandKit {
+        return new
+        /** @extends AbstractCommandKit<CommandInterface> */
+        class($commands) extends AbstractCommandKit {
             /**
              * @param list<CommandInterface> $commands
              */

@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace NeuronTui\Conversation;
 
-use NeuronTui\Command\CommandArguments;
-use NeuronTui\Command\CommandControlsInterface;
-use NeuronTui\Command\CommandInterface;
+use NeuronInteraction\Command\CommandArguments;
+use NeuronInteraction\Command\CommandControlsInterface;
+use NeuronInteraction\Command\CommandInterface;
 use NeuronTui\Command\ConcurrentCommandInterface;
 
 /** @internal Adapts terminal concurrency to ordinary Command dispatch. */
