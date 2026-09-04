@@ -33,8 +33,8 @@ Neuron TUI requires PHP 8.4.1 or newer and an interactive TTY.
 
 Neuron TUI adapts the separate `asterixcapri/neuron-interaction` library. That
 package owns Commands, Sessions, Input history and Storage and does not depend
-on terminal code. Rendering, Agent turns, streaming and recall navigation stay
-in Neuron TUI.
+on terminal code. Rendering, Agent turns, streaming and keyboard handling stay
+in Neuron TUI. Input history also provides optional recall navigation.
 
 ## Usage
 
@@ -374,7 +374,10 @@ newest input. Editing a recalled input leaves navigation. A Picker or Command
 suggestions owns the arrow keys while its list is active.
 
 The package's `NeuronInteraction\InputHistory\InputHistory` offers `record()`
-and `entries()` for other Adapters; each Adapter owns its navigation state.
+and `entries()` for other Adapters. The same class offers optional `older()`,
+`newer()`, `isNavigating()` and `leave()` methods, with a cursor and draft local
+to each instance. The TUI binds these methods to its keyboard events; a web
+frontend may instead navigate the sequence locally in JavaScript.
 No legacy persistence reader, fallback or automatic migration is provided.
 Old files are left untouched and are outside the extracted package's contract.
 
