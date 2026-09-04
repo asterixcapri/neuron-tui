@@ -10,7 +10,7 @@ use NeuronTui\Command\AbstractCommandKit;
 use NeuronTui\Command\CommandArguments;
 use NeuronTui\Command\CommandInterface;
 use NeuronTui\Command\HelpCommand;
-use NeuronTui\Conversation\Controls;
+use NeuronTui\Command\CommandControls;
 use NeuronTui\Tui;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
@@ -56,7 +56,7 @@ final class DuplicateCommandsTest extends TestCase
                 '/clear',
                 'The first duplicate.',
                 static function (
-                    Controls $controls,
+                    CommandControls $controls,
                     string $arguments,
                 ) use (&$ran): void {
                     $ran[] = 'first';
@@ -67,7 +67,7 @@ final class DuplicateCommandsTest extends TestCase
                 '/clear',
                 'The second duplicate.',
                 static function (
-                    Controls $controls,
+                    CommandControls $controls,
                     string $arguments,
                 ) use (&$ran): void {
                     $ran[] = 'second';
@@ -181,7 +181,7 @@ final class DuplicateCommandsTest extends TestCase
     }
 
     /**
-     * @param Closure(Controls, string): void|null $run
+     * @param Closure(CommandControls, string): void|null $run
      */
     private static function command(
         string $name,
@@ -190,7 +190,7 @@ final class DuplicateCommandsTest extends TestCase
     ): CommandInterface {
         return new class($name, $description, $run) implements CommandInterface {
             /**
-             * @param Closure(Controls, string): void|null $run
+             * @param Closure(CommandControls, string): void|null $run
              */
             public function __construct(
                 private readonly string $commandName,
@@ -209,7 +209,7 @@ final class DuplicateCommandsTest extends TestCase
                 return $this->description;
             }
 
-            public function run(Controls $controls, CommandArguments $arguments): void
+            public function run(CommandControls $controls, CommandArguments $arguments): void
             {
                 if ($this->run instanceof Closure) {
                     ($this->run)($controls, $arguments->text);

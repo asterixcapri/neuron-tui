@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace NeuronTui\Command;
 
-use NeuronTui\Conversation\Controls;
-
 /**
  * Starts a new Session, leaving the one on screen where it is stored.
  *
@@ -33,7 +31,7 @@ final readonly class ClearCommand implements CommandInterface
         return 'Starts a new Session, leaving the current one stored.';
     }
 
-    public function run(Controls $controls, CommandArguments $arguments): void
+    public function run(CommandControls $controls, CommandArguments $arguments): void
     {
         $controls->agent()->setChatHistory($controls->sessions()->start());
     }
