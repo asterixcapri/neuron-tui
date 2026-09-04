@@ -44,9 +44,15 @@ _Avoid_: Blob store, filesystem, database
 
 **Command**:
 A named operation whose effect an interaction Adapter decides rather than the
-model. Its identifier carries no presentation syntax; each Adapter decides how
-a person invokes it.
+model. Its identifier includes the shared slash convention, such as `/help`;
+each Adapter decides how a person submits it.
 _Avoid_: Message, prompt, action
+
+**Commands**:
+The ordered collection of mounted Commands, including those supplied by kits.
+It resolves an identifier to the first matching Command and reports its
+Command execution.
+_Avoid_: Command container, command list
 
 **Command execution**:
 The technical outcome reported by the Command dispatcher: completed, unknown
@@ -72,10 +78,8 @@ arguments after the person selects it.
 _Avoid_: Choice option, Picker row, menu item
 
 **Concurrent command**:
-A TUI-specific exception for a Command whose synchronous run may overlap a
-Turn. It receives only Concurrent Controls, so it cannot reach the Agent, put
-a prompt to it, open a Picker or replace the conversation while an answer is
-on its way.
+A Command the TUI permits to run while a Turn is active. This permission is
+reserved for Help and Leave and is a TUI policy, not a separate Command type.
 _Avoid_: Async command, background command, command that runs while working
 
 **Command controls**:
@@ -86,11 +90,6 @@ answering Agent, use the mounted Commands and Sessions, and stop the
 interaction. Command-specific dependencies still arrive through the Command's
 constructor.
 _Avoid_: Command context, environment, facade, API
-
-**Concurrent Controls**:
-What a Concurrent command may do while its synchronous run overlaps a Turn:
-say, warn, list the mounted commands and leave the terminal.
-_Avoid_: Limited Controls, async controls, background controls
 
 **Command kit**:
 A group of Commands mounted in one go, carrying between them whatever
