@@ -30,3 +30,16 @@
 - Current API names are `CommandControlsInterface` and `SessionCommandKit`.
   Installation documentation identifies development VCS branches and explicit
   root-level repository/stability requirements; no release is claimed.
+
+## Final review resolution
+
+- Standards review reported no findings. The Spec review identified numeric
+  string keys failing when listed through InMemoryStorage because PHP coerces
+  array keys to integers. Package commit `5e691e8` restores the string at the
+  document boundary and adds public regressions for both Storage adapters.
+- The fixed package passes 104 tests and 237 assertions, with PHPStan at maximum
+  level. Root and example locks now install the reviewed package from remote
+  commit `5c4edb7ef6e7a8d0fff50ab32878d154780309ec`.
+- Root and example Composer manifests validate strictly; the example installs
+  from its lock successfully. TUI passes 210 tests and 868 assertions, plus
+  PHPStan at maximum level, against the fixed dependency.
