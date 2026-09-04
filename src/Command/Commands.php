@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace NeuronTui\Command;
 
-use NeuronTui\Conversation\Controls;
 use Throwable;
 
 /** Mounted Commands in order, with the first matching identifier winning. */
@@ -35,7 +34,7 @@ final readonly class Commands
     public function run(
         string $identifier,
         CommandArguments $arguments,
-        Controls $controls,
+        CommandControls $controls,
     ): CommandExecution {
         $command = $this->named($identifier);
 

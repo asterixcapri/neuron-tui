@@ -32,6 +32,8 @@ use NeuronTui\Command\AbstractCommandKit;
 use NeuronTui\Command\CommandArguments;
 use NeuronTui\Command\ClearCommand;
 use NeuronTui\Command\CommandInterface;
+use NeuronTui\Command\SelectionOption;
+use NeuronTui\Command\SelectionRequest;
 use NeuronTui\Command\ConcurrentCommandInterface;
 use NeuronTui\Command\HelpCommand;
 use NeuronTui\Command\LeaveCommand;
@@ -39,7 +41,7 @@ use NeuronTui\Command\ResumeCommand;
 use NeuronTui\Command\SessionKit;
 use NeuronTui\Conversation\ChoiceOption;
 use NeuronTui\Conversation\ConcurrentControls;
-use NeuronTui\Conversation\Controls;
+use NeuronTui\Command\CommandControls;
 use NeuronTui\Tui;
 use NeuronTui\Session\Session;
 use NeuronTui\Session\Sessions;
@@ -277,7 +279,7 @@ final class TuiTest extends TestCase
                 ->setRole(MessageRole::SYSTEM),
         ]);
         $command = $this->commandThat(
-            static function (Controls $controls) use ($history): void {
+            static function (CommandControls $controls) use ($history): void {
                 $controls->agent()->setChatHistory($history);
             },
         );
@@ -810,7 +812,7 @@ MARKDOWN;
             new AssistantMessage('Finished.'),
         ]);
         $command = $this->commandThat(
-            static function (Controls $controls) use ($history): void {
+            static function (CommandControls $controls) use ($history): void {
                 $controls->agent()->setChatHistory($history);
             },
         );
@@ -1139,7 +1141,7 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
             static function (
-                Controls $controls,
+                CommandControls $controls,
                 string $typed,
             ) use (&$arguments): void {
                 $arguments = $typed;
@@ -1173,7 +1175,7 @@ MARKDOWN;
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
-            static function (Controls $controls, string $arguments): void {
+            static function (CommandControls $controls, string $arguments): void {
                 $controls->say('Everything was in order.');
                 $controls->warn('Except for one thing.');
             },
@@ -1206,9 +1208,10 @@ MARKDOWN;
         $agent = new Agent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
+        $storage = new \NeuronTui\Storage\InMemoryStorage();
         $command = $this->commandThat(
-            static function (Controls $controls, string $arguments): void {
-                $controls->ask('Review ' . $arguments . '.');
+            static function (CommandControls $controls, string $arguments): void {
+                $controls->promptAgent('Review ' . $arguments . '.');
             },
         );
         EventLoop::queue(
@@ -1222,7 +1225,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([$command])->run();
+        ))->setStorage($storage)->addCommand([$command])->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('❯ Review this diff.', $display);
@@ -1232,6 +1235,46 @@ MARKDOWN;
             'Review this diff.',
             $provider->getRecorded()[0]->messages[0]->getContent(),
         );
+        self::assertSame(
+            ['/probe this diff'],
+            (new \NeuronTui\InputHistory\InputHistory($storage))->entries(),
+        );
+    }
+
+    public function testSelectionRequestReturnsBeforeThePersonChoosesAndResumesTheCommand(): void
+    {
+        $terminal = new VirtualTerminal(rows: 30);
+        $storage = new \NeuronTui\Storage\InMemoryStorage();
+        $events = [];
+        $beforeChoice = null;
+        $command = $this->commandThat(
+            static function (CommandControls $controls, string $arguments) use (&$events): void {
+                if ($arguments !== '') {
+                    $events[] = $arguments;
+
+                    return;
+                }
+
+                $controls->requestSelection(new SelectionRequest('probe', 'Models', [
+                    new SelectionOption('stable-value', 'Visible label', 'Optional detail'),
+                ]));
+                $controls->say('Request submitted.');
+                $events[] = 'first invocation finished';
+            },
+        );
+        EventLoop::queue(static fn () => $terminal->simulateInput("/probe\r"));
+        EventLoop::delay(0.08, static function () use ($terminal, &$events, &$beforeChoice): void {
+            $beforeChoice = $events;
+            $terminal->simulateInput("\r");
+        });
+        EventLoop::delay(0.16, static fn () => $terminal->simulateInput("\x03"));
+
+        Tui::make(new Agent(), $terminal)->setStorage($storage)->addCommand($command)->run();
+
+        self::assertSame(['first invocation finished'], $beforeChoice);
+        self::assertSame(['first invocation finished', 'stable-value'], $events);
+        self::assertStringContainsString('Request submitted.', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
+        self::assertSame(['/probe'], (new \NeuronTui\InputHistory\InputHistory($storage))->entries());
     }
 
     public function testACommandReachesTheAgentToChangeProviderInstructionsAndTools(): void
@@ -1243,7 +1286,7 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
             static function (
-                Controls $controls,
+                CommandControls $controls,
                 string $arguments,
             ) use ($chosen): void {
                 $controls->agent()
@@ -1289,7 +1332,7 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
             static function (
-                Controls $controls,
+                CommandControls $controls,
                 string $arguments,
             ) use ($successor): void {
                 $controls->useAgent($successor);
@@ -1344,7 +1387,7 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
             static function (
-                Controls $controls,
+                CommandControls $controls,
                 string $arguments,
             ) use ($successor): void {
                 $controls->useAgent($successor);
@@ -1392,7 +1435,7 @@ MARKDOWN;
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
-            static function (Controls $controls, string $arguments): void {
+            static function (CommandControls $controls, string $arguments): void {
                 $controls->stop();
             },
             '/quit',
@@ -1423,7 +1466,7 @@ MARKDOWN;
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
-            static function (Controls $controls, string $arguments): void {
+            static function (CommandControls $controls, string $arguments): void {
                 throw new \RuntimeException('The command broke.');
             },
         );
@@ -1463,7 +1506,7 @@ MARKDOWN;
         ]));
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
-            static function (Controls $controls, string $arguments): void {
+            static function (CommandControls $controls, string $arguments): void {
                 $controls->agent()->setChatHistory(new InMemoryChatHistory());
 
                 throw new \RuntimeException('The command broke.');
@@ -1636,7 +1679,7 @@ MARKDOWN;
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
-            static function (Controls $controls, string $arguments): void {
+            static function (CommandControls $controls, string $arguments): void {
             },
         );
         EventLoop::queue(
@@ -1710,7 +1753,7 @@ MARKDOWN;
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
-            static function (Controls $controls, string $arguments): void {
+            static function (CommandControls $controls, string $arguments): void {
                 $controls->agent()->setChatHistory(new ExistingChatHistory([
                     new UserMessage('A restored question.'),
                     new AssistantMessage('A restored answer.'),
@@ -1754,7 +1797,7 @@ MARKDOWN;
         ));
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
-            static function (Controls $controls, string $arguments): void {
+            static function (CommandControls $controls, string $arguments): void {
                 $controls->say('The command ran.');
             },
         );
@@ -1802,7 +1845,7 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
             static function (
-                Controls $controls,
+                CommandControls $controls,
                 string $arguments,
             ) use (&$ran): void {
                 $ran = true;
@@ -2026,7 +2069,7 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
             static function (
-                Controls $controls,
+                CommandControls $controls,
                 string $arguments,
             ) use (&$chosen): void {
                 $chosen = $controls->choose('Models', [
@@ -2091,7 +2134,7 @@ MARKDOWN;
         $terminal = new VirtualTerminal(columns: 48, rows: 30);
         $command = $this->commandThat(
             static function (
-                Controls $controls,
+                CommandControls $controls,
                 string $arguments,
             ) use (&$chosen): void {
                 $controls->say('History remains visible.');
@@ -2183,7 +2226,7 @@ MARKDOWN;
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(columns: 32, rows: 30);
         $command = $this->commandThat(
-            static function (Controls $controls, string $arguments): void {
+            static function (CommandControls $controls, string $arguments): void {
                 $controls->choose('First choice', [
                     new ChoiceOption('first', 'First option'),
                 ]);
@@ -2269,7 +2312,7 @@ MARKDOWN;
         $terminal = new VirtualTerminal(columns: 42, rows: 32);
         $command = $this->commandThat(
             static function (
-                Controls $controls,
+                CommandControls $controls,
                 string $arguments,
             ) use (&$chosen): void {
                 $chosen = $controls->choose('Models', [
@@ -2386,7 +2429,7 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 40);
         $command = $this->commandThat(
             static function (
-                Controls $controls,
+                CommandControls $controls,
                 string $arguments,
             ) use (&$chosen): void {
                 $options = [];
@@ -2453,7 +2496,7 @@ MARKDOWN;
         $terminal = new VirtualTerminal(columns: 36, rows: 40);
         $command = $this->commandThat(
             static function (
-                Controls $controls,
+                CommandControls $controls,
                 string $arguments,
             ) use (&$chosen): void {
                 $chosen = $controls->choose('Viewport', [
@@ -2555,7 +2598,7 @@ MARKDOWN;
         $terminal = new VirtualTerminal(columns: 40, rows: 30);
         $command = $this->commandThat(
             static function (
-                Controls $controls,
+                CommandControls $controls,
                 string $arguments,
             ) use (&$chosen): void {
                 $options = [
@@ -2697,7 +2740,7 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
             static function (
-                Controls $controls,
+                CommandControls $controls,
                 string $arguments,
             ) use (&$chosen): void {
                 $chosen = $controls->choose('Models', [
@@ -2756,7 +2799,7 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
             static function (
-                Controls $controls,
+                CommandControls $controls,
                 string $arguments,
             ) use (&$chosen, &$completions): void {
                 $chosen = $controls->choose('Models', [
@@ -2792,7 +2835,7 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
             static function (
-                Controls $controls,
+                CommandControls $controls,
                 string $arguments,
             ) use (&$chosen): void {
                 $chosen = $controls->choose('Models', [
@@ -2853,7 +2896,7 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
             static function (
-                Controls $controls,
+                CommandControls $controls,
                 string $arguments,
             ) use (&$shortChoice, &$longChoice): void {
                 $shortChoice = $controls->choose('Short choice', [
@@ -2937,7 +2980,7 @@ MARKDOWN;
         $terminal = new VirtualTerminal(columns: 38, rows: 32);
         $command = $this->commandThat(
             static function (
-                Controls $controls,
+                CommandControls $controls,
                 string $arguments,
             ) use (&$chosen): void {
                 $chosen = $controls->choose('Models', [
@@ -3016,7 +3059,7 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
             static function (
-                Controls $controls,
+                CommandControls $controls,
                 string $arguments,
             ) use (&$first, &$second): void {
                 $options = [
@@ -3245,7 +3288,7 @@ MARKDOWN;
 
         for ($place = 0; $place < 10; ++$place) {
             $commands[] = $this->commandThat(
-                static function (Controls $controls, string $arguments): void {
+                static function (CommandControls $controls, string $arguments): void {
                 },
                 '/cmd' . $place,
             );
@@ -3453,7 +3496,7 @@ MARKDOWN;
             [
                 $this->commandThat(
                     static function (
-                        Controls $controls,
+                        CommandControls $controls,
                         string $written,
                     ) use (&$arguments): void {
                         $arguments = $written;
@@ -3485,7 +3528,7 @@ MARKDOWN;
             &$arguments,
         ): Closure {
             return static function (
-                Controls $controls,
+                CommandControls $controls,
                 string $written,
             ) use ($name, &$ran, &$arguments): void {
                 $ran = $name;
@@ -3796,7 +3839,7 @@ MARKDOWN;
             }
 
             public function run(
-                Controls $controls,
+                CommandControls $controls,
                 CommandArguments $arguments,
             ): void {
             }
@@ -3835,7 +3878,7 @@ MARKDOWN;
             '/pulse',
         );
         $refused = $this->commandThat(
-            static function (Controls $controls, string $arguments): void {
+            static function (CommandControls $controls, string $arguments): void {
             },
             '/probe',
         );
@@ -3909,7 +3952,7 @@ MARKDOWN;
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $refused = $this->commandThat(
-            static function (Controls $controls, string $arguments): void {
+            static function (CommandControls $controls, string $arguments): void {
             },
             '/probe',
         );
@@ -3962,7 +4005,7 @@ MARKDOWN;
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
-            static function (Controls $controls, string $arguments): void {
+            static function (CommandControls $controls, string $arguments): void {
                 $controls->choose('Models', [
                     new ChoiceOption('haiku', 'Claude Haiku'),
                 ]);
@@ -4083,7 +4126,7 @@ MARKDOWN;
         $arguments = null;
         $note = static function (string $name) use (&$ran, &$arguments) {
             return static function (
-                Controls $controls,
+                CommandControls $controls,
                 string $written,
             ) use ($name, &$ran, &$arguments): void {
                 $ran = $name;
@@ -4390,7 +4433,7 @@ MARKDOWN;
      * A command that does what the test tells it to, under a name of the
      * test's choosing.
      *
-     * @param Closure(Controls, string): void $run
+     * @param Closure(CommandControls, string): void $run
      */
     private function commandThat(
         Closure $run,
@@ -4398,7 +4441,7 @@ MARKDOWN;
     ): CommandInterface {
         return new class($run, $name) implements CommandInterface {
             /**
-             * @param Closure(Controls, string): void $run
+             * @param Closure(CommandControls, string): void $run
              */
             public function __construct(
                 private readonly Closure $run,
@@ -4416,7 +4459,7 @@ MARKDOWN;
                 return 'Does what the test says.';
             }
 
-            public function run(Controls $controls, CommandArguments $arguments): void
+            public function run(CommandControls $controls, CommandArguments $arguments): void
             {
                 ($this->run)($controls, $arguments->text);
             }
@@ -4548,7 +4591,7 @@ MARKDOWN;
         $sessions = new Sessions($storage);
         $earlier = null;
         $fillSession = $this->commandThat(
-            static function (Controls $controls) use (&$earlier): void {
+            static function (CommandControls $controls) use (&$earlier): void {
                 $earlier = $controls->agent()->getChatHistory();
                 $earlier->addMessage(new UserMessage('Earlier question.'));
                 $earlier->addMessage(new AssistantMessage('Earlier answer.'));
@@ -4681,7 +4724,7 @@ MARKDOWN;
         $agent->setAiProvider($provider);
         $ongoing = null;
         $remember = $this->commandThat(
-            static function (Controls $controls) use (&$ongoing): void {
+            static function (CommandControls $controls) use (&$ongoing): void {
                 $ongoing = $controls->agent()->getChatHistory();
             },
         );
@@ -5030,7 +5073,7 @@ MARKDOWN;
         $agent = new Agent();
         $ongoing = null;
         $remember = $this->commandThat(
-            static function (Controls $controls) use (&$ongoing): void {
+            static function (CommandControls $controls) use (&$ongoing): void {
                 $ongoing = $controls->agent()->getChatHistory();
             },
         );
@@ -5524,7 +5567,7 @@ MARKDOWN;
         $agent = new Agent();
         $history = new ExistingChatHistory($messages);
         $restore = $this->commandThat(
-            static function (Controls $controls) use ($history): void {
+            static function (CommandControls $controls) use ($history): void {
                 $controls->agent()->setChatHistory($history);
             },
         );

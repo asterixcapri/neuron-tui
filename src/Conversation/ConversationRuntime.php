@@ -11,6 +11,8 @@ use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
 use NeuronTui\Command\CommandInterface;
 use NeuronTui\Command\CommandArguments;
 use NeuronTui\Command\Commands;
+use NeuronTui\Command\SelectionRequest;
+use NeuronTui\Command\SelectionOption;
 use NeuronTui\Command\ConcurrentCommandInterface;
 use NeuronTui\InputHistory\InputHistory;
 use NeuronTui\Session\Sessions;
@@ -24,6 +26,7 @@ use Symfony\Component\Tui\Input\Key;
 use Symfony\Component\Tui\Input\Keybindings;
 use Symfony\Component\Tui\Terminal\Terminal;
 use Symfony\Component\Tui\Terminal\TerminalInterface;
+use Revolt\EventLoop;
 use Throwable;
 
 use function Amp\async;
@@ -237,8 +240,9 @@ final class ConversationRuntime
                 $this->send(new MessageForAgent($prompt));
             },
             $this->answerFrom(...),
-            $this->commands,
+            $this->dispatcher,
             $this->sessions,
+            $this->requestSelection(...),
         );
     }
 
@@ -251,7 +255,33 @@ final class ConversationRuntime
      */
     private function concurrentControls(): ConcurrentControls
     {
-        return new ConcurrentControls($this->view, $this->commands);
+        return new ConcurrentControls($this->view, fn (): Commands => $this->dispatcher);
+    }
+
+    private function requestSelection(SelectionRequest $request): void
+    {
+        // Human input is collected in a later callback, after this Command ends.
+        EventLoop::queue(function () use ($request): void {
+            try {
+                $chosen = $this->view->choose(
+                    $request->prompt,
+                    array_map(
+                        static fn (SelectionOption $option): ChoiceOption => new ChoiceOption(
+                            $option->value,
+                            $option->label,
+                            $option->description,
+                        ),
+                        $request->options,
+                    ),
+                );
+
+                if ($chosen !== null) {
+                    $this->carryOut(new CommandInput($request->command, new CommandArguments($chosen)));
+                }
+            } catch (Throwable $exception) {
+                $this->showFailure($exception);
+            }
+        });
     }
 
     /**

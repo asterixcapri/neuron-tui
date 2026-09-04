@@ -7,7 +7,7 @@ namespace NeuronTuiDemo;
 use NeuronTui\Command\CommandArguments;
 use NeuronTui\Command\CommandInterface;
 use NeuronTui\Conversation\ChoiceOption;
-use NeuronTui\Conversation\Controls;
+use NeuronTui\Command\CommandControls;
 
 final readonly class ModelCommand implements CommandInterface
 {
@@ -21,7 +21,7 @@ final readonly class ModelCommand implements CommandInterface
         return 'Changes the AI model.';
     }
 
-    public function run(Controls $controls, CommandArguments $arguments): void
+    public function run(CommandControls $controls, CommandArguments $arguments): void
     {
         $modelId = $controls->choose('Choose a model', [
             new ChoiceOption(

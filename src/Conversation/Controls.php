@@ -6,13 +6,14 @@ namespace NeuronTui\Conversation;
 
 use Closure;
 use NeuronAI\Agent\Agent;
-use NeuronTui\Command\CommandInterface;
-use NeuronTui\Command\ConcurrentCommandInterface;
+use NeuronTui\Command\CommandControls;
+use NeuronTui\Command\Commands;
+use NeuronTui\Command\SelectionRequest;
 use NeuronTui\Session\Sessions;
 use NeuronTui\Tui\ConversationView;
 
 /**
- * What a Command may do while it runs.
+ * The terminal Adapter's implementation of Command controls.
  *
  * A command is code the Conversation TUI did not write, so it is given verbs
  * rather than the terminal: the widgets behind them stay out of reach and
@@ -20,14 +21,16 @@ use NeuronTui\Tui\ConversationView;
  * because the Agent belongs to the Host Application and Neuron AI already
  * says how it is changed; only which Agent answers does, because that one is
  * the Conversation TUI's own to remember.
+ *
+ * @internal Commands depend on CommandControls rather than this Adapter.
  */
-final readonly class Controls
+final readonly class Controls implements CommandControls
 {
     /**
      * @param Closure(): Agent      $answering  the Agent answering right now
      * @param Closure(string): void $putToAgent how a prompt reaches the Agent
      * @param Closure(Agent): void  $answerFrom how another Agent takes over
-     * @param list<CommandInterface|ConcurrentCommandInterface> $mounted the commands mounted here
+     * @param Closure(SelectionRequest): void $select how a later selection reaches the Adapter
      * @param Sessions $sessions the Sessions owned by this Conversation Runtime
      *
      * @internal the Conversation TUI builds these, a command receives them
@@ -37,8 +40,9 @@ final readonly class Controls
         private Closure $answering,
         private Closure $putToAgent,
         private Closure $answerFrom,
-        private array $mounted,
+        private Commands $mounted,
         private Sessions $sessions,
+        private Closure $select,
     ) {
     }
 
@@ -62,9 +66,14 @@ final readonly class Controls
      * Puts a prompt to the Agent as though the person had written it, and
      * finishes: the answer arrives on the screen, not here.
      */
-    public function ask(string $prompt): void
+    public function promptAgent(string $prompt): void
     {
         ($this->putToAgent)($prompt);
+    }
+
+    public function requestSelection(SelectionRequest $request): void
+    {
+        ($this->select)($request);
     }
 
     /**
@@ -123,9 +132,8 @@ final readonly class Controls
      * TUI is the one that has it, and a Host Application would have to build
      * it before it existed.
      *
-     * @return list<CommandInterface|ConcurrentCommandInterface>
      */
-    public function commands(): array
+    public function commands(): Commands
     {
         return $this->mounted;
     }

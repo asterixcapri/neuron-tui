@@ -6,7 +6,6 @@ namespace NeuronTui\Command;
 
 use DateTimeImmutable;
 use NeuronTui\Conversation\ChoiceOption;
-use NeuronTui\Conversation\Controls;
 use NeuronTui\Conversation\SessionMetadata;
 
 /**
@@ -37,7 +36,7 @@ final readonly class ResumeCommand implements CommandInterface
         return 'Lets you choose a stored Session to resume.';
     }
 
-    public function run(Controls $controls, CommandArguments $arguments): void
+    public function run(CommandControls $controls, CommandArguments $arguments): void
     {
         $sessions = $controls->sessions()->list();
 
