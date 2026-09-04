@@ -9,7 +9,6 @@ use LogicException;
 use NeuronAI\Agent\Agent;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\CommandKitInterface;
-use NeuronTui\Command\ConcurrentCommandInterface;
 use NeuronTui\Conversation\ConversationRuntime;
 use NeuronInteraction\Storage\StorageInterface;
 use Symfony\Component\Tui\Terminal\TerminalInterface;
@@ -35,7 +34,7 @@ final class Tui
 
     private string $figletFont = 'standard';
 
-    /** @var list<CommandInterface|ConcurrentCommandInterface> */
+    /** @var list<CommandInterface> */
     private array $commands = [];
 
     private ?StorageInterface $storage = null;
@@ -102,10 +101,10 @@ final class Tui
     }
 
     /**
-     * @param CommandInterface|ConcurrentCommandInterface|CommandKitInterface<CommandInterface|ConcurrentCommandInterface>|array<array-key, mixed> $commands
+     * @param CommandInterface|CommandKitInterface<CommandInterface>|array<array-key, mixed> $commands
      */
     public function addCommand(
-        CommandInterface|ConcurrentCommandInterface|CommandKitInterface|array $commands,
+        CommandInterface|CommandKitInterface|array $commands,
     ): self
     {
         $this->ensureNotStarted();
@@ -115,12 +114,10 @@ final class Tui
         foreach ($commands as $command) {
             if (
                 !$command instanceof CommandInterface
-                && !$command instanceof ConcurrentCommandInterface
                 && !$command instanceof CommandKitInterface
             ) {
                 throw new InvalidArgumentException(
-                    'A TUI command must implement CommandInterface, '
-                        . 'ConcurrentCommandInterface or CommandKitInterface.',
+                    'A TUI command must implement CommandInterface or CommandKitInterface.',
                 );
             }
 
@@ -140,11 +137,9 @@ final class Tui
     {
         if (
             !$command instanceof CommandInterface
-            && !$command instanceof ConcurrentCommandInterface
         ) {
             throw new InvalidArgumentException(
-                'A TUI command must implement CommandInterface '
-                    . 'or ConcurrentCommandInterface.',
+                'A TUI command must implement CommandInterface.',
             );
         }
 

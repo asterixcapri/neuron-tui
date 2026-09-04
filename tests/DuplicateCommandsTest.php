@@ -9,7 +9,7 @@ use NeuronAI\Agent\Agent;
 use NeuronInteraction\Command\AbstractCommandKit;
 use NeuronInteraction\Command\CommandArguments;
 use NeuronInteraction\Command\CommandInterface;
-use NeuronTui\Command\HelpCommand;
+use NeuronInteraction\Command\HelpCommand;
 use NeuronInteraction\Command\CommandControlsInterface;
 use NeuronTui\Tui;
 use PHPUnit\Framework\TestCase;

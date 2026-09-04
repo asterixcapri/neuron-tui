@@ -34,13 +34,11 @@ use NeuronInteraction\Command\ClearCommand;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\SelectionOption;
 use NeuronInteraction\Command\SelectionRequest;
-use NeuronTui\Command\ConcurrentCommandInterface;
-use NeuronTui\Command\HelpCommand;
-use NeuronTui\Command\LeaveCommand;
+use NeuronInteraction\Command\HelpCommand;
+use NeuronInteraction\Command\LeaveCommand;
 use NeuronInteraction\Command\ResumeCommand;
 use NeuronInteraction\Command\SessionCommandKit;
 
-use NeuronTui\Conversation\ConcurrentControls;
 use NeuronInteraction\Command\CommandControlsInterface;
 use NeuronTui\Tui;
 use NeuronInteraction\Session\Session;
@@ -104,8 +102,7 @@ final class TuiTest extends TestCase
 
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage(
-            'A TUI command must implement CommandInterface, '
-                . 'ConcurrentCommandInterface or CommandKitInterface.',
+            'A TUI command must implement CommandInterface or CommandKitInterface.',
         );
 
         $tui->addCommand([new \stdClass()]);
@@ -1706,7 +1703,7 @@ MARKDOWN;
         );
         // ... the other commands this library ships, ...
         self::assertStringContainsString(
-            '/exit — Closes the Conversation TUI.',
+            '/exit — Stops the interaction.',
             $display,
         );
         // ... and the ones the Host Application wrote itself.
@@ -1852,13 +1849,14 @@ MARKDOWN;
             ) use (&$ran): void {
                 $ran = true;
             },
+            '/help',
         );
         EventLoop::queue(
             static fn () => $terminal->simulateInput("A question\r"),
         );
         EventLoop::delay(
             0.06,
-            static fn () => $terminal->simulateInput("/probe\r"),
+            static fn () => $terminal->simulateInput("/help\r"),
         );
         EventLoop::delay(
             0.12,
@@ -1877,19 +1875,18 @@ MARKDOWN;
 
         self::assertIsString($refusedDisplay);
         self::assertStringContainsString(
-            '/probe is refused while the Agent is working',
+            '/help is refused while the Agent is working',
             $refusedDisplay,
         );
         self::assertFalse($ran);
     }
 
     /**
-     * A Concurrent command is carried out during a Turn, and the answer on
+     * A Help alias is carried out during a Turn, and the answer on
      * its way is none the worse for it.
      */
-    public function testAConcurrentCommandIsCarriedOutMidTurn(): void
+    public function testHelpAliasIsCarriedOutMidTurn(): void
     {
-        $ran = false;
         $midTurnDisplay = null;
         $provider = new class(
             new AssistantMessage('A slow answer.'),
@@ -1905,15 +1902,7 @@ MARKDOWN;
         $agent = new Agent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 24);
-        $command = $this->concurrentCommand(
-            static function (
-                ConcurrentControls $controls,
-                string $arguments,
-            ) use (&$ran): void {
-                $ran = true;
-                $controls->say('The command ran mid-turn.');
-            },
-        );
+        $command = new HelpCommand('probe');
         EventLoop::queue(
             static fn () => $terminal->simulateInput("A question\r"),
         );
@@ -1941,10 +1930,9 @@ MARKDOWN;
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
-        self::assertTrue($ran);
         self::assertIsString($midTurnDisplay);
         self::assertStringContainsString(
-            'The command ran mid-turn.',
+            '/probe — Lists what can be typed here.',
             $midTurnDisplay,
         );
         self::assertStringNotContainsString('is refused', $midTurnDisplay);
@@ -1952,7 +1940,7 @@ MARKDOWN;
         // command ran in, and what the command said is still there under it.
         self::assertStringContainsString('❯ A question', $display);
         self::assertStringContainsString('● A slow answer.', $display);
-        self::assertStringContainsString('The command ran mid-turn.', $display);
+        self::assertStringContainsString('/probe — Lists what can be typed here.', $display);
     }
 
     /**
@@ -2012,23 +2000,94 @@ MARKDOWN;
             $midTurnDisplay,
         );
         self::assertStringContainsString(
-            '/exit — Closes the Conversation TUI.',
+            '/exit — Stops the interaction.',
             $midTurnDisplay,
         );
         self::assertFalse($forcedExit);
     }
 
+    public function testHelpAndLeaveAliasesAnswerWhileTheAgentIsWorking(): void
+    {
+        $forcedExit = false;
+        $midTurnDisplay = null;
+        $provider = new class(
+            new AssistantMessage('A slow answer.'),
+        ) extends FakeAIProvider {
+            public int $started = 0;
+
+            public bool $completed = false;
+
+            protected function streamChunks(Message $response): Generator
+            {
+                ++$this->started;
+                \Amp\delay(0.5);
+                $this->completed = true;
+                yield new TextChunk('slow-stream', 'A slow answer.');
+
+                return $response;
+            }
+        };
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        $terminal = new VirtualTerminal(rows: 24);
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("A question\r"),
+        );
+        EventLoop::delay(
+            0.04,
+            static fn () => $terminal->simulateInput("Queued question\r"),
+        );
+        EventLoop::delay(
+            0.06,
+            static fn () => $terminal->simulateInput("/guide\r"),
+        );
+        EventLoop::delay(
+            0.12,
+            static function () use (&$midTurnDisplay, $terminal): void {
+                $midTurnDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("/quit\r");
+            },
+        );
+        EventLoop::delay(
+            0.9,
+            static function () use (&$forcedExit, $terminal): void {
+                $forcedExit = true;
+                $terminal->simulateInput("\x03");
+            },
+        );
+
+        (new Tui(
+            $agent,
+            terminal: $terminal,
+        ))->addCommand([new HelpCommand('guide'), new LeaveCommand('quit')])->run();
+
+        self::assertIsString($midTurnDisplay);
+        self::assertStringContainsString(
+            '/guide — Lists what can be typed here.',
+            $midTurnDisplay,
+        );
+        self::assertStringContainsString(
+            '/quit — Stops the interaction.',
+            $midTurnDisplay,
+        );
+        self::assertFalse($forcedExit);
+        self::assertSame(1, $provider->started);
+        self::assertFalse($provider->completed);
+    }
+
     /**
-     * A kit carries commands of both kinds, and what arrived in one is
+     * A kit carries ordinary Commands, and what arrived in one is
      * mounted like anything else — the mid-turn permission included.
      */
-    public function testAKitCanCarryAConcurrentCommand(): void
+    public function testAKitCanCarrySharedCommands(): void
     {
         $agent = new Agent();
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(rows: 24);
         $kit = new
-        /** @extends AbstractCommandKit<CommandInterface|ConcurrentCommandInterface> */
+        /** @extends AbstractCommandKit<CommandInterface> */
         class() extends AbstractCommandKit {
             protected function provide(): array
             {
@@ -2055,7 +2114,7 @@ MARKDOWN;
             $display,
         );
         self::assertStringContainsString(
-            '/exit — Closes the Conversation TUI.',
+            '/exit — Stops the interaction.',
             $display,
         );
     }
@@ -3319,7 +3378,7 @@ MARKDOWN;
         );
         self::assertStringContainsString('/exit', $display);
         self::assertStringContainsString(
-            'Closes the Conversation TUI.',
+            'Stops the interaction.',
             $display,
         );
         // The Host Application named /help first, and reads it first.
@@ -3879,7 +3938,7 @@ MARKDOWN;
      * Each string is typed a moment after the one before it, so a test can
      * write a name and then delete part of it.
      *
-     * @param list<CommandInterface|ConcurrentCommandInterface> $commands
+     * @param list<CommandInterface> $commands
      */
     private static function screenAfterTyping(
         array $commands,
@@ -3956,7 +4015,7 @@ MARKDOWN;
     }
 
     /**
-     * During a Turn the list carries the Concurrent commands: one the TUI
+     * During a Turn the list carries the Help and Leave Commands: one the TUI
      * would turn away is never offered there, and the whole list is back
      * under the same name once the Turn has finished.
      */
@@ -3978,14 +4037,7 @@ MARKDOWN;
         $agent = new Agent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
-        $concurrent = $this->concurrentCommand(
-            static function (
-                ConcurrentControls $controls,
-                string $arguments,
-            ): void {
-            },
-            '/pulse',
-        );
+        $concurrent = new HelpCommand('pulse');
         $refused = $this->commandThat(
             static function (CommandControlsInterface $controls, string $arguments): void {
             },
@@ -4579,46 +4631,7 @@ MARKDOWN;
         };
     }
 
-    /**
-     * A Concurrent command that does what the test tells it to with the
-     * controls that remain valid while a Turn is under way.
-     *
-     * @param Closure(ConcurrentControls, string): void $run
-     */
-    private function concurrentCommand(
-        Closure $run,
-        string $name = '/probe',
-    ): ConcurrentCommandInterface {
-        return new class($run, $name) implements ConcurrentCommandInterface {
-            /**
-             * @param Closure(ConcurrentControls, string): void $run
-             */
-            public function __construct(
-                private readonly Closure $run,
-                private readonly string $commandName,
-            ) {
-            }
-
-            public function name(): string
-            {
-                return ltrim($this->commandName, '/');
-            }
-
-            public function describe(): string
-            {
-                return 'Does what the test says, during a Turn or not.';
-            }
-
-            public function run(
-                ConcurrentControls $controls,
-                CommandArguments $arguments,
-            ): void {
-                ($this->run)($controls, $arguments->text);
-            }
-        };
-    }
-
-    /** @return list<CommandInterface|ConcurrentCommandInterface> */
+    /** @return list<CommandInterface> */
     private static function sessionCommands(): array
     {
         return [

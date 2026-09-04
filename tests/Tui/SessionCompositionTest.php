@@ -11,10 +11,8 @@ use NeuronAI\Chat\History\InMemoryChatHistory;
 use NeuronInteraction\Command\CommandArguments;
 use NeuronInteraction\Command\ClearCommand;
 use NeuronInteraction\Command\CommandInterface;
-use NeuronTui\Command\ConcurrentCommandInterface;
 use NeuronInteraction\Command\ResumeCommand;
 use NeuronInteraction\Command\SessionCommandKit;
-use NeuronTui\Conversation\ConcurrentControls;
 use NeuronInteraction\Command\CommandControlsInterface;
 use NeuronInteraction\Session\Sessions;
 use NeuronInteraction\Session\StorageChatHistory;
@@ -102,15 +100,6 @@ final class SessionCompositionTest extends TestCase
         self::assertCount(1, $entries);
     }
 
-    public function testOnlySettledControlsExposeSessions(): void
-    {
-        self::assertContains('sessions', get_class_methods(CommandControlsInterface::class));
-        self::assertNotContains(
-            'sessions',
-            get_class_methods(ConcurrentControls::class),
-        );
-    }
-
     public function testSessionCommandsNeedNoParallelSessionDependency(): void
     {
         self::assertSame('clear', (new ClearCommand())->name());
@@ -122,7 +111,7 @@ final class SessionCompositionTest extends TestCase
             [ClearCommand::class, ResumeCommand::class],
             array_map(
                 static fn (
-                    CommandInterface|ConcurrentCommandInterface $command,
+                    CommandInterface $command,
                 ): string => $command::class,
                 (new SessionCommandKit())->commands(),
             ),
