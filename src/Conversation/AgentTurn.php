@@ -45,7 +45,7 @@ final class AgentTurn
     /**
      * Sends the typed input and shows the answer as it comes back.
      */
-    public function respond(Agent $agent, ConversationInput $input): void
+    public function respond(Agent $agent, ConversationInputInterface $input): void
     {
         $tools = $this->view->beginAgentResponse();
         $contents = '';
@@ -56,7 +56,7 @@ final class AgentTurn
 
         foreach ($events as $event) {
             if ($event instanceof ToolCallChunk) {
-                if ($event->tool instanceof ConversationSource) {
+                if ($event->tool instanceof ConversationSourceInterface) {
                     $event->tool->connect($this->conversation);
                 }
 

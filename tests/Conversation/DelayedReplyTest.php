@@ -13,7 +13,7 @@ use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Tools\Tool;
 use NeuronTui\Conversation\ConversationPort;
-use NeuronTui\Conversation\ConversationSource;
+use NeuronTui\Conversation\ConversationSourceInterface;
 use NeuronTui\Conversation\SubagentReply;
 use NeuronTui\Tui;
 use PHPUnit\Framework\TestCase;
@@ -159,7 +159,7 @@ final class DelayedReplyTest extends TestCase
     }
 }
 
-final class DelayedReplyTool extends Tool implements ConversationSource
+final class DelayedReplyTool extends Tool implements ConversationSourceInterface
 {
     private ?ConversationPort $conversation = null;
 

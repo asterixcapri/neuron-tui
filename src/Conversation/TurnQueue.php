@@ -23,9 +23,9 @@ final class TurnQueue
 {
     private TurnState $state = TurnState::Idle;
 
-    private ?ConversationInput $accepted = null;
+    private ?ConversationInputInterface $accepted = null;
 
-    /** @var list<ConversationInput> */
+    /** @var list<ConversationInputInterface> */
     private array $queued = [];
 
     /**
@@ -34,7 +34,7 @@ final class TurnQueue
      * Returns the input when it starts a turn now, and null when a turn is
      * already under way and the input has joined the queue behind it.
      */
-    public function accept(ConversationInput $input): ?ConversationInput
+    public function accept(ConversationInputInterface $input): ?ConversationInputInterface
     {
         if ($this->state !== TurnState::Idle) {
             $this->queued[] = $input;
@@ -51,7 +51,7 @@ final class TurnQueue
      * Returns null when no accepted message is waiting to be sent, which is
      * every moment except the one right after a turn starts.
      */
-    public function beginWorking(): ?ConversationInput
+    public function beginWorking(): ?ConversationInputInterface
     {
         if ($this->state !== TurnState::Accepted) {
             return null;
@@ -70,7 +70,7 @@ final class TurnQueue
      * Returns the input at the head of the queue, whose turn starts now, or
      * null when nothing was waiting.
      */
-    public function finishWorking(): ?ConversationInput
+    public function finishWorking(): ?ConversationInputInterface
     {
         $this->state = TurnState::Idle;
 
@@ -84,7 +84,7 @@ final class TurnQueue
     /**
      * The inputs still waiting, in the order they will be sent.
      *
-     * @return list<ConversationInput>
+     * @return list<ConversationInputInterface>
      */
     public function queued(): array
     {
@@ -103,7 +103,7 @@ final class TurnQueue
         return $this->state !== TurnState::Idle;
     }
 
-    private function start(ConversationInput $input): ConversationInput
+    private function start(ConversationInputInterface $input): ConversationInputInterface
     {
         $this->accepted = $input;
         $this->state = TurnState::Accepted;

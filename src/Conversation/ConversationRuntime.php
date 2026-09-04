@@ -144,7 +144,7 @@ final class ConversationRuntime
         $this->accept($message);
     }
 
-    private function accept(ConversationInput $input): void
+    private function accept(ConversationInputInterface $input): void
     {
         $accepted = $this->turns->accept($input);
 
@@ -402,7 +402,7 @@ final class ConversationRuntime
      * The one transition from an accepted message to a turn in flight, taken
      * both by an input accepted immediately and by one that waited.
      */
-    private function beginTurn(ConversationInput $input): void
+    private function beginTurn(ConversationInputInterface $input): void
     {
         if ($input instanceof MessageForAgent) {
             $this->view->acceptUserMessage($input->contents);
