@@ -133,7 +133,7 @@ final class SubagentsTest extends TestCase
         ControllableChildTurnExecutor $executor,
         array &$replies,
     ): Subagents {
-        $subagents = new Subagents(WorkerAgent::class, $executor);
+        $subagents = new Subagents(WorkerAgent::class, executor: $executor);
         $subagents->connect(new ConversationPort(
             static function (SubagentReply $reply) use (&$replies): void {
                 $replies[] = $reply;

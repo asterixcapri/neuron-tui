@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronTui\Subagent;
 
+use InvalidArgumentException;
 use LogicException;
 use NeuronAI\Agent\Agent;
 use NeuronTui\Conversation\ConversationPort;
@@ -21,16 +22,26 @@ final class Subagents
     /** @var list<string> */
     private array $ready = [];
 
-    private bool $running = false;
+    private int $activeTurns = 0;
     private ?ConversationPort $conversation = null;
+    private readonly ChildTurnExecutorInterface $executor;
 
     /**
      * @param class-string<Agent> $agentClass
      */
     public function __construct(
         private readonly string $agentClass,
-        private readonly ChildTurnExecutorInterface $executor = new ParallelChildTurnExecutor(),
+        private readonly int $concurrency = 4,
+        ?ChildTurnExecutorInterface $executor = null,
     ) {
+        if ($concurrency < 1) {
+            throw new InvalidArgumentException(
+                'Subagent concurrency must be a positive integer.',
+            );
+        }
+
+        $this->executor = $executor
+            ?? new ParallelChildTurnExecutor($concurrency);
     }
 
     public function connect(ConversationPort $conversation): void
@@ -121,17 +132,24 @@ final class Subagents
 
     private function dispatch(): void
     {
-        if ($this->running || $this->ready === []) {
-            return;
+        while (
+            $this->activeTurns < $this->concurrency
+            && $this->ready !== []
+        ) {
+            $id = array_shift($this->ready);
+            $subagent = $this->subagents[$id];
+            $message = $subagent->nextMessage();
+            $subagent->state = SubagentState::Running;
+            ++$this->activeTurns;
+            $this->execute($subagent, $message, $this->conversation);
         }
+    }
 
-        $id = array_shift($this->ready);
-        $subagent = $this->subagents[$id];
-        $message = $subagent->nextMessage();
-        $subagent->state = SubagentState::Running;
-        $this->running = true;
-        $conversation = $this->conversation;
-
+    private function execute(
+        Subagent $subagent,
+        string $message,
+        ?ConversationPort $conversation,
+    ): void {
         async(function () use ($subagent, $message, $conversation): void {
             try {
                 $result = $this->executor
@@ -144,7 +162,6 @@ final class Subagents
                 $subagent->history = $result->history;
                 $subagent->state = SubagentState::Idle;
                 $subagent->startedAt = null;
-                $this->running = false;
                 $conversation?->deliver(
                     new SubagentReply($subagent->id, $result->reply),
                 );
@@ -154,12 +171,12 @@ final class Subagents
                 $subagent->state = SubagentState::Failed;
                 $subagent->startedAt = null;
                 $subagent->clearQueuedMessages();
-                $this->running = false;
                 $conversation?->deliver(new SubagentReply(
                     $subagent->id,
                     'The subagent failed while processing its turn.',
                 ));
             } finally {
+                --$this->activeTurns;
                 $this->dispatch();
             }
         })->ignore();

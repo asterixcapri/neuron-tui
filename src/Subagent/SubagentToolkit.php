@@ -27,7 +27,10 @@ final class SubagentToolkit extends AbstractToolkit
             );
         }
 
-        $this->subagents = new Subagents($agentClass);
+        $this->subagents = new Subagents(
+            $agentClass,
+            $concurrency,
+        );
     }
 
     /** @return list<ToolInterface> */
