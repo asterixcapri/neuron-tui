@@ -204,7 +204,7 @@ final class DuplicateCommandsTest extends TestCase
 
             public function name(): string
             {
-                return ltrim($this->commandName, '/');
+                return $this->commandName;
             }
 
             public function describe(): string

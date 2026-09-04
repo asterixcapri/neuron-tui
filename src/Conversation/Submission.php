@@ -46,7 +46,7 @@ final class Submission
         $endOfName = strcspn($input, self::WHITESPACE);
 
         return new CommandInput(
-            substr($input, 1, $endOfName - 1),
+            substr($input, 0, $endOfName),
             new CommandArguments(trim(substr($input, $endOfName), self::WHITESPACE)),
         );
     }

@@ -17,7 +17,7 @@ use NeuronTui\Conversation\ConcurrentControls;
 interface ConcurrentCommandInterface
 {
     /**
-     * The name it answers to, slash omitted: `help`.
+     * The name it answers to, including the slash: `/help`.
      */
     public function name(): string;
 

@@ -52,7 +52,7 @@ final class InputHistoryTest extends TestCase
 
             public function name(): string
             {
-                return 'probe';
+                return '/probe';
             }
 
             public function describe(): string
@@ -684,7 +684,7 @@ final class InputHistoryTest extends TestCase
 
             public function name(): string
             {
-                return 'choose';
+                return '/choose';
             }
 
             public function describe(): string
@@ -873,7 +873,7 @@ final class InputHistoryTest extends TestCase
 
             public function name(): string
             {
-                return ltrim($this->commandName, '/');
+                return $this->commandName;
             }
 
             public function describe(): string

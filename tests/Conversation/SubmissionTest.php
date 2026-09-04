@@ -35,7 +35,7 @@ final class SubmissionTest extends TestCase
         $submission = Submission::interpret('/exit');
 
         self::assertInstanceOf(CommandInput::class, $submission);
-        self::assertSame('exit', $submission->name);
+        self::assertSame('/exit', $submission->name);
         self::assertSame('', $submission->arguments->text);
     }
 
@@ -44,7 +44,7 @@ final class SubmissionTest extends TestCase
         $submission = Submission::interpret("/clear \n");
 
         self::assertInstanceOf(CommandInput::class, $submission);
-        self::assertSame('clear', $submission->name);
+        self::assertSame('/clear', $submission->name);
         self::assertSame('', $submission->arguments->text);
     }
 
@@ -53,7 +53,7 @@ final class SubmissionTest extends TestCase
         $submission = Submission::interpret('/exit now');
 
         self::assertInstanceOf(CommandInput::class, $submission);
-        self::assertSame('exit', $submission->name);
+        self::assertSame('/exit', $submission->name);
         self::assertSame('now', $submission->arguments->text);
     }
 
@@ -62,7 +62,7 @@ final class SubmissionTest extends TestCase
         $submission = Submission::interpret("/review  the  diff \t");
 
         self::assertInstanceOf(CommandInput::class, $submission);
-        self::assertSame('review', $submission->name);
+        self::assertSame('/review', $submission->name);
         self::assertSame('the  diff', $submission->arguments->text);
     }
 
@@ -71,7 +71,7 @@ final class SubmissionTest extends TestCase
         $submission = Submission::interpret("/exit\x0Cnow");
 
         self::assertInstanceOf(CommandInput::class, $submission);
-        self::assertSame('exit', $submission->name);
+        self::assertSame('/exit', $submission->name);
         self::assertSame('now', $submission->arguments->text);
     }
 
@@ -80,7 +80,7 @@ final class SubmissionTest extends TestCase
         $submission = Submission::interpret("/unknown with\targuments");
 
         self::assertInstanceOf(CommandInput::class, $submission);
-        self::assertSame('unknown', $submission->name);
+        self::assertSame('/unknown', $submission->name);
         self::assertSame("with\targuments", $submission->arguments->text);
     }
 
