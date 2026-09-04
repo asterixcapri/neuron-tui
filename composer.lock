@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "13ece259a9149a49f88c3863409f8aa0",
+    "content-hash": "4482e4b7bbf84ee093285e26f8a8c4a5",
     "packages": [
         {
             "name": "amphp/amp",
@@ -86,6 +86,63 @@
                 }
             ],
             "time": "2026-07-19T17:59:20+00:00"
+        },
+        {
+            "name": "asterixcapri/neuron-interaction",
+            "version": "dev-feat/extract-neuron-interaction",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/asterixcapri/neuron-interaction.git",
+                "reference": "f432ed069d089b21c3aaf2af497530d3c610c01e"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/asterixcapri/neuron-interaction/zipball/f432ed069d089b21c3aaf2af497530d3c610c01e",
+                "reference": "f432ed069d089b21c3aaf2af497530d3c610c01e",
+                "shasum": ""
+            },
+            "require": {
+                "neuron-core/neuron-ai": "^3.0",
+                "php": ">=8.4.1"
+            },
+            "require-dev": {
+                "phpstan/phpstan": "^2.1",
+                "phpunit/phpunit": "^13.0"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "NeuronInteraction\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "NeuronInteraction\\Tests\\": "tests/"
+                }
+            },
+            "scripts": {
+                "stan": [
+                    "phpstan analyse --no-progress --memory-limit=512M"
+                ],
+                "test": [
+                    "phpunit"
+                ]
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Alessandro Astarita",
+                    "email": "aleast@caprionline.it"
+                }
+            ],
+            "description": "Presentation-independent interaction modules for Neuron AI Agents.",
+            "support": {
+                "source": "https://github.com/asterixcapri/neuron-interaction/tree/feat/extract-neuron-interaction",
+                "issues": "https://github.com/asterixcapri/neuron-interaction/issues"
+            },
+            "time": "2026-09-04T22:15:10+00:00"
         },
         {
             "name": "dflydev/dot-access-data",
@@ -4203,7 +4260,9 @@
     ],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": {},
+    "stability-flags": {
+        "asterixcapri/neuron-interaction": 20
+    },
     "prefer-stable": false,
     "prefer-lowest": false,
     "platform": {

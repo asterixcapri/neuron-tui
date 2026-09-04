@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace NeuronTui\Conversation;
 
 use Closure;
-use NeuronTui\Command\Commands;
+use NeuronInteraction\Command\Commands;
 use NeuronTui\Tui\ConversationView;
 
 /**

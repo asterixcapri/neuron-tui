@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronTui\Tui;
 
-use NeuronTui\Command\CommandInterface;
+use NeuronInteraction\Command\CommandInterface;
 use NeuronTui\Command\ConcurrentCommandInterface;
 use Symfony\Component\Tui\Style\Style;
 use Symfony\Component\Tui\Widget\AbstractWidget;
