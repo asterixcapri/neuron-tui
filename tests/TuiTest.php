@@ -1257,7 +1257,7 @@ MARKDOWN;
                     return;
                 }
 
-                $controls->requestSelection(new SelectionRequest('probe', 'Models', [
+                $controls->requestSelection(new SelectionRequest('/probe', 'Models', [
                     new SelectionOption('stable-value', 'Visible label', 'Optional detail'),
                 ]));
                 $controls->say('Request submitted.');
@@ -1649,8 +1649,8 @@ MARKDOWN;
             $agent,
             terminal: $terminal,
         ))->addCommand([
-                new ClearCommand('wipe'),
-                new LeaveCommand('quit'),
+                new ClearCommand('/wipe'),
+                new LeaveCommand('/quit'),
             ])->run();
 
         // The name it was given is the only name it answers to.
@@ -2077,7 +2077,7 @@ MARKDOWN;
                 string $arguments,
             ) use (&$chosen): void {
                 if ($arguments === '') {
-                    $controls->requestSelection(new SelectionRequest('probe', 'Models', [
+                    $controls->requestSelection(new SelectionRequest('/probe', 'Models', [
                         new SelectionOption('haiku', 'Claude Haiku'),
                         new SelectionOption('007', 'Claude Opus'),
                     ]));
@@ -2149,7 +2149,7 @@ MARKDOWN;
                 $controls->say('History remains visible.');
                 if ($arguments === '') {
                     $controls->requestSelection(new SelectionRequest(
-                        'probe',
+                        '/probe',
                         'Models',
                         [
                             new SelectionOption('haiku', 'Claude Haiku'),
@@ -2244,7 +2244,7 @@ MARKDOWN;
         $command = $this->commandThat(
             static function (CommandControlsInterface $controls, string $arguments): void {
                 if ($arguments === '') {
-                    $controls->requestSelection(new SelectionRequest('probe', 'First choice', [
+                    $controls->requestSelection(new SelectionRequest('/probe', 'First choice', [
                         new SelectionOption('first', 'First option'),
                     ]));
 
@@ -2256,7 +2256,7 @@ MARKDOWN;
                 }
 
                 $controls->requestSelection(new SelectionRequest(
-                    'probe',
+                    '/probe',
                     'Second choice',
                     [new SelectionOption('second', 'Second option')],
                     'alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau',
@@ -2342,7 +2342,7 @@ MARKDOWN;
                 string $arguments,
             ) use (&$chosen): void {
                 if ($arguments === '') {
-                    $controls->requestSelection(new SelectionRequest('probe', 'Models', [
+                    $controls->requestSelection(new SelectionRequest('/probe', 'Models', [
                         new SelectionOption(
                             'detailed',
                             "A selected label with a supplied\nline break and enough text to need more than two visual lines",
@@ -2475,7 +2475,7 @@ MARKDOWN;
                 }
 
                 if ($arguments === '') {
-                    $controls->requestSelection(new SelectionRequest('probe', 'Models', $options));
+                    $controls->requestSelection(new SelectionRequest('/probe', 'Models', $options));
 
                     return;
                 }
@@ -2538,7 +2538,7 @@ MARKDOWN;
                 string $arguments,
             ) use (&$chosen): void {
                 if ($arguments === '') {
-                    $controls->requestSelection(new SelectionRequest('probe', 'Viewport', [
+                    $controls->requestSelection(new SelectionRequest('/probe', 'Viewport', [
                         new SelectionOption('one', 'Option one', 'Detail one'),
                         new SelectionOption('two', 'Option two'),
                         new SelectionOption(
@@ -2662,7 +2662,7 @@ MARKDOWN;
                     new SelectionOption('six', 'Match sixth choice'),
                 ];
                 if ($arguments === '') {
-                    $controls->requestSelection(new SelectionRequest('probe', 'Resizable', $options));
+                    $controls->requestSelection(new SelectionRequest('/probe', 'Resizable', $options));
 
                     return;
                 }
@@ -2672,7 +2672,7 @@ MARKDOWN;
                 }
 
                 $chosen = $arguments;
-                $controls->requestSelection(new SelectionRequest('probe', 'Reopened', array_map(
+                $controls->requestSelection(new SelectionRequest('/probe', 'Reopened', array_map(
                     static fn (SelectionOption $option): SelectionOption => new SelectionOption(
                         'done:' . $option->value,
                         $option->label,
@@ -2804,7 +2804,7 @@ MARKDOWN;
                 string $arguments,
             ) use (&$chosen): void {
                 if ($arguments === '') {
-                    $controls->requestSelection(new SelectionRequest('probe', 'Models', [
+                    $controls->requestSelection(new SelectionRequest('/probe', 'Models', [
                         new SelectionOption('haiku', 'Claude Haiku'),
                     ]));
 
@@ -2868,7 +2868,7 @@ MARKDOWN;
                 string $arguments,
             ) use (&$chosen, &$completions): void {
                 if ($arguments === '') {
-                    $controls->requestSelection(new SelectionRequest('probe', 'Models', [
+                    $controls->requestSelection(new SelectionRequest('/probe', 'Models', [
                         new SelectionOption('haiku', 'Claude Haiku'),
                     ]));
 
@@ -2910,7 +2910,7 @@ MARKDOWN;
                 string $arguments,
             ) use (&$chosen): void {
                 if ($arguments === '') {
-                    $controls->requestSelection(new SelectionRequest('probe', 'Models', [
+                    $controls->requestSelection(new SelectionRequest('/probe', 'Models', [
                         new SelectionOption('haiku', 'Claude Haiku'),
                         new SelectionOption('opus', 'Claude Opus'),
                         new SelectionOption('sonnet', 'Claude Sonnet'),
@@ -2977,7 +2977,7 @@ MARKDOWN;
                 string $arguments,
             ) use (&$shortChoice, &$longChoice): void {
                 if ($arguments === '') {
-                    $controls->requestSelection(new SelectionRequest('probe', 'Short choice', [
+                    $controls->requestSelection(new SelectionRequest('/probe', 'Short choice', [
                         new SelectionOption('short-1', 'Short one'),
                         new SelectionOption('short-2', 'Short two'),
                         new SelectionOption('short-3', 'Short three'),
@@ -2995,7 +2995,7 @@ MARKDOWN;
                 }
 
                 $shortChoice = $arguments;
-                $controls->requestSelection(new SelectionRequest('probe', 'Long choice', [
+                $controls->requestSelection(new SelectionRequest('/probe', 'Long choice', [
                     new SelectionOption('long-1', 'Long one'),
                     new SelectionOption('long-2', 'Long two'),
                     new SelectionOption('long-3', 'Long three'),
@@ -3073,7 +3073,7 @@ MARKDOWN;
                 string $arguments,
             ) use (&$chosen): void {
                 if ($arguments === '') {
-                    $controls->requestSelection(new SelectionRequest('probe', 'Models', [
+                    $controls->requestSelection(new SelectionRequest('/probe', 'Models', [
                         new SelectionOption('alpha', 'Alpha'),
                         new SelectionOption(
                             'detail',
@@ -3167,7 +3167,7 @@ MARKDOWN;
                 ];
                 if ($arguments === '' || $arguments === 'reopen') {
                     $controls->requestSelection(new SelectionRequest(
-                        'probe',
+                        '/probe',
                         $arguments === '' ? 'First opening' : 'Second opening',
                         $options,
                     ));
@@ -3939,7 +3939,7 @@ MARKDOWN;
 
             public function name(): string
             {
-                return ltrim($this->commandName, '/');
+                return $this->commandName;
             }
 
             public function describe(): string
@@ -4119,7 +4119,7 @@ MARKDOWN;
                     return;
                 }
 
-                $controls->requestSelection(new SelectionRequest('probe', 'Models', [
+                $controls->requestSelection(new SelectionRequest('/probe', 'Models', [
                     new SelectionOption('haiku', 'Claude Haiku'),
                 ]));
             },
@@ -4564,7 +4564,7 @@ MARKDOWN;
 
             public function name(): string
             {
-                return ltrim($this->commandName, '/');
+                return $this->commandName;
             }
 
             public function describe(): string
@@ -4601,7 +4601,7 @@ MARKDOWN;
 
             public function name(): string
             {
-                return ltrim($this->commandName, '/');
+                return $this->commandName;
             }
 
             public function describe(): string

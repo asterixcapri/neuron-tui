@@ -181,14 +181,14 @@ final class ConversationRuntime
         $command = $this->commandNamed($input->name);
 
         if ($command === null) {
-            $this->view->showUnknownCommand('/' . $input->name);
+            $this->view->showUnknownCommand($input->name);
 
             return;
         }
 
         if (
             !$command instanceof ConcurrentCommandInterface
-            && $this->refusedWhileWorking('/' . $input->name)
+            && $this->refusedWhileWorking($input->name)
         ) {
             return;
         }

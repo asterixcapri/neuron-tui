@@ -24,9 +24,9 @@ use NeuronTui\Conversation\ConcurrentControls;
 final readonly class HelpCommand implements ConcurrentCommandInterface
 {
     /**
-     * @param string $name the name it answers to, slash omitted
+     * @param string $name the name it answers to, including the slash
      */
-    public function __construct(private string $name = 'help')
+    public function __construct(private string $name = '/help')
     {
     }
 
@@ -43,7 +43,7 @@ final readonly class HelpCommand implements ConcurrentCommandInterface
     public function run(ConcurrentControls $controls, CommandArguments $arguments): void
     {
         foreach ($controls->commands()->all() as $command) {
-            $controls->say('/' . $command->name() . ' — ' . $command->describe());
+            $controls->say($command->name() . ' — ' . $command->describe());
         }
     }
 }

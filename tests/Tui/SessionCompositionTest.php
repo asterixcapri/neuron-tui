@@ -113,10 +113,10 @@ final class SessionCompositionTest extends TestCase
 
     public function testSessionCommandsNeedNoParallelSessionDependency(): void
     {
-        self::assertSame('clear', (new ClearCommand())->name());
-        self::assertSame('wipe', (new ClearCommand('wipe'))->name());
-        self::assertSame('resume', (new ResumeCommand())->name());
-        self::assertSame('return', (new ResumeCommand('return'))->name());
+        self::assertSame('/clear', (new ClearCommand())->name());
+        self::assertSame('/wipe', (new ClearCommand('/wipe'))->name());
+        self::assertSame('/resume', (new ResumeCommand())->name());
+        self::assertSame('/return', (new ResumeCommand('/return'))->name());
 
         self::assertSame(
             [ClearCommand::class, ResumeCommand::class],
@@ -140,7 +140,7 @@ final class SessionCompositionTest extends TestCase
 
             public function name(): string
             {
-                return 'inspect';
+                return '/inspect';
             }
 
             public function describe(): string

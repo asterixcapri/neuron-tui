@@ -148,6 +148,10 @@ final class Tui
             );
         }
 
+        if (!str_starts_with($command->name(), '/')) {
+            throw new InvalidArgumentException('A mounted Command identifier must start with a slash.');
+        }
+
         $this->commands[] = $command;
     }
 
