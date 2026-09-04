@@ -53,6 +53,7 @@ final class Subagents
             $this->agentClass,
             SubagentState::Queued,
             $task,
+            startedAt: microtime(true),
         );
         $this->ready[] = $id;
         $this->dispatch();
@@ -60,7 +61,15 @@ final class Subagents
         return ['id' => $id, 'state' => $this->subagents[$id]->state->value];
     }
 
-    /** @return array{id: string, state: string, history: list<array<string, mixed>>} */
+    /**
+     * @return array{
+     *     id: string,
+     *     state: string,
+     *     queued_messages: int,
+     *     history: list<array<string, mixed>>,
+     *     elapsed_seconds?: float
+     * }
+     */
     public function status(string $id): array
     {
         $subagent = $this->subagents[$id] ?? null;
@@ -69,19 +78,45 @@ final class Subagents
             throw new LogicException("Unknown subagent ID: {$id}");
         }
 
-        return [
+        $status = [
             'id' => $id,
             'state' => $subagent->state->value,
+            'queued_messages' => $subagent->queuedMessages(),
             'history' => $subagent->history,
         ];
+
+        if ($subagent->startedAt !== null) {
+            $status['elapsed_seconds'] = microtime(true) - $subagent->startedAt;
+        }
+
+        return $status;
     }
 
     /** @return array{id: string, state: string} */
     public function send(string $id, string $message): array
     {
-        throw new LogicException(
-            'Continuing a subagent is not available yet.',
-        );
+        $subagent = $this->subagents[$id] ?? null;
+
+        if (!$subagent instanceof Subagent) {
+            throw new LogicException("Unknown subagent ID: {$id}");
+        }
+
+        if ($subagent->state === SubagentState::Failed) {
+            throw new LogicException(
+                "Subagent {$id} has failed; create a new subagent to retry.",
+            );
+        }
+
+        $subagent->enqueue($message);
+
+        if ($subagent->state === SubagentState::Idle) {
+            $subagent->state = SubagentState::Queued;
+            $subagent->startedAt = microtime(true);
+            $this->ready[] = $id;
+            $this->dispatch();
+        }
+
+        return ['id' => $id, 'state' => $subagent->state->value];
     }
 
     private function dispatch(): void
@@ -92,34 +127,55 @@ final class Subagents
 
         $id = array_shift($this->ready);
         $subagent = $this->subagents[$id];
+        $message = $subagent->nextMessage();
         $subagent->state = SubagentState::Running;
         $this->running = true;
         $conversation = $this->conversation;
 
-        async(function () use ($subagent, $conversation): void {
+        async(function () use ($subagent, $message, $conversation): void {
             try {
                 $result = $this->executor
                     ->execute(
                         $subagent->agentClass,
-                        $subagent->message,
+                        $message,
                         $subagent->history,
                     )
                     ->await();
                 $subagent->history = $result->history;
                 $subagent->state = SubagentState::Idle;
+                $subagent->startedAt = null;
+                $this->running = false;
                 $conversation?->deliver(
                     new SubagentReply($subagent->id, $result->reply),
                 );
+
+                $this->queueNextTurn($subagent);
             } catch (Throwable) {
                 $subagent->state = SubagentState::Failed;
+                $subagent->startedAt = null;
+                $subagent->clearQueuedMessages();
+                $this->running = false;
                 $conversation?->deliver(new SubagentReply(
                     $subagent->id,
                     'The subagent failed while processing its turn.',
                 ));
             } finally {
-                $this->running = false;
                 $this->dispatch();
             }
         })->ignore();
+    }
+
+    private function queueNextTurn(Subagent $subagent): void
+    {
+        if (
+            $subagent->state !== SubagentState::Idle
+            || !$subagent->hasQueuedMessages()
+        ) {
+            return;
+        }
+
+        $subagent->state = SubagentState::Queued;
+        $subagent->startedAt = microtime(true);
+        $this->ready[] = $subagent->id;
     }
 }
