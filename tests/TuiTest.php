@@ -38,7 +38,7 @@ use NeuronTui\Command\ConcurrentCommandInterface;
 use NeuronTui\Command\HelpCommand;
 use NeuronTui\Command\LeaveCommand;
 use NeuronInteraction\Command\ResumeCommand;
-use NeuronInteraction\Command\SessionKit;
+use NeuronInteraction\Command\SessionCommandKit;
 
 use NeuronTui\Conversation\ConcurrentControls;
 use NeuronInteraction\Command\CommandControlsInterface;
@@ -5500,7 +5500,7 @@ MARKDOWN;
             $agent,
             terminal: $terminal,
         ))->setStorage($storage)->addCommand([
-            new SessionKit(),
+            new SessionCommandKit(),
             new LeaveCommand(),
         ])->run();
 
@@ -5577,7 +5577,7 @@ MARKDOWN;
             $agent,
             terminal: $terminal,
         ))->setStorage($storage)->addCommand([
-                (new SessionKit())->exclude([ClearCommand::class]),
+                (new SessionCommandKit())->exclude([ClearCommand::class]),
                 new LeaveCommand(),
             ])->run();
 
@@ -5646,7 +5646,7 @@ MARKDOWN;
             $agent,
             terminal: $terminal,
         ))->setStorage($storage)->addCommand([
-                (new SessionKit())->only([ClearCommand::class]),
+                (new SessionCommandKit())->only([ClearCommand::class]),
                 new LeaveCommand(),
             ])->run();
 
