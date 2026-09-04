@@ -16,7 +16,7 @@ use NeuronTui\Command\ClearCommand;
 use NeuronTui\Command\CommandInterface;
 use NeuronTui\Command\ResumeCommand;
 use NeuronTui\Conversation\ChoiceOption;
-use NeuronTui\Conversation\Controls;
+use NeuronTui\Command\CommandControls;
 use NeuronTui\Session\Sessions;
 use NeuronTui\Storage\FileStorage;
 use NeuronTui\Storage\InMemoryStorage;
@@ -59,7 +59,7 @@ final class InputHistoryTest extends TestCase
                 return 'Record that the command ran.';
             }
 
-            public function run(Controls $controls, CommandArguments $arguments): void
+            public function run(CommandControls $controls, CommandArguments $arguments): void
             {
                 $this->arguments[] = $arguments->text;
             }
@@ -691,7 +691,7 @@ final class InputHistoryTest extends TestCase
                 return 'Choose an option.';
             }
 
-            public function run(Controls $controls, CommandArguments $arguments): void
+            public function run(CommandControls $controls, CommandArguments $arguments): void
             {
                 $this->chosen = $controls->choose('Options', [
                     new ChoiceOption('first', 'First option'),
@@ -874,7 +874,7 @@ final class InputHistoryTest extends TestCase
                 return $this->description;
             }
 
-            public function run(Controls $controls, CommandArguments $arguments): void
+            public function run(CommandControls $controls, CommandArguments $arguments): void
             {
             }
         };

@@ -5,17 +5,12 @@ declare(strict_types=1);
 namespace NeuronTui\Tests\Command;
 
 use Closure;
-use NeuronAI\Agent\Agent;
 use NeuronTui\Command\CommandArguments;
+use NeuronTui\Command\CommandControls;
 use NeuronTui\Command\CommandInterface;
 use NeuronTui\Command\Commands;
-use NeuronTui\Conversation\Controls;
-use NeuronTui\Session\Sessions;
-use NeuronTui\Storage\InMemoryStorage;
-use NeuronTui\Tui\ConversationView;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
-use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
 final class CommandsTest extends TestCase
 {
@@ -95,24 +90,15 @@ final class CommandsTest extends TestCase
                 return 'A test Command';
             }
 
-            public function run(Controls $controls, CommandArguments $arguments): void
+            public function run(CommandControls $controls, CommandArguments $arguments): void
             {
                 ($this->run)($arguments);
             }
         };
     }
 
-    private static function controls(): Controls
+    private static function controls(): CommandControls
     {
-        return new Controls(
-            new ConversationView(new VirtualTerminal(), 'Test', 'Commands'),
-            static fn (): Agent => new Agent(),
-            static function (string $prompt): void {
-            },
-            static function (Agent $agent): void {
-            },
-            [],
-            new Sessions(new InMemoryStorage()),
-        );
+        return new FakeCommandControls();
     }
 }

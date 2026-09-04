@@ -41,7 +41,7 @@ final readonly class HelpCommand implements ConcurrentCommandInterface
 
     public function run(ConcurrentControls $controls, CommandArguments $arguments): void
     {
-        foreach ($controls->commands() as $command) {
+        foreach ($controls->commands()->all() as $command) {
             $controls->say('/' . $command->name() . ' — ' . $command->describe());
         }
     }
