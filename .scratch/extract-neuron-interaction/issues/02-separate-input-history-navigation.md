@@ -4,12 +4,11 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] The persistence-facing Input history owns only the ordered submitted-input sequence and its recording rules.
-- [ ] Blank inputs and consecutive duplicates retain their established behavior.
-- [ ] Messages and Command invocations are both recorded as originally submitted.
-- [ ] Navigation position, older/newer movement, draft restoration and leaving navigation are owned by the TUI Adapter.
-- [ ] Two navigation instances may use the same persisted sequence without sharing cursor state.
-- [ ] Existing terminal history navigation remains externally unchanged through virtual-terminal tests.
-
+- [x] The persistence-facing Input history owns only the ordered submitted-input sequence and its recording rules.
+- [x] Blank inputs and consecutive duplicates retain their established behavior.
+- [x] Messages and Command invocations are both recorded as originally submitted.
+- [x] Navigation position, older/newer movement, draft restoration and leaving navigation are owned by the TUI Adapter.
+- [x] Two navigation instances may use the same persisted sequence without sharing cursor state.
+- [x] Existing terminal history navigation remains externally unchanged through virtual-terminal tests.
