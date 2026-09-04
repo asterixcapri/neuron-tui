@@ -1,6 +1,12 @@
 # Extract Neuron Interaction
 
-Status: ready-for-agent
+Status: completed
+
+Implementation naming: the shared controls contract is
+`CommandControlsInterface`, following the repository's required `Interface`
+suffix. The concrete Session Command kit is `SessionCommandKit`, following
+`AbstractCommandKit`; earlier conceptual references below use the original
+names. The extraction is implemented on development branches, not released.
 
 ## Problem Statement
 

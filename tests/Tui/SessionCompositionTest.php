@@ -13,7 +13,7 @@ use NeuronInteraction\Command\ClearCommand;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronTui\Command\ConcurrentCommandInterface;
 use NeuronInteraction\Command\ResumeCommand;
-use NeuronInteraction\Command\SessionKit;
+use NeuronInteraction\Command\SessionCommandKit;
 use NeuronTui\Conversation\ConcurrentControls;
 use NeuronInteraction\Command\CommandControlsInterface;
 use NeuronInteraction\Session\Sessions;
@@ -124,7 +124,7 @@ final class SessionCompositionTest extends TestCase
                 static fn (
                     CommandInterface|ConcurrentCommandInterface $command,
                 ): string => $command::class,
-                (new SessionKit())->commands(),
+                (new SessionCommandKit())->commands(),
             ),
         );
     }
