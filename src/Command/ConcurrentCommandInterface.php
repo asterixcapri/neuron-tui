@@ -16,7 +16,7 @@ use NeuronTui\Conversation\ConcurrentControls;
 interface ConcurrentCommandInterface
 {
     /**
-     * The name it answers to, slash included: `/help`.
+     * The name it answers to, slash omitted: `help`.
      */
     public function name(): string;
 
@@ -27,6 +27,6 @@ interface ConcurrentCommandInterface
 
     public function run(
         ConcurrentControls $controls,
-        string $arguments,
+        CommandArguments $arguments,
     ): void;
 }

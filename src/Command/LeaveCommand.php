@@ -20,9 +20,9 @@ use NeuronTui\Conversation\ConcurrentControls;
 final readonly class LeaveCommand implements ConcurrentCommandInterface
 {
     /**
-     * @param string $name the name it answers to, slash included
+     * @param string $name the name it answers to, slash omitted
      */
-    public function __construct(private string $name = '/exit')
+    public function __construct(private string $name = 'exit')
     {
     }
 
@@ -36,7 +36,7 @@ final readonly class LeaveCommand implements ConcurrentCommandInterface
         return 'Closes the Conversation TUI.';
     }
 
-    public function run(ConcurrentControls $controls, string $arguments): void
+    public function run(ConcurrentControls $controls, CommandArguments $arguments): void
     {
         $controls->stop();
     }

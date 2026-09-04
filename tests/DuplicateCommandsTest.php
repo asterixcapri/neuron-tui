@@ -7,6 +7,7 @@ namespace NeuronTui\Tests;
 use Closure;
 use NeuronAI\Agent\Agent;
 use NeuronTui\Command\AbstractCommandKit;
+use NeuronTui\Command\CommandArguments;
 use NeuronTui\Command\CommandInterface;
 use NeuronTui\Command\HelpCommand;
 use NeuronTui\Conversation\Controls;
@@ -200,7 +201,7 @@ final class DuplicateCommandsTest extends TestCase
 
             public function name(): string
             {
-                return $this->commandName;
+                return ltrim($this->commandName, '/');
             }
 
             public function describe(): string
@@ -208,10 +209,10 @@ final class DuplicateCommandsTest extends TestCase
                 return $this->description;
             }
 
-            public function run(Controls $controls, string $arguments): void
+            public function run(Controls $controls, CommandArguments $arguments): void
             {
                 if ($this->run instanceof Closure) {
-                    ($this->run)($controls, $arguments);
+                    ($this->run)($controls, $arguments->text);
                 }
             }
         };

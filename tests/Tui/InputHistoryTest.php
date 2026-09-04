@@ -11,6 +11,7 @@ use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Testing\FakeAIProvider;
+use NeuronTui\Command\CommandArguments;
 use NeuronTui\Command\ClearCommand;
 use NeuronTui\Command\CommandInterface;
 use NeuronTui\Command\ResumeCommand;
@@ -50,7 +51,7 @@ final class InputHistoryTest extends TestCase
 
             public function name(): string
             {
-                return '/probe';
+                return 'probe';
             }
 
             public function describe(): string
@@ -58,9 +59,9 @@ final class InputHistoryTest extends TestCase
                 return 'Record that the command ran.';
             }
 
-            public function run(Controls $controls, string $arguments): void
+            public function run(Controls $controls, CommandArguments $arguments): void
             {
-                $this->arguments[] = $arguments;
+                $this->arguments[] = $arguments->text;
             }
         };
 
@@ -682,7 +683,7 @@ final class InputHistoryTest extends TestCase
 
             public function name(): string
             {
-                return '/choose';
+                return 'choose';
             }
 
             public function describe(): string
@@ -690,7 +691,7 @@ final class InputHistoryTest extends TestCase
                 return 'Choose an option.';
             }
 
-            public function run(Controls $controls, string $arguments): void
+            public function run(Controls $controls, CommandArguments $arguments): void
             {
                 $this->chosen = $controls->choose('Options', [
                     new ChoiceOption('first', 'First option'),
@@ -865,7 +866,7 @@ final class InputHistoryTest extends TestCase
 
             public function name(): string
             {
-                return $this->commandName;
+                return ltrim($this->commandName, '/');
             }
 
             public function describe(): string
@@ -873,7 +874,7 @@ final class InputHistoryTest extends TestCase
                 return $this->description;
             }
 
-            public function run(Controls $controls, string $arguments): void
+            public function run(Controls $controls, CommandArguments $arguments): void
             {
             }
         };

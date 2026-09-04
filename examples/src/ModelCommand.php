@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronTuiDemo;
 
+use NeuronTui\Command\CommandArguments;
 use NeuronTui\Command\CommandInterface;
 use NeuronTui\Conversation\ChoiceOption;
 use NeuronTui\Conversation\Controls;
@@ -12,7 +13,7 @@ final readonly class ModelCommand implements CommandInterface
 {
     public function name(): string
     {
-        return '/model';
+        return 'model';
     }
 
     public function describe(): string
@@ -20,7 +21,7 @@ final readonly class ModelCommand implements CommandInterface
         return 'Changes the AI model.';
     }
 
-    public function run(Controls $controls, string $arguments): void
+    public function run(Controls $controls, CommandArguments $arguments): void
     {
         $modelId = $controls->choose('Choose a model', [
             new ChoiceOption(
