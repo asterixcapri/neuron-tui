@@ -4,14 +4,13 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Shared Command identifiers contain no slash or other Adapter invocation syntax.
-- [ ] Neuron TUI continues to accept and suggest slash-prefixed Commands while removing the slash at its boundary.
-- [ ] Raw argument text is delivered through `CommandArguments` with whitespace behavior covered at the public parsing and dispatch seams.
-- [ ] `Commands` preserves mounting order and exposes mounted Commands for enumeration.
-- [ ] The first mounted Command with a duplicate identifier executes, while duplicate entries may remain enumerable.
-- [ ] Dispatch reports completed, unknown and failed states through one `CommandExecution` type.
-- [ ] A failed execution retains the identifier and original exception; an unknown identifier is not represented by an exception.
-- [ ] Command dispatch behavior is tested through the public collection and the TUI public API.
-
+- [x] Shared Command identifiers contain no slash or other Adapter invocation syntax.
+- [x] Neuron TUI continues to accept and suggest slash-prefixed Commands while removing the slash at its boundary.
+- [x] Raw argument text is delivered through `CommandArguments` with whitespace behavior covered at the public parsing and dispatch seams.
+- [x] `Commands` preserves mounting order and exposes mounted Commands for enumeration.
+- [x] The first mounted Command with a duplicate identifier executes, while duplicate entries may remain enumerable.
+- [x] Dispatch reports completed, unknown and failed states through one `CommandExecution` type.
+- [x] A failed execution retains the identifier and original exception; an unknown identifier is not represented by an exception.
+- [x] Command dispatch behavior is tested through the public collection and the TUI public API.
