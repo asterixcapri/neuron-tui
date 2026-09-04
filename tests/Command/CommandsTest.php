@@ -6,7 +6,7 @@ namespace NeuronTui\Tests\Command;
 
 use Closure;
 use NeuronTui\Command\CommandArguments;
-use NeuronTui\Command\CommandControls;
+use NeuronTui\Command\CommandControlsInterface;
 use NeuronTui\Command\CommandInterface;
 use NeuronTui\Command\Commands;
 use PHPUnit\Framework\TestCase;
@@ -90,14 +90,14 @@ final class CommandsTest extends TestCase
                 return 'A test Command';
             }
 
-            public function run(CommandControls $controls, CommandArguments $arguments): void
+            public function run(CommandControlsInterface $controls, CommandArguments $arguments): void
             {
                 ($this->run)($arguments);
             }
         };
     }
 
-    private static function controls(): CommandControls
+    private static function controls(): CommandControlsInterface
     {
         return new FakeCommandControls();
     }

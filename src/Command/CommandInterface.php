@@ -17,5 +17,5 @@ interface CommandInterface
      */
     public function describe(): string;
 
-    public function run(CommandControls $controls, CommandArguments $arguments): void;
+    public function run(CommandControlsInterface $controls, CommandArguments $arguments): void;
 }

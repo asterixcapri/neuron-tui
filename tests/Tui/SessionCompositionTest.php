@@ -15,7 +15,7 @@ use NeuronTui\Command\ConcurrentCommandInterface;
 use NeuronTui\Command\ResumeCommand;
 use NeuronTui\Command\SessionKit;
 use NeuronTui\Conversation\ConcurrentControls;
-use NeuronTui\Command\CommandControls;
+use NeuronTui\Command\CommandControlsInterface;
 use NeuronTui\Session\Sessions;
 use NeuronTui\Session\StorageChatHistory;
 use NeuronTui\Storage\InMemoryStorage;
@@ -66,7 +66,7 @@ final class SessionCompositionTest extends TestCase
         $terminal = new VirtualTerminal();
         $received = [];
         $command = $this->commandThat(
-            static function (CommandControls $controls) use (&$received): void {
+            static function (CommandControlsInterface $controls) use (&$received): void {
                 $received[] = $controls->sessions();
             },
         );
@@ -104,7 +104,7 @@ final class SessionCompositionTest extends TestCase
 
     public function testOnlySettledControlsExposeSessions(): void
     {
-        self::assertContains('sessions', get_class_methods(CommandControls::class));
+        self::assertContains('sessions', get_class_methods(CommandControlsInterface::class));
         self::assertNotContains(
             'sessions',
             get_class_methods(ConcurrentControls::class),
@@ -130,12 +130,12 @@ final class SessionCompositionTest extends TestCase
     }
 
     /**
-     * @param Closure(CommandControls): void $run
+     * @param Closure(CommandControlsInterface): void $run
      */
     private function commandThat(Closure $run): CommandInterface
     {
         return new class($run) implements CommandInterface {
-            /** @param Closure(CommandControls): void $run */
+            /** @param Closure(CommandControlsInterface): void $run */
             public function __construct(private readonly Closure $run) {}
 
             public function name(): string
@@ -148,7 +148,7 @@ final class SessionCompositionTest extends TestCase
                 return 'Inspects the runtime composition.';
             }
 
-            public function run(CommandControls $controls, CommandArguments $arguments): void
+            public function run(CommandControlsInterface $controls, CommandArguments $arguments): void
             {
                 ($this->run)($controls);
             }

@@ -17,6 +17,7 @@ final readonly class SelectionRequest
         public string $command,
         public string $prompt,
         array $options,
+        public ?string $description = null,
     ) {
         if ($options === [] || !array_is_list($options)) {
             throw new InvalidArgumentException('A selection must offer an ordered non-empty list of options.');

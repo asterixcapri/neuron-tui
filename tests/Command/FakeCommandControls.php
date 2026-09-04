@@ -4,15 +4,14 @@ declare(strict_types=1);
 
 namespace NeuronTui\Tests\Command;
 
-use LogicException;
 use NeuronAI\Agent\Agent;
-use NeuronTui\Command\CommandControls;
+use NeuronTui\Command\CommandControlsInterface;
 use NeuronTui\Command\Commands;
 use NeuronTui\Command\SelectionRequest;
 use NeuronTui\Session\Sessions;
 use NeuronTui\Storage\InMemoryStorage;
 
-final class FakeCommandControls implements CommandControls
+final class FakeCommandControls implements CommandControlsInterface
 {
     /** @var list<string> */
     public array $notices = [];
@@ -78,10 +77,5 @@ final class FakeCommandControls implements CommandControls
     public function stop(): void
     {
         $this->stopped = true;
-    }
-
-    public function choose(string $title, array $options, ?string $description = null): ?string
-    {
-        throw new LogicException('Blocking selection is a temporary TUI compatibility bridge.');
     }
 }
