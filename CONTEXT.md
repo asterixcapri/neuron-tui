@@ -12,9 +12,15 @@ _Avoid_: Neuron CLI, executable, command
 
 **Agent**:
 A ready-to-use Neuron AI agent whose capabilities and dependencies have
-already been configured by the Host Application. It may coordinate other
-Agents, but Neuron TUI sees only the Agent it converses with.
+already been configured by the Host Application. It may coordinate Subagents,
+but only the Agent in charge answers the conversation.
 _Avoid_: Bot, model
+
+**Subagent**:
+An Agent created to carry work in a separate History while another Agent
+remains in charge of the conversation. Its stable identity lets that Agent
+continue the exchange across more than one Turn.
+_Avoid_: Delegation, worker, tool
 
 **Host Application**:
 The application that configures the Agent and starts the terminal
@@ -101,9 +107,10 @@ this is not the Picker, whatever the two look like.
 _Avoid_: Picker, menu, autocomplete, palette, command palette
 
 **Turn**:
-One stretch of the conversation, from the moment a person's message is taken
-for the Agent to the moment the Agent has finished answering it. A message
-written while a turn is under way waits behind it.
+One stretch of the conversation, from the moment an input is taken for the
+Agent to the moment the Agent has finished answering it. An input may come
+from the person or a Subagent; another input arriving while a turn is under
+way waits behind it.
 _Avoid_: Round, exchange, request
 
 **Working indicator**:

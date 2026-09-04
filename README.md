@@ -66,7 +66,10 @@ The demo reads `examples/.env` through Symfony Dotenv. Existing process
 environment variables take precedence over values from `examples/.env`. It
 starts with an inexpensive OpenAI model; `/model` opens a Picker that can also
 switch to other OpenAI and Anthropic models. It mounts the commands this
-library ships, so `/exit` or Ctrl+C closes it and `/help` lists them.
+library ships, so `/exit` or Ctrl+C closes it and `/help` lists them. The Agent
+also mounts the Subagent toolkit: ask it to delegate independent work to run
+that work concurrently. Subagents use the demo's default model and receive the
+provider credentials through the worker process environment.
 
 ## Commands
 

@@ -12,9 +12,11 @@ use NeuronAI\Providers\OpenAI\Responses\OpenAIResponses;
 use NeuronAI\Tools\Toolkits\Calendar\CalendarToolkit;
 use NeuronAI\Tools\Toolkits\FileSystem\FileSystemToolkit;
 use NeuronAI\Tools\Toolkits\Jina\JinaToolkit;
+use NeuronAI\Tools\Toolkits\ToolkitInterface;
+use NeuronTui\Subagent\SubagentToolkit;
 use RuntimeException;
 
-final class DemoAgent extends Agent
+class DemoAgent extends Agent
 {
     private string $modelId = 'openai:gpt-5.4-nano';
 
@@ -37,9 +39,9 @@ final class DemoAgent extends Agent
         [$provider, $model] = explode(':', $this->modelId, 2);
 
         if ($provider === 'openai') {
-            $key = $_ENV['OPENAI_API_KEY'] ?? null;
+            $key = self::environment('OPENAI_API_KEY');
 
-            if (!is_string($key) || $key === '') {
+            if ($key === null) {
                 throw new RuntimeException('OPENAI_API_KEY not configured');
             }
 
@@ -49,9 +51,9 @@ final class DemoAgent extends Agent
                 httpClient: new AmpHttpClient(),
             );
         } elseif ($provider === 'anthropic') {
-            $key = $_ENV['ANTHROPIC_API_KEY'] ?? null;
+            $key = self::environment('ANTHROPIC_API_KEY');
 
-            if (!is_string($key) || $key === '') {
+            if ($key === null) {
                 throw new RuntimeException('ANTHROPIC_API_KEY not configured');
             }
 
@@ -67,17 +69,39 @@ final class DemoAgent extends Agent
 
     protected function tools(): array
     {
+        return [
+            ...$this->demoTools(),
+            new SubagentToolkit(DemoSubagent::class),
+        ];
+    }
+
+    /** @return list<ToolkitInterface> */
+    protected function demoTools(): array
+    {
         $tools = [
             new FileSystemToolkit(),
             new CalendarToolkit(),
         ];
 
-        $jinaKey = $_ENV['JINA_API_KEY'] ?? null;
+        $jinaKey = self::environment('JINA_API_KEY');
 
-        if (is_string($jinaKey) && $jinaKey !== '') {
+        if ($jinaKey !== null) {
             $tools[] = new JinaToolkit($jinaKey);
         }
 
         return $tools;
+    }
+
+    private static function environment(string $name): ?string
+    {
+        $value = getenv($name);
+
+        if (is_string($value) && $value !== '') {
+            return $value;
+        }
+
+        $value = $_ENV[$name] ?? null;
+
+        return is_string($value) && $value !== '' ? $value : null;
     }
 }

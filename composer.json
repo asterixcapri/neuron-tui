@@ -12,6 +12,7 @@
     "require": {
         "php": ">=8.4.1",
         "amphp/amp": "^3.0",
+        "amphp/parallel": "^2.4",
         "league/commonmark": "^2.10",
         "neuron-core/neuron-ai": "^3.0",
         "symfony/tui": "^8.1.2",

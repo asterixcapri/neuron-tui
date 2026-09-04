@@ -44,6 +44,8 @@ final class ConversationRuntime
 
     private readonly AgentTurn $agentTurn;
 
+    private ConversationPort $conversation;
+
     private readonly Sessions $sessions;
 
     private readonly InputHistory $inputHistory;
@@ -89,6 +91,7 @@ final class ConversationRuntime
         );
         $this->workingIndicator = $this->view->workingIndicator();
         $this->turns = new TurnQueue();
+        $this->conversation = new ConversationPort($this->accept(...));
         $this->agentTurn = new AgentTurn($this->view);
         $this->view->showHistory(
             $this->agent->getChatHistory()->getMessages(),
@@ -113,7 +116,11 @@ final class ConversationRuntime
             );
         }
 
-        $this->view->run();
+        try {
+            $this->view->run();
+        } finally {
+            $this->conversation->close();
+        }
     }
 
     private function submit(SubmitEvent $event): void
@@ -138,7 +145,12 @@ final class ConversationRuntime
 
     private function send(MessageForAgent $message): void
     {
-        $accepted = $this->turns->accept($message->contents);
+        $this->accept($message);
+    }
+
+    private function accept(ConversationInputInterface $input): void
+    {
+        $accepted = $this->turns->accept($input);
 
         if ($accepted === null) {
             $this->showQueue();
@@ -276,6 +288,8 @@ final class ConversationRuntime
             return;
         }
 
+        $this->conversation->close();
+        $this->conversation = new ConversationPort($this->accept(...));
         $this->view->showHistory($current->getMessages());
     }
 
@@ -345,8 +359,9 @@ final class ConversationRuntime
             // The Agent is read the moment the turn starts, so a turn under
             // way ends with the one that took it.
             $agent = $this->agent;
-            $this->response = async(function () use ($agent, $message): void {
-                $this->agentTurn->respond($agent, $message);
+            $conversation = $this->conversation;
+            $this->response = async(function () use ($agent, $message, $conversation): void {
+                $this->agentTurn->respond($agent, $message, $conversation);
             });
 
             return true;
@@ -389,14 +404,17 @@ final class ConversationRuntime
     }
 
     /**
-     * Shows the message as the person's own and puts the TUI to work.
+     * Shows person-authored input when appropriate and puts the TUI to work.
      *
      * The one transition from an accepted message to a turn in flight, taken
-     * both by a message straight from the composer and by one that waited.
+     * both by an input accepted immediately and by one that waited.
      */
-    private function beginTurn(string $message): void
+    private function beginTurn(ConversationInputInterface $input): void
     {
-        $this->view->acceptUserMessage($message);
+        if ($input instanceof MessageForAgent) {
+            $this->view->acceptUserMessage($input->contents);
+        }
+
         $this->view->working();
         $this->workingIndicator->start(microtime(true));
     }
@@ -419,7 +437,15 @@ final class ConversationRuntime
 
     private function showQueue(): void
     {
-        $this->view->showQueuedMessages($this->turns->queued());
+        $messages = [];
+
+        foreach ($this->turns->queued() as $input) {
+            if ($input instanceof MessageForAgent) {
+                $messages[] = $input->contents;
+            }
+        }
+
+        $this->view->showQueuedMessages($messages);
     }
 
     private function handleInput(InputEvent $event): void

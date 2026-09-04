@@ -5,17 +5,17 @@ declare(strict_types=1);
 namespace NeuronTui\Conversation;
 
 /**
- * What becomes of a message written while the Agent is still answering.
+ * What becomes of an input accepted while the Agent is still answering.
  *
  * The states of a turn, the messages waiting behind it and the transitions
  * between them are all here, and nothing else is: the queue reads no input,
  * paints nothing and never touches the Agent. Every rule about ordering can
  * therefore be exercised in memory, with no event loop and no provider.
  *
- * A turn is occupied from the moment a message is taken, not from the moment
- * the Agent receives it, so a second message written in between still waits
- * its turn. Starting a turn is one transition, whether the message came
- * straight from the composer or from the queue.
+ * A turn is occupied from the moment an input is taken, not from the moment
+ * the Agent receives it, so another input accepted in between still waits.
+ * Starting a turn is one transition, whether the input came from the person,
+ * a Subagent or the queue.
  *
  * @internal
  */
@@ -23,54 +23,54 @@ final class TurnQueue
 {
     private TurnState $state = TurnState::Idle;
 
-    private ?string $accepted = null;
+    private ?ConversationInputInterface $accepted = null;
 
-    /** @var list<string> */
+    /** @var list<ConversationInputInterface> */
     private array $queued = [];
 
     /**
-     * Takes a message written by the person.
+     * Takes an input for the Agent in charge.
      *
-     * Returns the message when it starts a turn now, and null when a turn is
-     * already under way and the message has joined the queue behind it.
+     * Returns the input when it starts a turn now, and null when a turn is
+     * already under way and the input has joined the queue behind it.
      */
-    public function accept(string $message): ?string
+    public function accept(ConversationInputInterface $input): ?ConversationInputInterface
     {
         if ($this->state !== TurnState::Idle) {
-            $this->queued[] = $message;
+            $this->queued[] = $input;
 
             return null;
         }
 
-        return $this->start($message);
+        return $this->start($input);
     }
 
     /**
-     * Hands over the message the Agent is to answer, once.
+     * Hands over the input the Agent is to answer, once.
      *
      * Returns null when no accepted message is waiting to be sent, which is
      * every moment except the one right after a turn starts.
      */
-    public function beginWorking(): ?string
+    public function beginWorking(): ?ConversationInputInterface
     {
         if ($this->state !== TurnState::Accepted) {
             return null;
         }
 
-        $message = $this->accepted;
+        $input = $this->accepted;
         $this->accepted = null;
         $this->state = TurnState::Working;
 
-        return $message;
+        return $input;
     }
 
     /**
      * Closes the turn the Agent was answering.
      *
-     * Returns the message at the head of the queue, whose turn starts now, or
+     * Returns the input at the head of the queue, whose turn starts now, or
      * null when nothing was waiting.
      */
-    public function finishWorking(): ?string
+    public function finishWorking(): ?ConversationInputInterface
     {
         $this->state = TurnState::Idle;
 
@@ -82,9 +82,9 @@ final class TurnQueue
     }
 
     /**
-     * The messages still waiting, in the order they will be sent.
+     * The inputs still waiting, in the order they will be sent.
      *
-     * @return list<string>
+     * @return list<ConversationInputInterface>
      */
     public function queued(): array
     {
@@ -92,7 +92,7 @@ final class TurnQueue
     }
 
     /**
-     * Whether a turn is under way, from the moment a message is taken until
+     * Whether a turn is under way, from the moment an input is taken until
      * the Agent has finished answering it.
      *
      * What a caller may not do mid-turn is its own business; this only says
@@ -103,11 +103,11 @@ final class TurnQueue
         return $this->state !== TurnState::Idle;
     }
 
-    private function start(string $message): string
+    private function start(ConversationInputInterface $input): ConversationInputInterface
     {
-        $this->accepted = $message;
+        $this->accepted = $input;
         $this->state = TurnState::Accepted;
 
-        return $message;
+        return $input;
     }
 }

@@ -8,7 +8,6 @@ use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
 use NeuronAI\Chat\Messages\Stream\Chunks\ToolCallChunk;
 use NeuronAI\Chat\Messages\Stream\Chunks\ToolResultChunk;
-use NeuronAI\Chat\Messages\UserMessage;
 use NeuronTui\Tui\ConversationView;
 use NeuronTui\Tui\DisplayableText;
 use NeuronTui\Tui\WorkingIndicator;
@@ -43,19 +42,26 @@ final class AgentTurn
     }
 
     /**
-     * Sends the message and shows the answer as it comes back.
+     * Sends the typed input and shows the answer as it comes back.
      */
-    public function respond(Agent $agent, string $message): void
-    {
+    public function respond(
+        Agent $agent,
+        ConversationInputInterface $input,
+        ConversationPort $conversation,
+    ): void {
         $tools = $this->view->beginAgentResponse();
         $contents = '';
 
         $events = $agent
-            ->stream(new UserMessage($message))
+            ->stream($input->message())
             ->events();
 
         foreach ($events as $event) {
             if ($event instanceof ToolCallChunk) {
+                if ($event->tool instanceof ConversationSourceInterface) {
+                    $event->tool->connect($conversation);
+                }
+
                 $tools->start($event->tool);
                 $this->view->paintPendingChanges();
 

@@ -15,6 +15,7 @@ use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Tools\ToolInterface;
+use NeuronTui\Conversation\SubagentReply;
 use NeuronTui\Tui\DisplayableText;
 
 /**
@@ -88,6 +89,12 @@ final class HistoryProjection
 
     private function read(Message $message): void
     {
+        if (
+            $message->getMetadata(SubagentReply::HISTORY_PROVENANCE) !== null
+        ) {
+            return;
+        }
+
         $role = $message->getRole();
 
         if (
