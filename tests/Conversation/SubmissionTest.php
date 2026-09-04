@@ -35,8 +35,8 @@ final class SubmissionTest extends TestCase
         $submission = Submission::interpret('/exit');
 
         self::assertInstanceOf(CommandInput::class, $submission);
-        self::assertSame('/exit', $submission->name);
-        self::assertSame('', $submission->arguments);
+        self::assertSame('exit', $submission->name);
+        self::assertSame('', $submission->arguments->text);
     }
 
     public function testWhitespaceAroundACommandIsNotAnArgument(): void
@@ -44,8 +44,8 @@ final class SubmissionTest extends TestCase
         $submission = Submission::interpret("/clear \n");
 
         self::assertInstanceOf(CommandInput::class, $submission);
-        self::assertSame('/clear', $submission->name);
-        self::assertSame('', $submission->arguments);
+        self::assertSame('clear', $submission->name);
+        self::assertSame('', $submission->arguments->text);
     }
 
     public function testWhatFollowsTheNameIsTheArguments(): void
@@ -53,8 +53,8 @@ final class SubmissionTest extends TestCase
         $submission = Submission::interpret('/exit now');
 
         self::assertInstanceOf(CommandInput::class, $submission);
-        self::assertSame('/exit', $submission->name);
-        self::assertSame('now', $submission->arguments);
+        self::assertSame('exit', $submission->name);
+        self::assertSame('now', $submission->arguments->text);
     }
 
     public function testTheArgumentsKeepTheirOwnSpacingButNotTheOuterOne(): void
@@ -62,8 +62,8 @@ final class SubmissionTest extends TestCase
         $submission = Submission::interpret("/review  the  diff \t");
 
         self::assertInstanceOf(CommandInput::class, $submission);
-        self::assertSame('/review', $submission->name);
-        self::assertSame('the  diff', $submission->arguments);
+        self::assertSame('review', $submission->name);
+        self::assertSame('the  diff', $submission->arguments->text);
     }
 
     public function testWhateverEndsTheNameIsNotThenPartOfTheArguments(): void
@@ -71,8 +71,8 @@ final class SubmissionTest extends TestCase
         $submission = Submission::interpret("/exit\x0Cnow");
 
         self::assertInstanceOf(CommandInput::class, $submission);
-        self::assertSame('/exit', $submission->name);
-        self::assertSame('now', $submission->arguments);
+        self::assertSame('exit', $submission->name);
+        self::assertSame('now', $submission->arguments->text);
     }
 
     public function testANameNoCommandAnswersToIsStillReadAsAName(): void
@@ -80,8 +80,8 @@ final class SubmissionTest extends TestCase
         $submission = Submission::interpret("/unknown with\targuments");
 
         self::assertInstanceOf(CommandInput::class, $submission);
-        self::assertSame('/unknown', $submission->name);
-        self::assertSame("with\targuments", $submission->arguments);
+        self::assertSame('unknown', $submission->name);
+        self::assertSame("with\targuments", $submission->arguments->text);
     }
 
     public function testTextMentioningACommandIsStillAMessage(): void

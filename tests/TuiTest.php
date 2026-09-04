@@ -29,6 +29,7 @@ use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Testing\RequestRecord;
 use NeuronAI\Tools\Tool;
 use NeuronTui\Command\AbstractCommandKit;
+use NeuronTui\Command\CommandArguments;
 use NeuronTui\Command\ClearCommand;
 use NeuronTui\Command\CommandInterface;
 use NeuronTui\Command\ConcurrentCommandInterface;
@@ -1603,8 +1604,8 @@ MARKDOWN;
             $agent,
             terminal: $terminal,
         ))->addCommand([
-                new ClearCommand('/wipe'),
-                new LeaveCommand('/quit'),
+                new ClearCommand('wipe'),
+                new LeaveCommand('quit'),
             ])->run();
 
         // The name it was given is the only name it answers to.
@@ -3786,7 +3787,7 @@ MARKDOWN;
 
             public function name(): string
             {
-                return $this->commandName;
+                return ltrim($this->commandName, '/');
             }
 
             public function describe(): string
@@ -3796,7 +3797,7 @@ MARKDOWN;
 
             public function run(
                 Controls $controls,
-                string $arguments,
+                CommandArguments $arguments,
             ): void {
             }
         };
@@ -4407,7 +4408,7 @@ MARKDOWN;
 
             public function name(): string
             {
-                return $this->commandName;
+                return ltrim($this->commandName, '/');
             }
 
             public function describe(): string
@@ -4415,9 +4416,9 @@ MARKDOWN;
                 return 'Does what the test says.';
             }
 
-            public function run(Controls $controls, string $arguments): void
+            public function run(Controls $controls, CommandArguments $arguments): void
             {
-                ($this->run)($controls, $arguments);
+                ($this->run)($controls, $arguments->text);
             }
         };
     }
@@ -4444,7 +4445,7 @@ MARKDOWN;
 
             public function name(): string
             {
-                return $this->commandName;
+                return ltrim($this->commandName, '/');
             }
 
             public function describe(): string
@@ -4454,9 +4455,9 @@ MARKDOWN;
 
             public function run(
                 ConcurrentControls $controls,
-                string $arguments,
+                CommandArguments $arguments,
             ): void {
-                ($this->run)($controls, $arguments);
+                ($this->run)($controls, $arguments->text);
             }
         };
     }

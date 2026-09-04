@@ -18,8 +18,8 @@ use NeuronTui\Conversation\Controls;
  */
 final readonly class ClearCommand implements CommandInterface
 {
-    /** @param string $name the name it answers to, slash included */
-    public function __construct(private string $name = '/clear')
+    /** @param string $name the name it answers to, slash omitted */
+    public function __construct(private string $name = 'clear')
     {
     }
 
@@ -33,7 +33,7 @@ final readonly class ClearCommand implements CommandInterface
         return 'Starts a new Session, leaving the current one stored.';
     }
 
-    public function run(Controls $controls, string $arguments): void
+    public function run(Controls $controls, CommandArguments $arguments): void
     {
         $controls->agent()->setChatHistory($controls->sessions()->start());
     }

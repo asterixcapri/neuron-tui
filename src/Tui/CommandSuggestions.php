@@ -473,10 +473,10 @@ final class CommandSuggestions
 
         foreach ($commands as $command) {
             $suggestible[] = [
-                'answersTo' => $command->name(),
-                'name' => DisplayableText::safe($command->name()),
+                'answersTo' => '/' . $command->name(),
+                'name' => DisplayableText::safe('/' . $command->name()),
                 'label' => DisplayableText::preview(
-                    $command->name(),
+                    '/' . $command->name(),
                     self::NAME_WIDTH,
                 ),
                 'description' => DisplayableText::preview(
