@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronTui\Subagent;
 
+use Amp\Cancellation;
 use Amp\Future;
 use Amp\Parallel\Worker\ContextWorkerFactory;
 use Amp\Parallel\Worker\ContextWorkerPool;
@@ -14,25 +15,47 @@ use RuntimeException;
 /** @internal */
 final class ParallelChildTurnExecutor implements ChildTurnExecutorInterface
 {
-    private readonly ContextWorkerPool $workers;
+    private ?ContextWorkerPool $workers = null;
 
-    public function __construct(int $concurrency = 4)
+    public function __construct(private readonly int $concurrency = 4)
     {
-        $factory = new ContextWorkerFactory(
-            self::hostAutoloader(),
-            new SilentProcessContextFactory(),
-        );
-        $this->workers = new ContextWorkerPool($concurrency, $factory);
     }
 
     public function execute(
         string $agentClass,
         string $message,
         array $history,
+        Cancellation $cancellation,
     ): Future {
-        return $this->workers
-            ->submit(new ChildTurnTask($agentClass, $message, $history))
+        return $this->workers()
+            ->submit(
+                new ChildTurnTask($agentClass, $message, $history),
+                $cancellation,
+            )
             ->getFuture();
+    }
+
+    public function cancel(): void
+    {
+        $this->workers?->kill();
+        $this->workers = null;
+    }
+
+    private function workers(): ContextWorkerPool
+    {
+        if ($this->workers instanceof ContextWorkerPool) {
+            return $this->workers;
+        }
+
+        $factory = new ContextWorkerFactory(
+            self::hostAutoloader(),
+            new SilentProcessContextFactory(),
+        );
+
+        return $this->workers = new ContextWorkerPool(
+            $this->concurrency,
+            $factory,
+        );
     }
 
     private static function hostAutoloader(): string

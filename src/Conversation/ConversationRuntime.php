@@ -44,7 +44,7 @@ final class ConversationRuntime
 
     private readonly AgentTurn $agentTurn;
 
-    private readonly ConversationPort $conversation;
+    private ConversationPort $conversation;
 
     private readonly Sessions $sessions;
 
@@ -92,7 +92,7 @@ final class ConversationRuntime
         $this->workingIndicator = $this->view->workingIndicator();
         $this->turns = new TurnQueue();
         $this->conversation = new ConversationPort($this->accept(...));
-        $this->agentTurn = new AgentTurn($this->view, $this->conversation);
+        $this->agentTurn = new AgentTurn($this->view);
         $this->view->showHistory(
             $this->agent->getChatHistory()->getMessages(),
         );
@@ -116,7 +116,11 @@ final class ConversationRuntime
             );
         }
 
-        $this->view->run();
+        try {
+            $this->view->run();
+        } finally {
+            $this->conversation->close();
+        }
     }
 
     private function submit(SubmitEvent $event): void
@@ -284,6 +288,8 @@ final class ConversationRuntime
             return;
         }
 
+        $this->conversation->close();
+        $this->conversation = new ConversationPort($this->accept(...));
         $this->view->showHistory($current->getMessages());
     }
 
@@ -353,8 +359,9 @@ final class ConversationRuntime
             // The Agent is read the moment the turn starts, so a turn under
             // way ends with the one that took it.
             $agent = $this->agent;
-            $this->response = async(function () use ($agent, $message): void {
-                $this->agentTurn->respond($agent, $message);
+            $conversation = $this->conversation;
+            $this->response = async(function () use ($agent, $message, $conversation): void {
+                $this->agentTurn->respond($agent, $message, $conversation);
             });
 
             return true;

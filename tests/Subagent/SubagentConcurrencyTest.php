@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronTui\Tests\Subagent;
 
+use Amp\Cancellation;
 use Amp\DeferredFuture;
 use Amp\Future;
 use NeuronAI\Agent\Agent;
@@ -107,6 +108,44 @@ final class SubagentConcurrencyTest extends TestCase
         $replies->runUntilCount(2);
     }
 
+    public function testSessionClosureCancelsConcurrentTurnsAndTheirQueue(): void
+    {
+        $executor = new ConcurrencyChildTurnExecutor();
+        $replies = new ReplyList();
+        $subagents = new Subagents(Agent::class, 2, $executor);
+        $port = $this->port($replies);
+        $subagents->connect($port);
+        $first = $subagents->start('first');
+        $second = $subagents->start('second');
+        $third = $subagents->start('queued');
+        $executor->runUntilStarted(2);
+
+        $port->close();
+        EventLoop::run();
+
+        self::assertSame(1, $executor->cancellations);
+        self::assertTrue($executor->turnCancellations[0]->isRequested());
+        self::assertTrue($executor->turnCancellations[1]->isRequested());
+
+        foreach ([$first, $second, $third] as $forgotten) {
+            try {
+                $subagents->status($forgotten['id']);
+                self::fail('A cancelled Subagent remained registered.');
+            } catch (\LogicException $exception) {
+                self::assertStringContainsString(
+                    'Unknown subagent ID',
+                    $exception->getMessage(),
+                );
+            }
+        }
+
+        $executor->complete(0, 'late first');
+        $executor->complete(1, 'late second');
+        EventLoop::run();
+        self::assertSame(0, $replies->count());
+        self::assertSame(['first', 'second'], $executor->startedMessages());
+    }
+
     private function port(ReplyList $replies): ConversationPort
     {
         return new ConversationPort(
@@ -127,14 +166,21 @@ final class ConcurrencyChildTurnExecutor implements ChildTurnExecutorInterface
 
     private ?int $stopAfterStarts = null;
 
+    /** @var list<Cancellation> */
+    public array $turnCancellations = [];
+
+    public int $cancellations = 0;
+
     public function execute(
         string $agentClass,
         string $message,
         array $history,
+        Cancellation $cancellation,
     ): Future {
         $turn = new DeferredFuture();
         $this->messages[] = $message;
         $this->turns[] = $turn;
+        $this->turnCancellations[] = $cancellation;
 
         if (
             $this->stopAfterStarts !== null
@@ -152,6 +198,11 @@ final class ConcurrencyChildTurnExecutor implements ChildTurnExecutorInterface
                 return $result;
             },
         );
+    }
+
+    public function cancel(): void
+    {
+        ++$this->cancellations;
     }
 
     /** @return list<string> */
@@ -222,5 +273,10 @@ final class ReplyList
         $this->stopAfterReplies = null;
 
         TestCase::assertCount($count, $this->replies);
+    }
+
+    public function count(): int
+    {
+        return count($this->replies);
     }
 }

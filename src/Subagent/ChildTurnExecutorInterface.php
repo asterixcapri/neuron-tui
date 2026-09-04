@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronTui\Subagent;
 
+use Amp\Cancellation;
 use Amp\Future;
 use NeuronAI\Agent\Agent;
 
@@ -19,5 +20,9 @@ interface ChildTurnExecutorInterface
         string $agentClass,
         string $message,
         array $history,
+        Cancellation $cancellation,
     ): Future;
+
+    /** Cancels all work and releases resources owned by the current Session. */
+    public function cancel(): void;
 }

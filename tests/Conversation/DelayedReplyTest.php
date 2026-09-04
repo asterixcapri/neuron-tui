@@ -12,6 +12,7 @@ use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
 use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Tools\Tool;
+use NeuronTui\Command\ClearCommand;
 use NeuronTui\Conversation\ConversationPort;
 use NeuronTui\Conversation\ConversationSourceInterface;
 use NeuronTui\Conversation\SubagentReply;
@@ -144,6 +145,84 @@ final class DelayedReplyTest extends TestCase
         self::assertStringContainsString('Third question.', $display);
     }
 
+    public function testChangingSessionRejectsAReplyFromThePreviousHistory(): void
+    {
+        $tool = new DelayedReplyTool(
+            delay: 0.15,
+            subagentId: 'old-child',
+            reply: 'Must not cross Sessions.',
+        );
+        $provider = new FakeAIProvider(
+            new ToolCallMessage(tools: [$tool]),
+            new AssistantMessage('Old delegation started.'),
+            new AssistantMessage('New Session answer.'),
+            new AssistantMessage('Contaminated answer.'),
+        );
+        $terminal = new VirtualTerminal(rows: 30);
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("Delegate this.\r"),
+        );
+        EventLoop::delay(
+            0.05,
+            static fn () => $terminal->simulateInput("/clear\r"),
+        );
+        EventLoop::delay(
+            0.09,
+            static fn () => $terminal->simulateInput("New question.\r"),
+        );
+        EventLoop::delay(
+            0.28,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new Tui($agent, $terminal))
+            ->addCommand(new ClearCommand())
+            ->run();
+
+        $provider->assertCallCount(3);
+        self::assertSame([false], $tool->deliveryResults);
+        self::assertSame(
+            ['New question.', 'New Session answer.'],
+            array_map(
+                static fn (Message $message): ?string => $message->getContent(),
+                $agent->getChatHistory()->getMessages(),
+            ),
+        );
+    }
+
+    public function testShutdownClosesThePortBeforeALateReplyArrives(): void
+    {
+        $tool = new DelayedReplyTool(
+            delay: 0.12,
+            subagentId: 'shutdown-child',
+            reply: 'Arrived after shutdown.',
+        );
+        $provider = new FakeAIProvider(
+            new ToolCallMessage(tools: [$tool]),
+            new AssistantMessage('Delegation started.'),
+        );
+        $terminal = new VirtualTerminal(rows: 30);
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("Delegate this.\r"),
+        );
+        EventLoop::delay(
+            0.05,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new Tui($agent, $terminal))->run();
+        EventLoop::run();
+
+        $provider->assertCallCount(2);
+        self::assertSame([false], $tool->deliveryResults);
+    }
+
     private function lastMessageOfCall(
         FakeAIProvider $provider,
         int $call,
@@ -164,6 +243,9 @@ final class DelayedReplyTool extends Tool implements ConversationSourceInterface
     private ?ConversationPort $conversation = null;
 
     public int $executions = 0;
+
+    /** @var list<bool> */
+    public array $deliveryResults = [];
 
     public function __construct(
         private readonly float $delay,
@@ -191,7 +273,7 @@ final class DelayedReplyTool extends Tool implements ConversationSourceInterface
         EventLoop::delay(
             $this->delay,
             function () use ($conversation): void {
-                $conversation->deliver(
+                $this->deliveryResults[] = $conversation->deliver(
                     new SubagentReply($this->subagentId, $this->reply),
                 );
             },

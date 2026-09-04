@@ -37,7 +37,6 @@ final class AgentTurn
 
     public function __construct(
         private readonly ConversationView $view,
-        private readonly ConversationPort $conversation,
     ) {
         $this->workingIndicator = $this->view->workingIndicator();
     }
@@ -45,8 +44,11 @@ final class AgentTurn
     /**
      * Sends the typed input and shows the answer as it comes back.
      */
-    public function respond(Agent $agent, ConversationInputInterface $input): void
-    {
+    public function respond(
+        Agent $agent,
+        ConversationInputInterface $input,
+        ConversationPort $conversation,
+    ): void {
         $tools = $this->view->beginAgentResponse();
         $contents = '';
 
@@ -57,7 +59,7 @@ final class AgentTurn
         foreach ($events as $event) {
             if ($event instanceof ToolCallChunk) {
                 if ($event->tool instanceof ConversationSourceInterface) {
-                    $event->tool->connect($this->conversation);
+                    $event->tool->connect($conversation);
                 }
 
                 $tools->start($event->tool);

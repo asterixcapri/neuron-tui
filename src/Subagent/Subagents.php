@@ -24,6 +24,8 @@ final class Subagents
 
     private int $activeTurns = 0;
     private ?ConversationPort $conversation = null;
+    private ?string $cancellationSubscription = null;
+    private int $sessionGeneration = 0;
     private readonly ChildTurnExecutorInterface $executor;
 
     /**
@@ -46,7 +48,34 @@ final class Subagents
 
     public function connect(ConversationPort $conversation): void
     {
+        if ($conversation->cancellation()->isRequested()) {
+            throw new LogicException(
+                'The subagent tool cannot connect to a closed conversation.',
+            );
+        }
+
+        if ($this->conversation === $conversation) {
+            return;
+        }
+
+        if ($this->conversation instanceof ConversationPort) {
+            $this->forgetSession();
+        }
+
         $this->conversation = $conversation;
+        $generation = ++$this->sessionGeneration;
+        $this->cancellationSubscription = $conversation
+            ->cancellation()
+            ->subscribe(function () use ($conversation, $generation): void {
+                if (
+                    $this->conversation !== $conversation
+                    || $this->sessionGeneration !== $generation
+                ) {
+                    return;
+                }
+
+                $this->forgetSession();
+            });
     }
 
     /** @return array{id: string, state: string} */
@@ -132,54 +161,127 @@ final class Subagents
 
     private function dispatch(): void
     {
+        $conversation = $this->conversation;
+
+        if (!$conversation instanceof ConversationPort) {
+            return;
+        }
+
         while (
             $this->activeTurns < $this->concurrency
             && $this->ready !== []
         ) {
             $id = array_shift($this->ready);
-            $subagent = $this->subagents[$id];
+            $subagent = $this->subagents[$id] ?? null;
+
+            if (!$subagent instanceof Subagent) {
+                continue;
+            }
+
             $message = $subagent->nextMessage();
             $subagent->state = SubagentState::Running;
             ++$this->activeTurns;
-            $this->execute($subagent, $message, $this->conversation);
+            $this->execute(
+                $subagent,
+                $message,
+                $conversation,
+                $this->sessionGeneration,
+            );
         }
     }
 
     private function execute(
         Subagent $subagent,
         string $message,
-        ?ConversationPort $conversation,
+        ConversationPort $conversation,
+        int $generation,
     ): void {
-        async(function () use ($subagent, $message, $conversation): void {
+        async(function () use (
+            $subagent,
+            $message,
+            $conversation,
+            $generation,
+        ): void {
             try {
                 $result = $this->executor
                     ->execute(
                         $subagent->agentClass,
                         $message,
                         $subagent->history,
+                        $conversation->cancellation(),
                     )
-                    ->await();
-                $subagent->history = $result->history;
-                $subagent->state = SubagentState::Idle;
-                $subagent->startedAt = null;
-                $conversation?->deliver(
-                    new SubagentReply($subagent->id, $result->reply),
-                );
-
-                $this->queueNextTurn($subagent);
+                    ->await($conversation->cancellation());
             } catch (Throwable) {
-                $subagent->state = SubagentState::Failed;
-                $subagent->startedAt = null;
-                $subagent->clearQueuedMessages();
-                $conversation?->deliver(new SubagentReply(
-                    $subagent->id,
-                    'The subagent failed while processing its turn.',
-                ));
-            } finally {
+                if (!$this->owns($subagent, $conversation, $generation)) {
+                    return;
+                }
+
                 --$this->activeTurns;
+                $this->fail($subagent, $conversation);
                 $this->dispatch();
+
+                return;
             }
+
+            if (!$this->owns($subagent, $conversation, $generation)) {
+                return;
+            }
+
+            $subagent->history = $result->history;
+            $subagent->state = SubagentState::Idle;
+            $subagent->startedAt = null;
+            --$this->activeTurns;
+            $conversation->deliver(
+                new SubagentReply($subagent->id, $result->reply),
+            );
+
+            $this->queueNextTurn($subagent);
+            $this->dispatch();
         })->ignore();
+    }
+
+    private function owns(
+        Subagent $subagent,
+        ConversationPort $conversation,
+        int $generation,
+    ): bool {
+        return $this->conversation === $conversation
+            && $this->sessionGeneration === $generation
+            && !$conversation->cancellation()->isRequested()
+            && ($this->subagents[$subagent->id] ?? null) === $subagent;
+    }
+
+    private function fail(
+        Subagent $subagent,
+        ConversationPort $conversation,
+    ): void {
+        $subagent->state = SubagentState::Failed;
+        $subagent->startedAt = null;
+        $subagent->clearQueuedMessages();
+        $conversation->deliver(new SubagentReply(
+            $subagent->id,
+            'The subagent failed while processing its turn.',
+        ));
+    }
+
+    private function forgetSession(): void
+    {
+        if (
+            $this->conversation instanceof ConversationPort
+            && $this->cancellationSubscription !== null
+        ) {
+            $this->conversation
+                ->cancellation()
+                ->unsubscribe($this->cancellationSubscription);
+        }
+
+        ++$this->sessionGeneration;
+        $this->conversation = null;
+        $this->cancellationSubscription = null;
+        $this->ready = [];
+        $this->subagents = [];
+        $this->activeTurns = 0;
+        $this->executor->cancel();
     }
 
     private function queueNextTurn(Subagent $subagent): void

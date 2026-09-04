@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronTui\Tests\Subagent;
 
+use Amp\Cancellation;
 use Amp\DeferredFuture;
 use Amp\Future;
 use LogicException;
@@ -126,6 +127,60 @@ final class SubagentsTest extends TestCase
         $subagents->send($id, 'retry');
     }
 
+    public function testClosingTheSessionCancelsAndForgetsAllChildWork(): void
+    {
+        $executor = new ControllableChildTurnExecutor();
+        $replies = [];
+        $subagents = new Subagents(WorkerAgent::class, executor: $executor);
+        $firstPort = new ConversationPort(
+            static function (SubagentReply $reply) use (&$replies): void {
+                $replies[] = $reply;
+            },
+        );
+        $subagents->connect($firstPort);
+        $oldId = $subagents->start('first')['id'];
+        EventLoop::run();
+        $subagents->send($oldId, 'queued behind first');
+
+        $firstPort->close();
+        EventLoop::run();
+
+        self::assertSame(1, $executor->cancellations);
+        self::assertTrue($executor->turnCancellations[0]->isRequested());
+        $this->assertUnknown($subagents, $oldId);
+
+        $executor->complete(0, new ChildTurnResult('too late', []));
+        EventLoop::run();
+        self::assertSame([], $replies);
+
+        $secondPort = new ConversationPort(
+            static function (SubagentReply $reply) use (&$replies): void {
+                $replies[] = $reply;
+            },
+        );
+        $subagents->connect($secondPort);
+        $newId = $subagents->start('second session')['id'];
+        EventLoop::run();
+
+        self::assertNotSame($oldId, $newId);
+        self::assertSame('running', $subagents->status($newId)['state']);
+        $this->assertUnknown($subagents, $oldId);
+        self::assertSame('second session', $executor->calls[1]['message']);
+    }
+
+    private function assertUnknown(Subagents $subagents, string $id): void
+    {
+        try {
+            $subagents->status($id);
+            self::fail('An ID from another Session was accepted.');
+        } catch (LogicException $exception) {
+            self::assertStringContainsString(
+                'Unknown subagent ID',
+                $exception->getMessage(),
+            );
+        }
+    }
+
     /**
      * @param list<SubagentReply> $replies
      */
@@ -149,6 +204,11 @@ final class ControllableChildTurnExecutor implements ChildTurnExecutorInterface
     /** @var list<array{message: string, history: list<array<string, mixed>>}> */
     public array $calls = [];
 
+    /** @var list<Cancellation> */
+    public array $turnCancellations = [];
+
+    public int $cancellations = 0;
+
     /** @var list<PendingChildTurn> */
     private array $turns = [];
 
@@ -156,12 +216,19 @@ final class ControllableChildTurnExecutor implements ChildTurnExecutorInterface
         string $agentClass,
         string $message,
         array $history,
+        Cancellation $cancellation,
     ): Future {
         $this->calls[] = ['message' => $message, 'history' => $history];
+        $this->turnCancellations[] = $cancellation;
         $turn = new PendingChildTurn();
         $this->turns[] = $turn;
 
         return $turn->future();
+    }
+
+    public function cancel(): void
+    {
+        ++$this->cancellations;
     }
 
     public function complete(int $turn, ChildTurnResult $result): void

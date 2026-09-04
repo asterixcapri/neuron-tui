@@ -111,9 +111,18 @@ final class AgentTurnTest extends TestCase
         $later = $this->agentOf($second);
 
         EventLoop::queue(
-            static function () use ($turn, $earlier, $later): void {
-                $turn->respond($earlier, new MessageForAgent('Who answers?'));
-                $turn->respond($later, new MessageForAgent('And now?'));
+            function () use ($turn, $earlier, $later): void {
+                $conversation = $this->port();
+                $turn->respond(
+                    $earlier,
+                    new MessageForAgent('Who answers?'),
+                    $conversation,
+                );
+                $turn->respond(
+                    $later,
+                    new MessageForAgent('And now?'),
+                    $conversation,
+                );
             },
         );
         EventLoop::run();
@@ -163,13 +172,14 @@ final class AgentTurnTest extends TestCase
             new ToolCallMessage(tools: [$tool]),
             new AssistantMessage('Work started.'),
         );
-        $turn = new AgentTurn($view, $conversation);
+        $turn = new AgentTurn($view);
         $agent = $this->agentOf($provider);
 
         EventLoop::queue(
             static fn () => $turn->respond(
                 $agent,
                 new MessageForAgent('Delegate this.'),
+                $conversation,
             ),
         );
         EventLoop::run();
@@ -200,11 +210,13 @@ final class AgentTurnTest extends TestCase
         $agent = $this->agentOf($provider);
         $view = new ConversationView($terminal, 'Neuron AI', 'Conversation');
         $turn = $this->turn($view);
+        $conversation = $this->port();
 
         EventLoop::queue(
             static fn () => $turn->respond(
                 $agent,
                 new MessageForAgent($message),
+                $conversation,
             ),
         );
         EventLoop::run();
@@ -216,10 +228,12 @@ final class AgentTurnTest extends TestCase
 
     private function turn(ConversationView $view): AgentTurn
     {
-        return new AgentTurn(
-            $view,
-            new ConversationPort(static function (SubagentReply $reply): void {
-            }),
-        );
+        return new AgentTurn($view);
+    }
+
+    private function port(): ConversationPort
+    {
+        return new ConversationPort(static function (SubagentReply $reply): void {
+        });
     }
 }
