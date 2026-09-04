@@ -9,7 +9,7 @@ use Closure;
 use InvalidArgumentException;
 use LogicException;
 use NeuronAI\Chat\Messages\Message;
-use NeuronTui\Command\CommandInterface;
+use NeuronInteraction\Command\CommandInterface;
 use NeuronTui\Command\ConcurrentCommandInterface;
 use NeuronTui\Conversation\ChoiceOption;
 use NeuronTui\History\EntryKind;

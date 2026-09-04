@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace NeuronTui\Tests\Conversation;
 
 use NeuronTui\Conversation\InputHistoryNavigation;
-use NeuronTui\InputHistory\InputHistory;
-use NeuronTui\Storage\InMemoryStorage;
+use NeuronInteraction\InputHistory\InputHistory;
+use NeuronInteraction\Storage\InMemoryStorage;
 use PHPUnit\Framework\TestCase;
 
 final class InputHistoryNavigationTest extends TestCase

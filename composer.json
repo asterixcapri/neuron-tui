@@ -12,6 +12,7 @@
     "require": {
         "php": ">=8.4.1",
         "amphp/amp": "^3.0",
+        "asterixcapri/neuron-interaction": "dev-feat/extract-neuron-interaction",
         "league/commonmark": "^2.10",
         "neuron-core/neuron-ai": "^3.0",
         "symfony/tui": "^8.1.2",
@@ -26,6 +27,12 @@
             "NeuronTui\\": "src/"
         }
     },
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/asterixcapri/neuron-interaction"
+        }
+    ],
     "autoload-dev": {
         "psr-4": {
             "NeuronTui\\Tests\\": "tests/"
