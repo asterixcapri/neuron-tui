@@ -48,6 +48,8 @@ final class ConversationRuntime
 
     private readonly InputHistory $inputHistory;
 
+    private readonly InputHistoryNavigation $inputHistoryNavigation;
+
     /**
      * The mounted commands in the order the Host Application added them.
      *
@@ -77,6 +79,7 @@ final class ConversationRuntime
         $storage ??= new InMemoryStorage();
         $this->sessions = new Sessions($storage);
         $this->inputHistory = new InputHistory($storage);
+        $this->inputHistoryNavigation = new InputHistoryNavigation($this->inputHistory);
         $this->agent->setChatHistory($this->sessions->start());
         $this->terminal = $terminal ?? new Terminal();
         $this->view = new ConversationView(
@@ -94,7 +97,7 @@ final class ConversationRuntime
             $this->agent->getChatHistory()->getMessages(),
         );
         $this->view->onSubmit($this->submit(...));
-        $this->view->onDraftChange($this->inputHistory->leave(...));
+        $this->view->onDraftChange($this->inputHistoryNavigation->leave(...));
         $this->view->onInput($this->handleInput(...));
         $this->view->onTick($this->tick(...));
     }
@@ -118,7 +121,7 @@ final class ConversationRuntime
 
     private function submit(SubmitEvent $event): void
     {
-        $this->inputHistory->leave();
+        $this->inputHistoryNavigation->leave();
 
         if ($event->isBlank()) {
             return;
@@ -447,10 +450,10 @@ final class ConversationRuntime
 
         if ($keys->matches($event->getData(), 'recall-older-input')) {
             if (
-                $this->inputHistory->isNavigating()
+                $this->inputHistoryNavigation->isNavigating()
                 || $this->view->isComposerEmpty()
             ) {
-                $input = $this->inputHistory->older();
+                $input = $this->inputHistoryNavigation->older();
 
                 if ($input !== null) {
                     $event->stopPropagation();
@@ -463,9 +466,9 @@ final class ConversationRuntime
 
         if (
             $keys->matches($event->getData(), 'recall-newer-input')
-            && $this->inputHistory->isNavigating()
+            && $this->inputHistoryNavigation->isNavigating()
         ) {
-            $input = $this->inputHistory->newer();
+            $input = $this->inputHistoryNavigation->newer();
 
             if ($input !== null) {
                 $event->stopPropagation();
