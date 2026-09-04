@@ -8,6 +8,13 @@ suffix. The concrete Session Command kit is `SessionCommandKit`, following
 `AbstractCommandKit`; earlier conceptual references below use the original
 names. The extraction is implemented on development branches, not released.
 
+Navigation refinement: `InputHistory` also provides optional `older()`,
+`newer()`, `isNavigating()` and `leave()` methods. Cursor and draft are local
+to each instance and are never persisted. Adapters control the lifecycle and
+may navigate the sequence themselves; no separate navigator class is needed.
+This supersedes the earlier tickets' requirement to keep navigation code in
+the TUI.
+
 ## Problem Statement
 
 Neuron TUI currently owns reusable interaction concerns together with terminal
@@ -128,7 +135,7 @@ and Adapters, while navigation state will remain local to each Adapter.
 - Keep title escaping, truncation and other rendering rules in each Adapter rather than in the Session module.
 - Persist Input history as one ordered sequence per configured Storage, independent from Sessions and shared by all Adapters using that Storage.
 - Record both submitted messages and submitted Commands in Input history, subject to the established blank-input and consecutive-duplicate rules.
-- Move only Input history persistence and sequence behavior into Neuron Interaction. Keep older/newer navigation position, draft restoration and navigation lifecycle in each Adapter.
+- Move Input history persistence, sequence behavior and optional recall navigation into Neuron Interaction's `InputHistory`. Keep cursor and draft local to each instance; Adapters own keyboard handling and navigation lifecycle and may navigate independently.
 - Move the Storage contract, stored document representation, in-memory implementation and file implementation into Neuron Interaction.
 - Do not preserve compatibility with persistence documents written by Neuron TUI. Provide no legacy reader, fallback or automatic migration.
 - Refactor the modules behind TUI-independent boundaries on the extraction branch before transferring them to the separate package repository.
