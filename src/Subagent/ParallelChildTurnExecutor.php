@@ -16,13 +16,13 @@ final class ParallelChildTurnExecutor implements ChildTurnExecutorInterface
 {
     private readonly ContextWorkerPool $workers;
 
-    public function __construct()
+    public function __construct(int $concurrency = 4)
     {
         $factory = new ContextWorkerFactory(
             self::hostAutoloader(),
             new SilentProcessContextFactory(),
         );
-        $this->workers = new ContextWorkerPool(1, $factory);
+        $this->workers = new ContextWorkerPool($concurrency, $factory);
     }
 
     public function execute(
