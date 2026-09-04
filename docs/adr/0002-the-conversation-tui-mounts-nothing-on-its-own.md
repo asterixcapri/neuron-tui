@@ -1,7 +1,16 @@
 # The Conversation TUI mounts nothing on its own
 
 _ADR 0003 supersedes only this decision's duplicate-name rule. The TUI still
-mounts nothing on its own and all other consequences remain in force._
+mounts nothing on its own._
+
+_The Refine Interaction composition revision supersedes the concurrent marker
+and restricted controls policy below. HelpCommand and LeaveCommand now belong
+to Neuron Interaction and implement the ordinary CommandInterface with
+CommandControlsInterface. The TUI admits only those implementations during a
+Turn, including aliases; unrelated Commands are refused regardless of name.
+There is no concurrent marker, wrapper or restricted controls contract. Leave
+stops the terminal, pending Picker and queued-input processing without cancelling
+or waiting for in-flight Agent work. No Commands are mounted automatically._
 
 The package used to answer three Commands — `/clear`, `/sessions` and
 `/exit` — carried out by the Conversation TUI itself, and the source said as

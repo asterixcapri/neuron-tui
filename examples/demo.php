@@ -3,8 +3,8 @@
 declare(strict_types=1);
 
 use NeuronInteraction\Command\ClearCommand;
-use NeuronTui\Command\HelpCommand;
-use NeuronTui\Command\LeaveCommand;
+use NeuronInteraction\Command\HelpCommand;
+use NeuronInteraction\Command\LeaveCommand;
 use NeuronInteraction\Command\ResumeCommand;
 use NeuronInteraction\Storage\FileStorage;
 use NeuronTui\Tui;

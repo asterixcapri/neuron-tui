@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace NeuronTui\Conversation;
 
 use Amp\Future;
+use NeuronInteraction\Command\HelpCommand;
+use NeuronInteraction\Command\LeaveCommand;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\History\ChatHistoryInterface;
 use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
@@ -13,7 +15,6 @@ use NeuronInteraction\Command\CommandArguments;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Command\SelectionRequest;
 use NeuronInteraction\Command\SelectionOption;
-use NeuronTui\Command\ConcurrentCommandInterface;
 use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Session\Sessions;
 use NeuronInteraction\Storage\InMemoryStorage;
@@ -56,7 +57,7 @@ final class ConversationRuntime
     /**
      * The mounted commands in the order the Host Application added them.
      *
-     * @var list<CommandInterface|ConcurrentCommandInterface>
+     * @var list<CommandInterface>
      */
     private readonly array $commands;
 
@@ -65,8 +66,10 @@ final class ConversationRuntime
     /** @var Future<mixed>|null */
     private ?Future $response = null;
 
+    private bool $stopped = false;
+
     /**
-     * @param list<CommandInterface|ConcurrentCommandInterface> $commands everything that
+     * @param list<CommandInterface> $commands everything that
      *     can be typed here after a slash; the Conversation TUI mounts
      *     nothing on its own
      */
@@ -95,13 +98,7 @@ final class ConversationRuntime
             $figletFont,
         );
         $this->workingIndicator = $this->view->workingIndicator();
-        $this->dispatcher = new Commands(array_map(
-            fn (CommandInterface|ConcurrentCommandInterface $command): CommandInterface =>
-                $command instanceof ConcurrentCommandInterface
-                    ? new ConcurrentCommandAdapter($command, $this->concurrentControls())
-                    : $command,
-            $commands,
-        ));
+        $this->dispatcher = new Commands($commands);
         $this->turns = new TurnQueue();
         $this->agentTurn = new AgentTurn($this->view);
         $this->view->showHistory(
@@ -132,6 +129,10 @@ final class ConversationRuntime
 
     private function submit(SubmitEvent $event): void
     {
+        if ($this->stopped) {
+            return;
+        }
+
         $this->inputHistory->leave();
 
         if ($event->isBlank()) {
@@ -174,7 +175,7 @@ final class ConversationRuntime
      *
      * Whether a command may overlap a Turn is read from its type: an answer
      * already on its way would land in a conversation a command had meanwhile
-     * replaced, so only a Concurrent command runs there.
+     * replaced, so only Help and Leave run there.
      */
     private function carryOut(CommandInput $input): void
     {
@@ -187,7 +188,8 @@ final class ConversationRuntime
         }
 
         if (
-            !$command instanceof ConcurrentCommandInterface
+            !$command instanceof HelpCommand
+            && !$command instanceof LeaveCommand
             && $this->refusedWhileWorking($input->name)
         ) {
             return;
@@ -220,7 +222,7 @@ final class ConversationRuntime
     }
 
     /**
-     * Everything a command that expects the Agent to stand still may do.
+     * The ordinary controls supplied to every Command.
      */
     private function controls(): Controls
     {
@@ -234,25 +236,18 @@ final class ConversationRuntime
             $this->dispatcher,
             $this->sessions,
             $this->requestSelection(...),
+            $this->stop(...),
         );
-    }
-
-    /**
-     * The verbs whose meaning remains stable while a Turn is under way.
-     *
-     * There is nothing to close off here: what is missing is missing from the
-     * type, so a command asking for a Picker or for the Agent was already
-     * stopped where it was written.
-     */
-    private function concurrentControls(): ConcurrentControls
-    {
-        return new ConcurrentControls($this->view, fn (): Commands => $this->dispatcher);
     }
 
     private function requestSelection(SelectionRequest $request): void
     {
         // Human input is collected in a later callback, after this Command ends.
         EventLoop::queue(function () use ($request): void {
+            if ($this->stopped) {
+                return;
+            }
+
             try {
                 $chosen = $this->view->choose(
                     $request->prompt,
@@ -320,7 +315,7 @@ final class ConversationRuntime
      *
      * A command that changed the conversation mid-turn would have an answer
      * already on its way land where it does not belong, so the rule is the
-     * TUI's rather than any single command's: a Concurrent command never
+     * TUI's rather than any single command's: Help and Leave never
      * reaches here.
      *
      * Returns whether the command was turned away.
@@ -347,7 +342,7 @@ final class ConversationRuntime
      * complete terminal composition. Scanning from the beginning makes the
      * first command with a name the stable recipient of matching input.
      */
-    private function commandNamed(string $name): CommandInterface|ConcurrentCommandInterface|null
+    private function commandNamed(string $name): CommandInterface|null
     {
         foreach ($this->commands as $command) {
             if ($command->name() === $name) {
@@ -360,6 +355,10 @@ final class ConversationRuntime
 
     private function tick(): bool
     {
+        if ($this->stopped) {
+            return false;
+        }
+
         $message = $this->turns->beginWorking();
 
         if ($message !== null) {
@@ -443,6 +442,12 @@ final class ConversationRuntime
         $this->view->showQueuedMessages($this->turns->queued());
     }
 
+    private function stop(): void
+    {
+        $this->stopped = true;
+        $this->view->stop();
+    }
+
     private function handleInput(InputEvent $event): void
     {
         $keys = new Keybindings([
@@ -455,7 +460,7 @@ final class ConversationRuntime
 
         if ($keys->matches($event->getData(), 'quit')) {
             $event->stopPropagation();
-            $this->view->stop();
+            $this->stop();
 
             return;
         }
