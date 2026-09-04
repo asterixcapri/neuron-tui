@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronTui\Command;
 
+use NeuronInteraction\Command\CommandArguments;
 use NeuronTui\Conversation\ConcurrentControls;
 
 /**

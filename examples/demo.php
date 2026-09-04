@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-use NeuronTui\Command\ClearCommand;
+use NeuronInteraction\Command\ClearCommand;
 use NeuronTui\Command\HelpCommand;
 use NeuronTui\Command\LeaveCommand;
-use NeuronTui\Command\ResumeCommand;
-use NeuronTui\Storage\FileStorage;
+use NeuronInteraction\Command\ResumeCommand;
+use NeuronInteraction\Storage\FileStorage;
 use NeuronTui\Tui;
 use NeuronTuiDemo\DemoAgent;
 use NeuronTuiDemo\ModelCommand;

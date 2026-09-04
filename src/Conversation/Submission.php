@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronTui\Conversation;
 
-use NeuronTui\Command\CommandArguments;
+use NeuronInteraction\Command\CommandArguments;
 
 /**
  * Reads what a person typed and says what it is.

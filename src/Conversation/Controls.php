@@ -6,10 +6,10 @@ namespace NeuronTui\Conversation;
 
 use Closure;
 use NeuronAI\Agent\Agent;
-use NeuronTui\Command\CommandControlsInterface;
-use NeuronTui\Command\Commands;
-use NeuronTui\Command\SelectionRequest;
-use NeuronTui\Session\Sessions;
+use NeuronInteraction\Command\CommandControlsInterface;
+use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Command\SelectionRequest;
+use NeuronInteraction\Session\Sessions;
 use NeuronTui\Tui\ConversationView;
 
 /**

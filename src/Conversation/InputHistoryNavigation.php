@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronTui\Conversation;
 
-use NeuronTui\InputHistory\InputHistory;
+use NeuronInteraction\InputHistory\InputHistory;
 
 /** @internal Each composer owns its recall position and draft. */
 final class InputHistoryNavigation

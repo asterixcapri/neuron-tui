@@ -28,25 +28,25 @@ use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Testing\RequestRecord;
 use NeuronAI\Tools\Tool;
-use NeuronTui\Command\AbstractCommandKit;
-use NeuronTui\Command\CommandArguments;
-use NeuronTui\Command\ClearCommand;
-use NeuronTui\Command\CommandInterface;
-use NeuronTui\Command\SelectionOption;
-use NeuronTui\Command\SelectionRequest;
+use NeuronInteraction\Command\AbstractCommandKit;
+use NeuronInteraction\Command\CommandArguments;
+use NeuronInteraction\Command\ClearCommand;
+use NeuronInteraction\Command\CommandInterface;
+use NeuronInteraction\Command\SelectionOption;
+use NeuronInteraction\Command\SelectionRequest;
 use NeuronTui\Command\ConcurrentCommandInterface;
 use NeuronTui\Command\HelpCommand;
 use NeuronTui\Command\LeaveCommand;
-use NeuronTui\Command\ResumeCommand;
-use NeuronTui\Command\SessionKit;
+use NeuronInteraction\Command\ResumeCommand;
+use NeuronInteraction\Command\SessionKit;
 
 use NeuronTui\Conversation\ConcurrentControls;
-use NeuronTui\Command\CommandControlsInterface;
+use NeuronInteraction\Command\CommandControlsInterface;
 use NeuronTui\Tui;
-use NeuronTui\Session\Session;
-use NeuronTui\Session\Sessions;
-use NeuronTui\Storage\FileStorage;
-use NeuronTui\Storage\InMemoryStorage;
+use NeuronInteraction\Session\Session;
+use NeuronInteraction\Session\Sessions;
+use NeuronInteraction\Storage\FileStorage;
+use NeuronInteraction\Storage\InMemoryStorage;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
@@ -1055,7 +1055,7 @@ MARKDOWN;
 
     public function testACommandFollowedByArgumentsIsStillThatCommand(): void
     {
-        $storage = new \NeuronTui\Storage\InMemoryStorage();
+        $storage = new \NeuronInteraction\Storage\InMemoryStorage();
         $afterResume = null;
         $resumedContent = null;
         $afterClear = null;
@@ -1210,7 +1210,7 @@ MARKDOWN;
         $agent = new Agent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
-        $storage = new \NeuronTui\Storage\InMemoryStorage();
+        $storage = new \NeuronInteraction\Storage\InMemoryStorage();
         $command = $this->commandThat(
             static function (CommandControlsInterface $controls, string $arguments): void {
                 $controls->promptAgent('Review ' . $arguments . '.');
@@ -1239,14 +1239,14 @@ MARKDOWN;
         );
         self::assertSame(
             ['/probe this diff'],
-            (new \NeuronTui\InputHistory\InputHistory($storage))->entries(),
+            (new \NeuronInteraction\InputHistory\InputHistory($storage))->entries(),
         );
     }
 
     public function testSelectionRequestReturnsBeforeThePersonChoosesAndResumesTheCommand(): void
     {
         $terminal = new VirtualTerminal(rows: 30);
-        $storage = new \NeuronTui\Storage\InMemoryStorage();
+        $storage = new \NeuronInteraction\Storage\InMemoryStorage();
         $events = [];
         $beforeChoice = null;
         $command = $this->commandThat(
@@ -1276,7 +1276,7 @@ MARKDOWN;
         self::assertSame(['first invocation finished'], $beforeChoice);
         self::assertSame(['first invocation finished', 'stable-value'], $events);
         self::assertStringContainsString('Request submitted.', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
-        self::assertSame(['/probe'], (new \NeuronTui\InputHistory\InputHistory($storage))->entries());
+        self::assertSame(['/probe'], (new \NeuronInteraction\InputHistory\InputHistory($storage))->entries());
     }
 
     public function testACommandReachesTheAgentToChangeProviderInstructionsAndTools(): void
@@ -2027,7 +2027,9 @@ MARKDOWN;
         $agent = new Agent();
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(rows: 24);
-        $kit = new class() extends AbstractCommandKit {
+        $kit = new
+        /** @extends AbstractCommandKit<CommandInterface|ConcurrentCommandInterface> */
+        class() extends AbstractCommandKit {
             protected function provide(): array
             {
                 return [new HelpCommand(), new LeaveCommand()];
