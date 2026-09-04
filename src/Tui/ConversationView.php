@@ -10,7 +10,6 @@ use InvalidArgumentException;
 use LogicException;
 use NeuronAI\Chat\Messages\Message;
 use NeuronInteraction\Command\CommandInterface;
-use NeuronTui\Command\ConcurrentCommandInterface;
 use NeuronTui\Conversation\ChoiceOption;
 use NeuronTui\History\EntryKind;
 use NeuronTui\History\HistoryProjection;
@@ -97,7 +96,7 @@ final class ConversationView
     private bool $leaving = false;
 
     /**
-     * @param list<CommandInterface|ConcurrentCommandInterface> $commands
+     * @param list<CommandInterface> $commands
      *     the mounted commands, in the order the Host Application named
      *     them, which are what the Command suggestions have to offer
      */
