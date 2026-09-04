@@ -193,67 +193,35 @@ soon as the draft stops being a name: a space, a line break, or the slash
 deleted. A slash in the middle of a message shows nothing and stays text for
 the Agent.
 
-### Concurrent commands
+### Commands during a Turn
 
-A command is refused while the Agent is answering, and can be typed again once
-the turn has finished: one that replaced the conversation meanwhile would have
-the answer on its way land where it does not belong. A command whose
-synchronous run may overlap a Turn says so by implementing
-`NeuronTui\Command\ConcurrentCommandInterface` instead of
-`NeuronInteraction\Command\CommandInterface`, and is carried out at any time.
+The TUI permits only Neuron Interaction's `HelpCommand` and `LeaveCommand`
+while the Agent is answering. It checks their implementations, so configured
+aliases retain that permission and an unrelated Command named `/help` does not.
+Every Command uses `CommandInterface` and `CommandControlsInterface`; the shared
+dispatcher imposes no concurrency policy. Other Commands are refused until the
+Turn finishes.
 
-```php
-use NeuronTui\Conversation\ConcurrentControls;
-use NeuronTui\Command\ConcurrentCommandInterface;
-use NeuronInteraction\Command\CommandArguments;
-
-final class Version implements ConcurrentCommandInterface
-{
-    public function name(): string
-    {
-        return '/version';
-    }
-
-    public function describe(): string
-    {
-        return 'Says which build is answering.';
-    }
-
-    public function run(ConcurrentControls $controls, CommandArguments $arguments): void
-    {
-        $controls->say('Build ' . MyApp::VERSION);
-    }
-}
-```
-
-Both interfaces carry the name, description and `run()` contract; what changes
-is what `run()` is handed. In exchange for overlapping a Turn, such a command
-receives the **ConcurrentControls**: only
-`say()`, `warn()`, `commands()` and `stop()`. These controls expose neither
-selection nor Agent access or prompting. The marker interface and this policy
-are TUI-specific; Neuron Interaction imposes no concurrency policy on backend
-Adapters.
-
-`LeaveCommand` and `HelpCommand` are the two shipped commands that run this
-way: leaving and reading what may be typed here change no conversation.
+Leave stops the terminal and pending Picker, and prevents queued inputs from
+starting another Turn. It neither cancels nor waits for in-flight Agent work.
 
 ### The commands this library ships
 
-Neuron Interaction supplies Session Commands; Neuron TUI supplies terminal
-Help and Leave Commands. Each accepts a slash-prefixed name at construction, so a
-Host Application that prefers `/quit` to `/exit` passes `/quit`:
+Neuron Interaction supplies Session Commands, Help and Leave. Each accepts a
+slash-prefixed name at construction, so a Host Application that prefers `/quit`
+to `/exit` passes `/quit`:
 
 | Class | Terminal invocation | What it does |
 | --- | --- | --- |
 | `NeuronInteraction\Command\ClearCommand` | `/clear` | Starts a new Session, leaving the current one stored. |
 | `NeuronInteraction\Command\ResumeCommand` | `/resume` | Lets you choose a stored Session to resume. |
-| `NeuronTui\Command\LeaveCommand` | `/exit` | Closes the Conversation TUI. Concurrent. |
-| `NeuronTui\Command\HelpCommand` | `/help` | Lists what can be typed here. Concurrent. |
+| `NeuronInteraction\Command\LeaveCommand` | `/exit` | Requests that the Adapter stop. |
+| `NeuronInteraction\Command\HelpCommand` | `/help` | Lists what can be typed here. |
 
 ```php
 use NeuronInteraction\Command\ClearCommand;
-use NeuronTui\Command\HelpCommand;
-use NeuronTui\Command\LeaveCommand;
+use NeuronInteraction\Command\HelpCommand;
+use NeuronInteraction\Command\LeaveCommand;
 use NeuronInteraction\Command\ResumeCommand;
 
 Tui::make($agent)->addCommand([
@@ -283,7 +251,7 @@ A **Command kit** is a group of commands mounted in one line. `SessionCommandKit
 provided by Neuron Interaction, grouping both Commands that touch Sessions.
 
 ```php
-use NeuronTui\Command\LeaveCommand;
+use NeuronInteraction\Command\LeaveCommand;
 use NeuronInteraction\Command\SessionCommandKit;
 use NeuronInteraction\Storage\FileStorage;
 

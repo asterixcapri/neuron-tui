@@ -31,6 +31,7 @@ final readonly class Controls implements CommandControlsInterface
      * @param Closure(string): void $putToAgent how a prompt reaches the Agent
      * @param Closure(Agent): void  $answerFrom how another Agent takes over
      * @param Closure(SelectionRequest): void $select how a later selection reaches the Adapter
+     * @param Closure(): void $stop how the Adapter ends the interaction
      * @param Sessions $sessions the Sessions owned by this Conversation Runtime
      *
      * @internal the Conversation TUI builds these, a command receives them
@@ -43,6 +44,7 @@ final readonly class Controls implements CommandControlsInterface
         private Commands $mounted,
         private Sessions $sessions,
         private Closure $select,
+        private Closure $stop,
     ) {
     }
 
@@ -131,6 +133,6 @@ final readonly class Controls implements CommandControlsInterface
      */
     public function stop(): void
     {
-        $this->view->stop();
+        ($this->stop)();
     }
 }
