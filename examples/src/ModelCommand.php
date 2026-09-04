@@ -14,7 +14,7 @@ final readonly class ModelCommand implements CommandInterface
 {
     public function name(): string
     {
-        return 'model';
+        return '/model';
     }
 
     public function describe(): string

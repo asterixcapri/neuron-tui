@@ -21,9 +21,9 @@ use NeuronTui\Conversation\ConcurrentControls;
 final readonly class LeaveCommand implements ConcurrentCommandInterface
 {
     /**
-     * @param string $name the name it answers to, slash omitted
+     * @param string $name the name it answers to, including the slash
      */
-    public function __construct(private string $name = 'exit')
+    public function __construct(private string $name = '/exit')
     {
     }
 
