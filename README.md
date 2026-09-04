@@ -111,7 +111,7 @@ final class ReviewCommand implements CommandInterface
 {
     public function name(): string
     {
-        return 'review';
+        return '/review';
     }
 
     public function describe(): string
@@ -136,9 +136,10 @@ final class ReviewCommand implements CommandInterface
 Tui::make($agent)->addCommand(new ReviewCommand())->run();
 ```
 
-A Command's identifier is neutral: `review`. The terminal adds and parses the
-slash, so the person types `/review`. Text after the name reaches the Command
-as `CommandArguments::$text`, empty when no arguments were supplied. No name
+A Command's identifier includes its slash: `/review`. Mounting rejects names
+without a leading slash, and dispatch uses the exact identifier. This revision
+supersedes the historical extraction requirement for neutral identifiers.
+Text after the name reaches the Command as `CommandArguments::$text`, empty when no arguments were supplied. No name
 is reserved. If commands share a name, the first
 one added receives matching input and every duplicate remains visible in
 suggestions.
@@ -210,7 +211,7 @@ final class Version implements ConcurrentCommandInterface
 {
     public function name(): string
     {
-        return 'version';
+        return '/version';
     }
 
     public function describe(): string
@@ -239,8 +240,8 @@ way: leaving and reading what may be typed here change no conversation.
 ### The commands this library ships
 
 Neuron Interaction supplies Session Commands; Neuron TUI supplies terminal
-Help and Leave Commands. Each accepts a neutral name at construction, so a
-Host Application that prefers `/quit` to `/exit` passes `quit`:
+Help and Leave Commands. Each accepts a slash-prefixed name at construction, so a
+Host Application that prefers `/quit` to `/exit` passes `/quit`:
 
 | Class | Terminal invocation | What it does |
 | --- | --- | --- |
@@ -258,7 +259,7 @@ use NeuronInteraction\Command\ResumeCommand;
 Tui::make($agent)->addCommand([
     new ClearCommand(),
     new ResumeCommand(),
-    new LeaveCommand('quit'),
+    new LeaveCommand('/quit'),
     new HelpCommand(),
 ])->run();
 ```
