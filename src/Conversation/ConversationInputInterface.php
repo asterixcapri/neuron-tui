@@ -14,7 +14,7 @@ use NeuronAI\Chat\Messages\Message;
  *
  * @internal
  */
-interface ConversationInput
+interface ConversationInputInterface
 {
     /**
      * The message the Agent receives for this Turn.

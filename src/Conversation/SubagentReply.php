@@ -13,7 +13,7 @@ use NeuronAI\Chat\Messages\UserMessage;
  * This is an input to the Agent in charge, not a second result from the tool
  * that started child work and not something written by the person.
  */
-final readonly class SubagentReply implements ConversationInput
+final readonly class SubagentReply implements ConversationInputInterface
 {
     public const string HISTORY_PROVENANCE = 'neuron_tui_subagent_reply';
 

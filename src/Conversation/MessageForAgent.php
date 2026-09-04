@@ -12,7 +12,7 @@ use NeuronAI\Chat\Messages\UserMessage;
  *
  * @internal
  */
-final readonly class MessageForAgent implements ConversationInput
+final readonly class MessageForAgent implements ConversationInputInterface
 {
     public function __construct(public string $contents)
     {

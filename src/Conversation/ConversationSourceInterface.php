@@ -7,7 +7,7 @@ namespace NeuronTui\Conversation;
 /**
  * A model tool that can produce new conversation input after it has returned.
  */
-interface ConversationSource
+interface ConversationSourceInterface
 {
     /**
      * Supplies the current Session's return address before the tool executes.

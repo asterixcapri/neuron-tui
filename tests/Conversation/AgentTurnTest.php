@@ -14,7 +14,7 @@ use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Tools\Tool;
 use NeuronTui\Conversation\AgentTurn;
 use NeuronTui\Conversation\ConversationPort;
-use NeuronTui\Conversation\ConversationSource;
+use NeuronTui\Conversation\ConversationSourceInterface;
 use NeuronTui\Conversation\MessageForAgent;
 use NeuronTui\Conversation\SubagentReply;
 use NeuronTui\Tui\ConversationView;
@@ -135,7 +135,7 @@ final class AgentTurnTest extends TestCase
                 $delivered[] = $reply;
             },
         );
-        $tool = new class() extends Tool implements ConversationSource {
+        $tool = new class() extends Tool implements ConversationSourceInterface {
             private ?ConversationPort $conversation = null;
 
             public function __construct()
