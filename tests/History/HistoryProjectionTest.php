@@ -18,6 +18,7 @@ use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Tools\Tool;
+use NeuronTui\Conversation\SubagentReply;
 use NeuronTui\History\Entry;
 use NeuronTui\History\EntryKind;
 use NeuronTui\History\HistoryProjection;
@@ -54,6 +55,24 @@ final class HistoryProjectionTest extends TestCase
 
         self::assertSame(
             [[EntryKind::Agent, 'Visible.']],
+            self::summarize($entries),
+        );
+    }
+
+    public function testSubagentRepliesAreNotAttributedToThePerson(): void
+    {
+        $reply = new SubagentReply('child-8', 'Background result.');
+        $entries = $this->project([
+            new UserMessage('Please delegate this.'),
+            $reply->message(),
+            new AssistantMessage('The delegated work is complete.'),
+        ]);
+
+        self::assertSame(
+            [
+                [EntryKind::Person, 'Please delegate this.'],
+                [EntryKind::Agent, 'The delegated work is complete.'],
+            ],
             self::summarize($entries),
         );
     }

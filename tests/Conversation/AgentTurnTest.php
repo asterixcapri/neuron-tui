@@ -13,6 +13,10 @@ use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Tools\Tool;
 use NeuronTui\Conversation\AgentTurn;
+use NeuronTui\Conversation\ConversationPort;
+use NeuronTui\Conversation\ConversationSource;
+use NeuronTui\Conversation\MessageForAgent;
+use NeuronTui\Conversation\SubagentReply;
 use NeuronTui\Tui\ConversationView;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
@@ -102,14 +106,14 @@ final class AgentTurnTest extends TestCase
         $first = new FakeAIProvider(new AssistantMessage('The first one.'));
         $second = new FakeAIProvider(new AssistantMessage('The second one.'));
         $view = new ConversationView($terminal, 'Neuron AI', 'Conversation');
-        $turn = new AgentTurn($view);
+        $turn = $this->turn($view);
         $earlier = $this->agentOf($first);
         $later = $this->agentOf($second);
 
         EventLoop::queue(
             static function () use ($turn, $earlier, $later): void {
-                $turn->respond($earlier, 'Who answers?');
-                $turn->respond($later, 'And now?');
+                $turn->respond($earlier, new MessageForAgent('Who answers?'));
+                $turn->respond($later, new MessageForAgent('And now?'));
             },
         );
         EventLoop::run();
@@ -119,6 +123,61 @@ final class AgentTurnTest extends TestCase
         self::assertStringContainsString('The second one.', $display);
         $first->assertCallCount(1);
         $second->assertCallCount(1);
+    }
+
+    public function testAConversationSourceIsConnectedBeforeItExecutes(): void
+    {
+        $delivered = [];
+        $terminal = new VirtualTerminal(rows: 24);
+        $view = new ConversationView($terminal, 'Neuron AI', 'Conversation');
+        $conversation = new ConversationPort(
+            static function (SubagentReply $reply) use (&$delivered): void {
+                $delivered[] = $reply;
+            },
+        );
+        $tool = new class() extends Tool implements ConversationSource {
+            private ?ConversationPort $conversation = null;
+
+            public function __construct()
+            {
+                parent::__construct('start_later');
+                $this->setCallable(function (): string {
+                    if (!$this->conversation instanceof ConversationPort) {
+                        throw new \LogicException('Tool was not connected.');
+                    }
+
+                    $this->conversation->deliver(
+                        new SubagentReply('child-12', 'Finished later.'),
+                    );
+
+                    return 'Started child-12.';
+                });
+            }
+
+            public function connect(ConversationPort $conversation): void
+            {
+                $this->conversation = $conversation;
+            }
+        };
+        $provider = new FakeAIProvider(
+            new ToolCallMessage(tools: [$tool]),
+            new AssistantMessage('Work started.'),
+        );
+        $turn = new AgentTurn($view, $conversation);
+        $agent = $this->agentOf($provider);
+
+        EventLoop::queue(
+            static fn () => $turn->respond(
+                $agent,
+                new MessageForAgent('Delegate this.'),
+            ),
+        );
+        EventLoop::run();
+
+        self::assertCount(1, $delivered);
+        self::assertSame('child-12', $delivered[0]->subagentId);
+        self::assertSame('Finished later.', $delivered[0]->contents);
+        self::assertSame('Started child-12.', $tool->getResult());
     }
 
     private function agentOf(FakeAIProvider $provider): Agent
@@ -140,15 +199,27 @@ final class AgentTurnTest extends TestCase
     ): string {
         $agent = $this->agentOf($provider);
         $view = new ConversationView($terminal, 'Neuron AI', 'Conversation');
-        $turn = new AgentTurn($view);
+        $turn = $this->turn($view);
 
         EventLoop::queue(
-            static fn () => $turn->respond($agent, $message),
+            static fn () => $turn->respond(
+                $agent,
+                new MessageForAgent($message),
+            ),
         );
         EventLoop::run();
 
         $view->paintPendingChanges();
 
         return AnsiUtils::stripAnsiCodes($terminal->getOutput());
+    }
+
+    private function turn(ConversationView $view): AgentTurn
+    {
+        return new AgentTurn(
+            $view,
+            new ConversationPort(static function (SubagentReply $reply): void {
+            }),
+        );
     }
 }
