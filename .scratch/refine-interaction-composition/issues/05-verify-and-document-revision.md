@@ -1,0 +1,34 @@
+# 05: Verify and document the integrated interaction revision
+
+**What to build:** A Host Application can follow the documented composition
+examples against the revised packages, and the existing pull requests contain
+a verified, coherent implementation of the agreed interaction contracts.
+
+**Blocked by:** 02 — Retain slash identifiers throughout Command interaction;
+04 — Preserve and resume the initial conversation. These transitively cover
+tickets 01 and 03.
+
+**Status:** ready-for-agent
+
+Parent: Refine Interaction composition and shared Commands, the spec in this
+feature directory.
+
+- [ ] Run the full test suites and static analysis in Neuron Interaction and Neuron TUI after integrating all preceding tickets; resolve regressions within the revision's scope.
+- [ ] Validate Composer metadata and consumer dependency locks, including demonstration applications, against the revised shared package on the existing development branch.
+- [ ] Executable terminal and backend examples use the same shared Commands, slash identifiers and ordinary controls contract without terminal dependencies in Neuron Interaction.
+- [ ] Verify the complete public flow: optional module defaults and supplied-instance reuse, mutable Command mounting, Help and Leave during a Turn, slash-preserving selection reinvocation, and initial-conversation recovery after clear.
+- [ ] Retain coverage for optional InputHistory navigation, independent instance cursors/drafts, shared persisted inputs, unchanged execution outcomes and no automatic Command mounting.
+- [ ] Current usage documentation reflects module composition and the removal of Tui::addCommand, TUI-owned Storage configuration and concurrent Command abstractions. No current example relies on the removed APIs.
+- [ ] Reconcile architectural guidance with explicit, scoped supersession of ADR-0002, ADR-0003 and ADR-0005; preserve unrelated decisions and historical context. Keep CONTEXT a glossary, not an implementation checklist.
+- [ ] Record that slash identifiers and shared Help/Leave supersede the conflicting historical extraction requirements, without rewriting or reopening completed extraction tickets.
+- [ ] Verify interface names use the Interface suffix and the kit remains SessionCommandKit. Do not introduce an Interaction container, runtime collection locking, Agent cancellation or a compatibility layer.
+- [ ] Update existing Neuron TUI PR #11 and Neuron Interaction PR #1 with an accurate revision summary and validation results, crediting the human author alone.
+- [ ] No replacement branches or PRs, merges, releases or registry publication are performed. Do not close or change the parent spec as part of this ticket.
+
+## Execution notes
+
+Continue on feat/extract-neuron-interaction in both repositories. This is an
+integration audit, not a reason to defer tests or usage documentation from the
+behavior tickets. Prefer the already approved public API and virtual-terminal
+test boundaries; do not add test-only architecture. Report actual validation
+results and any remaining limitations rather than claiming unrun checks passed.
