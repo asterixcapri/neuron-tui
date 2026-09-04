@@ -204,12 +204,6 @@ final class ConversationRuntime
 
     /**
      * Presents a dispatch failure after reconciling any History change.
-     *
-     * It runs where it was typed, which is a callback of the event loop the
-     * TUI and amphp share, and a callback runs in a fiber of its own. So a
-     * command that waits — `choose()` is the one verb that does — suspends
-     * that fiber alone: the loop goes on ticking, painting and reading keys
-     * meanwhile, which is what lets a person answer the list.
      */
     private function runSafely(
         string $identifier,
@@ -273,6 +267,7 @@ final class ConversationRuntime
                         ),
                         $request->options,
                     ),
+                    $request->description,
                 );
 
                 if ($chosen !== null) {

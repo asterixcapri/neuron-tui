@@ -6,7 +6,7 @@ namespace NeuronTui\Tests\Conversation;
 
 use DateTimeImmutable;
 use Generator;
-use NeuronTui\Conversation\SessionMetadata;
+use NeuronTui\Command\SessionMetadata;
 use NeuronTui\Session\Session;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
