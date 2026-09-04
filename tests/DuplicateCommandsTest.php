@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace NeuronTui\Tests;
 
 use Closure;
+use NeuronInteraction\Command\Commands;
 use NeuronAI\Agent\Agent;
 use NeuronInteraction\Command\AbstractCommandKit;
 use NeuronInteraction\Command\CommandArguments;
@@ -22,29 +23,29 @@ final class DuplicateCommandsTest extends TestCase
     public function testTheFirstDuplicateRunsForEveryWayCommandsCanBeAdded(): void
     {
         /**
-         * @var array<string, Closure(Tui, CommandInterface, CommandInterface): Tui>
+         * @var array<string, Closure(Commands, CommandInterface, CommandInterface): Commands>
          */
         $mount = [
             'separate calls' => static fn (
-                Tui $tui,
+                Commands $commands,
                 CommandInterface $first,
                 CommandInterface $second,
-            ): Tui => $tui->addCommand($first)->addCommand($second),
+            ): Commands => $commands->addCommand($first)->addCommand($second),
             'one array' => static fn (
-                Tui $tui,
+                Commands $commands,
                 CommandInterface $first,
                 CommandInterface $second,
-            ): Tui => $tui->addCommand([$first, $second]),
+            ): Commands => $commands->addCommand([$first, $second]),
             'one kit' => static fn (
-                Tui $tui,
+                Commands $commands,
                 CommandInterface $first,
                 CommandInterface $second,
-            ): Tui => $tui->addCommand(self::kit([$first, $second])),
+            ): Commands => $commands->addCommand(self::kit([$first, $second])),
             'array and kit' => static fn (
-                Tui $tui,
+                Commands $commands,
                 CommandInterface $first,
                 CommandInterface $second,
-            ): Tui => $tui->addCommand([
+            ): Commands => $commands->addCommand([
                 $first,
                 self::kit([$second]),
             ]),
@@ -79,7 +80,7 @@ final class DuplicateCommandsTest extends TestCase
                 static fn () => $terminal->simulateInput("/clear\r"),
             );
 
-            $add(new Tui(new Agent(), $terminal), $first, $second)->run();
+            (new Tui(new Agent(), $terminal, commands: $add(new Commands(), $first, $second)))->run();
 
             self::assertSame(['first'], $ran, $form);
         }
@@ -138,13 +139,13 @@ final class DuplicateCommandsTest extends TestCase
             },
         );
 
-        (new Tui(new Agent(), $terminal))
+        $mounted = (new Commands())
             ->addCommand($commands[0])
             ->addCommand([$commands[1], $commands[2]])
             ->addCommand(self::kit([$commands[3], $commands[4]]))
             ->addCommand([$commands[5], self::kit([$commands[6]])])
-            ->addCommand(new HelpCommand())
-            ->run();
+            ->addCommand(new HelpCommand());
+        (new Tui(new Agent(), $terminal, commands: $mounted))->run();
 
         self::assertIsString($suggestions);
         self::assertInOrder($descriptions, $suggestions);

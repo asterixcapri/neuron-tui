@@ -1,5 +1,15 @@
 # Shared storage underlies TUI state
 
+_The Refine Interaction composition revision supersedes runtime-owned module
+construction and a single TUI Storage configuration below. The Host Application
+may supply Commands, Sessions and InputHistory independently. Tui creates omitted
+modules once: empty Commands and in-memory Sessions and InputHistory. Runtime and
+Command controls reuse those modules. Persistence is configured through the
+supplied modules; they may share Storage but are not required to. The concurrency
+controls policy is superseded as recorded in ADR-0002. Storage contracts and
+namespace separation remain unchanged. Initial History integration is addressed
+by the subsequent startup-recovery revision._
+
 Sessions and Input history are concrete behaviour modules over one
 `StorageInterface`. Storage persists JSON documents by namespace and logical
 key, keeping caller-owned string metadata atomic with their data. JSON byte

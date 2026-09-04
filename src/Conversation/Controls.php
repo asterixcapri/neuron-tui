@@ -32,7 +32,7 @@ final readonly class Controls implements CommandControlsInterface
      * @param Closure(Agent): void  $answerFrom how another Agent takes over
      * @param Closure(SelectionRequest): void $select how a later selection reaches the Adapter
      * @param Closure(): void $stop how the Adapter ends the interaction
-     * @param Sessions $sessions the Sessions owned by this Conversation Runtime
+     * @param Sessions $sessions the Sessions used by this Conversation Runtime
      *
      * @internal the Conversation TUI builds these, a command receives them
      */
@@ -121,7 +121,7 @@ final readonly class Controls implements CommandControlsInterface
     }
 
     /**
-     * The one live Sessions instance owned by this Conversation Runtime.
+     * The same Sessions instance supplied to this Conversation Runtime.
      */
     public function sessions(): Sessions
     {
