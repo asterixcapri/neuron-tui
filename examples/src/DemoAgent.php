@@ -12,9 +12,11 @@ use NeuronAI\Providers\OpenAI\Responses\OpenAIResponses;
 use NeuronAI\Tools\Toolkits\Calendar\CalendarToolkit;
 use NeuronAI\Tools\Toolkits\FileSystem\FileSystemToolkit;
 use NeuronAI\Tools\Toolkits\Jina\JinaToolkit;
+use NeuronAI\Tools\Toolkits\ToolkitInterface;
+use NeuronTui\Subagent\SubagentToolkit;
 use RuntimeException;
 
-final class DemoAgent extends Agent
+class DemoAgent extends Agent
 {
     private string $modelId = 'openai:gpt-5.4-nano';
 
@@ -66,6 +68,15 @@ final class DemoAgent extends Agent
     }
 
     protected function tools(): array
+    {
+        return [
+            ...$this->demoTools(),
+            new SubagentToolkit(DemoSubagent::class),
+        ];
+    }
+
+    /** @return list<ToolkitInterface> */
+    protected function demoTools(): array
     {
         $tools = [
             new FileSystemToolkit(),
