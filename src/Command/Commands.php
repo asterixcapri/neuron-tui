@@ -34,7 +34,7 @@ final readonly class Commands
     public function run(
         string $identifier,
         CommandArguments $arguments,
-        CommandControls $controls,
+        CommandControlsInterface $controls,
     ): CommandExecution {
         $command = $this->named($identifier);
 

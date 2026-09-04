@@ -15,8 +15,9 @@ use NeuronTui\Command\CommandArguments;
 use NeuronTui\Command\ClearCommand;
 use NeuronTui\Command\CommandInterface;
 use NeuronTui\Command\ResumeCommand;
-use NeuronTui\Conversation\ChoiceOption;
-use NeuronTui\Command\CommandControls;
+use NeuronTui\Command\SelectionOption;
+use NeuronTui\Command\SelectionRequest;
+use NeuronTui\Command\CommandControlsInterface;
 use NeuronTui\Session\Sessions;
 use NeuronTui\Storage\FileStorage;
 use NeuronTui\Storage\InMemoryStorage;
@@ -59,7 +60,7 @@ final class InputHistoryTest extends TestCase
                 return 'Record that the command ran.';
             }
 
-            public function run(CommandControls $controls, CommandArguments $arguments): void
+            public function run(CommandControlsInterface $controls, CommandArguments $arguments): void
             {
                 $this->arguments[] = $arguments->text;
             }
@@ -691,12 +692,18 @@ final class InputHistoryTest extends TestCase
                 return 'Choose an option.';
             }
 
-            public function run(CommandControls $controls, CommandArguments $arguments): void
+            public function run(CommandControlsInterface $controls, CommandArguments $arguments): void
             {
-                $this->chosen = $controls->choose('Options', [
-                    new ChoiceOption('first', 'First option'),
-                    new ChoiceOption('last', 'Last option'),
-                ]);
+                if ($arguments->text !== '') {
+                    $this->chosen = $arguments->text;
+
+                    return;
+                }
+
+                $controls->requestSelection(new SelectionRequest($this->name(), 'Options', [
+                    new SelectionOption('first', 'First option'),
+                    new SelectionOption('last', 'Last option'),
+                ]));
             }
         };
 
@@ -874,7 +881,7 @@ final class InputHistoryTest extends TestCase
                 return $this->description;
             }
 
-            public function run(CommandControls $controls, CommandArguments $arguments): void
+            public function run(CommandControlsInterface $controls, CommandArguments $arguments): void
             {
             }
         };

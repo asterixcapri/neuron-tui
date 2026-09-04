@@ -6,7 +6,7 @@ namespace NeuronTui\Conversation;
 
 use Closure;
 use NeuronAI\Agent\Agent;
-use NeuronTui\Command\CommandControls;
+use NeuronTui\Command\CommandControlsInterface;
 use NeuronTui\Command\Commands;
 use NeuronTui\Command\SelectionRequest;
 use NeuronTui\Session\Sessions;
@@ -22,9 +22,9 @@ use NeuronTui\Tui\ConversationView;
  * says how it is changed; only which Agent answers does, because that one is
  * the Conversation TUI's own to remember.
  *
- * @internal Commands depend on CommandControls rather than this Adapter.
+ * @internal Commands depend on CommandControlsInterface rather than this Adapter.
  */
-final readonly class Controls implements CommandControls
+final readonly class Controls implements CommandControlsInterface
 {
     /**
      * @param Closure(): Agent      $answering  the Agent answering right now
@@ -74,26 +74,6 @@ final readonly class Controls implements CommandControls
     public function requestSelection(SelectionRequest $request): void
     {
         ($this->select)($request);
-    }
-
-    /**
-     * Offers a list and waits there for what a person chose.
-     *
-     * The only verb that waits: it returns the key of the line chosen, or
-     * nothing at all if a person cancelled. What the keys stand for is the
-     * command's own business — the list shows the labels and hands the key
-     * back untouched. The terminal goes on painting meanwhile.
-     * A description may explain the choice beneath its title.
-     *
-     * @param non-empty-list<ChoiceOption> $options in the order the lines are
-     *                                                 offered
-     */
-    public function choose(
-        string $title,
-        array $options,
-        ?string $description = null,
-    ): ?string {
-        return $this->view->choose($title, $options, $description);
     }
 
     /**

@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace NeuronTui\Command;
 
 use DateTimeImmutable;
-use NeuronTui\Conversation\ChoiceOption;
-use NeuronTui\Conversation\SessionMetadata;
 
 /**
  * Offers the stored Sessions so a person can resume one.
@@ -16,7 +14,7 @@ use NeuronTui\Conversation\SessionMetadata;
  * prefers.
  *
  * A list with nothing in it is not worth entering, so it is said in the
- * conversation instead. The Sessions become ChoiceOptions here, while their
+ * conversation instead. The Sessions become Selection options here, while their
  * keys and titles are still something known.
  */
 final readonly class ResumeCommand implements CommandInterface
@@ -36,8 +34,16 @@ final readonly class ResumeCommand implements CommandInterface
         return 'Lets you choose a stored Session to resume.';
     }
 
-    public function run(CommandControls $controls, CommandArguments $arguments): void
+    public function run(CommandControlsInterface $controls, CommandArguments $arguments): void
     {
+        if ($arguments->text !== '') {
+            $controls->agent()->setChatHistory(
+                $controls->sessions()->resume($arguments->text),
+            );
+
+            return;
+        }
+
         $sessions = $controls->sessions()->list();
 
         if ($sessions === []) {
@@ -50,21 +56,13 @@ final readonly class ResumeCommand implements CommandInterface
         $now = new DateTimeImmutable();
 
         foreach ($sessions as $session) {
-            $options[] = new ChoiceOption(
+            $options[] = new SelectionOption(
                 $session->key,
                 $session->title,
                 SessionMetadata::format($session, $now),
             );
         }
 
-        $chosen = $controls->choose('Sessions', $options);
-
-        if ($chosen === null) {
-            return;
-        }
-
-        $controls->agent()->setChatHistory(
-            $controls->sessions()->resume($chosen),
-        );
+        $controls->requestSelection(new SelectionRequest($this->name(), 'Sessions', $options));
     }
 }
