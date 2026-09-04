@@ -22,8 +22,8 @@ use NeuronTui\Conversation\SessionMetadata;
  */
 final readonly class ResumeCommand implements CommandInterface
 {
-    /** @param string $name the name it answers to, slash included */
-    public function __construct(private string $name = '/resume')
+    /** @param string $name the name it answers to, slash omitted */
+    public function __construct(private string $name = 'resume')
     {
     }
 
@@ -37,7 +37,7 @@ final readonly class ResumeCommand implements CommandInterface
         return 'Lets you choose a stored Session to resume.';
     }
 
-    public function run(Controls $controls, string $arguments): void
+    public function run(Controls $controls, CommandArguments $arguments): void
     {
         $sessions = $controls->sessions()->list();
 

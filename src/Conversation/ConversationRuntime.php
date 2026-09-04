@@ -9,6 +9,8 @@ use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\History\ChatHistoryInterface;
 use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
 use NeuronTui\Command\CommandInterface;
+use NeuronTui\Command\CommandArguments;
+use NeuronTui\Command\Commands;
 use NeuronTui\Command\ConcurrentCommandInterface;
 use NeuronTui\InputHistory\InputHistory;
 use NeuronTui\Session\Sessions;
@@ -57,6 +59,8 @@ final class ConversationRuntime
      */
     private readonly array $commands;
 
+    private readonly Commands $dispatcher;
+
     /** @var Future<mixed>|null */
     private ?Future $response = null;
 
@@ -91,6 +95,13 @@ final class ConversationRuntime
             $figletFont,
         );
         $this->workingIndicator = $this->view->workingIndicator();
+        $this->dispatcher = new Commands(array_map(
+            fn (CommandInterface|ConcurrentCommandInterface $command): CommandInterface =>
+                $command instanceof ConcurrentCommandInterface
+                    ? new ConcurrentCommandAdapter($command, $this->concurrentControls())
+                    : $command,
+            $commands,
+        ));
         $this->turns = new TurnQueue();
         $this->agentTurn = new AgentTurn($this->view);
         $this->view->showHistory(
@@ -170,14 +181,14 @@ final class ConversationRuntime
         $command = $this->commandNamed($input->name);
 
         if ($command === null) {
-            $this->view->showUnknownCommand($input->name);
+            $this->view->showUnknownCommand('/' . $input->name);
 
             return;
         }
 
         if (
             !$command instanceof ConcurrentCommandInterface
-            && $this->refusedWhileWorking($input->name)
+            && $this->refusedWhileWorking('/' . $input->name)
         ) {
             return;
         }
@@ -185,16 +196,11 @@ final class ConversationRuntime
         // The command was taken, so what was typed leaves the composer:
         // only a name nobody answers stays there to be corrected.
         $this->view->emptyComposer();
-        $this->runSafely($command, $input->arguments);
+        $this->runSafely($input->name, $input->arguments);
     }
 
     /**
-     * Runs a command of the Host Application's, and survives it.
-     *
-     * From here on the Conversation TUI carries out code that is not its own,
-     * so whatever a command lets rise becomes a line of error in the
-     * conversation, as an exception during a Turn already does, and the
-     * terminal stays where the person left it.
+     * Presents a dispatch failure after reconciling any History change.
      *
      * It runs where it was typed, which is a callback of the event loop the
      * TUI and amphp share, and a callback runs in a fiber of its own. So a
@@ -203,29 +209,19 @@ final class ConversationRuntime
      * meanwhile, which is what lets a person answer the list.
      */
     private function runSafely(
-        CommandInterface|ConcurrentCommandInterface $command,
-        string $arguments,
+        string $identifier,
+        CommandArguments $arguments,
     ): void {
         $conversation = $this->agent->getChatHistory();
-        $failure = null;
-
-        try {
-            if ($command instanceof ConcurrentCommandInterface) {
-                $command->run($this->concurrentControls(), $arguments);
-            } else {
-                $command->run($this->controls(), $arguments);
-            }
-        } catch (Throwable $exception) {
-            $failure = $exception;
-        }
+        $execution = $this->dispatcher->run($identifier, $arguments, $this->controls());
 
         // The screen is reconciled before anything is said about the run, so
         // that a command which failed after changing conversation leaves its
         // line of error on the conversation it left behind.
         $this->reconcile($conversation);
 
-        if ($failure instanceof Throwable) {
-            $this->showFailure($failure);
+        if ($execution->exception instanceof Throwable) {
+            $this->showFailure($execution->exception);
         }
     }
 

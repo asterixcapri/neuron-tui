@@ -11,7 +11,7 @@ use NeuronTui\Conversation\Controls;
  *
  * A command says what it is called and describes itself in one line; what it
  * then does is written by the Host Application that mounted it. It is handed
- * the Controls and whatever was typed after its name — the empty string when
+ * the Controls and whatever was typed after its name — empty text when
  * nothing was — and whatever it does with them is survived by the
  * Conversation TUI. It is refused while a Turn is under way, when those
  * Controls do not all have a stable meaning.
@@ -19,7 +19,7 @@ use NeuronTui\Conversation\Controls;
 interface CommandInterface
 {
     /**
-     * The name it answers to, slash included: `/review`.
+     * The name it answers to, slash omitted: `review`.
      */
     public function name(): string;
 
@@ -28,5 +28,5 @@ interface CommandInterface
      */
     public function describe(): string;
 
-    public function run(Controls $controls, string $arguments): void;
+    public function run(Controls $controls, CommandArguments $arguments): void;
 }
