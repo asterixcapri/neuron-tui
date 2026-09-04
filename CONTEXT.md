@@ -32,35 +32,60 @@ including messages that predate the TUI startup.
 _Avoid_: Transcript, TUI log
 
 **Input history**:
-The sequence of earlier composer inputs that a person can recall for editing
-or resubmission. It is TUI state rather than part of the Agent's History.
+The sequence of earlier submitted inputs that a person can recall for editing
+or resubmission across Sessions and interaction Adapters. It is independent
+from the Agent's History.
 _Avoid_: History, conversation history, prompt history
 
 **Storage**:
-The collection of namespaced JSON documents in which TUI-owned state may
-outlive the module using it. Documents are identified by logical keys.
+The collection of namespaced JSON documents in which interaction state may
+outlive the Adapter using it. Documents are identified by logical keys.
 _Avoid_: Blob store, filesystem, database
 
 **Command**:
-Input beginning with `/` whose effect the TUI decides rather than the model.
-What it does is code someone wrote, and that code is free to send the Agent
-a prompt of its own.
+A named operation whose effect an interaction Adapter decides rather than the
+model. Its identifier carries no presentation syntax; each Adapter decides how
+a person invokes it.
 _Avoid_: Message, prompt, action
 
+**Command execution**:
+The technical outcome reported by the Command dispatcher: completed, unknown
+or failed. It does not describe the domain effect or presentation of a
+Command.
+_Avoid_: Command result, response, view model
+
+**Command arguments**:
+The text supplied with a Command invocation after an interaction Adapter has
+removed its presentation syntax.
+_Avoid_: Parameters, payload
+
+**Selection request**:
+A presentation-neutral request for a person to choose one value from a list.
+The Adapter presents it and invokes the named Command again with the selected
+value as Command arguments; the request itself retains no selection.
+_Avoid_: Picker, selected value, Command result
+
+**Selection option**:
+One value offered by a Selection request, carrying the label shown to a person
+and, when useful, a description. Its value is returned unchanged as Command
+arguments after the person selects it.
+_Avoid_: Choice option, Picker row, menu item
+
 **Concurrent command**:
-A Command whose synchronous run may overlap a Turn. It receives only
-Concurrent Controls, so it cannot reach the Agent, put a prompt to it, open a
-Picker or replace the conversation while an answer is on its way.
+A TUI-specific exception for a Command whose synchronous run may overlap a
+Turn. It receives only Concurrent Controls, so it cannot reach the Agent, put
+a prompt to it, open a Picker or replace the conversation while an answer is
+on its way.
 _Avoid_: Async command, background command, command that runs while working
 
-**Controls**:
-What a Command may do while it runs: say something in the conversation,
-put a prompt to the Agent, offer a Picker, reach the Agent itself, put another
-Agent in charge of answering, reach the Sessions, list the mounted commands,
-leave the terminal. A Concurrent command instead receives Concurrent Controls:
-saying, warning, listing and leaving, the operations whose meaning remains
-stable while an answer is on its way.
-_Avoid_: Context, facade, API
+**Command controls**:
+The presentation-independent verbs and shared interaction state available to
+a Command for one execution. They let it say or warn, put a prompt to the
+Agent through `promptAgent()`, request a selection, inspect or replace the
+answering Agent, use the mounted Commands and Sessions, and stop the
+interaction. Command-specific dependencies still arrive through the Command's
+constructor.
+_Avoid_: Command context, environment, facade, API
 
 **Concurrent Controls**:
 What a Concurrent command may do while its synchronous run overlaps a Turn:
@@ -78,7 +103,9 @@ _Avoid_: Toolkit, bundle, plugin, pack
 One conversation, identified by a key and held by a single History, that
 may outlive the TUI process and can be reopened. No Agent owns it: any Agent
 can be handed it and carry it on. Its title and last-used time identify it to
-a person; its storage may also report its size.
+a person; its title comes from the first non-empty user-authored content in
+its History, while each Adapter decides how to render it. Its storage may also
+report its size.
 _Avoid_: Chat, thread
 
 **Sessions**:
