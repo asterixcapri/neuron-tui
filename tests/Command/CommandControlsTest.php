@@ -6,7 +6,7 @@ namespace NeuronTui\Tests\Command;
 
 use NeuronAI\Agent\Agent;
 use NeuronTui\Command\CommandArguments;
-use NeuronTui\Command\CommandControls;
+use NeuronTui\Command\CommandControlsInterface;
 use NeuronTui\Command\CommandInterface;
 use NeuronTui\Command\Commands;
 use NeuronTui\Command\SelectionOption;
@@ -36,7 +36,7 @@ final class CommandControlsTest extends TestCase
                 return 'Exercises shared Command controls.';
             }
 
-            public function run(CommandControls $controls, CommandArguments $arguments): void
+            public function run(CommandControlsInterface $controls, CommandArguments $arguments): void
             {
                 $controls->say($controls->commands()->all()[0]->name());
                 $controls->warn($arguments->text);

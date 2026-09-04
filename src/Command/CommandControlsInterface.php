@@ -5,11 +5,10 @@ declare(strict_types=1);
 namespace NeuronTui\Command;
 
 use NeuronAI\Agent\Agent;
-use NeuronTui\Conversation\ChoiceOption;
 use NeuronTui\Session\Sessions;
 
 /** Presentation-independent operations supplied by the active Adapter. */
-interface CommandControls
+interface CommandControlsInterface
 {
     public function say(string $text): void;
 
@@ -30,11 +29,4 @@ interface CommandControls
     public function sessions(): Sessions;
 
     public function stop(): void;
-
-    /**
-     * Temporary bridge for existing Picker consumers; removed by ticket 05.
-     *
-     * @param non-empty-list<ChoiceOption> $options
-     */
-    public function choose(string $title, array $options, ?string $description = null): ?string;
 }
