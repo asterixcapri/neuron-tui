@@ -30,7 +30,15 @@ final class SubagentStatusTool extends AbstractSubagentTool
         )];
     }
 
-    /** @return array{id: string, state: string, history: list<array<string, mixed>>} */
+    /**
+     * @return array{
+     *     id: string,
+     *     state: string,
+     *     queued_messages: int,
+     *     history: list<array<string, mixed>>,
+     *     elapsed_seconds?: float
+     * }
+     */
     public function __invoke(string $subagent_id): array
     {
         return $this->subagents->status($subagent_id);
