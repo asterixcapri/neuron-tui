@@ -15,6 +15,10 @@ Triage uses the five default canonical labels. See `docs/agents/triage-labels.md
 
 Domain documentation uses the single-context layout. See `docs/agents/domain.md`.
 
+### Coding style
+
+PHP naming conventions are documented in `docs/coding-style.md`.
+
 ## Authorship
 
 Commits, pull requests and comments credit the human author alone. Write the
