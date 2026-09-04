@@ -6,8 +6,9 @@ namespace NeuronTui\Session;
 
 use DateTimeImmutable;
 use InvalidArgumentException;
+use NeuronAI\Chat\Enums\MessageRole;
 use NeuronAI\Chat\History\ChatHistoryInterface;
-use NeuronTui\History\HistoryProjection;
+use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronTui\Storage\StorageInterface;
 use NeuronTui\Storage\StoredDocument;
 use UnexpectedValueException;
@@ -41,10 +42,7 @@ final readonly class Sessions
         $sessions = [];
 
         foreach ($this->storage->entries(self::NAMESPACE) as $document) {
-            $projection = new HistoryProjection(
-                $this->history($document)->getMessages(),
-            );
-            $title = $projection->openingWords();
+            $title = $this->title($this->history($document));
 
             if ($title === null) {
                 continue;
@@ -92,6 +90,26 @@ final readonly class Sessions
             $document->key,
             document: $document,
         );
+    }
+
+    private function title(ChatHistoryInterface $history): ?string
+    {
+        foreach ($history->getMessages() as $message) {
+            // Neuron represents tool results with the user role, but their
+            // content was not authored by the person.
+            if ($message->getRole() !== MessageRole::USER->value
+                || $message instanceof ToolResultMessage) {
+                continue;
+            }
+
+            $content = $message->getContent();
+
+            if ($content !== null && trim($content) !== '') {
+                return $content;
+            }
+        }
+
+        return null;
     }
 
     private function lastUsedAt(StoredDocument $document): DateTimeImmutable

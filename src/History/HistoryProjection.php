@@ -67,25 +67,6 @@ final class HistoryProjection
         return array_values($this->entries);
     }
 
-    /**
-     * The first thing the person wrote, or nothing when they wrote nothing.
-     *
-     * How a conversation opened is what tells one Session from another in a
-     * list, and it is read here so that a title says exactly what the
-     * History would have shown.
-     *
-     */
-    public function openingWords(): ?string
-    {
-        foreach ($this->entries() as $entry) {
-            if ($entry->kind === EntryKind::Person) {
-                return $entry->text;
-            }
-        }
-
-        return null;
-    }
-
     private function read(Message $message): void
     {
         $role = $message->getRole();
