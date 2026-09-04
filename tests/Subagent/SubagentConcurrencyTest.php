@@ -10,6 +10,7 @@ use Amp\Future;
 use NeuronAI\Agent\Agent;
 use NeuronTui\Conversation\ConversationPort;
 use NeuronTui\Conversation\SubagentReply;
+use NeuronTui\Subagent\ChildTurn;
 use NeuronTui\Subagent\ChildTurnExecutorInterface;
 use NeuronTui\Subagent\ChildTurnResult;
 use NeuronTui\Subagent\Subagents;
@@ -172,14 +173,12 @@ final class ConcurrencyChildTurnExecutor implements ChildTurnExecutorInterface
     public int $cancellations = 0;
 
     public function execute(
-        string $agentClass,
-        string $message,
-        array $history,
+        ChildTurn $turn,
         Cancellation $cancellation,
     ): Future {
-        $turn = new DeferredFuture();
-        $this->messages[] = $message;
-        $this->turns[] = $turn;
+        $future = new DeferredFuture();
+        $this->messages[] = $turn->message;
+        $this->turns[] = $future;
         $this->turnCancellations[] = $cancellation;
 
         if (
@@ -189,7 +188,7 @@ final class ConcurrencyChildTurnExecutor implements ChildTurnExecutorInterface
             EventLoop::getDriver()->stop();
         }
 
-        return $turn->getFuture()->map(
+        return $future->getFuture()->map(
             static function (mixed $result): ChildTurnResult {
                 if (!$result instanceof ChildTurnResult) {
                     throw new RuntimeException('Unexpected child Turn result.');

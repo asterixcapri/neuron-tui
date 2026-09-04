@@ -13,6 +13,7 @@ use NeuronAI\Tools\ToolInterface;
 use NeuronTui\Conversation\ConversationPort;
 use NeuronTui\Conversation\ConversationSourceInterface;
 use NeuronTui\Conversation\SubagentReply;
+use NeuronTui\Subagent\ChildTurn;
 use NeuronTui\Subagent\ChildTurnTask;
 use NeuronTui\Subagent\SubagentToolkit;
 use NeuronTui\Tests\Subagent\Fixture\WorkerAgent;
@@ -58,7 +59,11 @@ final class SubagentToolkitTest extends TestCase
 
         /** @var list<array<string, mixed>> $messages */
         $messages = json_decode($json, true, flags: JSON_THROW_ON_ERROR);
-        $task = new ChildTurnTask(WorkerAgent::class, 'Continue.', $messages);
+        $task = new ChildTurnTask(new ChildTurn(
+            WorkerAgent::class,
+            'Continue.',
+            $messages,
+        ));
 
         self::assertStringNotContainsString('not serialized', serialize($task));
     }

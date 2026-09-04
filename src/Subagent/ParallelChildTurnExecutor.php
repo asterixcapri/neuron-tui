@@ -9,7 +9,6 @@ use Amp\Future;
 use Amp\Parallel\Worker\ContextWorkerFactory;
 use Amp\Parallel\Worker\ContextWorkerPool;
 use Composer\Autoload\ClassLoader;
-use NeuronAI\Agent\Agent;
 use RuntimeException;
 
 /** @internal */
@@ -22,14 +21,12 @@ final class ParallelChildTurnExecutor implements ChildTurnExecutorInterface
     }
 
     public function execute(
-        string $agentClass,
-        string $message,
-        array $history,
+        ChildTurn $turn,
         Cancellation $cancellation,
     ): Future {
         return $this->workers()
             ->submit(
-                new ChildTurnTask($agentClass, $message, $history),
+                new ChildTurnTask($turn),
                 $cancellation,
             )
             ->getFuture();

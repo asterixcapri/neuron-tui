@@ -205,9 +205,11 @@ final class Subagents
             try {
                 $result = $this->executor
                     ->execute(
-                        $subagent->agentClass,
-                        $message,
-                        $subagent->history,
+                        new ChildTurn(
+                            $subagent->agentClass,
+                            $message,
+                            $subagent->history,
+                        ),
                         $conversation->cancellation(),
                     )
                     ->await($conversation->cancellation());

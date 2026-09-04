@@ -11,6 +11,7 @@ use LogicException;
 use NeuronAI\Agent\Agent;
 use NeuronTui\Conversation\ConversationPort;
 use NeuronTui\Conversation\SubagentReply;
+use NeuronTui\Subagent\ChildTurn;
 use NeuronTui\Subagent\ChildTurnExecutorInterface;
 use NeuronTui\Subagent\ChildTurnResult;
 use NeuronTui\Subagent\Subagents;
@@ -213,12 +214,13 @@ final class ControllableChildTurnExecutor implements ChildTurnExecutorInterface
     private array $turns = [];
 
     public function execute(
-        string $agentClass,
-        string $message,
-        array $history,
+        ChildTurn $turn,
         Cancellation $cancellation,
     ): Future {
-        $this->calls[] = ['message' => $message, 'history' => $history];
+        $this->calls[] = [
+            'message' => $turn->message,
+            'history' => $turn->history,
+        ];
         $this->turnCancellations[] = $cancellation;
         $turn = new PendingChildTurn();
         $this->turns[] = $turn;

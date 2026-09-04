@@ -21,12 +21,6 @@ final class SubagentToolkit extends AbstractToolkit
             );
         }
 
-        if ($concurrency < 1) {
-            throw new InvalidArgumentException(
-                'Subagent concurrency must be a positive integer.',
-            );
-        }
-
         $this->subagents = new Subagents(
             $agentClass,
             $concurrency,

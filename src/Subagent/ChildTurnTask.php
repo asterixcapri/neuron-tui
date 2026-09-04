@@ -8,7 +8,6 @@ use Amp\Cancellation;
 use Amp\Parallel\Worker\Task;
 use Amp\Sync\Channel;
 use JsonException;
-use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\Messages\ContentBlocks\TextContent;
 use NeuronAI\Chat\Messages\UserMessage;
 
@@ -20,27 +19,18 @@ use NeuronAI\Chat\Messages\UserMessage;
  */
 final readonly class ChildTurnTask implements Task
 {
-    /**
-     * @param class-string<Agent> $agentClass
-     * @param list<array<string, mixed>> $history
-     */
-    public function __construct(
-        private string $agentClass,
-        private string $message,
-        private array $history,
-    ) {
-    }
+    public function __construct(private ChildTurn $turn) {}
 
     /** @throws JsonException */
     public function run(Channel $channel, Cancellation $cancellation): ChildTurnResult
     {
         $cancellation->throwIfRequested();
 
-        $agent = $this->agentClass::make();
-        $history = new SerializedChatHistory($this->history);
+        $agent = $this->turn->agentClass::make();
+        $history = new SerializedChatHistory($this->turn->history);
         $agent->setChatHistory($history);
 
-        $reply = $agent->chat(new UserMessage($this->message))->getMessage();
+        $reply = $agent->chat(new UserMessage($this->turn->message))->getMessage();
         $cancellation->throwIfRequested();
 
         $contents = implode('', array_map(
