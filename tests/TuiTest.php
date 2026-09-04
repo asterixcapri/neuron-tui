@@ -4977,7 +4977,9 @@ MARKDOWN;
         $storage = new InMemoryStorage();
         $sessions = new Sessions($storage);
         $earlier = $sessions->start();
-        $earlier->addMessage(new UserMessage("The earlier\x00 subject"));
+        $title = "The earlier\x00 subject";
+        $earlier->addMessage(new UserMessage($title));
+        self::assertSame($title, $sessions->list()[0]->title);
         $terminal = new VirtualTerminal(rows: 24);
         $pickerDisplay = null;
         EventLoop::delay(
@@ -5013,7 +5015,7 @@ MARKDOWN;
         );
         self::assertStringContainsString('❯ The earlier subject', $display);
         self::assertSame(
-            ["The earlier\x00 subject"],
+            [$title],
             array_map(
                 static fn (Message $message): string => (string) $message
                     ->getContent(),

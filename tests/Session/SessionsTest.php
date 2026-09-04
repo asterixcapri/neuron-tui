@@ -5,7 +5,11 @@ declare(strict_types=1);
 namespace NeuronTui\Tests\Session;
 
 use InvalidArgumentException;
+use NeuronAI\Chat\Enums\SourceType;
 use NeuronAI\Chat\Messages\AssistantMessage;
+use NeuronAI\Chat\Messages\ContentBlocks\ImageContent;
+use NeuronAI\Chat\Messages\ContentBlocks\ReasoningContent;
+use NeuronAI\Chat\Messages\ContentBlocks\TextContent;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronTui\Session\Session;
 use NeuronTui\Session\Sessions;
@@ -121,6 +125,56 @@ final class SessionsTest extends TestCase
 
         self::assertNull($storage->read('sessions', 'unknown'));
         self::assertSame([], iterator_to_array($storage->entries('sessions')));
+    }
+
+    public function testTitleUsesTheFirstNonBlankUserAuthoredTextUnchanged(): void
+    {
+        $sessions = new Sessions(new InMemoryStorage());
+        $history = $sessions->start();
+        $history->addMessage(new UserMessage(" \n\t"));
+        $history->addMessage(new AssistantMessage('An introductory answer'));
+        $history->addMessage(new UserMessage([
+            new ReasoningContent('Internal reasoning'),
+            new ImageContent('https://example.com/image.png', SourceType::URL),
+        ]));
+
+        $withoutText = $sessions->list();
+        self::assertSame([], $withoutText);
+
+        $history->addMessage(new AssistantMessage('Image received'));
+        $title = "  A\x00 title\nwith \x1b[31mcolor\x1b[0m "
+            . str_repeat('long words ', 30);
+        $history->addMessage(new UserMessage([
+            new ImageContent('https://example.com/image.png', SourceType::URL),
+            new TextContent($title),
+        ]));
+        $history->addMessage(new AssistantMessage('An answer'));
+        $history->addMessage(new UserMessage('Another subject'));
+
+        self::assertSame($title, $sessions->list()[0]->title);
+    }
+
+    public function testEqualLastUseTimesAreOrderedByKey(): void
+    {
+        $storage = new InMemoryStorage();
+        $sessions = new Sessions($storage);
+        $sessions->start()->addMessage(new UserMessage('First'));
+        $sessions->start()->addMessage(new UserMessage('Second'));
+        $keys = [];
+
+        foreach ($storage->entries('sessions') as $document) {
+            $keys[] = $document->key;
+            $storage->write('sessions', $document->key, $document->data, [
+                'lastUsedAt' => '2026-09-04T12:00:00.000000+00:00',
+            ]);
+        }
+
+        sort($keys);
+
+        self::assertSame($keys, array_map(
+            static fn (Session $session): string => $session->key,
+            $sessions->list(),
+        ));
     }
 
     public function testFilePayloadIsKeyNamedJsonAndReportsItsDataSize(): void
