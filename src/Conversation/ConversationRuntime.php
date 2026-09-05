@@ -198,9 +198,9 @@ final class ConversationRuntime
     /**
      * The ordinary controls supplied to every Command.
      */
-    private function controls(): Controls
+    private function controls(): CommandControls
     {
-        return new Controls(
+        return new CommandControls(
             $this->view,
             fn (): Agent => $this->agent,
             function (string $prompt): void {

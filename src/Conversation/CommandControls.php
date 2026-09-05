@@ -24,7 +24,7 @@ use NeuronTui\Tui\ConversationView;
  *
  * @internal Commands depend on CommandControlsInterface rather than this Adapter.
  */
-final readonly class Controls implements CommandControlsInterface
+final readonly class CommandControls implements CommandControlsInterface
 {
     /**
      * @param Closure(): Agent      $answering  the Agent answering right now
