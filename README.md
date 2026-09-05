@@ -54,9 +54,11 @@ Tui::make($agent)->run();
 modules after the optional Terminal: `commands`, `sessions`, and `inputHistory`.
 Each supplied object is reused. Omitted Commands is empty; omitted Sessions and
 InputHistory each use in-memory Storage, constructed once per TUI instance.
-Startup preserves the Agent's existing messages and retains the conversation in
-those Sessions. After `/clear`, `/resume` can restore it, including messages
-added during the interaction. This also works with default in-memory Sessions.
+Startup displays the Agent's existing History unchanged. The TUI does not import
+it into Sessions or automatically resume a stored conversation. `/resume` lists
+only conversations managed through the configured Sessions. To make the initial
+conversation resumable, the Host Application installs a History from those
+Sessions before starting the TUI.
 Storage is configured through those modules:
 
 ```php
@@ -242,7 +244,7 @@ to `/exit` passes `/quit`:
 
 | Class | Terminal invocation | What it does |
 | --- | --- | --- |
-| `NeuronInteraction\Command\ClearCommand` | `/clear` | Starts a new Session, leaving the current one stored. |
+| `NeuronInteraction\Command\ClearCommand` | `/clear` | Starts a new Session; previously managed Sessions remain stored. |
 | `NeuronInteraction\Command\ResumeCommand` | `/resume` | Lets you choose a stored Session to resume. |
 | `NeuronInteraction\Command\LeaveCommand` | `/exit` | Requests that the Adapter stop. |
 | `NeuronInteraction\Command\HelpCommand` | `/help` | Lists what can be typed here. |
@@ -288,11 +290,13 @@ use NeuronInteraction\Storage\FileStorage;
 use NeuronInteraction\Session\Sessions;
 
 $storage = new FileStorage('/var/lib/my-app');
+$sessions = new Sessions($storage);
+$agent->setChatHistory($sessions->start()); // Or $sessions->resume($chosenKey).
 
 Tui::make(
     $agent,
     commands: new Commands([new SessionCommandKit(), new LeaveCommand()]),
-    sessions: new Sessions($storage),
+    sessions: $sessions,
 )->run();
 ```
 
@@ -334,8 +338,9 @@ suffix, including `CommandInterface`, `CommandControlsInterface`,
 ## Sessions
 
 A Session is one conversation with the Agent. `ClearCommand` starts a fresh one
-without leaving the terminal: the screen and the composer empty, and the
-conversation that was on screen stays where it is stored.
+without leaving the terminal: the screen and the composer empty. A conversation
+already managed by Sessions remains stored. An external Agent History is not
+imported when clearing.
 
 `ResumeCommand` lists the Sessions in the configured Storage in the Picker, most recently
 used first, each labelled with the first thing the person wrote in it. While
@@ -344,9 +349,9 @@ typing narrows it, Enter chooses one and resumes it, and Escape leaves the
 current one alone. Resuming paints that conversation and the Agent answers
 with its context. A Session nobody wrote in is not listed.
 
-The Conversation TUI reuses the supplied `Sessions` instance. By default it stores
-everything in memory for the life of the process and creates no directories or
-files. To persist conversations, the Host Application configures one shared
+The Conversation TUI reuses the supplied `Sessions` instance. Default Sessions
+store managed conversations in memory for the life of the process and create
+no directories or files. To persist conversations, the Host Application configures one shared
 storage directory and explicitly mounts the Session commands it wants:
 
 ```php
@@ -356,22 +361,24 @@ use NeuronInteraction\Storage\FileStorage;
 use NeuronInteraction\Session\Sessions;
 
 $storage = new FileStorage('/var/lib/my-app');
+$sessions = new Sessions($storage);
+$agent->setChatHistory($sessions->start()); // Or $sessions->resume($chosenKey).
 
 Tui::make(
     $agent,
     commands: new Commands(new SessionCommandKit()),
-    sessions: new Sessions($storage),
+    sessions: $sessions,
 )->run();
 ```
 
 `FileStorage` separates each interaction namespace beneath that root. The Host
-Application chooses the Agent's initial History, optionally by installing
-`$sessions->resume($key)` before startup. The TUI retains that conversation
-through the supplied Sessions, reusing a History already backed by the same
-Storage object. Other Histories are imported without trimming their initial
-messages; the returned History persists later additions. Normal Session
-trimming and title rules still apply. Neuron TUI never deletes a stored
-conversation.
+Application explicitly chooses the Agent's initial History with `start()` or
+`resume($key)` when it wants that conversation managed by these Sessions. An
+unrelated History stays on the Agent unchanged and is not registered in Sessions.
+`/clear` starts a managed Session, including with default in-memory Sessions;
+that Session and subsequent messages can later be recovered through `/resume`.
+No latest Session is selected automatically. Normal Session trimming and title
+rules still apply. Neuron TUI never deletes a stored conversation.
 
 ## Input history
 

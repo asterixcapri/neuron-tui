@@ -192,6 +192,8 @@ final class InputHistoryTest extends TestCase
         $agent = new Agent();
         $agent->setAiProvider($provider);
         $storage = new InMemoryStorage();
+        $sessions = new Sessions($storage);
+        $agent->setChatHistory($sessions->start());
         $terminal = new VirtualTerminal(rows: 24);
 
         EventLoop::queue(
@@ -217,7 +219,7 @@ final class InputHistoryTest extends TestCase
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, $terminal, sessions: new Sessions($storage), inputHistory: new InputHistory($storage), commands: new Commands(new ClearCommand())))
+        (new Tui($agent, $terminal, sessions: $sessions, inputHistory: new InputHistory($storage), commands: new Commands(new ClearCommand())))
             ->run();
 
         self::assertCount(2, $provider->getRecorded());
