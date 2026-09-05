@@ -30,6 +30,8 @@ $commands = (new Commands())->addCommand([
     new HelpCommand(),
 ]);
 
+// The Agent's existing messages (or a Session resumed before this call) survive
+// startup and remain recoverable through /resume after /clear.
 Tui::make(
     $agent,
     commands: $commands,

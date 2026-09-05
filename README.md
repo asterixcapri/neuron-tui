@@ -54,6 +54,9 @@ Tui::make($agent)->run();
 modules after the optional Terminal: `commands`, `sessions`, and `inputHistory`.
 Each supplied object is reused. Omitted Commands is empty; omitted Sessions and
 InputHistory each use in-memory Storage, constructed once per TUI instance.
+Startup preserves the Agent's existing messages and retains the conversation in
+those Sessions. After `/clear`, `/resume` can restore it, including messages
+added during the interaction. This also works with default in-memory Sessions.
 Storage is configured through those modules:
 
 ```php
@@ -362,9 +365,13 @@ Tui::make(
 ```
 
 `FileStorage` separates each interaction namespace beneath that root. The Host
-Application neither implements Neuron AI's `ChatHistoryInterface` nor installs
-a Session History on the Agent: the runtime starts its initial Session and
-owns History composition. Neuron TUI never deletes a stored conversation.
+Application chooses the Agent's initial History, optionally by installing
+`$sessions->resume($key)` before startup. The TUI retains that conversation
+through the supplied Sessions, reusing a History already backed by the same
+Storage object. Other Histories are imported without trimming their initial
+messages; the returned History persists later additions. Normal Session
+trimming and title rules still apply. Neuron TUI never deletes a stored
+conversation.
 
 ## Input history
 

@@ -7,8 +7,15 @@ modules once: empty Commands and in-memory Sessions and InputHistory. Runtime an
 Command controls reuse those modules. Persistence is configured through the
 supplied modules; they may share Storage but are not required to. The concurrency
 controls policy is superseded as recorded in ADR-0002. Storage contracts and
-namespace separation remain unchanged. Initial History integration is addressed
-by the subsequent startup-recovery revision._
+namespace separation remain unchanged. The same revision also supersedes the
+unconditional replacement of the Agent's initial History: startup retains its
+existing conversation through the configured Sessions, including default
+in-memory Sessions. Later messages persist in that retained History so Clear
+followed by Resume recovers the conversation present at clearing. A preselected
+History backed by the same Storage object is reused; an arbitrary History is
+imported in one operation without trimming its initial messages. This keeps
+Sessions responsible for persistence and avoids runtime snapshot state. Normal
+Session trimming, title rules and the single-run TUI lifecycle remain unchanged._
 
 Sessions and Input history are concrete behaviour modules over one
 `StorageInterface`. Storage persists JSON documents by namespace and logical
