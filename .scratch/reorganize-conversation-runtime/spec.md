@@ -1,6 +1,6 @@
 # Unify Command execution through Commands and explicit Adapters
 
-Status: ready-for-agent
+Status: completed
 
 ## Problem Statement
 
@@ -327,3 +327,17 @@ change, then finish TUI input extraction, composition, and responsibility
 descriptions. Preserve green checks at integrated milestones. This is guidance
 for implementation planning, not a ticket decomposition. No production code
 changes or implementation tickets have been created.
+
+## Completion
+
+Implemented across [Neuron TUI PR #12](https://github.com/asterixcapri/neuron-tui/pull/12)
+and [Neuron Interaction PR #2](https://github.com/asterixcapri/neuron-interaction/pull/2).
+All three implementation tickets are completed. TUI implementation revision:
+`514f0b5dfae47e197c741a94633c36eb672457ca`; shared dependency revision:
+`d823bce842c16d69d9432d4b7ea98ca21d618021`.
+
+The specification above records the agreed design and its original planning
+scope. Implementation and integrated validation are now complete: 213 TUI tests
+and 118 shared-package tests pass, with maximum-level static analysis in both
+packages. See [verification](verification.md) for package versions and reproduction,
+and [review](review.md) for the standards and spec reviews, both without findings.
