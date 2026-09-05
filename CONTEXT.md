@@ -51,14 +51,14 @@ _Avoid_: Message, prompt, action
 
 **Commands**:
 The ordered collection of mounted Commands, including those supplied by kits.
-It resolves an identifier to the first matching Command and reports its
-Command execution.
+It resolves an identifier to the first matching Command and coordinates its
+execution through a Command Adapter.
 _Avoid_: Command container, command list
 
 **Command execution**:
-The technical outcome reported by the Command dispatcher: completed, unknown
-or failed. It does not describe the domain effect or presentation of a
-Command.
+The technical outcome of a Command dispatch: completed, unknown or failed.
+It does not describe the domain effect or presentation of a Command, or imply
+that a requested selection or Agent response has finished.
 _Avoid_: Command result, response, view model
 
 **Command arguments**:
@@ -91,6 +91,13 @@ answering Agent, use the mounted Commands and Sessions, and stop the
 interaction. Command-specific dependencies still arrive through the Command's
 constructor.
 _Avoid_: Command context, environment, facade, API
+
+**Command Adapter**:
+The realization of Command controls in a particular interaction environment.
+It admits Commands, carries out their requested operations, and interprets
+their technical outcomes as terminal effects, backend responses, or other
+output appropriate to that environment.
+_Avoid_: Command runner, Command result
 
 **Command kit**:
 A group of Commands mounted in one go, carrying between them whatever
