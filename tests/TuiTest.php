@@ -43,7 +43,7 @@ use NeuronInteraction\Command\SessionCommandKit;
 use NeuronInteraction\Command\CommandAdapterInterface;
 use NeuronTui\Tui;
 use NeuronInteraction\InputHistory\InputHistory;
-use NeuronInteraction\Session\Session;
+use NeuronInteraction\Session\SessionSummary;
 use NeuronInteraction\Session\Sessions;
 use NeuronInteraction\Storage\FileStorage;
 use NeuronInteraction\Storage\InMemoryStorage;
@@ -1058,7 +1058,7 @@ MARKDOWN;
             0.2,
             static function () use ($terminal, $storage): void {
                 $terminal->clearOutput();
-                $key = (new Sessions($storage))->list()[0]->key;
+                $key = (new Sessions($storage))->summaries()[0]->key;
                 $terminal->simulateInput("/resume {$key}\r");
             },
         );
@@ -4986,7 +4986,7 @@ MARKDOWN;
         self::assertSame([], $agent->getChatHistory()->getMessages());
         self::assertNotNull($earlier);
         self::assertCount(2, $earlier->getMessages());
-        $listed = $sessions->list();
+        $listed = $sessions->summaries();
         self::assertCount(1, $listed);
         self::assertSame('Earlier question.', $listed[0]->title);
     }
@@ -5024,7 +5024,7 @@ MARKDOWN;
             commands: new Commands(self::sessionCommands()),
         ))->run();
 
-        $listed = $sessions->list();
+        $listed = $sessions->summaries();
 
         self::assertCount(1, $listed);
         self::assertSame('A question', $listed[0]->title);
@@ -5043,8 +5043,8 @@ MARKDOWN;
         self::assertSame(
             ['Written later', 'A question'],
             array_map(
-                static fn (Session $session): string => $session->title,
-                $sessions->list(),
+                static fn (SessionSummary $session): string => $session->title,
+                $sessions->summaries(),
             ),
         );
     }
@@ -5125,7 +5125,7 @@ MARKDOWN;
             $refusedDisplay,
         );
         self::assertStringContainsString('❯ A question', $refusedDisplay);
-        self::assertSame([], $sessions->list());
+        self::assertSame([], $sessions->summaries());
         self::assertNotNull($ongoing);
         self::assertSame($ongoing, $agent->getChatHistory());
         self::assertFalse($forcedExit);
@@ -5222,7 +5222,7 @@ MARKDOWN;
             $earlier = $sessions->start();
             $earlier->addMessage(new UserMessage('The stored subject'));
             $earlier->addMessage(new AssistantMessage('The stored answer.'));
-            $listed = $sessions->list();
+            $listed = $sessions->summaries();
             self::assertCount(1, $listed);
             $document = $storage->read(
                 'sessions',
@@ -5379,7 +5379,7 @@ MARKDOWN;
         $earlier = $sessions->start();
         $title = "The earlier\x00 subject";
         $earlier->addMessage(new UserMessage($title));
-        self::assertSame($title, $sessions->list()[0]->title);
+        self::assertSame($title, $sessions->summaries()[0]->title);
         $terminal = new VirtualTerminal(rows: 24);
         $pickerDisplay = null;
         EventLoop::delay(
@@ -5788,8 +5788,8 @@ MARKDOWN;
         self::assertSame(
             ['The earlier subject'],
             array_map(
-                static fn (Session $session): string => $session->title,
-                $sessions->list(),
+                static fn (SessionSummary $session): string => $session->title,
+                $sessions->summaries(),
             ),
         );
     }

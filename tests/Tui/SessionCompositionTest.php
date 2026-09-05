@@ -39,7 +39,7 @@ final class SessionCompositionTest extends TestCase
             $initial->addMessage(new AssistantMessage('Initial answer'));
             $selectedKey = null;
             if ($sessions !== null) {
-                $selectedKey = $sessions->list()[0]->key;
+                $selectedKey = $sessions->summaries()[0]->key;
                 $initial = $sessions->resume($selectedKey);
             }
             $initialMessages = $initial->getMessages();
@@ -83,8 +83,8 @@ final class SessionCompositionTest extends TestCase
             }
             self::assertStringContainsString('Generated continuation', $display);
             if ($sessions !== null) {
-                self::assertCount(1, $sessions->list());
-                self::assertSame($selectedKey, $sessions->list()[0]->key);
+                self::assertCount(1, $sessions->summaries());
+                self::assertSame($selectedKey, $sessions->summaries()[0]->key);
             }
         }
     }
@@ -103,8 +103,8 @@ final class SessionCompositionTest extends TestCase
         Tui::make($agent, $terminal, sessions: $sessions)->run();
 
         self::assertSame($initial, $agent->getChatHistory());
-        self::assertCount(1, $sessions->list());
-        self::assertSame('Stored subject', $sessions->list()[0]->title);
+        self::assertCount(1, $sessions->summaries());
+        self::assertSame('Stored subject', $sessions->summaries()[0]->title);
         self::assertStringContainsString('Host selected subject', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
     }
 
@@ -145,7 +145,7 @@ final class SessionCompositionTest extends TestCase
                         if (count($received) === 1) {
                             $adapter->sessions()->start()->addMessage(new \NeuronAI\Chat\Messages\UserMessage('Kept by this module'));
                         } else {
-                            self::assertCount(1, $adapter->sessions()->list());
+                            self::assertCount(1, $adapter->sessions()->summaries());
                         }
                     },
                 );
@@ -212,7 +212,7 @@ final class SessionCompositionTest extends TestCase
             self::assertSame($received[0], $received[1]);
             self::assertSame($previous, $agent->getChatHistory());
             self::assertCount(2, $agent->getChatHistory()->getMessages());
-            self::assertSame([], $received[0]->list());
+            self::assertSame([], $received[0]->summaries());
             self::assertStringContainsString('External conversation', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
 
             $entries = iterator_to_array($storage->entries('sessions'));
