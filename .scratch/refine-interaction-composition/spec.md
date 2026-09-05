@@ -11,8 +11,9 @@ Leave through a separate concurrent Command contract. This makes ownership
 harder to follow and prevents another Adapter from using those Commands directly.
 
 The runtime also replaces the Agent's initial History with an empty Session.
-A Host Application cannot safely bring an existing conversation into the TUI,
-and that conversation must remain recoverable after clearing. Meanwhile,
+A Host Application cannot safely bring an existing conversation into the TUI.
+The Host must retain ownership of that History and choose whether it belongs
+to Sessions. Meanwhile,
 stripping and restoring slash prefixes splits one Command identifier convention
 between the shared library and terminal presentation.
 
@@ -26,8 +27,9 @@ an Interaction container. Move incremental Command mounting into Commands.
 Ship Help and Leave as ordinary Neuron Interaction Commands. Keep permission to
 execute them during a Turn as a simple, explicit TUI policy. Restore the slash
 as part of Command identifiers throughout dispatch and presentation. Preserve
-the Agent's initial conversation and make it resumable through the configured
-Sessions, including when Sessions uses the default in-memory Storage.
+the Agent's initial History without importing it into Sessions. The Host
+Application explicitly starts or resumes a Session when it wants that
+conversation managed by Sessions; /resume only discovers those conversations.
 
 ## User Stories
 
@@ -56,8 +58,8 @@ Sessions, including when Sessions uses the default in-memory Storage.
 23. As a TUI maintainer, I want other Commands refused during a Turn even if named /help or /exit, so that names alone cannot bypass the policy.
 24. As a TUI user, I want Leave to close the terminal without introducing a wait for the Agent, so that the existing exit experience is preserved.
 25. As a Host Application developer, I want existing Agent messages preserved at startup, so that entering the TUI does not discard my conversation.
-26. As a TUI user, I want the initial conversation recoverable after /clear through /resume, so that clearing does not silently lose it.
-27. As a TUI user, I want that recovery with default in-memory Sessions too, so that the default setup remains coherent during the interaction.
+26. As a Host Application developer, I want an externally supplied History to remain outside Sessions unless I explicitly choose a Session, so that the TUI does not introduce implicit persistence or copying.
+27. As a TUI user, I want conversations created through the configured Sessions recoverable with /resume, including Sessions created by /clear using the default in-memory module.
 28. As a Host Application developer, I want a History I resumed before startup to remain the initial conversation, so that the TUI respects my selection.
 29. As an Adapter developer, I want Input history navigation to remain optional, so that a frontend may navigate locally without a backend call for each arrow key.
 30. As a maintainer, I want examples and architectural guidance aligned with the revised contracts, so that future work does not reintroduce the superseded design.
@@ -108,13 +110,21 @@ Sessions, including when Sessions uses the default in-memory Storage.
 - Preserve stop semantics: close the Adapter and pending Picker; stop TUI
   queue processing without introducing cancellation of, or waiting for, the
   Agent's in-flight work. Other Adapters define their own stop effect.
-- The Host Application chooses the Agent's initial or resumed History. Startup
-  must preserve that conversation and its existing messages while integrating
-  it with the supplied or default Sessions so it remains resumable after clear.
-  Do not replace it with an empty conversation. The integration mechanism is an
-  implementation choice, not a requirement for a new active-History field or
-  a new public facade. Acceptance concerns retained conversation content and
-  resumability, not mandatory identity of the History object.
+- The Host Application chooses the Agent's initial History. Startup preserves
+  that History and its existing messages without replacing it, copying it into
+  Sessions, or automatically resuming a stored conversation. An empty Agent
+  therefore opens empty; an explicitly preloaded Agent shows its History.
+- A History supplied directly to the Agent is not automatically a Session.
+  /resume discovers only conversations managed by the configured Sessions.
+  To persist the initial conversation through Sessions, the Host explicitly
+  installs a History returned by that module's start() or resume() before
+  launching the TUI. A preselected Session retains subsequent messages and is
+  recoverable after clear. /clear also creates managed Sessions when the TUI
+  uses the default in-memory module. External Histories retain their own
+  persistence semantics and are not promised recovery through /resume.
+- Do not introduce retain(), automatic History import, an active-History field,
+  a History factory or a new facade. A future explicit import API is outside
+  this revision's scope.
 - Retain CommandExecution's completed, unknown and failed outcomes and the
   existing two-invocation Selection request protocol. Clear and Resume use the
   same Sessions instance exposed through Command controls.
@@ -150,10 +160,12 @@ Sessions, including when Sessions uses the default in-memory Storage.
 - Extend TuiTest, SessionCompositionTest and Input history integration tests
   for the minimal Agent-only setup, independently omitted modules, reuse of
   supplied modules, stable default state across invocations and empty Commands.
-- Cover existing Agent messages and a preselected Session at startup. Exercise
-  clear followed by resume and assert restoration of the initial conversation,
-  both with supplied Sessions and default in-memory Sessions. Use real module
-  behavior rather than mocking away the persistence interaction.
+- Cover an external History preserved at startup without registering a
+  Session, and a Session explicitly selected by the Host before startup.
+  Exercise clear/resume recovery of managed Sessions, including messages added
+  during interaction and Sessions created through /clear with the default
+  in-memory module. External Histories must not appear in /resume merely because
+  the TUI displayed them. Use real Sessions and Storage behavior.
 - Exercise Help and Leave during an active fake Agent Turn, including aliases;
   verify refusal of other Commands, including an unrelated Command named /help.
   Verify exit and cessation of queued-input processing without requiring
@@ -201,3 +213,11 @@ feature rather than reopening completed extraction tickets.
 The grilling is complete and the testing boundaries were confirmed by the
 user. This document publishes the agreed work to the local Markdown issue
 tracker; it does not claim that the revision has been implemented.
+
+## Clarification agreed during implementation
+
+The Host owns the distinction between an Agent History and a saved Session.
+The user explicitly rejected automatic retention/import of external Histories
+into Sessions. This replaces the earlier requirement that every initial
+conversation become resumable through Sessions, while retaining startup
+History preservation and recovery of conversations already managed by Sessions.

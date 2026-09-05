@@ -5,7 +5,7 @@ examples against the revised packages, and the existing pull requests contain
 a verified, coherent implementation of the agreed interaction contracts.
 
 **Blocked by:** 02 — Retain slash identifiers throughout Command interaction;
-04 — Preserve and resume the initial conversation. These transitively cover
+04 — Preserve the initial History and explicit Session ownership. These transitively cover
 tickets 01 and 03.
 
 **Status:** ready-for-agent
@@ -16,7 +16,7 @@ feature directory.
 - [ ] Run the full test suites and static analysis in Neuron Interaction and Neuron TUI after integrating all preceding tickets; resolve regressions within the revision's scope.
 - [ ] Validate Composer metadata and consumer dependency locks, including demonstration applications, against the revised shared package on the existing development branch.
 - [ ] Executable terminal and backend examples use the same shared Commands, slash identifiers and ordinary controls contract without terminal dependencies in Neuron Interaction.
-- [ ] Verify the complete public flow: optional module defaults and supplied-instance reuse, mutable Command mounting, Help and Leave during a Turn, slash-preserving selection reinvocation, and initial-conversation recovery after clear.
+- [ ] Verify the complete public flow: optional module defaults and supplied-instance reuse, mutable Command mounting, Help and Leave during a Turn, slash-preserving selection reinvocation, startup preservation without automatic import, and recovery of explicitly managed Sessions after clear.
 - [ ] Retain coverage for optional InputHistory navigation, independent instance cursors/drafts, shared persisted inputs, unchanged execution outcomes and no automatic Command mounting.
 - [ ] Current usage documentation reflects module composition and the removal of Tui::addCommand, TUI-owned Storage configuration and concurrent Command abstractions. No current example relies on the removed APIs.
 - [ ] Reconcile architectural guidance with explicit, scoped supersession of ADR-0002, ADR-0003 and ADR-0005; preserve unrelated decisions and historical context. Keep CONTEXT a glossary, not an implementation checklist.
