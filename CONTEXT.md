@@ -85,11 +85,9 @@ _Avoid_: Async command, background command, command that runs while working
 
 **Command controls**:
 The presentation-independent verbs and shared interaction state available to
-a Command for one execution. They let it say or warn, put a prompt to the
-Agent through `promptAgent()`, request a selection, inspect or replace the
-answering Agent, use the mounted Commands and Sessions, and stop the
-interaction. Command-specific dependencies still arrive through the Command's
-constructor.
+a Command for one execution. They cover notices, warnings, Agent prompts,
+selections, the answering Agent, mounted Commands, Sessions, and leaving the
+interaction.
 _Avoid_: Command context, environment, facade, API
 
 **Command Adapter**:

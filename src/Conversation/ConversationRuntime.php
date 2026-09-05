@@ -7,33 +7,19 @@ namespace NeuronTui\Conversation;
 use Amp\Future;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
-use NeuronInteraction\Command\Commands;
-use NeuronInteraction\InputHistory\InputHistory;
-use NeuronInteraction\Session\Sessions;
 use NeuronTui\Tui\ConversationView;
 use NeuronTui\Tui\WorkingIndicator;
-use Symfony\Component\Tui\Event\InputEvent;
-use Symfony\Component\Tui\Event\SubmitEvent;
-use Symfony\Component\Tui\Input\Key;
-use Symfony\Component\Tui\Input\Keybindings;
-use Symfony\Component\Tui\Terminal\Terminal;
-use Symfony\Component\Tui\Terminal\TerminalInterface;
 use Throwable;
 
 use function Amp\async;
 
 /**
- * The assembled Conversation TUI and its live Session state.
+ * Owns the current answering Agent and the accepted and responding Turns.
  *
- * @internal The public entry point is responsible for configuration and uses
- *     this single boundary to assemble and run the terminal conversation.
+ * @internal
  */
 final class ConversationRuntime
 {
-    private readonly TerminalInterface $terminal;
-
-    private readonly ConversationView $view;
-
     private readonly WorkingIndicator $workingIndicator;
 
     private readonly TurnQueue $turns;
@@ -47,79 +33,11 @@ final class ConversationRuntime
 
     public function __construct(
         private Agent $agent,
-        private readonly Commands $commands,
-        private readonly Sessions $sessions,
-        private readonly InputHistory $inputHistory,
-        string $title = 'Neuron AI',
-        string $subtitle = 'Agent conversation',
-        ?TerminalInterface $terminal = null,
-        ?string $figlet = null,
-        string $figletFont = 'standard',
+        private readonly ConversationView $view,
     ) {
-        $this->terminal = $terminal ?? new Terminal();
-        $this->view = new ConversationView(
-            $this->terminal,
-            $title,
-            $subtitle,
-            $this->commands->all(),
-            $figlet,
-            $figletFont,
-        );
         $this->workingIndicator = $this->view->workingIndicator();
         $this->turns = new TurnQueue();
         $this->agentTurn = new AgentTurn($this->view);
-        $this->view->showHistory(
-            $this->agent->getChatHistory()->getMessages(),
-        );
-        $this->view->onSubmit($this->submit(...));
-        $this->view->onDraftChange($this->inputHistory->leave(...));
-        $this->view->onInput($this->handleInput(...));
-        $this->view->onTick($this->tick(...));
-    }
-
-    public function run(): void
-    {
-        if (
-            $this->terminal instanceof Terminal
-            && (
-                !stream_isatty(STDIN)
-                || !stream_isatty(STDOUT)
-            )
-        ) {
-            throw new \RuntimeException(
-                'Neuron TUI requires an interactive TTY.',
-            );
-        }
-
-        $this->view->run();
-    }
-
-    private function submit(SubmitEvent $event): void
-    {
-        if ($this->stopped) {
-            return;
-        }
-
-        $this->inputHistory->leave();
-
-        if ($event->isBlank()) {
-            return;
-        }
-
-        $this->inputHistory->record($event->getValue());
-        $submission = Submission::interpret($event->getValue());
-
-        if ($submission instanceof CommandInput) {
-            $this->commands->run(
-                $submission->name,
-                $submission->arguments,
-                new TuiAdapter($this, $this->view, $this->commands, $this->sessions),
-            );
-
-            return;
-        }
-
-        $this->send($submission);
     }
 
     public function send(MessageForAgent $message): void
@@ -258,71 +176,5 @@ final class ConversationRuntime
     {
         $this->stopped = true;
         $this->view->stop();
-    }
-
-    private function handleInput(InputEvent $event): void
-    {
-        $keys = new Keybindings([
-            'quit' => [Key::ctrl('c')],
-            'recall-older-input' => [Key::UP],
-            'recall-newer-input' => [Key::DOWN],
-            'scroll-up' => [Key::PAGE_UP],
-            'scroll-down' => [Key::PAGE_DOWN],
-        ]);
-
-        if ($keys->matches($event->getData(), 'quit')) {
-            $event->stopPropagation();
-            $this->stop();
-
-            return;
-        }
-
-        // While a person is choosing from a list, the list owns the keys
-        // that move through it, page keys included.
-        if ($this->view->isChoosing()) {
-            return;
-        }
-
-        if ($keys->matches($event->getData(), 'recall-older-input')) {
-            if (
-                $this->inputHistory->isNavigating()
-                || $this->view->isComposerEmpty()
-            ) {
-                $input = $this->inputHistory->older();
-
-                if ($input !== null) {
-                    $event->stopPropagation();
-                    $this->view->recallInput($input);
-                }
-            }
-
-            return;
-        }
-
-        if (
-            $keys->matches($event->getData(), 'recall-newer-input')
-            && $this->inputHistory->isNavigating()
-        ) {
-            $input = $this->inputHistory->newer();
-
-            if ($input !== null) {
-                $event->stopPropagation();
-                $this->view->recallInput($input);
-            }
-
-            return;
-        }
-
-        if ($keys->matches($event->getData(), 'scroll-up')) {
-            $event->stopPropagation();
-            $this->view->scrollUp();
-
-            return;
-        }
-
-        if ($keys->matches($event->getData(), 'scroll-down')) {
-            $event->stopPropagation();
-            $this->view->scrollDown();
-        }
     }
 }

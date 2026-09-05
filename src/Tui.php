@@ -11,7 +11,10 @@ use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Session\Sessions;
 use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Storage\InMemoryStorage;
+use NeuronTui\Conversation\ConversationInput;
 use NeuronTui\Conversation\ConversationRuntime;
+use NeuronTui\Tui\ConversationView;
+use Symfony\Component\Tui\Terminal\Terminal;
 use Symfony\Component\Tui\Terminal\TerminalInterface;
 
 /**
@@ -106,18 +109,42 @@ final class Tui
         $this->ensureNotStarted();
         $this->started = true;
 
-        $runtime = new ConversationRuntime(
-            $this->agent,
-            $this->commands,
-            $this->sessions,
-            $this->inputHistory,
+        $terminal = $this->terminal ?? new Terminal();
+        $view = new ConversationView(
+            $terminal,
             $this->title,
             $this->subtitle,
-            $this->terminal,
+            $this->commands->all(),
             $this->figlet,
             $this->figletFont,
         );
-        $runtime->run();
+        $runtime = new ConversationRuntime($this->agent, $view);
+        $input = new ConversationInput(
+            $view,
+            $this->inputHistory,
+            $runtime,
+            $this->commands,
+            $this->sessions,
+        );
+        $view->showHistory($this->agent->getChatHistory()->getMessages());
+        $view->onSubmit($input->submit(...));
+        $view->onDraftChange($input->draftChanged(...));
+        $view->onInput($input->handleInput(...));
+        $view->onTick($runtime->tick(...));
+
+        if (
+            $terminal instanceof Terminal
+            && (
+                !stream_isatty(STDIN)
+                || !stream_isatty(STDOUT)
+            )
+        ) {
+            throw new \RuntimeException(
+                'Neuron TUI requires an interactive TTY.',
+            );
+        }
+
+        $view->run();
     }
 
     private function ensureNotStarted(): void

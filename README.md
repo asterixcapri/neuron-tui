@@ -421,6 +421,27 @@ Old files are left untouched and are outside the extracted package's contract.
 
 ## Development
 
+`Tui::run()` assembles the concrete internal modules, shows the Agent's initial
+History, connects input and tick listeners, and starts the view. Construction
+of terminal widgets remains deferred until that call; configuration freezes
+when it begins, and the instance can run only once.
+
+| Module | Responsibility |
+| --- | --- |
+| `ConversationInput` | Human submissions, Input history recording and recall, draft changes, scrolling, quit keys, and input propagation. Messages enter the runtime; Commands use `Commands::run()` with a fresh Adapter. |
+| `Commands` in Neuron Interaction | First-match lookup and the complete admission, dispatch, and completion protocol. |
+| `TuiAdapter` | Terminal Command operations, admission, History reconciliation, failure presentation, and deferred selection followed by a fresh invocation. |
+| `ConversationRuntime` | The current answering Agent, Turn queue, response Future, stopped state, and Turn presentation and completion. |
+| `ConversationView` | Widgets and rendering, including Command suggestions, Picker key ownership, and deferred-choice shutdown. |
+
+The runtime depends on the Agent and view. History stays on the current Agent;
+there is no separate current-History state. A Turn occupies the runtime as soon
+as its message is accepted and captures its answering Agent when work begins.
+Queued messages follow in order. Stopping remains immediate, without cancelling
+or waiting for a provider response. `TurnQueue`, `AgentTurn`, and `Submission`
+retain their existing focused behavior. Generated prompts and Picker choices
+bypass human Input history while sharing the ordinary Turn and Command paths.
+
 A fresh checkout needs the Composer dependencies and the agent skills, which
 are restored from `skills-lock.json`:
 
