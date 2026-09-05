@@ -15,6 +15,8 @@ package owns Commands, Sessions, Input history and Storage and does not depend
 on terminal code. Rendering, Agent turns, streaming and keyboard handling stay
 in Neuron TUI. Input history also provides optional recall navigation.
 
+![Neuron TUI demo](docs/images/usage.gif)
+
 ## Usage
 
 Configure the Agent in your application, then pass it to `Tui`. Here,
