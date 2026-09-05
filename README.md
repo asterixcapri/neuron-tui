@@ -96,7 +96,7 @@ no directories or files. Startup keeps the Agent’s existing History; it does
 not automatically register it with Sessions or resume an earlier conversation.
 
 To persist the initial conversation, create a `FileStorage`, pass it to
-`Sessions`, and attach the History returned by `start()` to the Agent:
+`Sessions`, and install the new Session directly as the Agent's Chat History:
 
 ```php
 use NeuronInteraction\Command\ClearCommand;

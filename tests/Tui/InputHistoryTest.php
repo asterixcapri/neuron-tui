@@ -228,7 +228,7 @@ final class InputHistoryTest extends TestCase
             'Remember across clear after clear',
             $provider->getRecorded()[1]->messages[0]->getContent(),
         );
-        self::assertCount(2, (new Sessions($storage))->list());
+        self::assertCount(2, (new Sessions($storage))->summaries());
     }
 
     public function testResumingASessionKeepsItsInputHistoryAvailable(): void
