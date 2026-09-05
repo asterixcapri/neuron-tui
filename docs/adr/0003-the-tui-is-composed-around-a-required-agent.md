@@ -10,9 +10,10 @@ configured before run, without collection freezing or live synchronization.
 Branding, no automatic mounting, first-match duplicates and single-run behavior
 remain unchanged._
 
-_ADR 0005 supersedes only the decision that the Host Application owns History
-and Sessions. The Host still supplies the configured Agent, and the remaining
-composition decisions below continue to hold._
+_ADR-0005 previously superseded History and Sessions ownership. Its revision
+notice now records the restored Host Application choice of initial History and
+optional module composition. The historical decision text follows; apply these
+scoped supersessions._
 
 Neuron TUI follows Neuron AI's fluent construction style without copying the
 Agent's subclass-based configuration model. `NeuronTui\Tui` is final, receives
