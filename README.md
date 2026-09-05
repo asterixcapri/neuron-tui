@@ -54,7 +54,8 @@ Tui::make($agent)->run();
 modules after the optional Terminal: `commands`, `sessions`, and `inputHistory`.
 Each supplied object is reused. Omitted Commands is empty; omitted Sessions and
 InputHistory each use in-memory Storage, constructed once per TUI instance.
-Startup displays the Agent's existing History unchanged. The TUI does not import
+Startup displays the Agent's existing History unchanged. A fresh Agent with an
+empty History therefore starts empty, even when Storage contains older Sessions. The TUI does not import
 it into Sessions or automatically resume a stored conversation. `/resume` lists
 only conversations managed through the configured Sessions. To make the initial
 conversation resumable, the Host Application installs a History from those
@@ -238,7 +239,9 @@ starting another Turn. It neither cancels nor waits for in-flight Agent work.
 
 ### The commands this library ships
 
-Neuron Interaction supplies Session Commands, Help and Leave. Each accepts a
+Neuron Interaction supplies Session Commands, Help and Leave. Shared Help and
+Leave supersede the historical extraction requirement that they be terminal-only.
+Each accepts a
 slash-prefixed name at construction, so a Host Application that prefers `/quit`
 to `/exit` passes `/quit`:
 
@@ -385,7 +388,8 @@ rules still apply. Neuron TUI never deletes a stored conversation.
 Submitted messages and Commands share one ordered Input history per configured
 Storage, across Sessions and Adapters. Blank submissions are ignored and only
 consecutive exact duplicates collapse. Generated Agent prompts are excluded.
-The TUI owns its navigation cursor and draft: from an empty composer, ↑ recalls
+The InputHistory instance owns the navigation cursor and draft. In the TUI,
+from an empty composer, ↑ recalls
 older inputs, ↓ moves toward newer ones and restores the empty draft past the
 newest input. Editing a recalled input leaves navigation. A Picker or Command
 suggestions owns the arrow keys while its list is active.

@@ -1,6 +1,6 @@
 # Command execution reports technical outcomes
 
-Commands return `void`; they use `CommandControls` for their visible effects
+Commands return `void`; they use `CommandControlsInterface` for their visible effects
 instead of defining domain-specific result types. `Commands::run()` reports
 only a `CommandExecution`: completed, unknown or failed.
 
