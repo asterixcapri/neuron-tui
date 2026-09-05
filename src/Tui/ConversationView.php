@@ -84,7 +84,7 @@ final class ConversationView
     private bool $working = false;
 
     /**
-     * The choice a command is waiting on, while one is open.
+     * The choice an Adapter's deferred selection callback is waiting on.
      *
      * @var DeferredFuture<string|null>|null
      */
@@ -195,10 +195,8 @@ final class ConversationView
     public function stop(): void
     {
         if ($this->choice instanceof DeferredFuture) {
-            // A choice still open holds the command that asked for it, and a
-            // loop that goes now would leave that command suspended for
-            // good. So the choice is answered with nothing and leaving is
-            // taken up again where the waiting ends.
+            // Let the deferred selection callback resume with no choice
+            // before stopping the loop, so it is not left suspended.
             $this->leaving = true;
             $this->abandon();
 
