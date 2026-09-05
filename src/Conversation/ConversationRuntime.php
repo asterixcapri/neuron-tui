@@ -10,7 +10,6 @@ use NeuronInteraction\Command\LeaveCommand;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\History\ChatHistoryInterface;
 use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
-use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\CommandArguments;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Command\SelectionRequest;
@@ -154,7 +153,7 @@ final class ConversationRuntime
      */
     private function carryOut(CommandInput $input): void
     {
-        $command = $this->commandNamed($input->name);
+        $command = $this->commands->named($input->name);
 
         if ($command === null) {
             $this->view->showUnknownCommand($input->name);
@@ -308,18 +307,6 @@ final class ConversationRuntime
         );
 
         return true;
-    }
-
-    /**
-     * Returns the first mounted command answering to the given name.
-     *
-     * Duplicate names remain in the mounted list so suggestions expose the
-     * complete terminal composition. Scanning from the beginning makes the
-     * first command with a name the stable recipient of matching input.
-     */
-    private function commandNamed(string $name): CommandInterface|null
-    {
-        return $this->commands->named($name);
     }
 
     private function tick(): bool
