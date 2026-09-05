@@ -5,15 +5,17 @@ declare(strict_types=1);
 namespace NeuronTui\Conversation;
 
 use Amp\Future;
+use NeuronInteraction\Command\HelpCommand;
+use NeuronInteraction\Command\LeaveCommand;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\History\ChatHistoryInterface;
 use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
-use NeuronTui\Command\CommandInterface;
-use NeuronTui\Command\ConcurrentCommandInterface;
-use NeuronTui\InputHistory\InputHistory;
-use NeuronTui\Session\Sessions;
-use NeuronTui\Storage\InMemoryStorage;
-use NeuronTui\Storage\StorageInterface;
+use NeuronInteraction\Command\CommandArguments;
+use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Command\SelectionRequest;
+use NeuronInteraction\Command\SelectionOption;
+use NeuronInteraction\InputHistory\InputHistory;
+use NeuronInteraction\Session\Sessions;
 use NeuronTui\Tui\ConversationView;
 use NeuronTui\Tui\WorkingIndicator;
 use Symfony\Component\Tui\Event\InputEvent;
@@ -22,6 +24,7 @@ use Symfony\Component\Tui\Input\Key;
 use Symfony\Component\Tui\Input\Keybindings;
 use Symfony\Component\Tui\Terminal\Terminal;
 use Symfony\Component\Tui\Terminal\TerminalInterface;
+use Revolt\EventLoop;
 use Throwable;
 
 use function Amp\async;
@@ -44,46 +47,28 @@ final class ConversationRuntime
 
     private readonly AgentTurn $agentTurn;
 
-    private readonly Sessions $sessions;
-
-    private readonly InputHistory $inputHistory;
-
-    /**
-     * The mounted commands in the order the Host Application added them.
-     *
-     * @var list<CommandInterface|ConcurrentCommandInterface>
-     */
-    private readonly array $commands;
-
     /** @var Future<mixed>|null */
     private ?Future $response = null;
 
-    /**
-     * @param list<CommandInterface|ConcurrentCommandInterface> $commands everything that
-     *     can be typed here after a slash; the Conversation TUI mounts
-     *     nothing on its own
-     */
+    private bool $stopped = false;
+
     public function __construct(
         private Agent $agent,
+        private readonly Commands $commands,
+        private readonly Sessions $sessions,
+        private readonly InputHistory $inputHistory,
         string $title = 'Neuron AI',
         string $subtitle = 'Agent conversation',
         ?TerminalInterface $terminal = null,
-        array $commands = [],
         ?string $figlet = null,
         string $figletFont = 'standard',
-        ?StorageInterface $storage = null,
     ) {
-        $this->commands = $commands;
-        $storage ??= new InMemoryStorage();
-        $this->sessions = new Sessions($storage);
-        $this->inputHistory = new InputHistory($storage);
-        $this->agent->setChatHistory($this->sessions->start());
         $this->terminal = $terminal ?? new Terminal();
         $this->view = new ConversationView(
             $this->terminal,
             $title,
             $subtitle,
-            $this->commands,
+            $this->commands->all(),
             $figlet,
             $figletFont,
         );
@@ -118,6 +103,10 @@ final class ConversationRuntime
 
     private function submit(SubmitEvent $event): void
     {
+        if ($this->stopped) {
+            return;
+        }
+
         $this->inputHistory->leave();
 
         if ($event->isBlank()) {
@@ -160,11 +149,11 @@ final class ConversationRuntime
      *
      * Whether a command may overlap a Turn is read from its type: an answer
      * already on its way would land in a conversation a command had meanwhile
-     * replaced, so only a Concurrent command runs there.
+     * replaced, so only Help and Leave run there.
      */
     private function carryOut(CommandInput $input): void
     {
-        $command = $this->commandNamed($input->name);
+        $command = $this->commands->named($input->name);
 
         if ($command === null) {
             $this->view->showUnknownCommand($input->name);
@@ -173,7 +162,8 @@ final class ConversationRuntime
         }
 
         if (
-            !$command instanceof ConcurrentCommandInterface
+            !$command instanceof HelpCommand
+            && !$command instanceof LeaveCommand
             && $this->refusedWhileWorking($input->name)
         ) {
             return;
@@ -182,56 +172,35 @@ final class ConversationRuntime
         // The command was taken, so what was typed leaves the composer:
         // only a name nobody answers stays there to be corrected.
         $this->view->emptyComposer();
-        $this->runSafely($command, $input->arguments);
+        $this->runSafely($input->name, $input->arguments);
     }
 
     /**
-     * Runs a command of the Host Application's, and survives it.
-     *
-     * From here on the Conversation TUI carries out code that is not its own,
-     * so whatever a command lets rise becomes a line of error in the
-     * conversation, as an exception during a Turn already does, and the
-     * terminal stays where the person left it.
-     *
-     * It runs where it was typed, which is a callback of the event loop the
-     * TUI and amphp share, and a callback runs in a fiber of its own. So a
-     * command that waits — `choose()` is the one verb that does — suspends
-     * that fiber alone: the loop goes on ticking, painting and reading keys
-     * meanwhile, which is what lets a person answer the list.
+     * Presents a dispatch failure after reconciling any History change.
      */
     private function runSafely(
-        CommandInterface|ConcurrentCommandInterface $command,
-        string $arguments,
+        string $identifier,
+        CommandArguments $arguments,
     ): void {
         $conversation = $this->agent->getChatHistory();
-        $failure = null;
-
-        try {
-            if ($command instanceof ConcurrentCommandInterface) {
-                $command->run($this->concurrentControls(), $arguments);
-            } else {
-                $command->run($this->controls(), $arguments);
-            }
-        } catch (Throwable $exception) {
-            $failure = $exception;
-        }
+        $execution = $this->commands->run($identifier, $arguments, $this->controls());
 
         // The screen is reconciled before anything is said about the run, so
         // that a command which failed after changing conversation leaves its
         // line of error on the conversation it left behind.
         $this->reconcile($conversation);
 
-        if ($failure instanceof Throwable) {
-            $this->showFailure($failure);
+        if ($execution->exception instanceof Throwable) {
+            $this->showFailure($execution->exception);
         }
     }
 
     /**
-     * Everything a command that expects the Agent to stand still may do.
+     * The ordinary controls supplied to every Command.
      */
-    private function controls(): Controls
+    private function controls(): CommandControls
     {
-        return new Controls(
+        return new CommandControls(
             $this->view,
             fn (): Agent => $this->agent,
             function (string $prompt): void {
@@ -240,19 +209,40 @@ final class ConversationRuntime
             $this->answerFrom(...),
             $this->commands,
             $this->sessions,
+            $this->requestSelection(...),
+            $this->stop(...),
         );
     }
 
-    /**
-     * The verbs whose meaning remains stable while a Turn is under way.
-     *
-     * There is nothing to close off here: what is missing is missing from the
-     * type, so a command asking for a Picker or for the Agent was already
-     * stopped where it was written.
-     */
-    private function concurrentControls(): ConcurrentControls
+    private function requestSelection(SelectionRequest $request): void
     {
-        return new ConcurrentControls($this->view, $this->commands);
+        // Human input is collected in a later callback, after this Command ends.
+        EventLoop::queue(function () use ($request): void {
+            if ($this->stopped) {
+                return;
+            }
+
+            try {
+                $chosen = $this->view->choose(
+                    $request->prompt,
+                    array_map(
+                        static fn (SelectionOption $option): ChoiceOption => new ChoiceOption(
+                            $option->value,
+                            $option->label,
+                            $option->description,
+                        ),
+                        $request->options,
+                    ),
+                    $request->description,
+                );
+
+                if ($chosen !== null) {
+                    $this->carryOut(new CommandInput($request->command, new CommandArguments($chosen)));
+                }
+            } catch (Throwable $exception) {
+                $this->showFailure($exception);
+            }
+        });
     }
 
     /**
@@ -299,7 +289,7 @@ final class ConversationRuntime
      *
      * A command that changed the conversation mid-turn would have an answer
      * already on its way land where it does not belong, so the rule is the
-     * TUI's rather than any single command's: a Concurrent command never
+     * TUI's rather than any single command's: Help and Leave never
      * reaches here.
      *
      * Returns whether the command was turned away.
@@ -319,26 +309,12 @@ final class ConversationRuntime
         return true;
     }
 
-    /**
-     * Returns the first mounted command answering to the given name.
-     *
-     * Duplicate names remain in the mounted list so suggestions expose the
-     * complete terminal composition. Scanning from the beginning makes the
-     * first command with a name the stable recipient of matching input.
-     */
-    private function commandNamed(string $name): CommandInterface|ConcurrentCommandInterface|null
-    {
-        foreach ($this->commands as $command) {
-            if ($command->name() === $name) {
-                return $command;
-            }
-        }
-
-        return null;
-    }
-
     private function tick(): bool
     {
+        if ($this->stopped) {
+            return false;
+        }
+
         $message = $this->turns->beginWorking();
 
         if ($message !== null) {
@@ -422,6 +398,12 @@ final class ConversationRuntime
         $this->view->showQueuedMessages($this->turns->queued());
     }
 
+    private function stop(): void
+    {
+        $this->stopped = true;
+        $this->view->stop();
+    }
+
     private function handleInput(InputEvent $event): void
     {
         $keys = new Keybindings([
@@ -434,7 +416,7 @@ final class ConversationRuntime
 
         if ($keys->matches($event->getData(), 'quit')) {
             $event->stopPropagation();
-            $this->view->stop();
+            $this->stop();
 
             return;
         }

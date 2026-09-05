@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace NeuronTui\Conversation;
 
+use NeuronInteraction\Command\CommandArguments;
+
 /**
  * Reads what a person typed and says what it is.
  *
@@ -28,7 +30,7 @@ final class Submission
     /**
      * Anything beginning with a slash is a command: the name is its first
      * word, the arguments are the rest with the whitespace around them
-     * dropped, so `/exit now` is `/exit` with `now` and `/exit ` is `/exit`
+     * dropped, so `/exit now` is `exit` with `now` and `/exit ` is `exit`
      * with nothing. A message keeps every character the person typed, leading
      * slash and spacing included.
      */
@@ -45,7 +47,7 @@ final class Submission
 
         return new CommandInput(
             substr($input, 0, $endOfName),
-            trim(substr($input, $endOfName), self::WHITESPACE),
+            new CommandArguments(trim(substr($input, $endOfName), self::WHITESPACE)),
         );
     }
 }

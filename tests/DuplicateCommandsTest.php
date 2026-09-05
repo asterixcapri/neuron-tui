@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace NeuronTui\Tests;
 
 use Closure;
+use NeuronInteraction\Command\Commands;
 use NeuronAI\Agent\Agent;
-use NeuronTui\Command\AbstractCommandKit;
-use NeuronTui\Command\CommandInterface;
-use NeuronTui\Command\HelpCommand;
-use NeuronTui\Conversation\Controls;
+use NeuronInteraction\Command\AbstractCommandKit;
+use NeuronInteraction\Command\CommandArguments;
+use NeuronInteraction\Command\CommandInterface;
+use NeuronInteraction\Command\HelpCommand;
+use NeuronInteraction\Command\CommandControlsInterface;
 use NeuronTui\Tui;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
@@ -21,29 +23,29 @@ final class DuplicateCommandsTest extends TestCase
     public function testTheFirstDuplicateRunsForEveryWayCommandsCanBeAdded(): void
     {
         /**
-         * @var array<string, Closure(Tui, CommandInterface, CommandInterface): Tui>
+         * @var array<string, Closure(Commands, CommandInterface, CommandInterface): Commands>
          */
         $mount = [
             'separate calls' => static fn (
-                Tui $tui,
+                Commands $commands,
                 CommandInterface $first,
                 CommandInterface $second,
-            ): Tui => $tui->addCommand($first)->addCommand($second),
+            ): Commands => $commands->addCommand($first)->addCommand($second),
             'one array' => static fn (
-                Tui $tui,
+                Commands $commands,
                 CommandInterface $first,
                 CommandInterface $second,
-            ): Tui => $tui->addCommand([$first, $second]),
+            ): Commands => $commands->addCommand([$first, $second]),
             'one kit' => static fn (
-                Tui $tui,
+                Commands $commands,
                 CommandInterface $first,
                 CommandInterface $second,
-            ): Tui => $tui->addCommand(self::kit([$first, $second])),
+            ): Commands => $commands->addCommand(self::kit([$first, $second])),
             'array and kit' => static fn (
-                Tui $tui,
+                Commands $commands,
                 CommandInterface $first,
                 CommandInterface $second,
-            ): Tui => $tui->addCommand([
+            ): Commands => $commands->addCommand([
                 $first,
                 self::kit([$second]),
             ]),
@@ -55,7 +57,7 @@ final class DuplicateCommandsTest extends TestCase
                 '/clear',
                 'The first duplicate.',
                 static function (
-                    Controls $controls,
+                    CommandControlsInterface $controls,
                     string $arguments,
                 ) use (&$ran): void {
                     $ran[] = 'first';
@@ -66,7 +68,7 @@ final class DuplicateCommandsTest extends TestCase
                 '/clear',
                 'The second duplicate.',
                 static function (
-                    Controls $controls,
+                    CommandControlsInterface $controls,
                     string $arguments,
                 ) use (&$ran): void {
                     $ran[] = 'second';
@@ -78,7 +80,7 @@ final class DuplicateCommandsTest extends TestCase
                 static fn () => $terminal->simulateInput("/clear\r"),
             );
 
-            $add(new Tui(new Agent(), $terminal), $first, $second)->run();
+            (new Tui(new Agent(), $terminal, commands: $add(new Commands(), $first, $second)))->run();
 
             self::assertSame(['first'], $ran, $form);
         }
@@ -137,13 +139,13 @@ final class DuplicateCommandsTest extends TestCase
             },
         );
 
-        (new Tui(new Agent(), $terminal))
+        $mounted = (new Commands())
             ->addCommand($commands[0])
             ->addCommand([$commands[1], $commands[2]])
             ->addCommand(self::kit([$commands[3], $commands[4]]))
             ->addCommand([$commands[5], self::kit([$commands[6]])])
-            ->addCommand(new HelpCommand())
-            ->run();
+            ->addCommand(new HelpCommand());
+        (new Tui(new Agent(), $terminal, commands: $mounted))->run();
 
         self::assertIsString($suggestions);
         self::assertInOrder($descriptions, $suggestions);
@@ -157,10 +159,13 @@ final class DuplicateCommandsTest extends TestCase
 
     /**
      * @param list<CommandInterface> $commands
+     * @return AbstractCommandKit<CommandInterface>
      */
     private static function kit(array $commands): AbstractCommandKit
     {
-        return new class($commands) extends AbstractCommandKit {
+        return new
+        /** @extends AbstractCommandKit<CommandInterface> */
+        class($commands) extends AbstractCommandKit {
             /**
              * @param list<CommandInterface> $commands
              */
@@ -180,7 +185,7 @@ final class DuplicateCommandsTest extends TestCase
     }
 
     /**
-     * @param Closure(Controls, string): void|null $run
+     * @param Closure(CommandControlsInterface, string): void|null $run
      */
     private static function command(
         string $name,
@@ -189,7 +194,7 @@ final class DuplicateCommandsTest extends TestCase
     ): CommandInterface {
         return new class($name, $description, $run) implements CommandInterface {
             /**
-             * @param Closure(Controls, string): void|null $run
+             * @param Closure(CommandControlsInterface, string): void|null $run
              */
             public function __construct(
                 private readonly string $commandName,
@@ -208,10 +213,10 @@ final class DuplicateCommandsTest extends TestCase
                 return $this->description;
             }
 
-            public function run(Controls $controls, string $arguments): void
+            public function run(CommandControlsInterface $controls, CommandArguments $arguments): void
             {
                 if ($this->run instanceof Closure) {
-                    ($this->run)($controls, $arguments);
+                    ($this->run)($controls, $arguments->text);
                 }
             }
         };
