@@ -17,6 +17,9 @@ managed by the configured Sessions. This applies to default in-memory Sessions
 too. No retention/import API or runtime snapshot state is introduced. Normal
 Session trimming, title rules and the single-run TUI lifecycle remain unchanged._
 
+_The historical decision text follows; apply the scoped supersessions above.
+The shared kit is now named SessionCommandKit._
+
 Sessions and Input history are concrete behaviour modules over one
 `StorageInterface`. Storage persists JSON documents by namespace and logical
 key, keeping caller-owned string metadata atomic with their data. JSON byte

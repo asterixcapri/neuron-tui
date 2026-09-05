@@ -3,7 +3,7 @@
 `ClearCommand` and `ResumeCommand` belong to Neuron Interaction because they
 are the native Command interface to Sessions. Like every Command, they return
 no domain-specific result and express their interaction through
-`CommandControls`.
+`CommandControlsInterface`.
 
 Clearing starts a Session and may say what changed. Resuming without a key
 calls `requestSelection()` with a `SelectionRequest` and then finishes. The
@@ -15,4 +15,4 @@ the selected History on the Agent and may say what changed.
 
 This two-step exchange lets a TUI use a Picker and a web frontend use a later
 HTTP request. Neither presentation mechanism enters the shared module, and
-`CommandControls` need not retain temporary selection state.
+`CommandControlsInterface` need not retain temporary selection state.
