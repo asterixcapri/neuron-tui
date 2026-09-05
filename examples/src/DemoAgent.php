@@ -11,6 +11,7 @@ use NeuronAI\Providers\Anthropic\Anthropic;
 use NeuronAI\Providers\OpenAI\Responses\OpenAIResponses;
 use NeuronAI\Tools\Toolkits\Calendar\CalendarToolkit;
 use NeuronAI\Tools\Toolkits\FileSystem\FileSystemToolkit;
+use NeuronAI\Tools\Toolkits\FileSystem\GlobPathTool;
 use NeuronAI\Tools\Toolkits\Jina\JinaToolkit;
 use RuntimeException;
 
@@ -68,7 +69,7 @@ final class DemoAgent extends Agent
     protected function tools(): array
     {
         $tools = [
-            new FileSystemToolkit(),
+            (new FileSystemToolkit())->exclude([GlobPathTool::class]),
             new CalendarToolkit(),
         ];
 
