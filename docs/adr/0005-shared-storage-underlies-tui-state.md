@@ -1,5 +1,25 @@
 # Shared storage underlies TUI state
 
+_The Refine Interaction composition revision supersedes runtime-owned module
+construction and a single TUI Storage configuration below. The Host Application
+may supply Commands, Sessions and InputHistory independently. Tui creates omitted
+modules once: empty Commands and in-memory Sessions and InputHistory. Runtime and
+Command controls reuse those modules. Persistence is configured through the
+supplied modules; they may share Storage but are not required to. The concurrency
+controls policy is superseded as recorded in ADR-0002. Storage contracts and
+namespace separation remain unchanged. The same revision also supersedes the
+unconditional replacement of the Agent's initial History: startup displays that
+History unchanged, without importing it into Sessions or selecting a latest
+Session. The Host Application explicitly installs a History from the configured
+Sessions with start() or resume(key) when it wants the initial conversation to
+be resumable. Clear starts a managed Session; Resume lists only conversations
+managed by the configured Sessions. This applies to default in-memory Sessions
+too. No retention/import API or runtime snapshot state is introduced. Normal
+Session trimming, title rules and the single-run TUI lifecycle remain unchanged._
+
+_The historical decision text follows; apply the scoped supersessions above.
+The shared kit is now named SessionCommandKit._
+
 Sessions and Input history are concrete behaviour modules over one
 `StorageInterface`. Storage persists JSON documents by namespace and logical
 key, keeping caller-owned string metadata atomic with their data. JSON byte

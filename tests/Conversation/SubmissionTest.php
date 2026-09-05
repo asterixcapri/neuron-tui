@@ -36,7 +36,7 @@ final class SubmissionTest extends TestCase
 
         self::assertInstanceOf(CommandInput::class, $submission);
         self::assertSame('/exit', $submission->name);
-        self::assertSame('', $submission->arguments);
+        self::assertSame('', $submission->arguments->text);
     }
 
     public function testWhitespaceAroundACommandIsNotAnArgument(): void
@@ -45,7 +45,7 @@ final class SubmissionTest extends TestCase
 
         self::assertInstanceOf(CommandInput::class, $submission);
         self::assertSame('/clear', $submission->name);
-        self::assertSame('', $submission->arguments);
+        self::assertSame('', $submission->arguments->text);
     }
 
     public function testWhatFollowsTheNameIsTheArguments(): void
@@ -54,7 +54,7 @@ final class SubmissionTest extends TestCase
 
         self::assertInstanceOf(CommandInput::class, $submission);
         self::assertSame('/exit', $submission->name);
-        self::assertSame('now', $submission->arguments);
+        self::assertSame('now', $submission->arguments->text);
     }
 
     public function testTheArgumentsKeepTheirOwnSpacingButNotTheOuterOne(): void
@@ -63,7 +63,7 @@ final class SubmissionTest extends TestCase
 
         self::assertInstanceOf(CommandInput::class, $submission);
         self::assertSame('/review', $submission->name);
-        self::assertSame('the  diff', $submission->arguments);
+        self::assertSame('the  diff', $submission->arguments->text);
     }
 
     public function testWhateverEndsTheNameIsNotThenPartOfTheArguments(): void
@@ -72,7 +72,7 @@ final class SubmissionTest extends TestCase
 
         self::assertInstanceOf(CommandInput::class, $submission);
         self::assertSame('/exit', $submission->name);
-        self::assertSame('now', $submission->arguments);
+        self::assertSame('now', $submission->arguments->text);
     }
 
     public function testANameNoCommandAnswersToIsStillReadAsAName(): void
@@ -81,7 +81,7 @@ final class SubmissionTest extends TestCase
 
         self::assertInstanceOf(CommandInput::class, $submission);
         self::assertSame('/unknown', $submission->name);
-        self::assertSame("with\targuments", $submission->arguments);
+        self::assertSame("with\targuments", $submission->arguments->text);
     }
 
     public function testTextMentioningACommandIsStillAMessage(): void

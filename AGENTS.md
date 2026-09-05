@@ -15,6 +15,10 @@ Triage uses the five default canonical labels. See `docs/agents/triage-labels.md
 
 Domain documentation uses the single-context layout. See `docs/agents/domain.md`.
 
+## Coding standards
+
+When writing or reviewing code, follow [docs/coding-standards.md](docs/coding-standards.md).
+
 ## Authorship
 
 Commits, pull requests and comments credit the human author alone. Write the

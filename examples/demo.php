@@ -2,11 +2,14 @@
 
 declare(strict_types=1);
 
-use NeuronTui\Command\ClearCommand;
-use NeuronTui\Command\HelpCommand;
-use NeuronTui\Command\LeaveCommand;
-use NeuronTui\Command\ResumeCommand;
-use NeuronTui\Storage\FileStorage;
+use NeuronInteraction\Command\ClearCommand;
+use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Session\Sessions;
+use NeuronInteraction\InputHistory\InputHistory;
+use NeuronInteraction\Command\HelpCommand;
+use NeuronInteraction\Command\LeaveCommand;
+use NeuronInteraction\Command\ResumeCommand;
+use NeuronInteraction\Storage\FileStorage;
 use NeuronTui\Tui;
 use NeuronTuiDemo\DemoAgent;
 use NeuronTuiDemo\ModelCommand;
@@ -18,17 +21,26 @@ require_once __DIR__ . '/vendor/autoload.php';
 
 $agent = DemoAgent::make();
 
-$tui = Tui::make($agent)
-    ->setStorage(new FileStorage(__DIR__ . '/.storage'))
+$storage = new FileStorage(__DIR__ . '/.storage');
+$sessions = new Sessions($storage);
+$agent->setChatHistory($sessions->start()); // Or resume an explicitly chosen key.
+$commands = (new Commands())->addCommand([
+    new ClearCommand(),
+    new ResumeCommand(),
+    new ModelCommand(),
+    new LeaveCommand(),
+    new HelpCommand(),
+]);
+
+// Startup keeps this explicitly selected History. These Sessions own its
+// persistence, so /resume can recover it after /clear.
+Tui::make(
+    $agent,
+    commands: $commands,
+    sessions: $sessions,
+    inputHistory: new InputHistory($storage),
+)
     ->setFiglet('NeuronTUI')
     ->setTitle('Neuron TUI Demo')
     ->setSubtitle('Powered by Neuron AI')
-    ->addCommand([
-        new ClearCommand(),
-        new ResumeCommand(),
-        new ModelCommand(),
-        new LeaveCommand(),
-        new HelpCommand(),
-    ]);
-
-$tui->run();
+    ->run();

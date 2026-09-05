@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace NeuronTui\Tui;
 
-use NeuronTui\Command\CommandInterface;
-use NeuronTui\Command\ConcurrentCommandInterface;
+use NeuronInteraction\Command\CommandInterface;
+use NeuronInteraction\Command\HelpCommand;
+use NeuronInteraction\Command\LeaveCommand;
 use Symfony\Component\Tui\Style\Style;
 use Symfony\Component\Tui\Widget\AbstractWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
@@ -35,7 +36,7 @@ use Symfony\Component\Tui\Widget\TextWidget;
  * whether what is on screen is a list rather than the one line that says
  * nothing matches, which is what ↑↓, Tab and Enter have to work on.
  *
- * While a Turn is under way the list carries the Concurrent commands and
+ * While a Turn is under way the list carries the Help and Leave commands and
  * nothing else. The Conversation TUI turns away a command that does not say
  * in its type that it runs mid-turn, so offering that name meanwhile would
  * promise a run that will not happen — and where none of the mounted
@@ -145,7 +146,7 @@ final class CommandSuggestions
     private ?AbstractWidget $onScreen = null;
 
     /**
-     * @param list<CommandInterface|ConcurrentCommandInterface> $commands
+     * @param list<CommandInterface> $commands
      *     the mounted commands, in the order the Host Application named them
      */
     public function __construct(array $commands)
@@ -159,8 +160,8 @@ final class CommandSuggestions
         $this->suggestibleWhileWorking = self::suggestible(array_values(
             array_filter(
                 $commands,
-                static fn (CommandInterface|ConcurrentCommandInterface $command): bool
-                    => $command instanceof ConcurrentCommandInterface,
+                static fn (CommandInterface $command): bool
+                    => $command instanceof HelpCommand || $command instanceof LeaveCommand,
             ),
         ));
         $this->list = new SelectListWidget([], self::VISIBLE_LINES);
@@ -381,7 +382,7 @@ final class CommandSuggestions
      * them. It is not a score: the order can be told from the code without
      * running it.
      *
-     * During a Turn only the Concurrent commands are walked, so
+     * During a Turn only the Help and Leave commands are walked, so
      * a name that would be turned away is never suggested.
      *
      * @return list<array{value: string, label: string, description: string}>
@@ -458,7 +459,7 @@ final class CommandSuggestions
      * the same string: the one a completion would write, the whole safe one
      * a draft is matched against, and the shortened one a line is read on.
      *
-     * @param list<CommandInterface|ConcurrentCommandInterface> $commands
+     * @param list<CommandInterface> $commands
      *
      * @return list<array{
      *     answersTo: string,

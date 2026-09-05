@@ -28,22 +28,25 @@ use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Testing\RequestRecord;
 use NeuronAI\Tools\Tool;
-use NeuronTui\Command\AbstractCommandKit;
-use NeuronTui\Command\ClearCommand;
-use NeuronTui\Command\CommandInterface;
-use NeuronTui\Command\ConcurrentCommandInterface;
-use NeuronTui\Command\HelpCommand;
-use NeuronTui\Command\LeaveCommand;
-use NeuronTui\Command\ResumeCommand;
-use NeuronTui\Command\SessionKit;
-use NeuronTui\Conversation\ChoiceOption;
-use NeuronTui\Conversation\ConcurrentControls;
-use NeuronTui\Conversation\Controls;
+use NeuronInteraction\Command\AbstractCommandKit;
+use NeuronInteraction\Command\CommandArguments;
+use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Command\ClearCommand;
+use NeuronInteraction\Command\CommandInterface;
+use NeuronInteraction\Command\SelectionOption;
+use NeuronInteraction\Command\SelectionRequest;
+use NeuronInteraction\Command\HelpCommand;
+use NeuronInteraction\Command\LeaveCommand;
+use NeuronInteraction\Command\ResumeCommand;
+use NeuronInteraction\Command\SessionCommandKit;
+
+use NeuronInteraction\Command\CommandControlsInterface;
 use NeuronTui\Tui;
-use NeuronTui\Session\Session;
-use NeuronTui\Session\Sessions;
-use NeuronTui\Storage\FileStorage;
-use NeuronTui\Storage\InMemoryStorage;
+use NeuronInteraction\InputHistory\InputHistory;
+use NeuronInteraction\Session\Session;
+use NeuronInteraction\Session\Sessions;
+use NeuronInteraction\Storage\FileStorage;
+use NeuronInteraction\Storage\InMemoryStorage;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
@@ -82,7 +85,6 @@ final class TuiTest extends TestCase
         self::assertSame($tui, $tui->setTitle(''));
         self::assertSame($tui, $tui->setSubtitle(''));
         self::assertSame($tui, $tui->setFiglet(''));
-        self::assertSame($tui, $tui->addCommand(new HelpCommand()));
 
         EventLoop::delay(
             0.05,
@@ -93,19 +95,6 @@ final class TuiTest extends TestCase
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringNotContainsString('Neuron AI', $display);
         self::assertStringNotContainsString('Agent conversation', $display);
-    }
-
-    public function testAddCommandRejectsInvalidArrayMembersImmediately(): void
-    {
-        $tui = Tui::make(new Agent(), new VirtualTerminal());
-
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage(
-            'A TUI command must implement CommandInterface, '
-                . 'ConcurrentCommandInterface or CommandKitInterface.',
-        );
-
-        $tui->addCommand([new \stdClass()]);
     }
 
     public function testConfigurationFreezesWhenRunBeginsAndInstanceRunsOnlyOnce(): void
@@ -121,7 +110,6 @@ final class TuiTest extends TestCase
                     static fn () => $tui->setTitle('Late'),
                     static fn () => $tui->setSubtitle('Late'),
                     static fn () => $tui->setFiglet('Late'),
-                    static fn () => $tui->addCommand(new HelpCommand()),
                 ] as $mutation) {
                     try {
                         $mutation();
@@ -137,7 +125,6 @@ final class TuiTest extends TestCase
         $tui->run();
 
         self::assertSame([
-            'A TUI instance can only be configured and run once.',
             'A TUI instance can only be configured and run once.',
             'A TUI instance can only be configured and run once.',
             'A TUI instance can only be configured and run once.',
@@ -276,7 +263,7 @@ final class TuiTest extends TestCase
                 ->setRole(MessageRole::SYSTEM),
         ]);
         $command = $this->commandThat(
-            static function (Controls $controls) use ($history): void {
+            static function (CommandControlsInterface $controls) use ($history): void {
                 $controls->agent()->setChatHistory($history);
             },
         );
@@ -289,8 +276,7 @@ final class TuiTest extends TestCase
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, terminal: $terminal))
-            ->addCommand($command)
+        (new Tui($agent, terminal: $terminal, commands: new Commands($command)))
             ->run();
 
         $output = $terminal->getOutput();
@@ -809,7 +795,7 @@ MARKDOWN;
             new AssistantMessage('Finished.'),
         ]);
         $command = $this->commandThat(
-            static function (Controls $controls) use ($history): void {
+            static function (CommandControlsInterface $controls) use ($history): void {
                 $controls->agent()->setChatHistory($history);
             },
         );
@@ -822,8 +808,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, terminal: $terminal))
-            ->addCommand($command)
+        (new Tui($agent, terminal: $terminal, commands: new Commands($command)))
             ->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -1034,7 +1019,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([new LeaveCommand()])->run();
+            commands: new Commands([new LeaveCommand()]),
+        ))->run();
 
         self::assertIsString($intermediateDisplay);
         self::assertStringContainsString(
@@ -1052,7 +1038,9 @@ MARKDOWN;
 
     public function testACommandFollowedByArgumentsIsStillThatCommand(): void
     {
+        $storage = new \NeuronInteraction\Storage\InMemoryStorage();
         $afterResume = null;
+        $resumedContent = null;
         $afterClear = null;
         $forcedExit = false;
         $provider = new FakeAIProvider(new AssistantMessage('An answer.'));
@@ -1068,19 +1056,19 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.2,
-            static function () use ($terminal): void {
+            static function () use ($terminal, $storage): void {
                 $terminal->clearOutput();
-                $terminal->simulateInput("/resume now\r");
+                $key = (new Sessions($storage))->list()[0]->key;
+                $terminal->simulateInput("/resume {$key}\r");
             },
         );
         EventLoop::delay(
             0.3,
-            static function () use (&$afterResume, $terminal): void {
+            static function () use (&$afterResume, &$resumedContent, $terminal, $agent): void {
                 $afterResume = AnsiUtils::stripAnsiCodes(
                     $terminal->getOutput(),
                 );
-                // Escape leaves the picker and the composer is free again.
-                $terminal->simulateInput("\x1b");
+                $resumedContent = $agent->getChatHistory()->getMessages()[0]->getContent();
                 $terminal->clearOutput();
                 $terminal->simulateInput("/clear now\r");
             },
@@ -1105,15 +1093,18 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand(self::sessionCommands())->run();
+            sessions: new Sessions($storage),
+            inputHistory: new InputHistory($storage),
+            commands: new Commands(self::sessionCommands()),
+        ))->run();
 
-        // `/resume now` opens the picker on the Session being written in.
+        // `/resume <key>` installs the Session directly without a Picker.
         self::assertIsString($afterResume);
         self::assertStringNotContainsString(
             'Unknown Command',
             $afterResume,
         );
-        self::assertStringContainsString('A question', $afterResume);
+        self::assertSame('A question', $resumedContent);
         // `/clear now` starts a fresh Session, so the answer goes off the
         // screen instead of an unknown command reaching the conversation.
         self::assertIsString($afterClear);
@@ -1138,7 +1129,7 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
             static function (
-                Controls $controls,
+                CommandControlsInterface $controls,
                 string $typed,
             ) use (&$arguments): void {
                 $arguments = $typed;
@@ -1156,7 +1147,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([$command])->run();
+            commands: new Commands([$command]),
+        ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertSame('two words', $arguments);
@@ -1172,7 +1164,7 @@ MARKDOWN;
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
-            static function (Controls $controls, string $arguments): void {
+            static function (CommandControlsInterface $controls, string $arguments): void {
                 $controls->say('Everything was in order.');
                 $controls->warn('Except for one thing.');
             },
@@ -1188,7 +1180,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([$command])->run();
+            commands: new Commands([$command]),
+        ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString(
@@ -1205,9 +1198,10 @@ MARKDOWN;
         $agent = new Agent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
+        $storage = new \NeuronInteraction\Storage\InMemoryStorage();
         $command = $this->commandThat(
-            static function (Controls $controls, string $arguments): void {
-                $controls->ask('Review ' . $arguments . '.');
+            static function (CommandControlsInterface $controls, string $arguments): void {
+                $controls->promptAgent('Review ' . $arguments . '.');
             },
         );
         EventLoop::queue(
@@ -1221,7 +1215,10 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([$command])->run();
+            sessions: new Sessions($storage),
+            inputHistory: new InputHistory($storage),
+            commands: new Commands([$command]),
+        ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('❯ Review this diff.', $display);
@@ -1231,6 +1228,52 @@ MARKDOWN;
             'Review this diff.',
             $provider->getRecorded()[0]->messages[0]->getContent(),
         );
+        self::assertSame(
+            ['/probe this diff'],
+            (new \NeuronInteraction\InputHistory\InputHistory($storage))->entries(),
+        );
+    }
+
+    public function testSelectionRequestReturnsBeforeThePersonChoosesAndResumesTheCommand(): void
+    {
+        $terminal = new VirtualTerminal(rows: 30);
+        $storage = new \NeuronInteraction\Storage\InMemoryStorage();
+        $events = [];
+        $beforeChoice = null;
+        $command = $this->commandThat(
+            static function (CommandControlsInterface $controls, string $arguments) use (&$events): void {
+                if ($arguments !== '') {
+                    $events[] = $arguments;
+
+                    return;
+                }
+
+                $controls->requestSelection(new SelectionRequest('/probe', 'Models', [
+                    new SelectionOption('stable-value', 'Visible label', 'Optional detail'),
+                ]));
+                $controls->say('Request submitted.');
+                $events[] = 'first invocation finished';
+            },
+        );
+        EventLoop::queue(static fn () => $terminal->simulateInput("/probe\r"));
+        EventLoop::delay(0.08, static function () use ($terminal, &$events, &$beforeChoice): void {
+            $beforeChoice = $events;
+            $terminal->simulateInput("\r");
+        });
+        EventLoop::delay(0.16, static fn () => $terminal->simulateInput("\x03"));
+
+        Tui::make(
+            new Agent(),
+            $terminal,
+            commands: new Commands($command),
+            sessions: new Sessions($storage),
+            inputHistory: new InputHistory($storage),
+        )->run();
+
+        self::assertSame(['first invocation finished'], $beforeChoice);
+        self::assertSame(['first invocation finished', 'stable-value'], $events);
+        self::assertStringContainsString('Request submitted.', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
+        self::assertSame(['/probe'], (new \NeuronInteraction\InputHistory\InputHistory($storage))->entries());
     }
 
     public function testACommandReachesTheAgentToChangeProviderInstructionsAndTools(): void
@@ -1242,7 +1285,7 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
             static function (
-                Controls $controls,
+                CommandControlsInterface $controls,
                 string $arguments,
             ) use ($chosen): void {
                 $controls->agent()
@@ -1266,7 +1309,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([$command])->run();
+            commands: new Commands([$command]),
+        ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('The new one.', $display);
@@ -1288,7 +1332,7 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
             static function (
-                Controls $controls,
+                CommandControlsInterface $controls,
                 string $arguments,
             ) use ($successor): void {
                 $controls->useAgent($successor);
@@ -1313,7 +1357,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([$command])->run();
+            commands: new Commands([$command]),
+        ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         // The conversation held by the Agent that answered first is still on
@@ -1343,7 +1388,7 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
             static function (
-                Controls $controls,
+                CommandControlsInterface $controls,
                 string $arguments,
             ) use ($successor): void {
                 $controls->useAgent($successor);
@@ -1369,7 +1414,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([$command])->run();
+            commands: new Commands([$command]),
+        ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('The new one.', $display);
@@ -1391,7 +1437,7 @@ MARKDOWN;
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
-            static function (Controls $controls, string $arguments): void {
+            static function (CommandControlsInterface $controls, string $arguments): void {
                 $controls->stop();
             },
             '/quit',
@@ -1410,7 +1456,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([$command])->run();
+            commands: new Commands([$command]),
+        ))->run();
 
         self::assertFalse($forcedExit);
     }
@@ -1422,7 +1469,7 @@ MARKDOWN;
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
-            static function (Controls $controls, string $arguments): void {
+            static function (CommandControlsInterface $controls, string $arguments): void {
                 throw new \RuntimeException('The command broke.');
             },
         );
@@ -1441,7 +1488,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([$command])->run();
+            commands: new Commands([$command]),
+        ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString(
@@ -1462,7 +1510,7 @@ MARKDOWN;
         ]));
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
-            static function (Controls $controls, string $arguments): void {
+            static function (CommandControlsInterface $controls, string $arguments): void {
                 $controls->agent()->setChatHistory(new InMemoryChatHistory());
 
                 throw new \RuntimeException('The command broke.');
@@ -1479,7 +1527,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([$command])->run();
+            commands: new Commands([$command]),
+        ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -1602,10 +1651,11 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([
+            commands: new Commands([
                 new ClearCommand('/wipe'),
                 new LeaveCommand('/quit'),
-            ])->run();
+            ]),
+        ))->run();
 
         // The name it was given is the only name it answers to.
         self::assertIsString($unknownDisplay);
@@ -1613,7 +1663,7 @@ MARKDOWN;
             'Unknown Command: /clear',
             $unknownDisplay,
         );
-        self::assertStringNotContainsString('Earlier question.', $unknownDisplay);
+        self::assertStringContainsString('Earlier question.', $unknownDisplay);
         // `/wipe` behaves as `/clear` always did.
         self::assertIsString($wipedDisplay);
         self::assertStringNotContainsString(
@@ -1635,7 +1685,7 @@ MARKDOWN;
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
-            static function (Controls $controls, string $arguments): void {
+            static function (CommandControlsInterface $controls, string $arguments): void {
             },
         );
         EventLoop::queue(
@@ -1649,7 +1699,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([new HelpCommand(), new LeaveCommand(), $command])->run();
+            commands: new Commands([new HelpCommand(), new LeaveCommand(), $command]),
+        ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -1660,7 +1711,7 @@ MARKDOWN;
         );
         // ... the other commands this library ships, ...
         self::assertStringContainsString(
-            '/exit — Closes the Conversation TUI.',
+            '/exit — Stops the interaction.',
             $display,
         );
         // ... and the ones the Host Application wrote itself.
@@ -1692,7 +1743,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([new LeaveCommand()])->run();
+            commands: new Commands([new LeaveCommand()]),
+        ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -1709,7 +1761,7 @@ MARKDOWN;
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
-            static function (Controls $controls, string $arguments): void {
+            static function (CommandControlsInterface $controls, string $arguments): void {
                 $controls->agent()->setChatHistory(new ExistingChatHistory([
                     new UserMessage('A restored question.'),
                     new AssistantMessage('A restored answer.'),
@@ -1734,7 +1786,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([$command])->run();
+            commands: new Commands([$command]),
+        ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -1753,7 +1806,7 @@ MARKDOWN;
         ));
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
-            static function (Controls $controls, string $arguments): void {
+            static function (CommandControlsInterface $controls, string $arguments): void {
                 $controls->say('The command ran.');
             },
         );
@@ -1772,7 +1825,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([$command])->run();
+            commands: new Commands([$command]),
+        ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -1801,18 +1855,19 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
             static function (
-                Controls $controls,
+                CommandControlsInterface $controls,
                 string $arguments,
             ) use (&$ran): void {
                 $ran = true;
             },
+            '/help',
         );
         EventLoop::queue(
             static fn () => $terminal->simulateInput("A question\r"),
         );
         EventLoop::delay(
             0.06,
-            static fn () => $terminal->simulateInput("/probe\r"),
+            static fn () => $terminal->simulateInput("/help\r"),
         );
         EventLoop::delay(
             0.12,
@@ -1827,23 +1882,23 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([$command])->run();
+            commands: new Commands([$command]),
+        ))->run();
 
         self::assertIsString($refusedDisplay);
         self::assertStringContainsString(
-            '/probe is refused while the Agent is working',
+            '/help is refused while the Agent is working',
             $refusedDisplay,
         );
         self::assertFalse($ran);
     }
 
     /**
-     * A Concurrent command is carried out during a Turn, and the answer on
+     * A Help alias is carried out during a Turn, and the answer on
      * its way is none the worse for it.
      */
-    public function testAConcurrentCommandIsCarriedOutMidTurn(): void
+    public function testHelpAliasIsCarriedOutMidTurn(): void
     {
-        $ran = false;
         $midTurnDisplay = null;
         $provider = new class(
             new AssistantMessage('A slow answer.'),
@@ -1859,15 +1914,7 @@ MARKDOWN;
         $agent = new Agent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 24);
-        $command = $this->concurrentCommand(
-            static function (
-                ConcurrentControls $controls,
-                string $arguments,
-            ) use (&$ran): void {
-                $ran = true;
-                $controls->say('The command ran mid-turn.');
-            },
-        );
+        $command = new HelpCommand('/probe');
         EventLoop::queue(
             static fn () => $terminal->simulateInput("A question\r"),
         );
@@ -1891,14 +1938,14 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([$command])->run();
+            commands: new Commands([$command]),
+        ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
-        self::assertTrue($ran);
         self::assertIsString($midTurnDisplay);
         self::assertStringContainsString(
-            'The command ran mid-turn.',
+            '/probe — Lists what can be typed here.',
             $midTurnDisplay,
         );
         self::assertStringNotContainsString('is refused', $midTurnDisplay);
@@ -1906,7 +1953,7 @@ MARKDOWN;
         // command ran in, and what the command said is still there under it.
         self::assertStringContainsString('❯ A question', $display);
         self::assertStringContainsString('● A slow answer.', $display);
-        self::assertStringContainsString('The command ran mid-turn.', $display);
+        self::assertStringContainsString('/probe — Lists what can be typed here.', $display);
     }
 
     /**
@@ -1958,7 +2005,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([new HelpCommand(), new LeaveCommand()])->run();
+            commands: new Commands([new HelpCommand(), new LeaveCommand()]),
+        ))->run();
 
         self::assertIsString($midTurnDisplay);
         self::assertStringContainsString(
@@ -1966,22 +2014,96 @@ MARKDOWN;
             $midTurnDisplay,
         );
         self::assertStringContainsString(
-            '/exit — Closes the Conversation TUI.',
+            '/exit — Stops the interaction.',
             $midTurnDisplay,
         );
         self::assertFalse($forcedExit);
     }
 
+    public function testHelpAndLeaveAliasesAnswerWhileTheAgentIsWorking(): void
+    {
+        $forcedExit = false;
+        $midTurnDisplay = null;
+        $provider = new class(
+            new AssistantMessage('A slow answer.'),
+        ) extends FakeAIProvider {
+            public int $started = 0;
+
+            public bool $completed = false;
+
+            protected function streamChunks(Message $response): Generator
+            {
+                ++$this->started;
+                \Amp\delay(0.5);
+                $this->completed = true;
+                yield new TextChunk('slow-stream', 'A slow answer.');
+
+                return $response;
+            }
+        };
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        $terminal = new VirtualTerminal(rows: 24);
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("A question\r"),
+        );
+        EventLoop::delay(
+            0.04,
+            static fn () => $terminal->simulateInput("Queued question\r"),
+        );
+        EventLoop::delay(
+            0.06,
+            static fn () => $terminal->simulateInput("/guide\r"),
+        );
+        EventLoop::delay(
+            0.12,
+            static function () use (&$midTurnDisplay, $terminal): void {
+                $midTurnDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+                $terminal->simulateInput("/quit\r");
+            },
+        );
+        EventLoop::delay(
+            0.9,
+            static function () use (&$forcedExit, $terminal): void {
+                $forcedExit = true;
+                $terminal->simulateInput("\x03");
+            },
+        );
+
+        (new Tui(
+            $agent,
+            terminal: $terminal,
+            commands: new Commands([new HelpCommand('/guide'), new LeaveCommand('/quit')]),
+        ))->run();
+
+        self::assertIsString($midTurnDisplay);
+        self::assertStringContainsString(
+            '/guide — Lists what can be typed here.',
+            $midTurnDisplay,
+        );
+        self::assertStringContainsString(
+            '/quit — Stops the interaction.',
+            $midTurnDisplay,
+        );
+        self::assertFalse($forcedExit);
+        self::assertSame(1, $provider->started);
+        self::assertFalse($provider->completed);
+    }
+
     /**
-     * A kit carries commands of both kinds, and what arrived in one is
+     * A kit carries ordinary Commands, and what arrived in one is
      * mounted like anything else — the mid-turn permission included.
      */
-    public function testAKitCanCarryAConcurrentCommand(): void
+    public function testAKitCanCarrySharedCommands(): void
     {
         $agent = new Agent();
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(rows: 24);
-        $kit = new class() extends AbstractCommandKit {
+        $kit = new
+        /** @extends AbstractCommandKit<CommandInterface> */
+        class() extends AbstractCommandKit {
             protected function provide(): array
             {
                 return [new HelpCommand(), new LeaveCommand()];
@@ -1998,7 +2120,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([$kit])->run();
+            commands: new Commands([$kit]),
+        ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -2007,7 +2130,7 @@ MARKDOWN;
             $display,
         );
         self::assertStringContainsString(
-            '/exit — Closes the Conversation TUI.',
+            '/exit — Stops the interaction.',
             $display,
         );
     }
@@ -2025,14 +2148,20 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
             static function (
-                Controls $controls,
+                CommandControlsInterface $controls,
                 string $arguments,
             ) use (&$chosen): void {
-                $chosen = $controls->choose('Models', [
-                    new ChoiceOption('haiku', 'Claude Haiku'),
-                    new ChoiceOption('007', 'Claude Opus'),
-                ]);
-                $controls->say('Chosen: ' . ($chosen ?? 'nothing'));
+                if ($arguments === '') {
+                    $controls->requestSelection(new SelectionRequest('/probe', 'Models', [
+                        new SelectionOption('haiku', 'Claude Haiku'),
+                        new SelectionOption('007', 'Claude Opus'),
+                    ]));
+
+                    return;
+                }
+
+                $chosen = $arguments;
+                $controls->say('Chosen: ' . $chosen);
             },
         );
         EventLoop::delay(
@@ -2042,8 +2171,7 @@ MARKDOWN;
         EventLoop::delay(
             0.1,
             static function () use (&$pickerDisplay, $terminal): void {
-                // Captured while the command is still waiting: the list is on
-                // screen, so the TUI went on painting instead of stopping.
+                // The first invocation finished; the Adapter now owns the list.
                 $pickerDisplay = AnsiUtils::stripAnsiCodes(
                     $terminal->getOutput(),
                 );
@@ -2062,7 +2190,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([$command])->run();
+            commands: new Commands([$command]),
+        ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -2090,18 +2219,25 @@ MARKDOWN;
         $terminal = new VirtualTerminal(columns: 48, rows: 30);
         $command = $this->commandThat(
             static function (
-                Controls $controls,
+                CommandControlsInterface $controls,
                 string $arguments,
             ) use (&$chosen): void {
                 $controls->say('History remains visible.');
-                $chosen = $controls->choose(
-                    'Models',
-                    [
-                        new ChoiceOption('haiku', 'Claude Haiku'),
-                        new ChoiceOption('opus', 'Claude Opus'),
-                    ],
-                    'Choose the model used for the next response.',
-                );
+                if ($arguments === '') {
+                    $controls->requestSelection(new SelectionRequest(
+                        '/probe',
+                        'Models',
+                        [
+                            new SelectionOption('haiku', 'Claude Haiku'),
+                            new SelectionOption('opus', 'Claude Opus'),
+                        ],
+                        'Choose the model used for the next response.',
+                    ));
+
+                    return;
+                }
+
+                $chosen = $arguments;
             },
         );
         EventLoop::delay(
@@ -2142,7 +2278,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([$command])->run();
+            commands: new Commands([$command]),
+        ))->run();
 
         self::assertIsString($initialDisplay);
         self::assertStringContainsString('History remains visible.', $initialDisplay);
@@ -2182,15 +2319,25 @@ MARKDOWN;
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(columns: 32, rows: 30);
         $command = $this->commandThat(
-            static function (Controls $controls, string $arguments): void {
-                $controls->choose('First choice', [
-                    new ChoiceOption('first', 'First option'),
-                ]);
-                $controls->choose(
+            static function (CommandControlsInterface $controls, string $arguments): void {
+                if ($arguments === '') {
+                    $controls->requestSelection(new SelectionRequest('/probe', 'First choice', [
+                        new SelectionOption('first', 'First option'),
+                    ]));
+
+                    return;
+                }
+
+                if ($arguments !== 'first') {
+                    return;
+                }
+
+                $controls->requestSelection(new SelectionRequest(
+                    '/probe',
                     'Second choice',
-                    [new ChoiceOption('second', 'Second option')],
+                    [new SelectionOption('second', 'Second option')],
                     'alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau',
-                );
+                ));
             },
         );
         EventLoop::delay(
@@ -2237,7 +2384,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([$command])->run();
+            commands: new Commands([$command]),
+        ))->run();
 
         self::assertIsString($withoutDescription);
         $withoutLines = explode("\n", str_replace("\r", '', $withoutDescription));
@@ -2268,17 +2416,23 @@ MARKDOWN;
         $terminal = new VirtualTerminal(columns: 42, rows: 32);
         $command = $this->commandThat(
             static function (
-                Controls $controls,
+                CommandControlsInterface $controls,
                 string $arguments,
             ) use (&$chosen): void {
-                $chosen = $controls->choose('Models', [
-                    new ChoiceOption(
-                        'detailed',
-                        "A selected label with a supplied\nline break and enough text to need more than two visual lines",
-                        "A lighter detail with its own\r\nline break and enough text to need more than two visual lines",
-                    ),
-                    new ChoiceOption('plain', 'A plain option'),
-                ]);
+                if ($arguments === '') {
+                    $controls->requestSelection(new SelectionRequest('/probe', 'Models', [
+                        new SelectionOption(
+                            'detailed',
+                            "A selected label with a supplied\nline break and enough text to need more than two visual lines",
+                            "A lighter detail with its own\r\nline break and enough text to need more than two visual lines",
+                        ),
+                        new SelectionOption('plain', 'A plain option'),
+                    ]));
+
+                    return;
+                }
+
+                $chosen = $arguments;
             },
         );
         EventLoop::delay(
@@ -2300,7 +2454,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([$command])->run();
+            commands: new Commands([$command]),
+        ))->run();
 
         self::assertIsString($pickerOutput);
         $display = str_replace(
@@ -2385,20 +2540,26 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 40);
         $command = $this->commandThat(
             static function (
-                Controls $controls,
+                CommandControlsInterface $controls,
                 string $arguments,
             ) use (&$chosen): void {
                 $options = [];
 
                 for ($number = 1; $number <= 10; ++$number) {
-                    $options[] = new ChoiceOption(
+                    $options[] = new SelectionOption(
                         'key-' . $number,
                         'Label ' . $number,
                         'Detail ' . $number,
                     );
                 }
 
-                $chosen = $controls->choose('Models', $options);
+                if ($arguments === '') {
+                    $controls->requestSelection(new SelectionRequest('/probe', 'Models', $options));
+
+                    return;
+                }
+
+                $chosen = $arguments;
             },
         );
         EventLoop::delay(
@@ -2429,7 +2590,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([$command])->run();
+            commands: new Commands([$command]),
+        ))->run();
 
         self::assertIsString($scrolledDisplay);
         self::assertStringContainsString('→ Label 9', $scrolledDisplay);
@@ -2452,21 +2614,27 @@ MARKDOWN;
         $terminal = new VirtualTerminal(columns: 36, rows: 40);
         $command = $this->commandThat(
             static function (
-                Controls $controls,
+                CommandControlsInterface $controls,
                 string $arguments,
             ) use (&$chosen): void {
-                $chosen = $controls->choose('Viewport', [
-                    new ChoiceOption('one', 'Option one', 'Detail one'),
-                    new ChoiceOption('two', 'Option two'),
-                    new ChoiceOption(
-                        'three',
-                        'Option three has a label that wraps',
-                        'Detail three also wraps at this width',
-                    ),
-                    new ChoiceOption('four', 'Option four', 'Detail four'),
-                    new ChoiceOption('five', 'Option five', 'Detail five'),
-                    new ChoiceOption('six', 'Option six', 'Detail six'),
-                ]);
+                if ($arguments === '') {
+                    $controls->requestSelection(new SelectionRequest('/probe', 'Viewport', [
+                        new SelectionOption('one', 'Option one', 'Detail one'),
+                        new SelectionOption('two', 'Option two'),
+                        new SelectionOption(
+                            'three',
+                            'Option three has a label that wraps',
+                            'Detail three also wraps at this width',
+                        ),
+                        new SelectionOption('four', 'Option four', 'Detail four'),
+                        new SelectionOption('five', 'Option five', 'Detail five'),
+                        new SelectionOption('six', 'Option six', 'Detail six'),
+                    ]));
+
+                    return;
+                }
+
+                $chosen = $arguments;
             },
         );
         EventLoop::delay(
@@ -2519,7 +2687,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([$command])->run();
+            commands: new Commands([$command]),
+        ))->run();
 
         self::assertIsString($initialDisplay);
         self::assertStringContainsString('→ Option one', $initialDisplay);
@@ -2554,27 +2723,44 @@ MARKDOWN;
         $terminal = new VirtualTerminal(columns: 40, rows: 30);
         $command = $this->commandThat(
             static function (
-                Controls $controls,
+                CommandControlsInterface $controls,
                 string $arguments,
             ) use (&$chosen): void {
                 $options = [
-                    new ChoiceOption('one', 'Match first choice'),
-                    new ChoiceOption(
+                    new SelectionOption('one', 'Match first choice'),
+                    new SelectionOption(
                         'two',
                         'Match second choice with a long label',
                         'Second supporting detail is also long',
                     ),
-                    new ChoiceOption(
+                    new SelectionOption(
                         'three',
                         'Match third choice with a long label',
                         'Third supporting detail is also long',
                     ),
-                    new ChoiceOption('four', 'Match fourth choice'),
-                    new ChoiceOption('five', 'Match fifth choice', 'Fifth supporting detail'),
-                    new ChoiceOption('six', 'Match sixth choice'),
+                    new SelectionOption('four', 'Match fourth choice'),
+                    new SelectionOption('five', 'Match fifth choice', 'Fifth supporting detail'),
+                    new SelectionOption('six', 'Match sixth choice'),
                 ];
-                $chosen = $controls->choose('Resizable', $options);
-                $controls->choose('Reopened', $options);
+                if ($arguments === '') {
+                    $controls->requestSelection(new SelectionRequest('/probe', 'Resizable', $options));
+
+                    return;
+                }
+
+                if (str_starts_with($arguments, 'done:')) {
+                    return;
+                }
+
+                $chosen = $arguments;
+                $controls->requestSelection(new SelectionRequest('/probe', 'Reopened', array_map(
+                    static fn (SelectionOption $option): SelectionOption => new SelectionOption(
+                        'done:' . $option->value,
+                        $option->label,
+                        $option->description,
+                    ),
+                    $options,
+                )));
             },
         );
         EventLoop::delay(
@@ -2643,7 +2829,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([$command])->run();
+            commands: new Commands([$command]),
+        ))->run();
 
         self::assertIsString($shortDisplay);
         self::assertStringContainsString('Resizable (3 of 6)', $shortDisplay);
@@ -2684,11 +2871,10 @@ MARKDOWN;
     }
 
     /**
-     * Escape gives the command no choice at all, and it can tell that apart
-     * from a choice made. Meanwhile the composer takes no text: what was
-     * typed narrowed the list and is gone with it.
+     * Escape closes the Picker without invoking its target Command again.
+     * Text used to narrow the list leaves with it, freeing the composer.
      */
-    public function testACommandTellsAnAbandonedChoiceApartFromAChosenKey(): void
+    public function testAnAbandonedChoiceDoesNotInvokeItsTargetCommand(): void
     {
         $chosen = 'nothing yet';
         $agent = new Agent();
@@ -2696,13 +2882,19 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
             static function (
-                Controls $controls,
+                CommandControlsInterface $controls,
                 string $arguments,
             ) use (&$chosen): void {
-                $chosen = $controls->choose('Models', [
-                    new ChoiceOption('haiku', 'Claude Haiku'),
-                ]);
-                $controls->say('Chosen: ' . ($chosen ?? 'nothing'));
+                if ($arguments === '') {
+                    $controls->requestSelection(new SelectionRequest('/probe', 'Models', [
+                        new SelectionOption('haiku', 'Claude Haiku'),
+                    ]));
+
+                    return;
+                }
+
+                $chosen = $arguments;
+                $controls->say('Chosen: ' . $chosen);
             },
         );
         EventLoop::delay(
@@ -2731,22 +2923,22 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([$command])->run();
+            commands: new Commands([$command]),
+        ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
-        self::assertNull($chosen);
-        self::assertStringContainsString('Chosen: nothing', $display);
+        self::assertSame('nothing yet', $chosen);
+        self::assertStringNotContainsString('Chosen:', $display);
         self::assertStringNotContainsString('Claude Haiku', $display);
         self::assertStringNotContainsString('zzz', $display);
         self::assertStringContainsString('ready · Enter sends', $display);
     }
 
     /**
-     * Leaving the terminal mid-choice answers the command with nothing, so
-     * that nobody is left waiting on a list that will never come back.
+     * Leaving the terminal mid-choice never starts a second Command invocation.
      */
-    public function testLeavingWhileAListIsOpenAnswersTheCommandWithNothing(): void
+    public function testLeavingWhileAListIsOpenDoesNotInvokeTheCommandAgain(): void
     {
         $chosen = 'nothing yet';
         $completions = 0;
@@ -2755,12 +2947,18 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
             static function (
-                Controls $controls,
+                CommandControlsInterface $controls,
                 string $arguments,
             ) use (&$chosen, &$completions): void {
-                $chosen = $controls->choose('Models', [
-                    new ChoiceOption('haiku', 'Claude Haiku'),
-                ]);
+                if ($arguments === '') {
+                    $controls->requestSelection(new SelectionRequest('/probe', 'Models', [
+                        new SelectionOption('haiku', 'Claude Haiku'),
+                    ]));
+
+                    return;
+                }
+
+                $chosen = $arguments;
                 ++$completions;
             },
         );
@@ -2776,10 +2974,11 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([$command])->run();
+            commands: new Commands([$command]),
+        ))->run();
 
-        self::assertNull($chosen);
-        self::assertSame(1, $completions);
+        self::assertSame('nothing yet', $chosen);
+        self::assertSame(0, $completions);
     }
 
     public function testTypingNarrowsAListACommandOffered(): void
@@ -2791,17 +2990,23 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
             static function (
-                Controls $controls,
+                CommandControlsInterface $controls,
                 string $arguments,
             ) use (&$chosen): void {
-                $chosen = $controls->choose('Models', [
-                    new ChoiceOption('haiku', 'Claude Haiku'),
-                    new ChoiceOption('opus', 'Claude Opus'),
-                    new ChoiceOption('sonnet', 'Claude Sonnet'),
-                    new ChoiceOption('gemini', 'Gemini Pro'),
-                    new ChoiceOption('gpt', 'GPT'),
-                    new ChoiceOption('mistral', 'Mistral'),
-                ]);
+                if ($arguments === '') {
+                    $controls->requestSelection(new SelectionRequest('/probe', 'Models', [
+                        new SelectionOption('haiku', 'Claude Haiku'),
+                        new SelectionOption('opus', 'Claude Opus'),
+                        new SelectionOption('sonnet', 'Claude Sonnet'),
+                        new SelectionOption('gemini', 'Gemini Pro'),
+                        new SelectionOption('gpt', 'GPT'),
+                        new SelectionOption('mistral', 'Mistral'),
+                    ]));
+
+                    return;
+                }
+
+                $chosen = $arguments;
             },
         );
         EventLoop::delay(
@@ -2832,7 +3037,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([$command])->run();
+            commands: new Commands([$command]),
+        ))->run();
 
         self::assertIsString($narrowedDisplay);
         self::assertStringContainsString('Claude Opus', $narrowedDisplay);
@@ -2852,24 +3058,36 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
             static function (
-                Controls $controls,
+                CommandControlsInterface $controls,
                 string $arguments,
             ) use (&$shortChoice, &$longChoice): void {
-                $shortChoice = $controls->choose('Short choice', [
-                    new ChoiceOption('short-1', 'Short one'),
-                    new ChoiceOption('short-2', 'Short two'),
-                    new ChoiceOption('short-3', 'Short three'),
-                    new ChoiceOption('short-4', 'Short four'),
-                    new ChoiceOption('short-5', 'Short five'),
-                ]);
-                $longChoice = $controls->choose('Long choice', [
-                    new ChoiceOption('long-1', 'Long one'),
-                    new ChoiceOption('long-2', 'Long two'),
-                    new ChoiceOption('long-3', 'Long three'),
-                    new ChoiceOption('long-4', 'Long four'),
-                    new ChoiceOption('long-5', 'Long five'),
-                    new ChoiceOption('long-6', 'Long six'),
-                ]);
+                if ($arguments === '') {
+                    $controls->requestSelection(new SelectionRequest('/probe', 'Short choice', [
+                        new SelectionOption('short-1', 'Short one'),
+                        new SelectionOption('short-2', 'Short two'),
+                        new SelectionOption('short-3', 'Short three'),
+                        new SelectionOption('short-4', 'Short four'),
+                        new SelectionOption('short-5', 'Short five'),
+                    ]));
+
+                    return;
+                }
+
+                if (!str_starts_with($arguments, 'short-')) {
+                    $longChoice = $arguments;
+
+                    return;
+                }
+
+                $shortChoice = $arguments;
+                $controls->requestSelection(new SelectionRequest('/probe', 'Long choice', [
+                    new SelectionOption('long-1', 'Long one'),
+                    new SelectionOption('long-2', 'Long two'),
+                    new SelectionOption('long-3', 'Long three'),
+                    new SelectionOption('long-4', 'Long four'),
+                    new SelectionOption('long-5', 'Long five'),
+                    new SelectionOption('long-6', 'Long six'),
+                ]));
             },
         );
         EventLoop::delay(
@@ -2913,7 +3131,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([$command])->run();
+            commands: new Commands([$command]),
+        ))->run();
 
         self::assertIsString($shortDisplay);
         self::assertStringNotContainsString('Search:', $shortDisplay);
@@ -2936,21 +3155,27 @@ MARKDOWN;
         $terminal = new VirtualTerminal(columns: 38, rows: 32);
         $command = $this->commandThat(
             static function (
-                Controls $controls,
+                CommandControlsInterface $controls,
                 string $arguments,
             ) use (&$chosen): void {
-                $chosen = $controls->choose('Models', [
-                    new ChoiceOption('alpha', 'Alpha'),
-                    new ChoiceOption(
-                        'detail',
-                        'First matching option',
-                        'A detail whose visible beginning is deliberately long before HIDDEN NEEDLE',
-                    ),
-                    new ChoiceOption('label', 'Middle nEeDlE label'),
-                    new ChoiceOption('later', 'Later option', 'needle detail'),
-                    new ChoiceOption('fifth', 'Fifth option'),
-                    new ChoiceOption('sixth', 'Sixth option'),
-                ]);
+                if ($arguments === '') {
+                    $controls->requestSelection(new SelectionRequest('/probe', 'Models', [
+                        new SelectionOption('alpha', 'Alpha'),
+                        new SelectionOption(
+                            'detail',
+                            'First matching option',
+                            'A detail whose visible beginning is deliberately long before HIDDEN NEEDLE',
+                        ),
+                        new SelectionOption('label', 'Middle nEeDlE label'),
+                        new SelectionOption('later', 'Later option', 'needle detail'),
+                        new SelectionOption('fifth', 'Fifth option'),
+                        new SelectionOption('sixth', 'Sixth option'),
+                    ]));
+
+                    return;
+                }
+
+                $chosen = $arguments;
             },
         );
         EventLoop::delay(
@@ -2986,7 +3211,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([$command])->run();
+            commands: new Commands([$command]),
+        ))->run();
 
         self::assertIsString($filteredDisplay);
         self::assertStringContainsString('Models (1 of 3)', $filteredDisplay);
@@ -3015,19 +3241,29 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
             static function (
-                Controls $controls,
+                CommandControlsInterface $controls,
                 string $arguments,
             ) use (&$first, &$second): void {
                 $options = [
-                    new ChoiceOption('one', 'Option one'),
-                    new ChoiceOption('two', 'Option two'),
-                    new ChoiceOption('three', 'Option three'),
-                    new ChoiceOption('four', 'Option four'),
-                    new ChoiceOption('five', 'Option five'),
-                    new ChoiceOption('six', 'Option six'),
+                    new SelectionOption('one', 'Option one'),
+                    new SelectionOption('two', 'Option two'),
+                    new SelectionOption('three', 'Option three'),
+                    new SelectionOption('four', 'Option four'),
+                    new SelectionOption('five', 'Option five'),
+                    new SelectionOption('six', 'Option six'),
                 ];
-                $first = $controls->choose('First opening', $options);
-                $second = $controls->choose('Second opening', $options);
+                if ($arguments === '' || $arguments === 'reopen') {
+                    $controls->requestSelection(new SelectionRequest(
+                        '/probe',
+                        $arguments === '' ? 'First opening' : 'Second opening',
+                        $options,
+                    ));
+
+                    return;
+                }
+
+                $first = $arguments;
+                $second = $arguments;
             },
         );
         EventLoop::delay(
@@ -3078,6 +3314,10 @@ MARKDOWN;
             },
         );
         EventLoop::delay(
+            0.33,
+            static fn () => $terminal->simulateInput("/probe reopen\r"),
+        );
+        EventLoop::delay(
             0.37,
             static function () use (&$reopenedDisplay, $terminal): void {
                 $reopenedDisplay = AnsiUtils::stripAnsiCodes(
@@ -3094,7 +3334,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([$command])->run();
+            commands: new Commands([$command]),
+        ))->run();
 
         self::assertIsString($emptyDisplay);
         self::assertStringContainsString('First opening (0 of 0)', $emptyDisplay);
@@ -3106,12 +3347,12 @@ MARKDOWN;
         self::assertStringContainsString('First opening (1 of 6)', $restoredDisplay);
         self::assertStringContainsString('Search:', $restoredDisplay);
         self::assertStringContainsString('→ Option one', $restoredDisplay);
-        self::assertNull($first);
+        self::assertSame('still open', $first);
         self::assertIsString($reopenedDisplay);
         self::assertStringContainsString('Second opening (1 of 6)', $reopenedDisplay);
         self::assertStringNotContainsString('Search: z', $reopenedDisplay);
         self::assertStringContainsString('→ Option one', $reopenedDisplay);
-        self::assertNull($second);
+        self::assertSame('still open', $second);
     }
 
     /**
@@ -3156,7 +3397,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([new HelpCommand(), new LeaveCommand()])->run();
+            commands: new Commands([new HelpCommand(), new LeaveCommand()]),
+        ))->run();
 
         self::assertIsString($display);
         self::assertStringContainsString('/help', $display);
@@ -3166,7 +3408,7 @@ MARKDOWN;
         );
         self::assertStringContainsString('/exit', $display);
         self::assertStringContainsString(
-            'Closes the Conversation TUI.',
+            'Stops the interaction.',
             $display,
         );
         // The Host Application named /help first, and reads it first.
@@ -3204,7 +3446,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([new HelpCommand()])->run();
+            commands: new Commands([new HelpCommand()]),
+        ))->run();
 
         self::assertIsString($display);
         $lines = preg_split('/\r\n|\r|\n/', $display);
@@ -3244,7 +3487,7 @@ MARKDOWN;
 
         for ($place = 0; $place < 10; ++$place) {
             $commands[] = $this->commandThat(
-                static function (Controls $controls, string $arguments): void {
+                static function (CommandControlsInterface $controls, string $arguments): void {
                 },
                 '/cmd' . $place,
             );
@@ -3270,7 +3513,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand($commands)->run();
+            commands: new Commands($commands),
+        ))->run();
 
         self::assertIsString($display);
         self::assertStringContainsString('/cmd0', $display);
@@ -3358,7 +3602,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([new HelpCommand()])->run();
+            commands: new Commands([new HelpCommand()]),
+        ))->run();
 
         self::assertIsString($open);
         self::assertStringContainsString(
@@ -3402,7 +3647,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([new HelpCommand()])->run();
+            commands: new Commands([new HelpCommand()]),
+        ))->run();
 
         self::assertIsString($display);
         self::assertStringNotContainsString(
@@ -3452,7 +3698,7 @@ MARKDOWN;
             [
                 $this->commandThat(
                     static function (
-                        Controls $controls,
+                        CommandControlsInterface $controls,
                         string $written,
                     ) use (&$arguments): void {
                         $arguments = $written;
@@ -3484,7 +3730,7 @@ MARKDOWN;
             &$arguments,
         ): Closure {
             return static function (
-                Controls $controls,
+                CommandControlsInterface $controls,
                 string $written,
             ) use ($name, &$ran, &$arguments): void {
                 $ran = $name;
@@ -3726,7 +3972,7 @@ MARKDOWN;
      * Each string is typed a moment after the one before it, so a test can
      * write a name and then delete part of it.
      *
-     * @param list<CommandInterface|ConcurrentCommandInterface> $commands
+     * @param list<CommandInterface> $commands
      */
     private static function screenAfterTyping(
         array $commands,
@@ -3756,11 +4002,7 @@ MARKDOWN;
             },
         );
 
-        $tui = new Tui(new Agent(), $terminal);
-
-        foreach ($commands as $command) {
-            $tui->addCommand($command);
-        }
+        $tui = new Tui(new Agent(), $terminal, commands: new Commands($commands));
 
         $tui->run();
 
@@ -3795,15 +4037,15 @@ MARKDOWN;
             }
 
             public function run(
-                Controls $controls,
-                string $arguments,
+                CommandControlsInterface $controls,
+                CommandArguments $arguments,
             ): void {
             }
         };
     }
 
     /**
-     * During a Turn the list carries the Concurrent commands: one the TUI
+     * During a Turn the list carries the Help and Leave Commands: one the TUI
      * would turn away is never offered there, and the whole list is back
      * under the same name once the Turn has finished.
      */
@@ -3825,16 +4067,9 @@ MARKDOWN;
         $agent = new Agent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
-        $concurrent = $this->concurrentCommand(
-            static function (
-                ConcurrentControls $controls,
-                string $arguments,
-            ): void {
-            },
-            '/pulse',
-        );
+        $concurrent = new HelpCommand('/pulse');
         $refused = $this->commandThat(
-            static function (Controls $controls, string $arguments): void {
+            static function (CommandControlsInterface $controls, string $arguments): void {
             },
             '/probe',
         );
@@ -3876,7 +4111,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([$refused, $concurrent])->run();
+            commands: new Commands([$refused, $concurrent]),
+        ))->run();
 
         self::assertIsString($midTurnDisplay);
         self::assertStringContainsString('/pulse', $midTurnDisplay);
@@ -3908,7 +4144,7 @@ MARKDOWN;
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $refused = $this->commandThat(
-            static function (Controls $controls, string $arguments): void {
+            static function (CommandControlsInterface $controls, string $arguments): void {
             },
             '/probe',
         );
@@ -3940,7 +4176,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([$refused])->run();
+            commands: new Commands([$refused]),
+        ))->run();
 
         self::assertIsString($midTurnDisplay);
         self::assertStringContainsString(
@@ -3961,10 +4198,14 @@ MARKDOWN;
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
-            static function (Controls $controls, string $arguments): void {
-                $controls->choose('Models', [
-                    new ChoiceOption('haiku', 'Claude Haiku'),
-                ]);
+            static function (CommandControlsInterface $controls, string $arguments): void {
+                if ($arguments !== '') {
+                    return;
+                }
+
+                $controls->requestSelection(new SelectionRequest('/probe', 'Models', [
+                    new SelectionOption('haiku', 'Claude Haiku'),
+                ]));
             },
         );
         EventLoop::delay(
@@ -3992,7 +4233,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([$command])->run();
+            commands: new Commands([$command]),
+        ))->run();
 
         self::assertIsString($choosingDisplay);
         // The picker is what is on screen, and the slash went to it.
@@ -4082,7 +4324,7 @@ MARKDOWN;
         $arguments = null;
         $note = static function (string $name) use (&$ran, &$arguments) {
             return static function (
-                Controls $controls,
+                CommandControlsInterface $controls,
                 string $written,
             ) use ($name, &$ran, &$arguments): void {
                 $ran = $name;
@@ -4121,10 +4363,11 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([
+            commands: new Commands([
                 $this->commandThat($note('/alpha'), '/alpha'),
                 $this->commandThat($note('/album'), '/album'),
-            ])->run();
+            ]),
+        ))->run();
 
         self::assertIsString($completed);
         // The name that was chosen, written whole, with the list gone.
@@ -4165,7 +4408,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([self::commandNamed('/alpha', 'The only one.')])->run();
+            commands: new Commands([self::commandNamed('/alpha', 'The only one.')]),
+        ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -4256,7 +4500,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([new HelpCommand()])->run();
+            commands: new Commands([new HelpCommand()]),
+        ))->run();
 
         self::assertIsString($closed);
         self::assertStringNotContainsString(
@@ -4372,7 +4617,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand([new HelpCommand()])->run();
+            commands: new Commands([new HelpCommand()]),
+        ))->run();
 
         self::assertIsString($open);
         self::assertStringContainsString('↑↓ moves', $open);
@@ -4389,7 +4635,7 @@ MARKDOWN;
      * A command that does what the test tells it to, under a name of the
      * test's choosing.
      *
-     * @param Closure(Controls, string): void $run
+     * @param Closure(CommandControlsInterface, string): void $run
      */
     private function commandThat(
         Closure $run,
@@ -4397,7 +4643,7 @@ MARKDOWN;
     ): CommandInterface {
         return new class($run, $name) implements CommandInterface {
             /**
-             * @param Closure(Controls, string): void $run
+             * @param Closure(CommandControlsInterface, string): void $run
              */
             public function __construct(
                 private readonly Closure $run,
@@ -4415,53 +4661,14 @@ MARKDOWN;
                 return 'Does what the test says.';
             }
 
-            public function run(Controls $controls, string $arguments): void
+            public function run(CommandControlsInterface $controls, CommandArguments $arguments): void
             {
-                ($this->run)($controls, $arguments);
+                ($this->run)($controls, $arguments->text);
             }
         };
     }
 
-    /**
-     * A Concurrent command that does what the test tells it to with the
-     * controls that remain valid while a Turn is under way.
-     *
-     * @param Closure(ConcurrentControls, string): void $run
-     */
-    private function concurrentCommand(
-        Closure $run,
-        string $name = '/probe',
-    ): ConcurrentCommandInterface {
-        return new class($run, $name) implements ConcurrentCommandInterface {
-            /**
-             * @param Closure(ConcurrentControls, string): void $run
-             */
-            public function __construct(
-                private readonly Closure $run,
-                private readonly string $commandName,
-            ) {
-            }
-
-            public function name(): string
-            {
-                return $this->commandName;
-            }
-
-            public function describe(): string
-            {
-                return 'Does what the test says, during a Turn or not.';
-            }
-
-            public function run(
-                ConcurrentControls $controls,
-                string $arguments,
-            ): void {
-                ($this->run)($controls, $arguments);
-            }
-        };
-    }
-
-    /** @return list<CommandInterface|ConcurrentCommandInterface> */
+    /** @return list<CommandInterface> */
     private static function sessionCommands(): array
     {
         return [
@@ -4515,7 +4722,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand(self::sessionCommands())->run();
+            commands: new Commands(self::sessionCommands()),
+        ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -4545,9 +4753,10 @@ MARKDOWN;
         $agent = new Agent();
         $storage = new InMemoryStorage();
         $sessions = new Sessions($storage);
+        $agent->setChatHistory($sessions->start());
         $earlier = null;
         $fillSession = $this->commandThat(
-            static function (Controls $controls) use (&$earlier): void {
+            static function (CommandControlsInterface $controls) use (&$earlier): void {
                 $earlier = $controls->agent()->getChatHistory();
                 $earlier->addMessage(new UserMessage('Earlier question.'));
                 $earlier->addMessage(new AssistantMessage('Earlier answer.'));
@@ -4582,10 +4791,13 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->setStorage($storage)->addCommand([
-            ...self::sessionCommands(),
-            $fillSession,
-        ])->run();
+            sessions: $sessions,
+            inputHistory: new InputHistory($storage),
+            commands: new Commands([
+                ...self::sessionCommands(),
+                $fillSession,
+            ]),
+        ))->run();
 
         self::assertIsString($clearedDisplay);
         self::assertStringContainsString('draft', $clearedDisplay);
@@ -4634,7 +4846,10 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->setStorage($storage)->addCommand(self::sessionCommands())->run();
+            sessions: new Sessions($storage),
+            inputHistory: new InputHistory($storage),
+            commands: new Commands(self::sessionCommands()),
+        ))->run();
 
         $listed = $sessions->list();
 
@@ -4680,7 +4895,7 @@ MARKDOWN;
         $agent->setAiProvider($provider);
         $ongoing = null;
         $remember = $this->commandThat(
-            static function (Controls $controls) use (&$ongoing): void {
+            static function (CommandControlsInterface $controls) use (&$ongoing): void {
                 $ongoing = $controls->agent()->getChatHistory();
             },
         );
@@ -4723,10 +4938,13 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->setStorage($storage)->addCommand([
-            ...self::sessionCommands(),
-            $remember,
-        ])->run();
+            sessions: new Sessions($storage),
+            inputHistory: new InputHistory($storage),
+            commands: new Commands([
+                ...self::sessionCommands(),
+                $remember,
+            ]),
+        ))->run();
 
         self::assertIsString($refusedDisplay);
         self::assertStringContainsString(
@@ -4783,7 +5001,10 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->setStorage($storage)->addCommand(self::sessionCommands())->run();
+            sessions: new Sessions($storage),
+            inputHistory: new InputHistory($storage),
+            commands: new Commands(self::sessionCommands()),
+        ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -4863,7 +5084,10 @@ MARKDOWN;
             (new Tui(
                 $agent,
                 terminal: $terminal,
-            ))->setStorage($storage)->addCommand(self::sessionCommands())->run();
+                sessions: new Sessions($storage),
+                inputHistory: new InputHistory($storage),
+                commands: new Commands(self::sessionCommands()),
+            ))->run();
 
             self::assertIsString($pickerDisplay);
             self::assertStringContainsString(
@@ -4949,7 +5173,10 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->setStorage($storage)->addCommand(self::sessionCommands())->run();
+            sessions: new Sessions($storage),
+            inputHistory: new InputHistory($storage),
+            commands: new Commands(self::sessionCommands()),
+        ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -4977,7 +5204,9 @@ MARKDOWN;
         $storage = new InMemoryStorage();
         $sessions = new Sessions($storage);
         $earlier = $sessions->start();
-        $earlier->addMessage(new UserMessage("The earlier\x00 subject"));
+        $title = "The earlier\x00 subject";
+        $earlier->addMessage(new UserMessage($title));
+        self::assertSame($title, $sessions->list()[0]->title);
         $terminal = new VirtualTerminal(rows: 24);
         $pickerDisplay = null;
         EventLoop::delay(
@@ -5002,7 +5231,10 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->setStorage($storage)->addCommand(self::sessionCommands())->run();
+            sessions: new Sessions($storage),
+            inputHistory: new InputHistory($storage),
+            commands: new Commands(self::sessionCommands()),
+        ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -5013,7 +5245,7 @@ MARKDOWN;
         );
         self::assertStringContainsString('❯ The earlier subject', $display);
         self::assertSame(
-            ["The earlier\x00 subject"],
+            [$title],
             array_map(
                 static fn (Message $message): string => (string) $message
                     ->getContent(),
@@ -5027,7 +5259,7 @@ MARKDOWN;
         $agent = new Agent();
         $ongoing = null;
         $remember = $this->commandThat(
-            static function (Controls $controls) use (&$ongoing): void {
+            static function (CommandControlsInterface $controls) use (&$ongoing): void {
                 $ongoing = $controls->agent()->getChatHistory();
             },
         );
@@ -5072,10 +5304,13 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->setStorage($storage)->addCommand([
-            ...self::sessionCommands(),
-            $remember,
-        ])->run();
+            sessions: new Sessions($storage),
+            inputHistory: new InputHistory($storage),
+            commands: new Commands([
+                ...self::sessionCommands(),
+                $remember,
+            ]),
+        ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -5108,7 +5343,8 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->addCommand(self::sessionCommands())->run();
+            commands: new Commands(self::sessionCommands()),
+        ))->run();
 
         self::assertStringContainsString(
             'There is no earlier Session to return to yet.',
@@ -5163,7 +5399,10 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->setStorage($storage)->addCommand(self::sessionCommands())->run();
+            sessions: new Sessions($storage),
+            inputHistory: new InputHistory($storage),
+            commands: new Commands(self::sessionCommands()),
+        ))->run();
 
         self::assertIsString($narrowedDisplay);
         self::assertStringContainsString('Beta subject', $narrowedDisplay);
@@ -5209,7 +5448,10 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->setStorage($storage)->addCommand(self::sessionCommands())->run();
+            sessions: new Sessions($storage),
+            inputHistory: new InputHistory($storage),
+            commands: new Commands(self::sessionCommands()),
+        ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -5266,7 +5508,10 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->setStorage($storage)->addCommand(self::sessionCommands())->run();
+            sessions: new Sessions($storage),
+            inputHistory: new InputHistory($storage),
+            commands: new Commands(self::sessionCommands()),
+        ))->run();
 
         self::assertIsString($refusedDisplay);
         self::assertStringContainsString(
@@ -5340,10 +5585,13 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->setStorage($storage)->addCommand([
-            new SessionKit(),
-            new LeaveCommand(),
-        ])->run();
+            sessions: new Sessions($storage),
+            inputHistory: new InputHistory($storage),
+            commands: new Commands([
+                new SessionCommandKit(),
+                new LeaveCommand(),
+            ]),
+        ))->run();
 
         self::assertIsString($pickerDisplay);
         self::assertStringContainsString(
@@ -5417,10 +5665,13 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->setStorage($storage)->addCommand([
-                (new SessionKit())->exclude([ClearCommand::class]),
+            sessions: new Sessions($storage),
+            inputHistory: new InputHistory($storage),
+            commands: new Commands([
+                (new SessionCommandKit())->exclude([ClearCommand::class]),
                 new LeaveCommand(),
-            ])->run();
+            ]),
+        ))->run();
 
         self::assertIsString($refusedDisplay);
         self::assertStringContainsString(
@@ -5486,10 +5737,13 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-        ))->setStorage($storage)->addCommand([
-                (new SessionKit())->only([ClearCommand::class]),
+            sessions: new Sessions($storage),
+            inputHistory: new InputHistory($storage),
+            commands: new Commands([
+                (new SessionCommandKit())->only([ClearCommand::class]),
                 new LeaveCommand(),
-            ])->run();
+            ]),
+        ))->run();
 
         self::assertIsString($refusedDisplay);
         self::assertStringContainsString(
@@ -5521,7 +5775,7 @@ MARKDOWN;
         $agent = new Agent();
         $history = new ExistingChatHistory($messages);
         $restore = $this->commandThat(
-            static function (Controls $controls) use ($history): void {
+            static function (CommandControlsInterface $controls) use ($history): void {
                 $controls->agent()->setChatHistory($history);
             },
         );
@@ -5562,8 +5816,7 @@ MARKDOWN;
             },
         );
 
-        (new Tui($agent, terminal: $terminal))
-            ->addCommand($restore)
+        (new Tui($agent, terminal: $terminal, commands: new Commands($restore)))
             ->run();
 
         self::assertIsString($initialDisplay);
