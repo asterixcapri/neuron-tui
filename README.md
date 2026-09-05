@@ -1,19 +1,16 @@
 # Neuron TUI
 
-Neuron TUI is a reusable Conversation TUI for
-[Neuron AI](https://github.com/neuron-core/neuron-ai). A Host Application
-supplies a configured Agent; this library owns only the interactive terminal
-experience.
+A ready-to-use terminal UI for working with or testing your
+[Neuron AI](https://github.com/neuron-core/neuron-ai) agent. Manage conversation
+sessions, add commands, and recall previous inputs—all from the terminal.
 
-Neuron TUI is in alpha. Publication on Packagist is planned once the public
-interfaces are stable.
+Built with [Symfony TUI](https://github.com/symfony/tui).
 
-Neuron TUI requires PHP 8.4.1 or newer and an interactive TTY.
+Sessions, commands, and input history are powered by
+[Neuron Interaction](https://github.com/asterixcapri/neuron-interaction), so you
+can use the same features in backend applications too.
 
-Neuron TUI adapts the separate `asterixcapri/neuron-interaction` library. That
-package owns Commands, Sessions, Input history and Storage and does not depend
-on terminal code. Rendering, Agent turns, streaming and keyboard handling stay
-in Neuron TUI. Input history also provides optional recall navigation.
+Requires PHP 8.4.1+ and an interactive terminal.
 
 ![Neuron TUI demo](docs/images/usage.gif)
 
