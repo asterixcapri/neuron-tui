@@ -6,7 +6,7 @@
     "require": {
         "php": "^8.4.1",
         "amphp/http-client": "^5.3",
-        "asterixcapri/neuron-interaction": "dev-feat/command-adapter-execution#d823bce842c16d69d9432d4b7ea98ca21d618021",
+        "asterixcapri/neuron-interaction": "dev-main",
         "asterixcapri/neuron-tui": "dev-main",
         "neuron-core/neuron-ai": "^3.15.26",
         "symfony/dotenv": "^8.1"
