@@ -1,5 +1,12 @@
 # Clonare Claude Code come *interfaccia*: quali funzionalità basiche valgono per Neuron TUI
 
+> Nota storica: questa ricerca descrive la revisione indicata sotto. Le sezioni
+> su `ConcurrentCommandInterface`, `ConcurrentControls` e `Tui::addCommand()`
+> precedono la revisione della composizione e non sono istruzioni per le API
+> correnti. Help e Leave ora appartengono a Neuron Interaction e usano
+> `CommandControlsInterface`; il montaggio avviene tramite `Commands`.
+> Per gli esempi aggiornati, vedere il [README](../../README.md).
+
 Ricerca del 18 agosto 2026. Fonti primarie: documentazione ufficiale Claude Code
 (Anthropic), documentazione e sorgente ufficiali di Neuron AI, sorgente e blog
 ufficiali di Symfony. La domanda è deliberatamente ristretta alla **superficie di

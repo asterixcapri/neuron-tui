@@ -12,6 +12,10 @@ There is no concurrent marker, wrapper or restricted controls contract. Leave
 stops the terminal, pending Picker and queued-input processing without cancelling
 or waiting for in-flight Agent work. No Commands are mounted automatically._
 
+_ADR-0006 also supersedes the constructor-injected Session provider policy below:
+Session Commands use the shared Sessions exposed through CommandControlsInterface.
+The historical decision text follows; apply these scoped supersessions._
+
 The package used to answer three Commands — `/clear`, `/sessions` and
 `/exit` — carried out by the Conversation TUI itself, and the source said as
 much: a fixed set of commands does not justify a registry. That reasoning held
