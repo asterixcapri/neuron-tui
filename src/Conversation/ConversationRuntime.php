@@ -17,8 +17,6 @@ use NeuronInteraction\Command\SelectionRequest;
 use NeuronInteraction\Command\SelectionOption;
 use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Session\Sessions;
-use NeuronInteraction\Storage\InMemoryStorage;
-use NeuronInteraction\Storage\StorageInterface;
 use NeuronTui\Tui\ConversationView;
 use NeuronTui\Tui\WorkingIndicator;
 use Symfony\Component\Tui\Event\InputEvent;
@@ -50,55 +48,33 @@ final class ConversationRuntime
 
     private readonly AgentTurn $agentTurn;
 
-    private readonly Sessions $sessions;
-
-    private readonly InputHistory $inputHistory;
-
-    /**
-     * The mounted commands in the order the Host Application added them.
-     *
-     * @var list<CommandInterface>
-     */
-    private readonly array $commands;
-
-    private readonly Commands $dispatcher;
-
     /** @var Future<mixed>|null */
     private ?Future $response = null;
 
     private bool $stopped = false;
 
-    /**
-     * @param list<CommandInterface> $commands everything that
-     *     can be typed here after a slash; the Conversation TUI mounts
-     *     nothing on its own
-     */
     public function __construct(
         private Agent $agent,
+        private readonly Commands $commands,
+        private readonly Sessions $sessions,
+        private readonly InputHistory $inputHistory,
         string $title = 'Neuron AI',
         string $subtitle = 'Agent conversation',
         ?TerminalInterface $terminal = null,
-        array $commands = [],
         ?string $figlet = null,
         string $figletFont = 'standard',
-        ?StorageInterface $storage = null,
     ) {
-        $this->commands = $commands;
-        $storage ??= new InMemoryStorage();
-        $this->sessions = new Sessions($storage);
-        $this->inputHistory = new InputHistory($storage);
         $this->agent->setChatHistory($this->sessions->start());
         $this->terminal = $terminal ?? new Terminal();
         $this->view = new ConversationView(
             $this->terminal,
             $title,
             $subtitle,
-            $this->commands,
+            $this->commands->all(),
             $figlet,
             $figletFont,
         );
         $this->workingIndicator = $this->view->workingIndicator();
-        $this->dispatcher = new Commands($commands);
         $this->turns = new TurnQueue();
         $this->agentTurn = new AgentTurn($this->view);
         $this->view->showHistory(
@@ -209,7 +185,7 @@ final class ConversationRuntime
         CommandArguments $arguments,
     ): void {
         $conversation = $this->agent->getChatHistory();
-        $execution = $this->dispatcher->run($identifier, $arguments, $this->controls());
+        $execution = $this->commands->run($identifier, $arguments, $this->controls());
 
         // The screen is reconciled before anything is said about the run, so
         // that a command which failed after changing conversation leaves its
@@ -233,7 +209,7 @@ final class ConversationRuntime
                 $this->send(new MessageForAgent($prompt));
             },
             $this->answerFrom(...),
-            $this->dispatcher,
+            $this->commands,
             $this->sessions,
             $this->requestSelection(...),
             $this->stop(...),
@@ -344,13 +320,7 @@ final class ConversationRuntime
      */
     private function commandNamed(string $name): CommandInterface|null
     {
-        foreach ($this->commands as $command) {
-            if ($command->name() === $name) {
-                return $command;
-            }
-        }
-
-        return null;
+        return $this->commands->named($name);
     }
 
     private function tick(): bool

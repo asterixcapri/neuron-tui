@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace NeuronTui\Tests\Tui;
 
 use Closure;
-use LogicException;
+use NeuronInteraction\Command\Commands;
+use NeuronInteraction\InputHistory\InputHistory;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\History\InMemoryChatHistory;
 use NeuronInteraction\Command\CommandArguments;
@@ -24,35 +25,70 @@ use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
 final class SessionCompositionTest extends TestCase
 {
-    public function testStorageConfigurationIsFluentAndFreezesOnRun(): void
+    public function testOmittedCommandsStayEmptyWithIndependentlySuppliedState(): void
     {
-        $terminal = new VirtualTerminal();
-        $tui = Tui::make(new Agent(), $terminal);
-        $storage = new InMemoryStorage();
-        $failure = null;
+        foreach ([false, true] as $supplySessions) {
+            foreach ([false, true] as $supplyInputs) {
+                $terminal = new VirtualTerminal();
+                $inputs = $supplyInputs ? new InputHistory(new InMemoryStorage()) : null;
+                EventLoop::queue(static fn () => $terminal->simulateInput("/help\r"));
+                EventLoop::delay(0.06, static fn () => $terminal->simulateInput("\x03"));
 
-        self::assertSame($tui, $tui->setStorage($storage));
+                (new Tui(
+                    new Agent(),
+                    $terminal,
+                    sessions: $supplySessions ? new Sessions(new InMemoryStorage()) : null,
+                    inputHistory: $inputs,
+                ))->run();
 
-        EventLoop::delay(
-            0.04,
-            static function () use ($tui, $terminal, &$failure): void {
-                try {
-                    $tui->setStorage(new InMemoryStorage());
-                } catch (LogicException $exception) {
-                    $failure = $exception;
+                self::assertStringContainsString('Unknown Command: /help', \Symfony\Component\Tui\Ansi\AnsiUtils::stripAnsiCodes($terminal->getOutput()));
+                if ($inputs !== null) {
+                    self::assertSame(['/help'], $inputs->entries());
                 }
+            }
+        }
+    }
 
-                $terminal->simulateInput("\x03");
-            },
-        );
+    public function testSuppliedAndDefaultModulesKeepTheirStateAcrossCommands(): void
+    {
+        foreach ([false, true] as $supplySessions) {
+            foreach ([false, true] as $supplyInputs) {
+                $sessions = $supplySessions ? new Sessions(new InMemoryStorage()) : null;
+                $inputs = $supplyInputs ? new InputHistory(new InMemoryStorage()) : null;
+                $received = [];
+                $command = $this->commandThat(
+                    static function (CommandControlsInterface $controls) use (&$received): void {
+                        $received[] = [$controls->commands(), $controls->sessions()];
+                        if (count($received) === 1) {
+                            $controls->sessions()->start()->addMessage(new \NeuronAI\Chat\Messages\UserMessage('Kept by this module'));
+                        } else {
+                            self::assertCount(1, $controls->sessions()->list());
+                        }
+                    },
+                );
+                $commands = new Commands();
+                $terminal = new VirtualTerminal();
+                $tui = Tui::make(new Agent(), $terminal, $commands, $sessions, $inputs);
+                $commands->addCommand($command);
+                EventLoop::queue(static fn () => $terminal->simulateInput("/inspect\r"));
+                EventLoop::delay(0.04, static fn () => $terminal->simulateInput("\x1b[A\r"));
+                EventLoop::delay(0.08, static fn () => $terminal->simulateInput("\x1b[A"));
+                EventLoop::delay(0.12, static fn () => $terminal->simulateInput("\x03"));
 
-        $tui->run();
+                $tui->run();
 
-        self::assertInstanceOf(LogicException::class, $failure);
-        self::assertSame(
-            'A TUI instance can only be configured and run once.',
-            $failure->getMessage(),
-        );
+                self::assertCount(2, $received);
+                self::assertSame($commands, $received[0][0]);
+                self::assertSame($received[0], $received[1]);
+                if ($sessions !== null) {
+                    self::assertSame($sessions, $received[0][1]);
+                }
+                if ($inputs !== null) {
+                    self::assertSame(['/inspect'], $inputs->entries());
+                    self::assertTrue($inputs->isNavigating());
+                }
+            }
+        }
     }
 
     public function testRuntimeStartsOneSessionAndSharesItWithCommands(): void
@@ -81,10 +117,7 @@ final class SessionCompositionTest extends TestCase
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        Tui::make($agent, $terminal)
-            ->setStorage($storage)
-            ->addCommand($command)
-            ->run();
+        Tui::make($agent, $terminal, commands: new Commands($command), sessions: new Sessions($storage))->run();
 
         self::assertCount(2, $received);
         self::assertInstanceOf(Sessions::class, $received[0]);

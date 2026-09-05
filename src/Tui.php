@@ -7,10 +7,11 @@ namespace NeuronTui;
 use InvalidArgumentException;
 use LogicException;
 use NeuronAI\Agent\Agent;
-use NeuronInteraction\Command\CommandInterface;
-use NeuronInteraction\Command\CommandKitInterface;
+use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Session\Sessions;
+use NeuronInteraction\InputHistory\InputHistory;
+use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Conversation\ConversationRuntime;
-use NeuronInteraction\Storage\StorageInterface;
 use Symfony\Component\Tui\Terminal\TerminalInterface;
 
 /**
@@ -34,23 +35,34 @@ final class Tui
 
     private string $figletFont = 'standard';
 
-    /** @var list<CommandInterface> */
-    private array $commands = [];
+    private readonly Commands $commands;
 
-    private ?StorageInterface $storage = null;
+    private readonly Sessions $sessions;
+
+    private readonly InputHistory $inputHistory;
 
     private bool $started = false;
 
     public function __construct(
         private readonly Agent $agent,
         private readonly ?TerminalInterface $terminal = null,
-    ) {}
+        ?Commands $commands = null,
+        ?Sessions $sessions = null,
+        ?InputHistory $inputHistory = null,
+    ) {
+        $this->commands = $commands ?? new Commands();
+        $this->sessions = $sessions ?? new Sessions(new InMemoryStorage());
+        $this->inputHistory = $inputHistory ?? new InputHistory(new InMemoryStorage());
+    }
 
     public static function make(
         Agent $agent,
         ?TerminalInterface $terminal = null,
+        ?Commands $commands = null,
+        ?Sessions $sessions = null,
+        ?InputHistory $inputHistory = null,
     ): self {
-        return new self($agent, $terminal);
+        return new self($agent, $terminal, $commands, $sessions, $inputHistory);
     }
 
     public function setTitle(string $title): self
@@ -89,67 +101,6 @@ final class Tui
         return $this;
     }
 
-    /**
-     * Configures the storage used by this terminal's persistent state.
-     */
-    public function setStorage(StorageInterface $storage): self
-    {
-        $this->ensureNotStarted();
-        $this->storage = $storage;
-
-        return $this;
-    }
-
-    /**
-     * @param CommandInterface|CommandKitInterface<CommandInterface>|array<array-key, mixed> $commands
-     */
-    public function addCommand(
-        CommandInterface|CommandKitInterface|array $commands,
-    ): self
-    {
-        $this->ensureNotStarted();
-
-        $commands = is_array($commands) ? $commands : [$commands];
-
-        foreach ($commands as $command) {
-            if (
-                !$command instanceof CommandInterface
-                && !$command instanceof CommandKitInterface
-            ) {
-                throw new InvalidArgumentException(
-                    'A TUI command must implement CommandInterface or CommandKitInterface.',
-                );
-            }
-
-            $members = $command instanceof CommandKitInterface
-                ? $command->commands()
-                : [$command];
-
-            foreach ($members as $member) {
-                $this->mount($member);
-            }
-        }
-
-        return $this;
-    }
-
-    private function mount(mixed $command): void
-    {
-        if (
-            !$command instanceof CommandInterface
-        ) {
-            throw new InvalidArgumentException(
-                'A TUI command must implement CommandInterface.',
-            );
-        }
-
-        if (!str_starts_with($command->name(), '/')) {
-            throw new InvalidArgumentException('A mounted Command identifier must start with a slash.');
-        }
-
-        $this->commands[] = $command;
-    }
-
     public function run(): void
     {
         $this->ensureNotStarted();
@@ -157,13 +108,14 @@ final class Tui
 
         $runtime = new ConversationRuntime(
             $this->agent,
+            $this->commands,
+            $this->sessions,
+            $this->inputHistory,
             $this->title,
             $this->subtitle,
             $this->terminal,
-            $this->commands,
             $this->figlet,
             $this->figletFont,
-            $this->storage,
         );
         $runtime->run();
     }

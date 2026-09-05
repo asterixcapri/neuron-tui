@@ -50,6 +50,31 @@ $agent->setAiProvider($provider);
 Tui::make($agent)->run();
 ```
 
+`Tui::make()` and the public constructor accept the same independently optional
+modules after the optional Terminal: `commands`, `sessions`, and `inputHistory`.
+Each supplied object is reused. Omitted Commands is empty; omitted Sessions and
+InputHistory each use in-memory Storage, constructed once per TUI instance.
+Storage is configured through those modules:
+
+```php
+use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Session\Sessions;
+use NeuronInteraction\InputHistory\InputHistory;
+
+Tui::make(
+    $agent,
+    commands: $commands,
+    sessions: new Sessions($storage),
+    inputHistory: new InputHistory($storage),
+)->run();
+```
+
+Mount Commands before running the TUI. `Commands::addCommand()` accepts a
+Command, kit or mixed array, mutates that collection, and returns the same
+instance. Constructor mounting uses the same validation and ordering; the
+first matching duplicate runs. Live mounting during execution is unsupported.
+Branding setters and `run()` retain the single-run lifecycle.
+
 The default header uses generic Neuron AI branding. A title and subtitle can
 be supplied when the terminal should identify a particular Agent or product:
 
@@ -104,6 +129,7 @@ does what its application needs:
 
 ```php
 use NeuronInteraction\Command\CommandArguments;
+use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Command\CommandControlsInterface;
 use NeuronInteraction\Command\CommandInterface;
 
@@ -133,7 +159,7 @@ final class ReviewCommand implements CommandInterface
     }
 }
 
-Tui::make($agent)->addCommand(new ReviewCommand())->run();
+Tui::make($agent, commands: new Commands(new ReviewCommand()))->run();
 ```
 
 A Command's identifier includes its slash: `/review`. Mounting rejects names
@@ -220,21 +246,22 @@ to `/exit` passes `/quit`:
 
 ```php
 use NeuronInteraction\Command\ClearCommand;
+use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Command\HelpCommand;
 use NeuronInteraction\Command\LeaveCommand;
 use NeuronInteraction\Command\ResumeCommand;
 
-Tui::make($agent)->addCommand([
+Tui::make($agent, commands: new Commands([
     new ClearCommand(),
     new ResumeCommand(),
     new LeaveCommand('/quit'),
     new HelpCommand(),
-])->run();
+]))->run();
 ```
 
-The two commands that touch Sessions reach the live instance owned by the
-Conversation TUI through their Controls. The Host Application does not create
-a parallel Sessions dependency or install a History on the Agent.
+The two commands that touch Sessions receive the same live instance used by
+the Conversation TUI through their Controls. Command constructors need no
+parallel Sessions dependency.
 `HelpCommand` receives no list of commands: the one it shows contains itself,
 so the Conversation TUI hands it over while it runs rather than the Host
 Application building it beforehand. Typing `/help` lists every mounted command
@@ -253,14 +280,17 @@ provided by Neuron Interaction, grouping both Commands that touch Sessions.
 ```php
 use NeuronInteraction\Command\LeaveCommand;
 use NeuronInteraction\Command\SessionCommandKit;
+use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Storage\FileStorage;
+use NeuronInteraction\Session\Sessions;
 
 $storage = new FileStorage('/var/lib/my-app');
 
-Tui::make($agent)
-    ->setStorage($storage)
-    ->addCommand([new SessionCommandKit(), new LeaveCommand()])
-    ->run();
+Tui::make(
+    $agent,
+    commands: new Commands([new SessionCommandKit(), new LeaveCommand()]),
+    sessions: new Sessions($storage),
+)->run();
 ```
 
 A kit can be taken with some of its commands left out, or with only the named
@@ -269,16 +299,17 @@ ones kept, so an application in which conversations are not thrown away has
 
 ```php
 use NeuronInteraction\Command\ClearCommand;
+use NeuronInteraction\Command\Commands;
 
-Tui::make($agent)->addCommand([
+Tui::make($agent, commands: new Commands([
     (new SessionCommandKit())->exclude([ClearCommand::class]),
     new LeaveCommand(),
-])->run();
+]))->run();
 
 // The other way round, keeping only what is named:
-Tui::make($agent)
-    ->addCommand((new SessionCommandKit())->only([ClearCommand::class]))
-    ->run();
+Tui::make($agent, commands: new Commands(
+    (new SessionCommandKit())->only([ClearCommand::class]),
+))->run();
 ```
 
 Both answer with a kit of their own and leave the one asked untouched, so the
@@ -288,7 +319,7 @@ same thing, with the same listing and rules.
 
 A Host Application groups commands of its own by extending
 `NeuronInteraction\Command\AbstractCommandKit` and naming them in `provide()`; the
-`NeuronInteraction\Command\CommandKitInterface` interface is what the Conversation TUI
+`NeuronInteraction\Command\CommandKitInterface` interface is what `Commands`
 mounts. Renaming a command stays the command's own business, so a kit is the
 short way in and writing its commands out by hand remains the way to give them
 names of one's own.
@@ -310,21 +341,24 @@ typing narrows it, Enter chooses one and resumes it, and Escape leaves the
 current one alone. Resuming paints that conversation and the Agent answers
 with its context. A Session nobody wrote in is not listed.
 
-The Conversation TUI owns one live `Sessions` instance. By default it stores
+The Conversation TUI reuses the supplied `Sessions` instance. By default it stores
 everything in memory for the life of the process and creates no directories or
 files. To persist conversations, the Host Application configures one shared
 storage directory and explicitly mounts the Session commands it wants:
 
 ```php
 use NeuronInteraction\Command\SessionCommandKit;
+use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Storage\FileStorage;
+use NeuronInteraction\Session\Sessions;
 
 $storage = new FileStorage('/var/lib/my-app');
 
-Tui::make($agent)
-    ->setStorage($storage)
-    ->addCommand(new SessionCommandKit())
-    ->run();
+Tui::make(
+    $agent,
+    commands: new Commands(new SessionCommandKit()),
+    sessions: new Sessions($storage),
+)->run();
 ```
 
 `FileStorage` separates each interaction namespace beneath that root. The Host
