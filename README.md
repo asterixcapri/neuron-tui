@@ -116,6 +116,9 @@ cp .env.example .env
 php demo.php
 ```
 
+The demo declares `amphp/http-client` directly because its providers use
+Neuron AI's optional Amp HTTP transport for requests and streaming.
+
 The demo reads `examples/.env` through Symfony Dotenv. Existing process
 environment variables take precedence over values from `examples/.env`. It
 starts with an inexpensive OpenAI model; `/model` opens a Picker that can also
