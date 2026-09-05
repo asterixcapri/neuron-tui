@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace NeuronTui\Tests\Tui;
 
 use Closure;
+use NeuronAI\Chat\Messages\AssistantMessage;
+use NeuronAI\Chat\Messages\UserMessage;
+use NeuronAI\Testing\FakeAIProvider;
+use Symfony\Component\Tui\Ansi\AnsiUtils;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\InputHistory\InputHistory;
 use NeuronAI\Agent\Agent;
@@ -25,6 +29,63 @@ use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
 final class SessionCompositionTest extends TestCase
 {
+    public function testInitialConversationAndLaterTurnCanBeClearedAndResumed(): void
+    {
+        foreach (['default', 'supplied', 'preselected'] as $composition) {
+            $sessions = $composition === 'default' ? null : new Sessions(new InMemoryStorage());
+            $initial = $sessions !== null && $composition === 'preselected'
+                ? $sessions->start()
+                : new InMemoryChatHistory();
+            $initial->addMessage(new UserMessage('Initial subject'));
+            $initial->addMessage(new AssistantMessage('Initial answer'));
+            $selectedKey = null;
+            if ($sessions !== null && $composition === 'preselected') {
+                $selectedKey = $sessions->list()[0]->key;
+                $initial = $sessions->resume($selectedKey);
+            }
+            $initialMessages = $initial->getMessages();
+            $agent = new Agent();
+            $agent->setChatHistory($initial);
+            $agent->setAiProvider(new FakeAIProvider(new AssistantMessage('Generated continuation')));
+            $terminal = new VirtualTerminal(rows: 40);
+            $startup = null;
+            $beforeClear = null;
+            $afterClear = null;
+            EventLoop::queue(static function () use ($agent, &$startup): void {
+                $startup = $agent->getChatHistory()->getMessages();
+            });
+            EventLoop::delay(0.03, static fn () => $terminal->simulateInput("Later question\r"));
+            EventLoop::delay(0.15, static function () use ($agent, $terminal, &$beforeClear): void {
+                $beforeClear = $agent->getChatHistory()->getMessages();
+                $terminal->simulateInput("/clear\r");
+            });
+            EventLoop::delay(0.19, static function () use ($agent, $terminal, &$afterClear): void {
+                $afterClear = $agent->getChatHistory()->getMessages();
+                $terminal->simulateInput("/resume\r");
+            });
+            EventLoop::delay(0.23, static fn () => $terminal->simulateInput("\r"));
+            EventLoop::delay(0.29, static fn () => $terminal->simulateInput("\x03"));
+
+            Tui::make($agent, $terminal, new Commands(new SessionCommandKit()), $sessions)->run();
+
+            self::assertEquals($initialMessages, $startup);
+            self::assertIsArray($beforeClear);
+            self::assertCount(4, $beforeClear);
+            self::assertSame('Generated continuation', $beforeClear[3]->getContent());
+            self::assertSame([], $afterClear);
+            self::assertEquals($beforeClear, $agent->getChatHistory()->getMessages());
+            $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+            self::assertStringContainsString('Initial subject', $display);
+            self::assertStringContainsString('Generated continuation', $display);
+            if ($sessions !== null) {
+                self::assertCount(1, $sessions->list());
+                if ($selectedKey !== null) {
+                    self::assertSame($selectedKey, $sessions->list()[0]->key);
+                }
+            }
+        }
+    }
+
     public function testOmittedCommandsStayEmptyWithIndependentlySuppliedState(): void
     {
         foreach ([false, true] as $supplySessions) {
