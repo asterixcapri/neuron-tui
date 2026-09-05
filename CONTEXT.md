@@ -28,7 +28,8 @@ _Avoid_: Command, CLI application
 
 **History**:
 The sequence of messages owned by the Agent and represented by the TUI,
-including messages that predate the TUI startup.
+including messages that predate the TUI startup. A History may exist independently
+of Sessions and have its own persistence.
 _Avoid_: Transcript, TUI log
 
 **Input history**:
@@ -99,8 +100,8 @@ and it can be taken with some of them left out.
 _Avoid_: Toolkit, bundle, plugin, pack
 
 **Session**:
-One conversation, identified by a key and held by a single History, that
-may outlive the TUI process and can be reopened. No Agent owns it: any Agent
+One conversation managed within Sessions, identified by a key and held by a
+single History, that may outlive the TUI process and can be reopened. No Agent owns it: any Agent
 can be handed it and carry it on. Its title and last-used time identify it to
 a person; its title comes from the first non-empty user-authored content in
 its History, while each Adapter decides how to render it. Its storage may also
