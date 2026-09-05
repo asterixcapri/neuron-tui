@@ -7,9 +7,10 @@ experience.
 
 ## Installation
 
-The extraction is available on `feat/extract-neuron-interaction` and has not
-been released. Add both development dependencies and both repositories to
-your application's root `composer.json`, then run `composer update`:
+This revision uses `feat/reorganize-conversation-runtime` and the matching
+Neuron Interaction Adapter revision; neither has been released. Add both
+development dependencies and both repositories to your application's root
+`composer.json`, then run `composer update`:
 
 ```json
 {
@@ -18,8 +19,8 @@ your application's root `composer.json`, then run `composer update`:
         {"type": "vcs", "url": "https://github.com/asterixcapri/neuron-interaction"}
     ],
     "require": {
-        "asterixcapri/neuron-tui": "dev-feat/extract-neuron-interaction",
-        "asterixcapri/neuron-interaction": "dev-feat/extract-neuron-interaction"
+        "asterixcapri/neuron-tui": "dev-feat/reorganize-conversation-runtime",
+        "asterixcapri/neuron-interaction": "dev-feat/command-adapter-execution#d823bce842c16d69d9432d4b7ea98ca21d618021"
     }
 }
 ```
@@ -139,7 +140,7 @@ does what its application needs:
 ```php
 use NeuronInteraction\Command\CommandArguments;
 use NeuronInteraction\Command\Commands;
-use NeuronInteraction\Command\CommandControlsInterface;
+use NeuronInteraction\Command\CommandAdapterInterface;
 use NeuronInteraction\Command\CommandInterface;
 
 final class ReviewCommand implements CommandInterface
@@ -154,17 +155,18 @@ final class ReviewCommand implements CommandInterface
         return 'Reviews what is staged in git.';
     }
 
-    public function run(CommandControlsInterface $controls, CommandArguments $arguments): void
+    /** @param CommandAdapterInterface<mixed> $adapter */
+    public function run(CommandAdapterInterface $adapter, CommandArguments $arguments): void
     {
         $diff = shell_exec('git diff --staged') ?: '';
 
         if (trim($diff) === '') {
-            $controls->warn('Nothing staged to review.');
+            $adapter->warn('Nothing staged to review.');
 
             return;
         }
 
-        $controls->promptAgent("Review this diff:\n\n" . $diff);
+        $adapter->promptAgent("Review this diff:\n\n" . $diff);
     }
 }
 
@@ -186,7 +188,7 @@ its own — need say nothing about it, and a command that left the conversation
 where it found it leaves the screen alone too, messages appended to it
 included.
 
-While it runs, a Command receives `CommandControlsInterface`, implemented by
+While it runs, a Command receives `CommandAdapterInterface`, implemented by
 the TUI Adapter. Command-specific services belong in its constructor.
 
 - `say()` writes a line in the conversation.
@@ -198,7 +200,8 @@ the TUI Adapter. Command-specific services belong in its constructor.
   and returns immediately. The TUI presents its `SelectionOption` values in the
   Picker. Choosing invokes the request's target Command again with the selected
   value as new `CommandArguments`; cancellation leaves the conversation alone.
-  Controls do not retain a selected value.
+  Each selected invocation uses a fresh Adapter and passes through admission and
+  completion again, without entering human Input history.
 - `agent()` returns the Agent, so its provider, instructions, tools and
   History change through the Neuron AI API rather than through verbs here.
 - `commands()` returns the shared `Commands` collection; `all()` enumerates
@@ -212,9 +215,20 @@ the TUI Adapter. Command-specific services belong in its constructor.
   not interchangeable installs a fresh History on the new Agent afterwards.
 - `stop()` leaves the terminal.
 
-`Commands::run()` reports a technical `CommandExecution` with `completed`,
-`unknown` or `failed` status; Commands return `void`. The TUI presents failures
-as visible errors and stays usable. The failure retains the original exception.
+`Commands::run()` owns the invocation: it resolves the first matching Command,
+asks the Adapter's `admit()`, runs an admitted Command, and calls
+`afterExecution()` with a technical `CommandExecution` (`completed`, `unknown`
+or `failed`). Unknown identifiers reach completion without admission; refusal
+returns `null` without dispatch or completion. Commands still return `void`.
+Only Command exceptions become failed executions; admission and completion
+exceptions propagate to the caller.
+
+The return value of `Commands::run()` is the Adapter's completion output.
+`TuiAdapter` reconciles changed History, presents any failure, and returns `null`;
+a backend Adapter can return its own response. Callers need no separate runner
+or completion call. Each TUI invocation gets a fresh Adapter reading the current
+Agent from the runtime. Unknown and refused Commands preserve the composer;
+admitted Commands clear it. Admission and suggestions share the type rule below.
 
 While a name is being written after a slash, the mounted commands are shown
 above the composer, each with the line it describes itself with. Nothing is
@@ -233,7 +247,7 @@ the Agent.
 The TUI permits only Neuron Interaction's `HelpCommand` and `LeaveCommand`
 while the Agent is answering. It checks their implementations, so configured
 aliases retain that permission and an unrelated Command named `/help` does not.
-Every Command uses `CommandInterface` and `CommandControlsInterface`; the shared
+Every Command uses `CommandInterface` and `CommandAdapterInterface`; the shared
 dispatcher imposes no concurrency policy. Other Commands are refused until the
 Turn finishes.
 
@@ -271,7 +285,7 @@ Tui::make($agent, commands: new Commands([
 ```
 
 The two commands that touch Sessions receive the same live instance used by
-the Conversation TUI through their Controls. Command constructors need no
+the Conversation TUI through their Adapter. Command constructors need no
 parallel Sessions dependency.
 `HelpCommand` receives no list of commands: the one it shows contains itself,
 so the Conversation TUI hands it over while it runs rather than the Host
@@ -338,7 +352,7 @@ short way in and writing its commands out by hand remains the way to give them
 names of one's own.
 
 `SessionCommandKit` is the concrete shared kit; interfaces use the `Interface`
-suffix, including `CommandInterface`, `CommandControlsInterface`,
+suffix, including `CommandInterface`, `CommandAdapterInterface`,
 `CommandKitInterface` and `StorageInterface`.
 
 ## Sessions
@@ -424,7 +438,7 @@ composer stan
 
 Neuron Interaction can be developed and verified independently in its own
 repository with `composer test` and `composer stan`. Its
-[backend example](https://github.com/asterixcapri/neuron-interaction/blob/feat/extract-neuron-interaction/examples/backend.php)
+[backend example](https://github.com/asterixcapri/neuron-interaction/blob/feat/command-adapter-execution/examples/backend.php)
 demonstrates shared modules and selection across separate requests.
 
 The automated suite uses Neuron AI's fake provider and Symfony TUI's virtual

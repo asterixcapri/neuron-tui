@@ -18,7 +18,7 @@ use NeuronInteraction\Command\ClearCommand;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\ResumeCommand;
 use NeuronInteraction\Command\SessionCommandKit;
-use NeuronInteraction\Command\CommandControlsInterface;
+use NeuronInteraction\Command\CommandAdapterInterface;
 use NeuronInteraction\Session\Sessions;
 use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Tui;
@@ -140,12 +140,12 @@ final class SessionCompositionTest extends TestCase
                 $inputs = $supplyInputs ? new InputHistory(new InMemoryStorage()) : null;
                 $received = [];
                 $command = $this->commandThat(
-                    static function (CommandControlsInterface $controls) use (&$received): void {
-                        $received[] = [$controls->commands(), $controls->sessions()];
+                    static function (CommandAdapterInterface $adapter) use (&$received): void {
+                        $received[] = [$adapter->commands(), $adapter->sessions()];
                         if (count($received) === 1) {
-                            $controls->sessions()->start()->addMessage(new \NeuronAI\Chat\Messages\UserMessage('Kept by this module'));
+                            $adapter->sessions()->start()->addMessage(new \NeuronAI\Chat\Messages\UserMessage('Kept by this module'));
                         } else {
-                            self::assertCount(1, $controls->sessions()->list());
+                            self::assertCount(1, $adapter->sessions()->list());
                         }
                     },
                 );
@@ -186,8 +186,8 @@ final class SessionCompositionTest extends TestCase
             $terminal = new VirtualTerminal();
             $received = [];
             $command = $this->commandThat(
-                static function (CommandControlsInterface $controls) use (&$received): void {
-                    $received[] = $controls->sessions();
+                static function (CommandAdapterInterface $adapter) use (&$received): void {
+                    $received[] = $adapter->sessions();
                 },
             );
 
@@ -240,12 +240,12 @@ final class SessionCompositionTest extends TestCase
     }
 
     /**
-     * @param Closure(CommandControlsInterface): void $run
+     * @param Closure(CommandAdapterInterface<mixed>): void $run
      */
     private function commandThat(Closure $run): CommandInterface
     {
         return new class($run) implements CommandInterface {
-            /** @param Closure(CommandControlsInterface): void $run */
+            /** @param Closure(CommandAdapterInterface<mixed>): void $run */
             public function __construct(private readonly Closure $run) {}
 
             public function name(): string
@@ -258,9 +258,10 @@ final class SessionCompositionTest extends TestCase
                 return 'Inspects the runtime composition.';
             }
 
-            public function run(CommandControlsInterface $controls, CommandArguments $arguments): void
+            /** @param CommandAdapterInterface<mixed> $adapter */
+            public function run(CommandAdapterInterface $adapter, CommandArguments $arguments): void
             {
-                ($this->run)($controls);
+                ($this->run)($adapter);
             }
         };
     }

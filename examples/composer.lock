@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "341ccf0116df3df939d9ee9061abe712",
+    "content-hash": "ebd19f83cb4f133555380dc0dfcb6ff1",
     "packages": [
         {
             "name": "amphp/amp",
@@ -976,16 +976,16 @@
         },
         {
             "name": "asterixcapri/neuron-interaction",
-            "version": "dev-feat/extract-neuron-interaction",
+            "version": "dev-feat/command-adapter-execution",
             "source": {
                 "type": "git",
                 "url": "https://github.com/asterixcapri/neuron-interaction.git",
-                "reference": "0e5776e3caee299dceceb5cc9d3484995b9a9a3c"
+                "reference": "d823bce842c16d69d9432d4b7ea98ca21d618021"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/asterixcapri/neuron-interaction/zipball/0e5776e3caee299dceceb5cc9d3484995b9a9a3c",
-                "reference": "0e5776e3caee299dceceb5cc9d3484995b9a9a3c",
+                "url": "https://api.github.com/repos/asterixcapri/neuron-interaction/zipball/d823bce842c16d69d9432d4b7ea98ca21d618021",
+                "reference": "d823bce842c16d69d9432d4b7ea98ca21d618021",
                 "shasum": ""
             },
             "require": {
@@ -1027,10 +1027,10 @@
             ],
             "description": "Presentation-independent interaction modules for Neuron AI Agents.",
             "support": {
-                "source": "https://github.com/asterixcapri/neuron-interaction/tree/feat/extract-neuron-interaction",
+                "source": "https://github.com/asterixcapri/neuron-interaction/tree/feat/command-adapter-execution",
                 "issues": "https://github.com/asterixcapri/neuron-interaction/issues"
             },
-            "time": "2026-09-05T00:17:00+00:00"
+            "time": "2026-09-05T13:52:47+00:00"
         },
         {
             "name": "asterixcapri/neuron-tui",
@@ -1038,11 +1038,11 @@
             "dist": {
                 "type": "path",
                 "url": "..",
-                "reference": "240172bd49896805b2ddc75b68225076a7dd1983"
+                "reference": "251bd3d0ae2871bde2a9d8d84a05a25ccf21969a"
             },
             "require": {
                 "amphp/amp": "^3.0",
-                "asterixcapri/neuron-interaction": "dev-feat/extract-neuron-interaction",
+                "asterixcapri/neuron-interaction": "dev-feat/command-adapter-execution#d823bce842c16d69d9432d4b7ea98ca21d618021",
                 "league/commonmark": "^2.10",
                 "neuron-core/neuron-ai": "^3.0",
                 "php": ">=8.4.1",
