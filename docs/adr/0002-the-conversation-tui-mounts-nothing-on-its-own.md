@@ -6,14 +6,14 @@ mounts nothing on its own._
 _The Refine Interaction composition revision supersedes the concurrent marker
 and restricted controls policy below. HelpCommand and LeaveCommand now belong
 to Neuron Interaction and implement the ordinary CommandInterface with
-CommandControlsInterface. The TUI admits only those implementations during a
+CommandAdapterInterface. The TUI admits only those implementations during a
 Turn, including aliases; unrelated Commands are refused regardless of name.
 There is no concurrent marker, wrapper or restricted controls contract. Leave
 stops the terminal, pending Picker and queued-input processing without cancelling
 or waiting for in-flight Agent work. No Commands are mounted automatically._
 
 _ADR-0006 also supersedes the constructor-injected Session provider policy below:
-Session Commands use the shared Sessions exposed through CommandControlsInterface.
+Session Commands use the shared Sessions exposed through CommandAdapterInterface.
 The historical decision text follows; apply these scoped supersessions._
 
 The package used to answer three Commands — `/clear`, `/sessions` and
