@@ -67,6 +67,12 @@
       "skillPath": "skills/productivity/handoff/SKILL.md",
       "computedHash": "20e5f4afdef502637510bc5c64d27645d3c85c88df9cb006824bbb0980166319"
     },
+    "human-review": {
+      "source": "asterixcapri/skills",
+      "sourceType": "github",
+      "skillPath": "skills/human-review/SKILL.md",
+      "computedHash": "c0e170e736204565e4e372d83075b5467a25761055a0c98d2d7341dcb52efc99"
+    },
     "implement": {
       "source": "mattpocock/skills",
       "sourceType": "github",
