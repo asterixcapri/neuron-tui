@@ -93,12 +93,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/asterixcapri/neuron-interaction.git",
-                "reference": "5777c5a5a739500de317c632f19c6f9e203d0862"
+                "reference": "65c8bbe5b5aedab2e8959438711e2007bf04efb9"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/asterixcapri/neuron-interaction/zipball/5777c5a5a739500de317c632f19c6f9e203d0862",
-                "reference": "5777c5a5a739500de317c632f19c6f9e203d0862",
+                "url": "https://api.github.com/repos/asterixcapri/neuron-interaction/zipball/65c8bbe5b5aedab2e8959438711e2007bf04efb9",
+                "reference": "65c8bbe5b5aedab2e8959438711e2007bf04efb9",
                 "shasum": ""
             },
             "require": {
@@ -143,7 +143,7 @@
                 "source": "https://github.com/asterixcapri/neuron-interaction/tree/feat/extract-neuron-interaction",
                 "issues": "https://github.com/asterixcapri/neuron-interaction/issues"
             },
-            "time": "2026-09-04T23:59:19+00:00"
+            "time": "2026-09-05T00:14:59+00:00"
         },
         {
             "name": "asterixcapri/neuron-tui",
@@ -151,7 +151,7 @@
             "dist": {
                 "type": "path",
                 "url": "..",
-                "reference": "46a5db476676550257dd893853b539e927de3d48"
+                "reference": "0c56bfae708970427617058466ad1c2185c574b2"
             },
             "require": {
                 "amphp/amp": "^3.0",
