@@ -1663,7 +1663,7 @@ MARKDOWN;
             'Unknown Command: /clear',
             $unknownDisplay,
         );
-        self::assertStringNotContainsString('Earlier question.', $unknownDisplay);
+        self::assertStringContainsString('Earlier question.', $unknownDisplay);
         // `/wipe` behaves as `/clear` always did.
         self::assertIsString($wipedDisplay);
         self::assertStringNotContainsString(
