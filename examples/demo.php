@@ -22,6 +22,8 @@ require_once __DIR__ . '/vendor/autoload.php';
 $agent = DemoAgent::make();
 
 $storage = new FileStorage(__DIR__ . '/.storage');
+$sessions = new Sessions($storage);
+$agent->setChatHistory($sessions->start()); // Or resume an explicitly chosen key.
 $commands = (new Commands())->addCommand([
     new ClearCommand(),
     new ResumeCommand(),
@@ -30,12 +32,12 @@ $commands = (new Commands())->addCommand([
     new HelpCommand(),
 ]);
 
-// The Agent's existing messages (or a Session resumed before this call) survive
-// startup and remain recoverable through /resume after /clear.
+// Startup keeps this explicitly selected History. These Sessions own its
+// persistence, so /resume can recover it after /clear.
 Tui::make(
     $agent,
     commands: $commands,
-    sessions: new Sessions($storage),
+    sessions: $sessions,
     inputHistory: new InputHistory($storage),
 )
     ->setFiglet('NeuronTUI')
