@@ -5,15 +5,9 @@ declare(strict_types=1);
 namespace NeuronTui\Conversation;
 
 use Amp\Future;
-use NeuronInteraction\Command\HelpCommand;
-use NeuronInteraction\Command\LeaveCommand;
 use NeuronAI\Agent\Agent;
-use NeuronAI\Chat\History\ChatHistoryInterface;
 use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
-use NeuronInteraction\Command\CommandArguments;
 use NeuronInteraction\Command\Commands;
-use NeuronInteraction\Command\SelectionRequest;
-use NeuronInteraction\Command\SelectionOption;
 use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Session\Sessions;
 use NeuronTui\Tui\ConversationView;
@@ -24,7 +18,6 @@ use Symfony\Component\Tui\Input\Key;
 use Symfony\Component\Tui\Input\Keybindings;
 use Symfony\Component\Tui\Terminal\Terminal;
 use Symfony\Component\Tui\Terminal\TerminalInterface;
-use Revolt\EventLoop;
 use Throwable;
 
 use function Amp\async;
@@ -117,7 +110,11 @@ final class ConversationRuntime
         $submission = Submission::interpret($event->getValue());
 
         if ($submission instanceof CommandInput) {
-            $this->carryOut($submission);
+            $this->commands->run(
+                $submission->name,
+                $submission->arguments,
+                new TuiAdapter($this, $this->view, $this->commands, $this->sessions),
+            );
 
             return;
         }
@@ -125,7 +122,7 @@ final class ConversationRuntime
         $this->send($submission);
     }
 
-    private function send(MessageForAgent $message): void
+    public function send(MessageForAgent $message): void
     {
         $accepted = $this->turns->accept($message->contents);
 
@@ -138,135 +135,19 @@ final class ConversationRuntime
         $this->beginTurn($accepted);
     }
 
-    /**
-     * Carries out the command the typed name points at, with its arguments.
-     *
-     * The name is looked for among the commands mounted when the terminal was
-     * built, and there is nowhere else to look: the Conversation TUI answers
-     * to nothing on its own. A name no command answers to is said in the
-     * conversation rather than sent to the Agent, because the Command namespace
-     * is answered locally.
-     *
-     * Whether a command may overlap a Turn is read from its type: an answer
-     * already on its way would land in a conversation a command had meanwhile
-     * replaced, so only Help and Leave run there.
-     */
-    private function carryOut(CommandInput $input): void
+    public function agent(): Agent
     {
-        $command = $this->commands->named($input->name);
-
-        if ($command === null) {
-            $this->view->showUnknownCommand($input->name);
-
-            return;
-        }
-
-        if (
-            !$command instanceof HelpCommand
-            && !$command instanceof LeaveCommand
-            && $this->refusedWhileWorking($input->name)
-        ) {
-            return;
-        }
-
-        // The command was taken, so what was typed leaves the composer:
-        // only a name nobody answers stays there to be corrected.
-        $this->view->emptyComposer();
-        $this->runSafely($input->name, $input->arguments);
+        return $this->agent;
     }
 
-    /**
-     * Presents a dispatch failure after reconciling any History change.
-     */
-    private function runSafely(
-        string $identifier,
-        CommandArguments $arguments,
-    ): void {
-        $conversation = $this->agent->getChatHistory();
-        $execution = $this->commands->run($identifier, $arguments, $this->controls());
-
-        // The screen is reconciled before anything is said about the run, so
-        // that a command which failed after changing conversation leaves its
-        // line of error on the conversation it left behind.
-        $this->reconcile($conversation);
-
-        if ($execution->exception instanceof Throwable) {
-            $this->showFailure($execution->exception);
-        }
+    public function isBusy(): bool
+    {
+        return $this->turns->isBusy();
     }
 
-    /**
-     * The ordinary controls supplied to every Command.
-     */
-    private function controls(): CommandControls
+    public function isStopped(): bool
     {
-        return new CommandControls(
-            $this->view,
-            fn (): Agent => $this->agent,
-            function (string $prompt): void {
-                $this->send(new MessageForAgent($prompt));
-            },
-            $this->answerFrom(...),
-            $this->commands,
-            $this->sessions,
-            $this->requestSelection(...),
-            $this->stop(...),
-        );
-    }
-
-    private function requestSelection(SelectionRequest $request): void
-    {
-        // Human input is collected in a later callback, after this Command ends.
-        EventLoop::queue(function () use ($request): void {
-            if ($this->stopped) {
-                return;
-            }
-
-            try {
-                $chosen = $this->view->choose(
-                    $request->prompt,
-                    array_map(
-                        static fn (SelectionOption $option): ChoiceOption => new ChoiceOption(
-                            $option->value,
-                            $option->label,
-                            $option->description,
-                        ),
-                        $request->options,
-                    ),
-                    $request->description,
-                );
-
-                if ($chosen !== null) {
-                    $this->carryOut(new CommandInput($request->command, new CommandArguments($chosen)));
-                }
-            } catch (Throwable $exception) {
-                $this->showFailure($exception);
-            }
-        });
-    }
-
-    /**
-     * Puts back on screen the conversation the Agent is holding now.
-     *
-     * Read after every command, so that whatever it did — opened another
-     * Session, put another Agent in charge, installed a History of its own —
-     * the screen agrees with the Agent without the command having to say so.
-     *
-     * A command that left the History where it found it left the screen alone
-     * too: what it said, warned or asked stays where it was written, and
-     * repainting would throw it away. Handing a History from one Agent to
-     * another is that same case, which is why nothing is repainted after a
-     * change of Agent alone.
-     */
-    private function reconcile(ChatHistoryInterface $conversation): void
-    {
-        $current = $this->agent->getChatHistory();
-
-        if ($current === $conversation) {
-            return;
-        }
-
-        $this->view->showHistory($current->getMessages());
+        return $this->stopped;
     }
 
     /**
@@ -278,38 +159,13 @@ final class ConversationRuntime
      * the next answer, which comes from elsewhere. A command that knows the
      * two Agents are not interchangeable installs another History itself.
      */
-    private function answerFrom(Agent $agent): void
+    public function useAgent(Agent $agent): void
     {
         $agent->setChatHistory($this->agent->getChatHistory());
         $this->agent = $agent;
     }
 
-    /**
-     * Turns a command away while the Agent is answering, and says so.
-     *
-     * A command that changed the conversation mid-turn would have an answer
-     * already on its way land where it does not belong, so the rule is the
-     * TUI's rather than any single command's: Help and Leave never
-     * reaches here.
-     *
-     * Returns whether the command was turned away.
-     */
-    private function refusedWhileWorking(string $name): bool
-    {
-        if (!$this->turns->isBusy()) {
-            return false;
-        }
-
-        $this->view->showError(
-            $name
-                . ' is refused while the Agent is working. '
-                . 'Try it again once the turn has finished.',
-        );
-
-        return true;
-    }
-
-    private function tick(): bool
+    public function tick(): bool
     {
         if ($this->stopped) {
             return false;
@@ -398,7 +254,7 @@ final class ConversationRuntime
         $this->view->showQueuedMessages($this->turns->queued());
     }
 
-    private function stop(): void
+    public function stop(): void
     {
         $this->stopped = true;
         $this->view->stop();

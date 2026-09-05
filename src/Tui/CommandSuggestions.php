@@ -5,8 +5,7 @@ declare(strict_types=1);
 namespace NeuronTui\Tui;
 
 use NeuronInteraction\Command\CommandInterface;
-use NeuronInteraction\Command\HelpCommand;
-use NeuronInteraction\Command\LeaveCommand;
+use NeuronTui\Conversation\ConcurrentCommands;
 use Symfony\Component\Tui\Style\Style;
 use Symfony\Component\Tui\Widget\AbstractWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
@@ -160,8 +159,7 @@ final class CommandSuggestions
         $this->suggestibleWhileWorking = self::suggestible(array_values(
             array_filter(
                 $commands,
-                static fn (CommandInterface $command): bool
-                    => $command instanceof HelpCommand || $command instanceof LeaveCommand,
+                ConcurrentCommands::allows(...),
             ),
         ));
         $this->list = new SelectListWidget([], self::VISIBLE_LINES);
