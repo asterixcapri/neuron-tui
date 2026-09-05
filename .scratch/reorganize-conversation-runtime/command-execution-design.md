@@ -1,7 +1,8 @@
 # Command execution across Adapters
 
-Agreed design, pending implementation. This replaces the earlier proposal for
-a separate or fused CommandRunner. The spec records the full migration scope.
+Implemented design. This replaces the earlier proposal for a separate or fused
+CommandRunner. The [spec](spec.md) records the migration scope; [verification](verification.md)
+and [review](review.md) record the completed two-package implementation.
 
 ## Caller contract
 
@@ -144,5 +145,5 @@ semantics and immediate effects.
 Migrate neuron-interaction and neuron-tui together, including tests and examples.
 Test the shared protocol through Commands.run() and terminal behavior through
 Tui with VirtualTerminal, FakeAIProvider, and in-memory Storage. The investigation
-ran the existing shared Command suite: 49 tests and 142 assertions passed. The
-proposed lifecycle is not yet implemented or tested.
+ran the existing shared Command suite: 49 tests and 142 assertions passed. The completed implementation and its full validation are recorded in
+[verification](verification.md).
