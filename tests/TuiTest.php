@@ -4753,6 +4753,7 @@ MARKDOWN;
         $agent = new Agent();
         $storage = new InMemoryStorage();
         $sessions = new Sessions($storage);
+        $agent->setChatHistory($sessions->start());
         $earlier = null;
         $fillSession = $this->commandThat(
             static function (CommandControlsInterface $controls) use (&$earlier): void {
@@ -4790,7 +4791,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            sessions: new Sessions($storage),
+            sessions: $sessions,
             inputHistory: new InputHistory($storage),
             commands: new Commands([
                 ...self::sessionCommands(),
