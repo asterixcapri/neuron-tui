@@ -64,7 +64,6 @@ final class ConversationRuntime
         ?string $figlet = null,
         string $figletFont = 'standard',
     ) {
-        $this->agent->setChatHistory($this->sessions->retain($this->agent->getChatHistory()));
         $this->terminal = $terminal ?? new Terminal();
         $this->view = new ConversationView(
             $this->terminal,
