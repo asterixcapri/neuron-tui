@@ -19,7 +19,7 @@ use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\ResumeCommand;
 use NeuronInteraction\Command\SelectionOption;
 use NeuronInteraction\Command\SelectionRequest;
-use NeuronInteraction\Command\CommandControlsInterface;
+use NeuronInteraction\Command\CommandAdapterInterface;
 use NeuronInteraction\Session\Sessions;
 use NeuronInteraction\Storage\FileStorage;
 use NeuronInteraction\Storage\InMemoryStorage;
@@ -62,7 +62,8 @@ final class InputHistoryTest extends TestCase
                 return 'Record that the command ran.';
             }
 
-            public function run(CommandControlsInterface $controls, CommandArguments $arguments): void
+            /** @param CommandAdapterInterface<mixed> $adapter */
+            public function run(CommandAdapterInterface $adapter, CommandArguments $arguments): void
             {
                 $this->arguments[] = $arguments->text;
             }
@@ -681,7 +682,8 @@ final class InputHistoryTest extends TestCase
                 return 'Choose an option.';
             }
 
-            public function run(CommandControlsInterface $controls, CommandArguments $arguments): void
+            /** @param CommandAdapterInterface<mixed> $adapter */
+            public function run(CommandAdapterInterface $adapter, CommandArguments $arguments): void
             {
                 if ($arguments->text !== '') {
                     $this->chosen = $arguments->text;
@@ -689,7 +691,7 @@ final class InputHistoryTest extends TestCase
                     return;
                 }
 
-                $controls->requestSelection(new SelectionRequest($this->name(), 'Options', [
+                $adapter->requestSelection(new SelectionRequest($this->name(), 'Options', [
                     new SelectionOption('first', 'First option'),
                     new SelectionOption('last', 'Last option'),
                 ]));
@@ -863,7 +865,8 @@ final class InputHistoryTest extends TestCase
                 return $this->description;
             }
 
-            public function run(CommandControlsInterface $controls, CommandArguments $arguments): void
+            /** @param CommandAdapterInterface<mixed> $adapter */
+            public function run(CommandAdapterInterface $adapter, CommandArguments $arguments): void
             {
             }
         };

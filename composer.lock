@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "4482e4b7bbf84ee093285e26f8a8c4a5",
+    "content-hash": "9160d7da86296736b3f7f4b8e19429b2",
     "packages": [
         {
             "name": "amphp/amp",
@@ -89,16 +89,16 @@
         },
         {
             "name": "asterixcapri/neuron-interaction",
-            "version": "dev-feat/extract-neuron-interaction",
+            "version": "dev-feat/command-adapter-execution",
             "source": {
                 "type": "git",
                 "url": "https://github.com/asterixcapri/neuron-interaction.git",
-                "reference": "0e5776e3caee299dceceb5cc9d3484995b9a9a3c"
+                "reference": "d823bce842c16d69d9432d4b7ea98ca21d618021"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/asterixcapri/neuron-interaction/zipball/0e5776e3caee299dceceb5cc9d3484995b9a9a3c",
-                "reference": "0e5776e3caee299dceceb5cc9d3484995b9a9a3c",
+                "url": "https://api.github.com/repos/asterixcapri/neuron-interaction/zipball/d823bce842c16d69d9432d4b7ea98ca21d618021",
+                "reference": "d823bce842c16d69d9432d4b7ea98ca21d618021",
                 "shasum": ""
             },
             "require": {
@@ -140,10 +140,10 @@
             ],
             "description": "Presentation-independent interaction modules for Neuron AI Agents.",
             "support": {
-                "source": "https://github.com/asterixcapri/neuron-interaction/tree/feat/extract-neuron-interaction",
+                "source": "https://github.com/asterixcapri/neuron-interaction/tree/feat/command-adapter-execution",
                 "issues": "https://github.com/asterixcapri/neuron-interaction/issues"
             },
-            "time": "2026-09-05T00:17:00+00:00"
+            "time": "2026-09-05T13:52:47+00:00"
         },
         {
             "name": "dflydev/dot-access-data",

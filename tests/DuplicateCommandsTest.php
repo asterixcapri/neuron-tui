@@ -11,7 +11,7 @@ use NeuronInteraction\Command\AbstractCommandKit;
 use NeuronInteraction\Command\CommandArguments;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\HelpCommand;
-use NeuronInteraction\Command\CommandControlsInterface;
+use NeuronInteraction\Command\CommandAdapterInterface;
 use NeuronTui\Tui;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
@@ -57,22 +57,22 @@ final class DuplicateCommandsTest extends TestCase
                 '/clear',
                 'The first duplicate.',
                 static function (
-                    CommandControlsInterface $controls,
+                    CommandAdapterInterface $adapter,
                     string $arguments,
                 ) use (&$ran): void {
                     $ran[] = 'first';
-                    $controls->stop();
+                    $adapter->stop();
                 },
             );
             $second = self::command(
                 '/clear',
                 'The second duplicate.',
                 static function (
-                    CommandControlsInterface $controls,
+                    CommandAdapterInterface $adapter,
                     string $arguments,
                 ) use (&$ran): void {
                     $ran[] = 'second';
-                    $controls->stop();
+                    $adapter->stop();
                 },
             );
             $terminal = new VirtualTerminal();
@@ -185,7 +185,7 @@ final class DuplicateCommandsTest extends TestCase
     }
 
     /**
-     * @param Closure(CommandControlsInterface, string): void|null $run
+     * @param Closure(CommandAdapterInterface<mixed>, string): void|null $run
      */
     private static function command(
         string $name,
@@ -194,7 +194,7 @@ final class DuplicateCommandsTest extends TestCase
     ): CommandInterface {
         return new class($name, $description, $run) implements CommandInterface {
             /**
-             * @param Closure(CommandControlsInterface, string): void|null $run
+             * @param Closure(CommandAdapterInterface<mixed>, string): void|null $run
              */
             public function __construct(
                 private readonly string $commandName,
@@ -213,10 +213,11 @@ final class DuplicateCommandsTest extends TestCase
                 return $this->description;
             }
 
-            public function run(CommandControlsInterface $controls, CommandArguments $arguments): void
+            /** @param CommandAdapterInterface<mixed> $adapter */
+            public function run(CommandAdapterInterface $adapter, CommandArguments $arguments): void
             {
                 if ($this->run instanceof Closure) {
-                    ($this->run)($controls, $arguments->text);
+                    ($this->run)($adapter, $arguments->text);
                 }
             }
         };

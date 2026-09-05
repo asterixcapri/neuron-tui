@@ -4,7 +4,7 @@
 > su `ConcurrentCommandInterface`, `ConcurrentControls` e `Tui::addCommand()`
 > precedono la revisione della composizione e non sono istruzioni per le API
 > correnti. Help e Leave ora appartengono a Neuron Interaction e usano
-> `CommandControlsInterface`; il montaggio avviene tramite `Commands`.
+> `CommandAdapterInterface`; il montaggio avviene tramite `Commands`.
 > Per gli esempi aggiornati, vedere il [README](../../README.md).
 
 Ricerca del 18 agosto 2026. Fonti primarie: documentazione ufficiale Claude Code

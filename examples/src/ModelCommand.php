@@ -8,7 +8,7 @@ use NeuronInteraction\Command\CommandArguments;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\SelectionOption;
 use NeuronInteraction\Command\SelectionRequest;
-use NeuronInteraction\Command\CommandControlsInterface;
+use NeuronInteraction\Command\CommandAdapterInterface;
 
 final readonly class ModelCommand implements CommandInterface
 {
@@ -22,16 +22,17 @@ final readonly class ModelCommand implements CommandInterface
         return 'Changes the AI model.';
     }
 
-    public function run(CommandControlsInterface $controls, CommandArguments $arguments): void
+    /** @param CommandAdapterInterface<mixed> $adapter */
+    public function run(CommandAdapterInterface $adapter, CommandArguments $arguments): void
     {
         if ($arguments->text !== '') {
-            $controls->useAgent(DemoAgent::make()->setModelId($arguments->text));
-            $controls->say("Model changed to {$arguments->text}.");
+            $adapter->useAgent(DemoAgent::make()->setModelId($arguments->text));
+            $adapter->say("Model changed to {$arguments->text}.");
 
             return;
         }
 
-        $controls->requestSelection(new SelectionRequest($this->name(), 'Choose a model', [
+        $adapter->requestSelection(new SelectionRequest($this->name(), 'Choose a model', [
             new SelectionOption(
                 'openai:gpt-5.6-sol',
                 'OpenAI · GPT-5.6 Sol',
