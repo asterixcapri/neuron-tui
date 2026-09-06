@@ -233,15 +233,6 @@ cp .env.example .env
 php demo.php
 ```
 
-The demo uses `local` as its Session owner. The demo's
-`/model` command changes the Agent while preserving the current History;
-it does not save model preferences. Startup, model selection and exit need
-no provider credentials; sending a message requires a configured provider.
-
-The root and demo Composer lockfiles both resolve the
-`dev-feat/session-configuration-stores` branch of neuron-interaction.
-Use `composer install` in each directory to reproduce the checked versions.
-
 ## Development
 
 A fresh checkout needs the Composer dependencies and the agent skills, which
