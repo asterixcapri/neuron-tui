@@ -11,7 +11,6 @@ use NeuronInteraction\Command\LeaveCommand;
 use NeuronInteraction\Command\ResumeCommand;
 use NeuronInteraction\Storage\FileStorage;
 use NeuronTui\Tui;
-use NeuronTui\LocalUserId;
 use NeuronTuiDemo\DemoAgent;
 use NeuronTuiDemo\ModelCommand;
 use Symfony\Component\Dotenv\Dotenv;
@@ -23,12 +22,11 @@ require_once __DIR__ . '/vendor/autoload.php';
 $agent = DemoAgent::make();
 
 $storage = new FileStorage(__DIR__ . '/.storage');
-$configuredUserId = $_SERVER['NEURON_TUI_USER_ID'] ?? null;
-$sessions = new SessionStore(
-    $storage,
-    LocalUserId::resolve(is_string($configuredUserId) ? $configuredUserId : null),
-);
+$sessions = new SessionStore($storage, 'local');
+$inputHistory = new InputHistory($storage);
+
 $agent->setChatHistory($sessions->create()); // Or resume an explicitly chosen key.
+
 $commands = (new Commands())->addCommand([
     new ClearCommand(),
     new ResumeCommand(),
@@ -43,7 +41,7 @@ Tui::make(
     $agent,
     commands: $commands,
     sessions: $sessions,
-    inputHistory: new InputHistory($storage),
+    inputHistory: $inputHistory,
 )
     ->setFiglet('NeuronTUI')
     ->setTitle('Neuron TUI Demo')

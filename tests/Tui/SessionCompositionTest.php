@@ -242,52 +242,24 @@ final class SessionCompositionTest extends TestCase
         );
     }
 
-    public function testLocalIdentityPrecedenceAndStableFallbackAtComposition(): void
+    public function testDefaultStoreUsesLocalOwner(): void
     {
-        $previous = [];
-        foreach (['USER', 'USERNAME', 'LOGNAME'] as $name) {
-            $previous[$name] = getenv($name);
-            putenv($name);
-        }
+        $terminal = new VirtualTerminal();
+        $owner = null;
+        $command = $this->commandThat(
+            static function (CommandAdapterInterface $adapter) use (&$owner): void {
+                $owner = $adapter->sessionStore()->create()->getUserId();
+                $adapter->stop();
+            },
+        );
+        EventLoop::queue(static fn () => $terminal->simulateInput("/inspect\r"));
 
-        try {
-            foreach ([
-                ['configured', 'system-user', 'configured'],
-                [null, 'system-user', 'system-user'],
-                ['', 'system-user', 'system-user'],
-                [null, null, 'local'],
-                [null, null, 'local'],
-            ] as [$configured, $systemUser, $expected]) {
-                putenv($systemUser === null ? 'USER' : 'USER=' . $systemUser);
-                $agent = new Agent();
-                $terminal = new VirtualTerminal();
-                $owner = null;
-                $command = $this->commandThat(
-                    static function (CommandAdapterInterface $adapter) use (&$owner): void {
-                        $owner = $adapter->sessionStore()->create()->getUserId();
-                        $adapter->stop();
-                    },
-                );
-                EventLoop::queue(static fn () => $terminal->simulateInput("/inspect\r"));
+        Tui::make(new Agent(), $terminal, new Commands($command))->run();
 
-                Tui::make($agent, $terminal, new Commands($command), userId: $configured)->run();
-
-                self::assertSame($expected, $owner);
-            }
-
-            putenv('USERNAME=windows-user');
-            self::assertSame('windows-user', \NeuronTui\LocalUserId::resolve());
-            putenv('USERNAME');
-            putenv('LOGNAME=login-user');
-            self::assertSame('login-user', \NeuronTui\LocalUserId::resolve());
-        } finally {
-            foreach ($previous as $name => $value) {
-                putenv($value === false ? $name : $name . '=' . $value);
-            }
-        }
+        self::assertSame('local', $owner);
     }
 
-    public function testSuppliedStoreKeepsItsOwnerDespiteConfiguredIdentity(): void
+    public function testSuppliedStoreKeepsItsOwner(): void
     {
         $sessions = new SessionStore(new InMemoryStorage(), 'store-owner');
         $terminal = new VirtualTerminal();
@@ -307,7 +279,6 @@ final class SessionCompositionTest extends TestCase
             $terminal,
             new Commands($command),
             sessions: $sessions,
-            userId: 'another-user',
         ))->run();
 
         self::assertSame($sessions, $received);
