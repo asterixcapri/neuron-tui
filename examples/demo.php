@@ -22,10 +22,10 @@ require_once __DIR__ . '/vendor/autoload.php';
 $agent = DemoAgent::make();
 
 $storage = new FileStorage(__DIR__ . '/.storage');
-$sessions = new SessionStore($storage, 'local');
+$sessionStore = new SessionStore($storage, 'local');
 $inputHistory = new InputHistory($storage);
 
-$agent->setChatHistory($sessions->create()); // Or resume an explicitly chosen key.
+$agent->setChatHistory($sessionStore->create()); // Or resume an explicitly chosen key.
 
 $commands = (new Commands())->addCommand([
     new ClearCommand(),
@@ -40,7 +40,7 @@ $commands = (new Commands())->addCommand([
 Tui::make(
     $agent,
     commands: $commands,
-    sessions: $sessions,
+    sessions: $sessionStore,
     inputHistory: $inputHistory,
 )
     ->setFiglet('NeuronTUI')
