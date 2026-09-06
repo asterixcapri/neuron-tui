@@ -144,11 +144,11 @@ final class SessionCompositionTest extends TestCase
                 $received = [];
                 $command = $this->commandThat(
                     static function (CommandAdapterInterface $adapter) use (&$received): void {
-                        $received[] = [$adapter->commands(), $adapter->sessions()];
+                        $received[] = [$adapter->commands(), $adapter->sessionStore()];
                         if (count($received) === 1) {
-                            $adapter->sessions()->create()->addMessage(new \NeuronAI\Chat\Messages\UserMessage('Kept by this module'));
+                            $adapter->sessionStore()->create()->addMessage(new \NeuronAI\Chat\Messages\UserMessage('Kept by this module'));
                         } else {
-                            self::assertCount(1, $adapter->sessions()->summaries());
+                            self::assertCount(1, $adapter->sessionStore()->summaries());
                         }
                     },
                 );
@@ -190,7 +190,7 @@ final class SessionCompositionTest extends TestCase
             $received = [];
             $command = $this->commandThat(
                 static function (CommandAdapterInterface $adapter) use (&$received): void {
-                    $received[] = $adapter->sessions();
+                    $received[] = $adapter->sessionStore();
                 },
             );
 
@@ -264,7 +264,7 @@ final class SessionCompositionTest extends TestCase
                 $owner = null;
                 $command = $this->commandThat(
                     static function (CommandAdapterInterface $adapter) use (&$owner): void {
-                        $owner = $adapter->sessions()->create()->getUserId();
+                        $owner = $adapter->sessionStore()->create()->getUserId();
                         $adapter->stop();
                     },
                 );
@@ -295,7 +295,7 @@ final class SessionCompositionTest extends TestCase
         $owner = null;
         $command = $this->commandThat(
             static function (CommandAdapterInterface $adapter) use (&$received, &$owner): void {
-                $received = $adapter->sessions();
+                $received = $adapter->sessionStore();
                 $owner = $received->create()->getUserId();
                 $adapter->stop();
             },
