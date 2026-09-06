@@ -4,13 +4,14 @@ declare(strict_types=1);
 
 use NeuronInteraction\Command\ClearCommand;
 use NeuronInteraction\Command\Commands;
-use NeuronInteraction\Session\Sessions;
+use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Command\HelpCommand;
 use NeuronInteraction\Command\LeaveCommand;
 use NeuronInteraction\Command\ResumeCommand;
 use NeuronInteraction\Storage\FileStorage;
 use NeuronTui\Tui;
+use NeuronTui\LocalUserId;
 use NeuronTuiDemo\DemoAgent;
 use NeuronTuiDemo\ModelCommand;
 use Symfony\Component\Dotenv\Dotenv;
@@ -22,8 +23,12 @@ require_once __DIR__ . '/vendor/autoload.php';
 $agent = DemoAgent::make();
 
 $storage = new FileStorage(__DIR__ . '/.storage');
-$sessions = new Sessions($storage);
-$agent->setChatHistory($sessions->start()); // Or resume an explicitly chosen key.
+$configuredUserId = $_SERVER['NEURON_TUI_USER_ID'] ?? null;
+$sessions = new SessionStore(
+    $storage,
+    LocalUserId::resolve(is_string($configuredUserId) ? $configuredUserId : null),
+);
+$agent->setChatHistory($sessions->create()); // Or resume an explicitly chosen key.
 $commands = (new Commands())->addCommand([
     new ClearCommand(),
     new ResumeCommand(),
@@ -32,7 +37,7 @@ $commands = (new Commands())->addCommand([
     new HelpCommand(),
 ]);
 
-// Startup keeps this explicitly selected History. These Sessions own its
+// Startup keeps this explicitly selected History. This SessionStore owns its
 // persistence, so /resume can recover it after /clear.
 Tui::make(
     $agent,

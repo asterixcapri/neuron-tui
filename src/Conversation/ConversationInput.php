@@ -6,7 +6,7 @@ namespace NeuronTui\Conversation;
 
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\InputHistory\InputHistory;
-use NeuronInteraction\Session\Sessions;
+use NeuronInteraction\Session\SessionStore;
 use NeuronTui\Tui\ConversationView;
 use Symfony\Component\Tui\Event\InputEvent;
 use Symfony\Component\Tui\Event\SubmitEvent;
@@ -25,7 +25,7 @@ final class ConversationInput
         private readonly InputHistory $inputHistory,
         private readonly ConversationRuntime $runtime,
         private readonly Commands $commands,
-        private readonly Sessions $sessions,
+        private readonly SessionStore $sessions,
     ) {
     }
 

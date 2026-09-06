@@ -80,36 +80,37 @@ replaces `/exit` with `/quit`.
 
 A Session is one conversation with the Agent. `ClearCommand` starts a fresh one
 without leaving the terminal: the screen and the composer empty. A conversation
-already managed by Sessions remains stored. An external Agent History is not
+already managed by SessionStore remains stored. An external Agent History is not
 imported when clearing.
 
-`ResumeCommand` lists the Sessions in the configured Storage in the Picker, most recently
+`ResumeCommand` lists the current user's Sessions in the Picker, most recently
 used first, each labelled with the first thing the person wrote in it. While
 the list is open the composer takes no text: the arrow keys move through it,
 typing narrows it, Enter chooses one and resumes it, and Escape leaves the
 current one alone. Resuming displays that conversation; the Agent uses its
 context for subsequent messages. A Session nobody wrote in is not listed.
 
-The Conversation TUI reuses the supplied `Sessions` instance. Default Sessions
+The Conversation TUI reuses the supplied `SessionStore` instance. Default Stores
 store managed conversations in memory for the life of the process and create
 no directories or files. Startup keeps the Agent’s existing History; it does
-not automatically register it with Sessions or resume an earlier conversation.
+not automatically register it with SessionStore or resume an earlier conversation.
 
 To persist the initial conversation, create a `FileStorage`, pass it to
-`Sessions`, and install the new Session directly as the Agent's Chat History:
+`SessionStore` with the intended user identity, and install the new Session
+directly as the Agent's Chat History:
 
 ```php
 use NeuronInteraction\Command\ClearCommand;
 use NeuronInteraction\Command\ResumeCommand;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Storage\FileStorage;
-use NeuronInteraction\Session\Sessions;
+use NeuronInteraction\Session\SessionStore;
 use NeuronTui\Tui;
 
 $storage = new FileStorage(__DIR__ . '/.storage');
-$sessions = new Sessions($storage);
+$sessions = new SessionStore($storage, 'local-user');
 
-$agent->setChatHistory($sessions->start()); // Or $sessions->resume($chosenKey).
+$agent->setChatHistory($sessions->create()); // Or read and check an explicitly chosen key.
 
 Tui::make(
     $agent,
@@ -118,8 +119,19 @@ Tui::make(
 )->run();
 ```
 
-`start()` creates a new Session; `resume($key)` restores an existing one.
-No Session is resumed automatically.
+`create()` immediately stores a new empty Session. `read($key)` returns a Session
+or `null`; check for absence before installing it as the Agent's History.
+No Session is resumed automatically. A missing Resume selection leaves the
+current History installed and displays a warning.
+
+Without a supplied Store, `Tui::make(..., userId: 'local-user')` sets the identity
+for the default in-memory SessionStore. If omitted or blank, composition uses
+the first nonblank operating-system environment value among `USER`,
+`USERNAME` and `LOGNAME`, then the stable fallback `local`.
+A supplied SessionStore always keeps its own owner, even if `userId` is also
+provided. Hosts constructing a file-backed Store can use
+`NeuronTui\LocalUserId::resolve($configuredUserId)` for the same precedence.
+Input history keeps its independent existing ownership model.
 
 ## Input history
 
@@ -144,14 +156,14 @@ use NeuronInteraction\Command\LeaveCommand;
 use NeuronInteraction\Command\ClearCommand;
 use NeuronInteraction\Command\ResumeCommand;
 use NeuronInteraction\InputHistory\InputHistory;
-use NeuronInteraction\Session\Sessions;
+use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\FileStorage;
 use NeuronTui\Tui;
 
 $storage = new FileStorage(__DIR__ . '/.storage');
-$sessions = new Sessions($storage);
+$sessions = new SessionStore($storage, 'local-user');
 
-$agent->setChatHistory($sessions->start());
+$agent->setChatHistory($sessions->create());
 
 $commands = new Commands([
     new ClearCommand(),
@@ -226,6 +238,16 @@ cp .env.example .env
 php demo.php
 ```
 
+Set `NEURON_TUI_USER_ID` in the demo's `.env` to choose a stable Session owner.
+Otherwise it uses the local identity resolution described above. The demo's
+`/model` command changes the Agent while preserving the current History;
+it does not save model preferences. Startup, model selection and exit need
+no provider credentials; sending a message requires a configured provider.
+
+The root and demo Composer lockfiles both resolve the
+`dev-feat/session-configuration-stores` branch of neuron-interaction.
+Use `composer install` in each directory to reproduce the checked versions.
+
 ## Development
 
 A fresh checkout needs the Composer dependencies and the agent skills, which
@@ -241,7 +263,13 @@ Then:
 ```bash
 composer test
 composer stan
+composer --working-dir=examples install
+composer --working-dir=examples test
+composer --working-dir=examples stan
 ```
+
+The demo checks use its separate dependency graph and verify `/model` selection
+and History preservation without invoking a provider.
 
 The automated suite uses Neuron AI's fake provider and Symfony TUI's virtual
 terminal. It requires no credentials and makes no network requests.
