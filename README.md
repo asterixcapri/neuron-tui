@@ -264,12 +264,7 @@ Then:
 composer test
 composer stan
 composer --working-dir=examples install
-composer --working-dir=examples test
-composer --working-dir=examples stan
 ```
-
-The demo checks use its separate dependency graph and verify `/model` selection
-and History preservation without invoking a provider.
 
 The automated suite uses Neuron AI's fake provider and Symfony TUI's virtual
 terminal. It requires no credentials and makes no network requests.

@@ -11,10 +11,6 @@
         "neuron-core/neuron-ai": "^3.15.26",
         "symfony/dotenv": "^8.1"
     },
-    "require-dev": {
-        "phpstan/phpstan": "^2.1",
-        "phpunit/phpunit": "^13.0"
-    },
     "repositories": [
         {
             "type": "path",
@@ -36,15 +32,8 @@
             "NeuronTuiDemo\\": "src/"
         }
     },
-    "autoload-dev": {
-        "psr-4": {
-            "NeuronTuiDemo\\Tests\\": "tests/"
-        }
-    },
     "scripts": {
-        "demo": "php demo.php",
-        "test": "phpunit",
-        "stan": "phpstan analyse --no-progress --memory-limit=512M"
+        "demo": "php demo.php"
     },
     "config": {
         "sort-packages": true
