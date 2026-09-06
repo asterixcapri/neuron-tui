@@ -13,7 +13,7 @@ use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Tools\Tool;
 use NeuronTui\Conversation\AgentTurn;
-use NeuronTui\Tui\ConversationView;
+use NeuronTui\View\ConversationView;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
 use Symfony\Component\Tui\Ansi\AnsiUtils;

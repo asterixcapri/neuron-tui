@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace NeuronTui\History;
 
 use NeuronAI\Tools\ToolInterface;
-use NeuronTui\Tui\DisplayableText;
+use NeuronTui\View\DisplayableText;
 
 /**
  * How a tool call and its result are told to a person.

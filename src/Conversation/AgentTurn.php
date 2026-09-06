@@ -9,9 +9,9 @@ use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
 use NeuronAI\Chat\Messages\Stream\Chunks\ToolCallChunk;
 use NeuronAI\Chat\Messages\Stream\Chunks\ToolResultChunk;
 use NeuronAI\Chat\Messages\UserMessage;
-use NeuronTui\Tui\ConversationView;
-use NeuronTui\Tui\DisplayableText;
-use NeuronTui\Tui\WorkingIndicator;
+use NeuronTui\View\ConversationView;
+use NeuronTui\View\DisplayableText;
+use NeuronTui\View\WorkingIndicator;
 
 /**
  * One turn of the Agent, read from its stream as it happens.

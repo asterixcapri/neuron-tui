@@ -7,7 +7,7 @@ namespace NeuronTui\Conversation;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Session\SessionStore;
-use NeuronTui\Tui\ConversationView;
+use NeuronTui\View\ConversationView;
 use Symfony\Component\Tui\Event\InputEvent;
 use Symfony\Component\Tui\Event\SubmitEvent;
 use Symfony\Component\Tui\Input\Key;

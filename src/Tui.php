@@ -13,7 +13,7 @@ use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Conversation\ConversationInput;
 use NeuronTui\Conversation\ConversationRuntime;
-use NeuronTui\Tui\ConversationView;
+use NeuronTui\View\ConversationView;
 use Symfony\Component\Tui\Terminal\Terminal;
 use Symfony\Component\Tui\Terminal\TerminalInterface;
 
