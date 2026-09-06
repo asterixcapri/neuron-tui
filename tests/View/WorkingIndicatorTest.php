@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace NeuronTui\Tests\Tui;
+namespace NeuronTui\Tests\View;
 
-use NeuronTui\Tui\ConversationStyleSheet;
-use NeuronTui\Tui\HistoryPane;
-use NeuronTui\Tui\WorkingIndicator;
+use NeuronTui\View\ConversationStyleSheet;
+use NeuronTui\View\HistoryPane;
+use NeuronTui\View\WorkingIndicator;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;

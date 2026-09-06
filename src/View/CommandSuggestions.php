@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace NeuronTui\Tui;
+namespace NeuronTui\View;
 
 use NeuronInteraction\Command\CommandInterface;
 use NeuronTui\Conversation\ConcurrentCommands;
