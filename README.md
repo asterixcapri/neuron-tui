@@ -108,14 +108,14 @@ use NeuronInteraction\Session\SessionStore;
 use NeuronTui\Tui;
 
 $storage = new FileStorage(__DIR__ . '/.storage');
-$sessions = new SessionStore($storage, 'local-user');
+$sessionStore = new SessionStore($storage, 'local-user');
 
-$agent->setChatHistory($sessions->create()); // Or read and check an explicitly chosen key.
+$agent->setChatHistory($sessionStore->create()); // Or read and check an explicitly chosen key.
 
 Tui::make(
     $agent,
     commands: new Commands([new ClearCommand(), new ResumeCommand()]),
-    sessions: $sessions,
+    sessions: $sessionStore,
 )->run();
 ```
 
@@ -156,9 +156,9 @@ use NeuronInteraction\Storage\FileStorage;
 use NeuronTui\Tui;
 
 $storage = new FileStorage(__DIR__ . '/.storage');
-$sessions = new SessionStore($storage, 'local-user');
+$sessionStore = new SessionStore($storage, 'local-user');
 
-$agent->setChatHistory($sessions->create());
+$agent->setChatHistory($sessionStore->create());
 
 $commands = new Commands([
     new ClearCommand(),
@@ -170,7 +170,7 @@ $commands = new Commands([
 Tui::make(
     $agent,
     commands: $commands,
-    sessions: $sessions,
+    sessions: $sessionStore,
     inputHistory: new InputHistory($storage),
 )->run();
 ```
