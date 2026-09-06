@@ -43,6 +43,7 @@ use NeuronInteraction\Command\SessionCommandKit;
 use NeuronInteraction\Command\CommandAdapterInterface;
 use NeuronTui\Tui;
 use NeuronInteraction\InputHistory\InputHistory;
+use NeuronInteraction\Session\Session;
 use NeuronInteraction\Session\SessionSummary;
 use NeuronInteraction\Session\Sessions;
 use NeuronInteraction\Storage\FileStorage;
@@ -236,7 +237,7 @@ final class TuiTest extends TestCase
         self::assertStringStartsWith('─', $lines[$composerLine + 1]);
     }
 
-    public function testACommandCanInstallSafeExistingHistory(): void
+    public function testSafeExistingHistoryIsShown(): void
     {
         $agent = new Agent();
         $history = new ExistingChatHistory([
@@ -262,22 +263,14 @@ final class TuiTest extends TestCase
             (new AssistantMessage('System content in an assistant class.'))
                 ->setRole(MessageRole::SYSTEM),
         ]);
-        $command = $this->commandThat(
-            static function (CommandAdapterInterface $adapter) use ($history): void {
-                $adapter->agent()->setChatHistory($history);
-            },
-        );
+        $agent->setChatHistory($history);
         $terminal = new VirtualTerminal(rows: 60);
-        EventLoop::queue(
-            static fn () => $terminal->simulateInput("/probe\r"),
-        );
         EventLoop::delay(
             0.1,
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, terminal: $terminal, commands: new Commands($command)))
-            ->run();
+        (new Tui($agent, terminal: $terminal))->run();
 
         $output = $terminal->getOutput();
         $display = AnsiUtils::stripAnsiCodes($output);
@@ -794,22 +787,14 @@ MARKDOWN;
             ]),
             new AssistantMessage('Finished.'),
         ]);
-        $command = $this->commandThat(
-            static function (CommandAdapterInterface $adapter) use ($history): void {
-                $adapter->agent()->setChatHistory($history);
-            },
-        );
+        $agent->setChatHistory($history);
         $terminal = new VirtualTerminal(columns: 160, rows: 40);
-        EventLoop::queue(
-            static fn () => $terminal->simulateInput("/probe\r"),
-        );
         EventLoop::delay(
             0.1,
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, terminal: $terminal, commands: new Commands($command)))
-            ->run();
+        (new Tui($agent, terminal: $terminal))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString(
@@ -1317,7 +1302,7 @@ MARKDOWN;
         self::assertStringNotContainsString('Must not appear', $display);
     }
 
-    public function testSelectedCommandUsesTheLiveAgentAndReconcilesItsFailedHistoryChange(): void
+    public function testSelectedCommandUsesTheLiveAgentAndChangesItsSessionBeforeFailure(): void
     {
         $terminal = new VirtualTerminal(rows: 30);
         $inputHistory = new InputHistory(new InMemoryStorage());
@@ -1325,8 +1310,8 @@ MARKDOWN;
         $originalHistory = new ExistingChatHistory([new UserMessage('Original conversation.')]);
         $agent->setChatHistory($originalHistory);
         $successor = new Agent();
-        $replacementHistory = new ExistingChatHistory([new UserMessage('Replacement conversation.')]);
-        $resultingHistory = new ExistingChatHistory([
+        $replacementHistory = $this->sessionWith([new UserMessage('Replacement conversation.')]);
+        $resultingHistory = $this->sessionWith([
             new UserMessage('Resulting conversation.'),
             new AssistantMessage('Resulting answer.'),
         ]);
@@ -1343,7 +1328,7 @@ MARKDOWN;
         $replacement = $this->commandThat(
             static function (CommandAdapterInterface $adapter) use ($successor, $replacementHistory): void {
                 $adapter->useAgent($successor);
-                $adapter->agent()->setChatHistory($replacementHistory);
+                $adapter->useSession($replacementHistory);
             },
             '/replace',
         );
@@ -1355,7 +1340,7 @@ MARKDOWN;
             ): void {
                 $observedAgent = $adapter->agent();
                 $observedArguments = $arguments;
-                $adapter->agent()->setChatHistory($resultingHistory);
+                $adapter->useSession($resultingHistory);
 
                 throw new \RuntimeException('Selected command failed.');
             },
@@ -1549,7 +1534,7 @@ MARKDOWN;
         );
     }
 
-    public function testACommandCanInstallAnotherHistoryOnTheAgentItChose(): void
+    public function testACommandCanUseAnotherSessionOnTheAgentItChose(): void
     {
         $abandoned = new FakeAIProvider(new AssistantMessage('The old one.'));
         $chosen = new FakeAIProvider(new AssistantMessage('The new one.'));
@@ -1557,14 +1542,15 @@ MARKDOWN;
         $agent->setAiProvider($abandoned);
         $successor = new Agent();
         $successor->setAiProvider($chosen);
+        $replacementSession = (new Sessions(new InMemoryStorage()))->start();
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
             static function (
                 CommandAdapterInterface $adapter,
                 string $arguments,
-            ) use ($successor): void {
+            ) use ($successor, $replacementSession): void {
                 $adapter->useAgent($successor);
-                $adapter->agent()->setChatHistory(new InMemoryChatHistory());
+                $adapter->useSession($replacementSession);
             },
         );
         EventLoop::queue(
@@ -1680,10 +1666,11 @@ MARKDOWN;
             new UserMessage('Earlier question.'),
             new AssistantMessage('Earlier answer.'),
         ]));
+        $replacementSession = (new Sessions(new InMemoryStorage()))->start();
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
-            static function (CommandAdapterInterface $adapter, string $arguments): void {
-                $adapter->agent()->setChatHistory(new InMemoryChatHistory());
+            static function (CommandAdapterInterface $adapter, string $arguments) use ($replacementSession): void {
+                $adapter->useSession($replacementSession);
 
                 throw new \RuntimeException('The command broke.');
             },
@@ -1704,9 +1691,8 @@ MARKDOWN;
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
-        // The screen is reconciled first, so the line of error is left on the
-        // conversation the command walked away with rather than wiped by the
-        // repaint that follows it.
+        // useSession() paints the new conversation before the failure is
+        // reported, so the error remains visible on that conversation.
         self::assertStringContainsString(
             'RuntimeException: The command broke.',
             $display,
@@ -1927,17 +1913,18 @@ MARKDOWN;
         $provider->assertNothingSent();
     }
 
-    public function testTheScreenShowsTheConversationACommandInstalled(): void
+    public function testTheScreenShowsTheSessionACommandSelected(): void
     {
         $agent = new Agent();
         $agent->setAiProvider(new FakeAIProvider());
+        $restored = $this->sessionWith([
+            new UserMessage('A restored question.'),
+            new AssistantMessage('A restored answer.'),
+        ]);
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
-            static function (CommandAdapterInterface $adapter, string $arguments): void {
-                $adapter->agent()->setChatHistory(new ExistingChatHistory([
-                    new UserMessage('A restored question.'),
-                    new AssistantMessage('A restored answer.'),
-                ]));
+            static function (CommandAdapterInterface $adapter, string $arguments) use ($restored): void {
+                $adapter->useSession($restored);
             },
         );
         EventLoop::queue(
@@ -4841,6 +4828,18 @@ MARKDOWN;
         };
     }
 
+    /** @param list<Message> $messages */
+    private function sessionWith(array $messages): Session
+    {
+        $session = (new Sessions(new InMemoryStorage()))->start();
+
+        foreach ($messages as $message) {
+            $session->addMessage($message);
+        }
+
+        return $session;
+    }
+
     /** @return list<CommandInterface> */
     private static function sessionCommands(): array
     {
@@ -5946,10 +5945,10 @@ MARKDOWN;
         }
 
         $agent = new Agent();
-        $history = new ExistingChatHistory($messages);
+        $history = $this->sessionWith($messages);
         $restore = $this->commandThat(
             static function (CommandAdapterInterface $adapter) use ($history): void {
-                $adapter->agent()->setChatHistory($history);
+                $adapter->useSession($history);
             },
         );
         $terminal = new VirtualTerminal(rows: 16);
