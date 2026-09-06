@@ -1,6 +1,12 @@
 {
   "version": 1,
   "skills": {
+    "architecture-brainstorming": {
+      "source": "asterixcapri/skills",
+      "sourceType": "github",
+      "skillPath": "skills/architecture-brainstorming/SKILL.md",
+      "computedHash": "908f50b0e2ac9fd3bf6eea24836d382e115505a7a358d53fe9a80d4baecdbf28"
+    },
     "ask-matt": {
       "source": "mattpocock/skills",
       "sourceType": "github",
