@@ -980,12 +980,12 @@
             "source": {
                 "type": "git",
                 "url": "git@github.com:asterixcapri/neuron-interaction.git",
-                "reference": "4eb4ad670d07e693c7c1d3c0e01cbec5de5435b4"
+                "reference": "25f8c3a05f0ad8b2547af1d6bf798e52355da58b"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/asterixcapri/neuron-interaction/zipball/4eb4ad670d07e693c7c1d3c0e01cbec5de5435b4",
-                "reference": "4eb4ad670d07e693c7c1d3c0e01cbec5de5435b4",
+                "url": "https://api.github.com/repos/asterixcapri/neuron-interaction/zipball/25f8c3a05f0ad8b2547af1d6bf798e52355da58b",
+                "reference": "25f8c3a05f0ad8b2547af1d6bf798e52355da58b",
                 "shasum": ""
             },
             "require": {
@@ -1026,7 +1026,7 @@
                 }
             ],
             "description": "Presentation-independent interaction modules for Neuron AI Agents.",
-            "time": "2026-09-06T17:26:00+00:00"
+            "time": "2026-09-06T17:42:14+00:00"
         },
         {
             "name": "asterixcapri/neuron-tui",
