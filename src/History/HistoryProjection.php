@@ -15,7 +15,7 @@ use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Tools\ToolInterface;
-use NeuronTui\Tui\DisplayableText;
+use NeuronTui\View\DisplayableText;
 
 /**
  * The Agent's messages as the one ordered stream of entries a person sees.

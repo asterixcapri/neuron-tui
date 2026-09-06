@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace NeuronTui\Tests\Tui;
+namespace NeuronTui\Tests\View;
 
 use InvalidArgumentException;
 use LogicException;
 use NeuronAI\Chat\Messages\AssistantMessage;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronTui\Conversation\ChoiceOption;
-use NeuronTui\Tui\ConversationView;
+use NeuronTui\View\ConversationView;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 use Revolt\EventLoop;

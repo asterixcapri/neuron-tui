@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace NeuronTui\Conversation;
 
 use InvalidArgumentException;
-use NeuronTui\Tui\DisplayableText;
+use NeuronTui\View\DisplayableText;
 
 /**
  * One value a Command offers through the Picker.

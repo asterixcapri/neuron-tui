@@ -7,8 +7,8 @@ namespace NeuronTui\Conversation;
 use Amp\Future;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
-use NeuronTui\Tui\ConversationView;
-use NeuronTui\Tui\WorkingIndicator;
+use NeuronTui\View\ConversationView;
+use NeuronTui\View\WorkingIndicator;
 use Throwable;
 
 use function Amp\async;

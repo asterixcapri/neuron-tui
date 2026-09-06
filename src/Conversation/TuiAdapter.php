@@ -14,7 +14,7 @@ use NeuronInteraction\Command\SelectionOption;
 use NeuronInteraction\Command\SelectionRequest;
 use NeuronInteraction\Session\Session;
 use NeuronInteraction\Session\SessionStore;
-use NeuronTui\Tui\ConversationView;
+use NeuronTui\View\ConversationView;
 use Revolt\EventLoop;
 use Throwable;
 
