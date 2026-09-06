@@ -124,13 +124,8 @@ or `null`; check for absence before installing it as the Agent's History.
 No Session is resumed automatically. A missing Resume selection leaves the
 current History installed and displays a warning.
 
-Without a supplied Store, `Tui::make(..., userId: 'local-user')` sets the identity
-for the default in-memory SessionStore. If omitted or blank, composition uses
-the first nonblank operating-system environment value among `USER`,
-`USERNAME` and `LOGNAME`, then the stable fallback `local`.
-A supplied SessionStore always keeps its own owner, even if `userId` is also
-provided. Hosts constructing a file-backed Store can use
-`NeuronTui\LocalUserId::resolve($configuredUserId)` for the same precedence.
+Without a supplied Store, the TUI uses an in-memory SessionStore owned by `local`.
+To choose another owner, supply a SessionStore configured by the Host Application.
 Input history keeps its independent existing ownership model.
 
 ## Input history
@@ -238,8 +233,7 @@ cp .env.example .env
 php demo.php
 ```
 
-Set `NEURON_TUI_USER_ID` in the demo's `.env` to choose a stable Session owner.
-Otherwise it uses the local identity resolution described above. The demo's
+The demo uses `local` as its Session owner. The demo's
 `/model` command changes the Agent while preserving the current History;
 it does not save model preferences. Startup, model selection and exit need
 no provider credentials; sending a message requires a configured provider.
