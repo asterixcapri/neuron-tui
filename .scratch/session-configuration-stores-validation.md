@@ -3,7 +3,7 @@
 Validated on 2026-09-06 with PHP 8.5.8. Both Composer graphs lock
 `asterixcapri/neuron-interaction` on branch
 `dev-feat/session-configuration-stores` at
-`25f8c3a05f0ad8b2547af1d6bf798e52355da58b`.
+`09a2362eaf04c58ce56ea49a461e797b05b265e1`.
 
 From the repository root and separately from `examples/`, ran:
 
@@ -39,3 +39,10 @@ temporary environment and storage files were removed. That smoke used library
 revision `4eb4ad670d07e693c7c1d3c0e01cbec5de5435b4`; the automated checks above
 were rerun against the final revision after review fixes. Live provider
 responses were not tested.
+
+## Command Adapter naming review
+
+The Adapter accessor is now `sessionStore(): SessionStore`. TuiAdapter and its
+callers use the new name directly. Both installed dependency graphs were also
+checked through Reflection: `sessionStore()` exists and `sessions()` is absent.
+The PHPUnit and PHPStan results above were rerun with this revision.

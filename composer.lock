@@ -92,13 +92,13 @@
             "version": "dev-feat/session-configuration-stores",
             "source": {
                 "type": "git",
-                "url": "git@github.com:asterixcapri/neuron-interaction.git",
-                "reference": "25f8c3a05f0ad8b2547af1d6bf798e52355da58b"
+                "url": "https://github.com/asterixcapri/neuron-interaction.git",
+                "reference": "09a2362eaf04c58ce56ea49a461e797b05b265e1"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/asterixcapri/neuron-interaction/zipball/25f8c3a05f0ad8b2547af1d6bf798e52355da58b",
-                "reference": "25f8c3a05f0ad8b2547af1d6bf798e52355da58b",
+                "url": "https://api.github.com/repos/asterixcapri/neuron-interaction/zipball/09a2362eaf04c58ce56ea49a461e797b05b265e1",
+                "reference": "09a2362eaf04c58ce56ea49a461e797b05b265e1",
                 "shasum": ""
             },
             "require": {
@@ -139,7 +139,11 @@
                 }
             ],
             "description": "Presentation-independent interaction modules for Neuron AI Agents.",
-            "time": "2026-09-06T17:42:14+00:00"
+            "support": {
+                "source": "https://github.com/asterixcapri/neuron-interaction/tree/feat/session-configuration-stores",
+                "issues": "https://github.com/asterixcapri/neuron-interaction/issues"
+            },
+            "time": "2026-09-06T18:24:34+00:00"
         },
         {
             "name": "dflydev/dot-access-data",

@@ -138,7 +138,7 @@ final class TuiAdapter implements CommandAdapterInterface
         return $this->commands;
     }
 
-    public function sessions(): SessionStore
+    public function sessionStore(): SessionStore
     {
         return $this->sessions;
     }
