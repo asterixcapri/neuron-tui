@@ -2,20 +2,25 @@
 
 _The Refine Interaction composition revision supersedes runtime-owned module
 construction and a single TUI Storage configuration below. The Host Application
-may supply Commands, Sessions and InputHistory independently. Tui creates omitted
-modules once: empty Commands and in-memory Sessions and InputHistory. Runtime and
-Command controls reuse those modules. Persistence is configured through the
-supplied modules; they may share Storage but are not required to. The concurrency
-controls policy is superseded as recorded in ADR-0002. Storage contracts and
-namespace separation remain unchanged. The same revision also supersedes the
-unconditional replacement of the Agent's initial History: startup displays that
-History unchanged, without importing it into Sessions or selecting a latest
-Session. A Session returned by `start()` or `resume(key)` is itself a Chat
-History, and the Host Application installs it directly when it wants the initial
-conversation to be resumable. Clear starts a managed Session; Resume lists only
-conversations managed by the configured Sessions. This applies to default
-in-memory Sessions too. No retention/import API or runtime snapshot state is
-introduced. Normal Session trimming, title rules and the single-run TUI
+may supply Commands, SessionStore and InputHistory independently. Tui creates
+omitted modules once: empty Commands and in-memory SessionStore and
+InputHistory. Runtime and Command controls reuse those modules. Persistence is
+configured through the supplied modules; they may share Storage but are not
+required to. The concurrency controls policy is superseded as recorded in
+ADR-0002. Namespace separation remains unchanged. The SessionStore revision adds
+supplied creation keys and exact metadata filters to Storage. Each SessionStore
+binds Storage to an explicit user; reads return null for absent or other-user
+Sessions. Tui resolves local identity from explicit configuration, operating-
+system user or a stable local fallback. A supplied Store retains its existing
+owner. The same revision also supersedes the unconditional replacement of the
+Agent's initial History: startup displays that History unchanged, without
+importing it into SessionStore or selecting a latest Session. A Session returned
+by `SessionStore::create()` or a non-null `SessionStore::read(key)` is itself a
+Chat History, and the Host Application installs it directly when it wants the
+initial conversation to be resumable. Clear starts a managed Session; Resume
+lists only conversations managed by the configured SessionStore. This applies to
+default in-memory SessionStore too. No retention/import API or runtime snapshot
+state is introduced. Normal Session trimming, title rules and the single-run TUI
 lifecycle remain unchanged._
 
 _The historical decision text follows; apply the scoped supersessions above.
