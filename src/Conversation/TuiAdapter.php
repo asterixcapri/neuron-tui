@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace NeuronTui\Conversation;
 
 use NeuronAI\Agent\Agent;
-use NeuronAI\Chat\History\ChatHistoryInterface;
 use NeuronInteraction\Command\CommandAdapterInterface;
 use NeuronInteraction\Command\CommandArguments;
 use NeuronInteraction\Command\CommandExecution;
@@ -13,6 +12,7 @@ use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Command\SelectionOption;
 use NeuronInteraction\Command\SelectionRequest;
+use NeuronInteraction\Session\Session;
 use NeuronInteraction\Session\Sessions;
 use NeuronTui\Tui\ConversationView;
 use Revolt\EventLoop;
@@ -26,8 +26,6 @@ use Throwable;
  */
 final class TuiAdapter implements CommandAdapterInterface
 {
-    private ?ChatHistoryInterface $previousHistory = null;
-
     public function __construct(
         private readonly ConversationRuntime $runtime,
         private readonly ConversationView $view,
@@ -49,7 +47,6 @@ final class TuiAdapter implements CommandAdapterInterface
         }
 
         $this->view->emptyComposer();
-        $this->previousHistory = $this->agent()->getChatHistory();
 
         return true;
     }
@@ -60,14 +57,6 @@ final class TuiAdapter implements CommandAdapterInterface
             $this->view->showUnknownCommand($execution->identifier);
 
             return null;
-        }
-
-        // Reconcile first, so a failure remains visible on the resulting
-        // conversation. The same History preserves notices and warnings.
-        $current = $this->agent()->getChatHistory();
-
-        if ($current !== $this->previousHistory) {
-            $this->view->showHistory($current->getMessages());
         }
 
         if ($execution->exception instanceof Throwable) {
@@ -136,6 +125,12 @@ final class TuiAdapter implements CommandAdapterInterface
     public function useAgent(Agent $agent): void
     {
         $this->runtime->useAgent($agent);
+    }
+
+    public function useSession(Session $session): void
+    {
+        $this->agent()->setChatHistory($session);
+        $this->view->showHistory($session->getMessages());
     }
 
     public function commands(): Commands
