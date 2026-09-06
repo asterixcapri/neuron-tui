@@ -13,7 +13,7 @@ use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Command\SelectionOption;
 use NeuronInteraction\Command\SelectionRequest;
 use NeuronInteraction\Session\Session;
-use NeuronInteraction\Session\Sessions;
+use NeuronInteraction\Session\SessionStore;
 use NeuronTui\Tui\ConversationView;
 use Revolt\EventLoop;
 use Throwable;
@@ -30,7 +30,7 @@ final class TuiAdapter implements CommandAdapterInterface
         private readonly ConversationRuntime $runtime,
         private readonly ConversationView $view,
         private readonly Commands $commands,
-        private readonly Sessions $sessions,
+        private readonly SessionStore $sessions,
     ) {
     }
 
@@ -138,7 +138,7 @@ final class TuiAdapter implements CommandAdapterInterface
         return $this->commands;
     }
 
-    public function sessions(): Sessions
+    public function sessions(): SessionStore
     {
         return $this->sessions;
     }

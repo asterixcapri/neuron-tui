@@ -29,7 +29,7 @@ _Avoid_: Command, CLI application
 **History**:
 The sequence of messages owned by the Agent and represented by the TUI,
 including messages that predate the TUI startup. A History may exist independently
-of Sessions and have its own persistence.
+of SessionStore and have its own persistence.
 _Avoid_: Transcript, TUI log
 
 **Input history**:
@@ -86,7 +86,7 @@ _Avoid_: Async command, background command, command that runs while working
 **Command controls**:
 The presentation-independent verbs and shared interaction state available to
 a Command for one execution. They cover notices, warnings, Agent prompts,
-selections, the answering Agent, mounted Commands, Sessions, and leaving the
+selections, the answering Agent, mounted Commands, SessionStore, and leaving the
 interaction.
 _Avoid_: Command context, environment, facade, API
 
@@ -105,18 +105,16 @@ and it can be taken with some of them left out.
 _Avoid_: Toolkit, bundle, plugin, pack
 
 **Session**:
-One conversation managed within Sessions, identified by a key and held by a
-single History, that may outlive the TUI process and can be reopened. No Agent owns it: any Agent
-can be handed it and carry it on. Its title and last-used time identify it to
-a person; its title comes from the first non-empty user-authored content in
-its History, while each Adapter decides how to render it. Its storage may also
-report its size.
+One conversation owned by a user, identified by a key and held as the Agent's
+History, that can outlive the TUI process and be reopened by another Agent.
+Its title and last-used time help the person recognize it.
 _Avoid_: Chat, thread
 
-**Sessions**:
-The collection within which Session keys are minted and resolved. It is where
-a new Session starts and where an existing one is found to be resumed.
-_Avoid_: Session provider, repository, archive
+**SessionStore**:
+The user's collection of Sessions, within which conversations are created,
+found and selected for resuming. A Store's owner is supplied by the Host
+Application.
+_Avoid_: Sessions, Session provider, repository, archive
 
 **Picker**:
 The state the Conversation TUI is in while a person is choosing from a list

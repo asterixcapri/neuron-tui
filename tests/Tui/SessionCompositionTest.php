@@ -19,8 +19,10 @@ use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\ResumeCommand;
 use NeuronInteraction\Command\SessionCommandKit;
 use NeuronInteraction\Command\CommandAdapterInterface;
-use NeuronInteraction\Session\Sessions;
+use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\InMemoryStorage;
+use NeuronInteraction\Storage\FileStorage;
+use NeuronInteraction\Session\Session;
 use NeuronTui\Tui;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
@@ -31,16 +33,17 @@ final class SessionCompositionTest extends TestCase
     public function testManagedConversationsAndLaterTurnsCanBeClearedAndResumed(): void
     {
         foreach (['default', 'preselected'] as $composition) {
-            $sessions = $composition === 'default' ? null : new Sessions(new InMemoryStorage());
+            $sessions = $composition === 'default' ? null : new SessionStore(new InMemoryStorage(), 'test-user');
             $initial = $sessions !== null
-                ? $sessions->start()
+                ? $sessions->create()
                 : new InMemoryChatHistory();
             $initial->addMessage(new UserMessage('Initial subject'));
             $initial->addMessage(new AssistantMessage('Initial answer'));
             $selectedKey = null;
             if ($sessions !== null) {
                 $selectedKey = $sessions->summaries()[0]->key;
-                $initial = $sessions->resume($selectedKey);
+                $initial = $sessions->read($selectedKey);
+                self::assertNotNull($initial);
             }
             $initialMessages = $initial->getMessages();
             $agent = new Agent();
@@ -91,8 +94,8 @@ final class SessionCompositionTest extends TestCase
 
     public function testStartupDoesNotAutomaticallySelectAStoredSession(): void
     {
-        $sessions = new Sessions(new InMemoryStorage());
-        $sessions->start()->addMessage(new UserMessage('Stored subject'));
+        $sessions = new SessionStore(new InMemoryStorage(), 'test-user');
+        $sessions->create()->addMessage(new UserMessage('Stored subject'));
         $initial = new InMemoryChatHistory();
         $initial->addMessage(new UserMessage('Host selected subject'));
         $agent = new Agent();
@@ -110,7 +113,7 @@ final class SessionCompositionTest extends TestCase
 
     public function testOmittedCommandsStayEmptyWithIndependentlySuppliedState(): void
     {
-        foreach ([false, true] as $supplySessions) {
+        foreach ([false, true] as $supplySessionStore) {
             foreach ([false, true] as $supplyInputs) {
                 $terminal = new VirtualTerminal();
                 $inputs = $supplyInputs ? new InputHistory(new InMemoryStorage()) : null;
@@ -120,7 +123,7 @@ final class SessionCompositionTest extends TestCase
                 (new Tui(
                     new Agent(),
                     $terminal,
-                    sessions: $supplySessions ? new Sessions(new InMemoryStorage()) : null,
+                    sessions: $supplySessionStore ? new SessionStore(new InMemoryStorage(), 'test-user') : null,
                     inputHistory: $inputs,
                 ))->run();
 
@@ -134,16 +137,16 @@ final class SessionCompositionTest extends TestCase
 
     public function testSuppliedAndDefaultModulesKeepTheirStateAcrossCommands(): void
     {
-        foreach ([false, true] as $supplySessions) {
+        foreach ([false, true] as $supplySessionStore) {
             foreach ([false, true] as $supplyInputs) {
-                $sessions = $supplySessions ? new Sessions(new InMemoryStorage()) : null;
+                $sessions = $supplySessionStore ? new SessionStore(new InMemoryStorage(), 'test-user') : null;
                 $inputs = $supplyInputs ? new InputHistory(new InMemoryStorage()) : null;
                 $received = [];
                 $command = $this->commandThat(
                     static function (CommandAdapterInterface $adapter) use (&$received): void {
                         $received[] = [$adapter->commands(), $adapter->sessions()];
                         if (count($received) === 1) {
-                            $adapter->sessions()->start()->addMessage(new \NeuronAI\Chat\Messages\UserMessage('Kept by this module'));
+                            $adapter->sessions()->create()->addMessage(new \NeuronAI\Chat\Messages\UserMessage('Kept by this module'));
                         } else {
                             self::assertCount(1, $adapter->sessions()->summaries());
                         }
@@ -174,9 +177,9 @@ final class SessionCompositionTest extends TestCase
         }
     }
 
-    public function testRuntimePreservesExternalHistoryWithoutRegisteringItInSessions(): void
+    public function testRuntimePreservesExternalHistoryWithoutRegisteringItInSessionStore(): void
     {
-        foreach ([false, true] as $supplySessions) {
+        foreach ([false, true] as $supplySessionStore) {
             $storage = new InMemoryStorage();
             $previous = new InMemoryChatHistory();
             $previous->addMessage(new UserMessage('External conversation'));
@@ -205,10 +208,10 @@ final class SessionCompositionTest extends TestCase
 
             EventLoop::delay(0.07, static fn () => $terminal->simulateInput("/resume\r"));
 
-            Tui::make($agent, $terminal, commands: new Commands([$command, new ResumeCommand()]), sessions: $supplySessions ? new Sessions($storage) : null)->run();
+            Tui::make($agent, $terminal, commands: new Commands([$command, new ResumeCommand()]), sessions: $supplySessionStore ? new SessionStore($storage, 'test-user') : null)->run();
 
             self::assertCount(2, $received);
-            self::assertInstanceOf(Sessions::class, $received[0]);
+            self::assertInstanceOf(SessionStore::class, $received[0]);
             self::assertSame($received[0], $received[1]);
             self::assertSame($previous, $agent->getChatHistory());
             self::assertCount(2, $agent->getChatHistory()->getMessages());
@@ -237,6 +240,166 @@ final class SessionCompositionTest extends TestCase
                 (new SessionCommandKit())->commands(),
             ),
         );
+    }
+
+    public function testLocalIdentityPrecedenceAndStableFallbackAtComposition(): void
+    {
+        $previous = [];
+        foreach (['USER', 'USERNAME', 'LOGNAME'] as $name) {
+            $previous[$name] = getenv($name);
+            putenv($name);
+        }
+
+        try {
+            foreach ([
+                ['configured', 'system-user', 'configured'],
+                [null, 'system-user', 'system-user'],
+                ['', 'system-user', 'system-user'],
+                [null, null, 'local'],
+                [null, null, 'local'],
+            ] as [$configured, $systemUser, $expected]) {
+                putenv($systemUser === null ? 'USER' : 'USER=' . $systemUser);
+                $agent = new Agent();
+                $terminal = new VirtualTerminal();
+                $owner = null;
+                $command = $this->commandThat(
+                    static function (CommandAdapterInterface $adapter) use (&$owner): void {
+                        $owner = $adapter->sessions()->create()->getUserId();
+                        $adapter->stop();
+                    },
+                );
+                EventLoop::queue(static fn () => $terminal->simulateInput("/inspect\r"));
+
+                Tui::make($agent, $terminal, new Commands($command), userId: $configured)->run();
+
+                self::assertSame($expected, $owner);
+            }
+
+            putenv('USERNAME=windows-user');
+            self::assertSame('windows-user', \NeuronTui\LocalUserId::resolve());
+            putenv('USERNAME');
+            putenv('LOGNAME=login-user');
+            self::assertSame('login-user', \NeuronTui\LocalUserId::resolve());
+        } finally {
+            foreach ($previous as $name => $value) {
+                putenv($value === false ? $name : $name . '=' . $value);
+            }
+        }
+    }
+
+    public function testSuppliedStoreKeepsItsOwnerDespiteConfiguredIdentity(): void
+    {
+        $sessions = new SessionStore(new InMemoryStorage(), 'store-owner');
+        $terminal = new VirtualTerminal();
+        $received = null;
+        $owner = null;
+        $command = $this->commandThat(
+            static function (CommandAdapterInterface $adapter) use (&$received, &$owner): void {
+                $received = $adapter->sessions();
+                $owner = $received->create()->getUserId();
+                $adapter->stop();
+            },
+        );
+        EventLoop::queue(static fn () => $terminal->simulateInput("/inspect\r"));
+
+        (new Tui(
+            new Agent(),
+            $terminal,
+            new Commands($command),
+            sessions: $sessions,
+            userId: 'another-user',
+        ))->run();
+
+        self::assertSame($sessions, $received);
+        self::assertSame('store-owner', $owner);
+    }
+
+    public function testClearAndResumePreserveOnlyTheCurrentUsersPersistedConversation(): void
+    {
+        $directory = sys_get_temp_dir() . '/neuron-tui-scoped-' . bin2hex(random_bytes(6));
+
+        try {
+            $storage = new FileStorage($directory);
+            $sessions = new SessionStore($storage, 'alice');
+            $foreign = (new SessionStore($storage, 'bob'))->create();
+            $foreign->addMessage(new UserMessage('Private Bob subject'));
+            $initial = $sessions->create();
+            $agent = new Agent();
+            $agent->setChatHistory($initial);
+            $provider = new FakeAIProvider(new AssistantMessage('Persisted Alice answer'));
+            $agent->setAiProvider($provider);
+            $terminal = new VirtualTerminal(rows: 30);
+            $cleared = null;
+            $picker = null;
+            EventLoop::queue(static fn () => $terminal->simulateInput("Alice subject\r"));
+            EventLoop::delay(0.15, static fn () => $terminal->simulateInput("/clear\r"));
+            EventLoop::delay(0.19, static function () use ($agent, $terminal, &$cleared): void {
+                $cleared = $agent->getChatHistory();
+                $terminal->simulateInput("/resume\r");
+            });
+            EventLoop::delay(0.23, static function () use ($terminal, &$picker): void {
+                $picker = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+                $terminal->simulateInput("\r");
+            });
+            EventLoop::delay(0.29, static fn () => $terminal->simulateInput("\x03"));
+
+            Tui::make($agent, $terminal, new Commands(new SessionCommandKit()), $sessions)->run();
+
+            self::assertInstanceOf(Session::class, $cleared);
+            self::assertSame('alice', $cleared->getUserId());
+            self::assertNotSame($initial->getKey(), $cleared->getKey());
+            self::assertSame([], $cleared->getMessages());
+            self::assertIsString($picker);
+            self::assertStringContainsString('Alice subject', $picker);
+            self::assertStringNotContainsString('Private Bob subject', $picker);
+            self::assertInstanceOf(Session::class, $agent->getChatHistory());
+            self::assertSame($initial->getKey(), $agent->getChatHistory()->getKey());
+            $reopened = (new SessionStore(new FileStorage($directory), 'alice'))->read($initial->getKey());
+            self::assertNotNull($reopened);
+            self::assertCount(2, $reopened->getMessages());
+            self::assertSame('Persisted Alice answer', $reopened->getMessages()[1]->getContent());
+            self::assertEquals($reopened->getMessages(), $agent->getChatHistory()->getMessages());
+            self::assertNull($sessions->read($foreign->getKey()));
+            self::assertNotNull((new SessionStore(new FileStorage($directory), 'bob'))->read($foreign->getKey()));
+            $provider->assertCallCount(1);
+        } finally {
+            foreach (glob($directory . '/sessions/*') ?: [] as $path) {
+                unlink($path);
+            }
+            if (is_dir($directory . '/sessions')) {
+                rmdir($directory . '/sessions');
+            }
+            if (is_dir($directory)) {
+                rmdir($directory);
+            }
+        }
+    }
+
+    public function testResumeHandlesASelectionDeletedWhileThePickerWasOpen(): void
+    {
+        $sessions = new SessionStore(new InMemoryStorage(), 'alice');
+        $earlier = $sessions->create();
+        $earlier->addMessage(new UserMessage('Session removed during selection'));
+        $initial = new InMemoryChatHistory();
+        $initial->addMessage(new UserMessage('Current conversation'));
+        $agent = new Agent();
+        $agent->setChatHistory($initial);
+        $terminal = new VirtualTerminal();
+        EventLoop::queue(static fn () => $terminal->simulateInput("/resume\r"));
+        EventLoop::delay(0.05, static function () use ($sessions, $earlier, $terminal): void {
+            $sessions->delete($earlier->getKey());
+            $terminal->simulateInput("\r");
+        });
+        EventLoop::delay(0.1, static fn () => $terminal->simulateInput("\x03"));
+
+        Tui::make($agent, $terminal, new Commands(new ResumeCommand()), $sessions)->run();
+
+        self::assertSame($initial, $agent->getChatHistory());
+        self::assertStringContainsString(
+            'No Session is named by that key.',
+            AnsiUtils::stripAnsiCodes($terminal->getOutput()),
+        );
+        self::assertSame([], $sessions->summaries());
     }
 
     /**
