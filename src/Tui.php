@@ -8,7 +8,7 @@ use InvalidArgumentException;
 use LogicException;
 use NeuronAI\Agent\Agent;
 use NeuronInteraction\Command\Commands;
-use NeuronInteraction\Session\Sessions;
+use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Conversation\ConversationInput;
@@ -40,7 +40,7 @@ final class Tui
 
     private readonly Commands $commands;
 
-    private readonly Sessions $sessions;
+    private readonly SessionStore $sessions;
 
     private readonly InputHistory $inputHistory;
 
@@ -50,11 +50,15 @@ final class Tui
         private readonly Agent $agent,
         private readonly ?TerminalInterface $terminal = null,
         ?Commands $commands = null,
-        ?Sessions $sessions = null,
+        ?SessionStore $sessions = null,
         ?InputHistory $inputHistory = null,
+        ?string $userId = null,
     ) {
         $this->commands = $commands ?? new Commands();
-        $this->sessions = $sessions ?? new Sessions(new InMemoryStorage());
+        $this->sessions = $sessions ?? new SessionStore(
+            new InMemoryStorage(),
+            LocalUserId::resolve($userId),
+        );
         $this->inputHistory = $inputHistory ?? new InputHistory(new InMemoryStorage());
     }
 
@@ -62,10 +66,11 @@ final class Tui
         Agent $agent,
         ?TerminalInterface $terminal = null,
         ?Commands $commands = null,
-        ?Sessions $sessions = null,
+        ?SessionStore $sessions = null,
         ?InputHistory $inputHistory = null,
+        ?string $userId = null,
     ): self {
-        return new self($agent, $terminal, $commands, $sessions, $inputHistory);
+        return new self($agent, $terminal, $commands, $sessions, $inputHistory, $userId);
     }
 
     public function setTitle(string $title): self

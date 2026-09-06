@@ -45,7 +45,7 @@ use NeuronTui\Tui;
 use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Session\Session;
 use NeuronInteraction\Session\SessionSummary;
-use NeuronInteraction\Session\Sessions;
+use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\FileStorage;
 use NeuronInteraction\Storage\InMemoryStorage;
 use PHPUnit\Framework\TestCase;
@@ -1043,7 +1043,7 @@ MARKDOWN;
             0.2,
             static function () use ($terminal, $storage): void {
                 $terminal->clearOutput();
-                $key = (new Sessions($storage))->summaries()[0]->key;
+                $key = (new SessionStore($storage, 'test-user'))->summaries()[0]->key;
                 $terminal->simulateInput("/resume {$key}\r");
             },
         );
@@ -1078,7 +1078,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            sessions: new Sessions($storage),
+            sessions: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands(self::sessionCommands()),
         ))->run();
@@ -1200,7 +1200,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            sessions: new Sessions($storage),
+            sessions: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands([$command]),
         ))->run();
@@ -1251,7 +1251,7 @@ MARKDOWN;
             new Agent(),
             $terminal,
             commands: new Commands($command),
-            sessions: new Sessions($storage),
+            sessions: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
         )->run();
 
@@ -1542,7 +1542,7 @@ MARKDOWN;
         $agent->setAiProvider($abandoned);
         $successor = new Agent();
         $successor->setAiProvider($chosen);
-        $replacementSession = (new Sessions(new InMemoryStorage()))->start();
+        $replacementSession = (new SessionStore(new InMemoryStorage(), 'test-user'))->create();
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
             static function (
@@ -1666,7 +1666,7 @@ MARKDOWN;
             new UserMessage('Earlier question.'),
             new AssistantMessage('Earlier answer.'),
         ]));
-        $replacementSession = (new Sessions(new InMemoryStorage()))->start();
+        $replacementSession = (new SessionStore(new InMemoryStorage(), 'test-user'))->create();
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
             static function (CommandAdapterInterface $adapter, string $arguments) use ($replacementSession): void {
@@ -4831,7 +4831,7 @@ MARKDOWN;
     /** @param list<Message> $messages */
     private function sessionWith(array $messages): Session
     {
-        $session = (new Sessions(new InMemoryStorage()))->start();
+        $session = (new SessionStore(new InMemoryStorage(), 'test-user'))->create();
 
         foreach ($messages as $message) {
             $session->addMessage($message);
@@ -4924,8 +4924,8 @@ MARKDOWN;
     {
         $agent = new Agent();
         $storage = new InMemoryStorage();
-        $sessions = new Sessions($storage);
-        $agent->setChatHistory($sessions->start());
+        $sessions = new SessionStore($storage, 'test-user');
+        $agent->setChatHistory($sessions->create());
         $earlier = null;
         $fillSession = $this->commandThat(
             static function (CommandAdapterInterface $adapter) use (&$earlier): void {
@@ -4996,7 +4996,7 @@ MARKDOWN;
         $agent = new Agent();
         $agent->setAiProvider($provider);
         $storage = new InMemoryStorage();
-        $sessions = new Sessions($storage);
+        $sessions = new SessionStore($storage, 'test-user');
         $terminal = new VirtualTerminal(rows: 24);
         EventLoop::delay(
             0.03,
@@ -5018,7 +5018,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            sessions: new Sessions($storage),
+            sessions: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands(self::sessionCommands()),
         ))->run();
@@ -5027,16 +5027,18 @@ MARKDOWN;
 
         self::assertCount(1, $listed);
         self::assertSame('A question', $listed[0]->title);
+        $reopened = $sessions->read($listed[0]->key);
+        self::assertNotNull($reopened);
         self::assertSame(
             ['A question', 'An answer.'],
             array_map(
                 static fn (Message $message): string => (string) $message
                     ->getContent(),
-                $sessions->resume($listed[0]->key)->getMessages(),
+                $reopened->getMessages(),
             ),
         );
         self::assertSame([], $agent->getChatHistory()->getMessages());
-        // The Session the Agent was left holding is the newer one Sessions
+        // The Session the Agent was left holding is the newer one SessionStore
         // minted, so writing in it lists it ahead of the other.
         $agent->getChatHistory()->addMessage(new UserMessage('Written later'));
         self::assertSame(
@@ -5072,7 +5074,7 @@ MARKDOWN;
             },
         );
         $storage = new InMemoryStorage();
-        $sessions = new Sessions($storage);
+        $sessions = new SessionStore($storage, 'test-user');
         $terminal = new VirtualTerminal(rows: 24);
         EventLoop::queue(
             static fn () => $terminal->simulateInput("/probe\r"),
@@ -5110,7 +5112,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            sessions: new Sessions($storage),
+            sessions: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands([
                 ...self::sessionCommands(),
@@ -5138,8 +5140,8 @@ MARKDOWN;
         $agent = new Agent();
         $agent->setAiProvider($provider);
         $storage = new InMemoryStorage();
-        $sessions = new Sessions($storage);
-        $earlier = $sessions->start();
+        $sessions = new SessionStore($storage, 'test-user');
+        $earlier = $sessions->create();
         $earlier->addMessage(new UserMessage('The earlier subject'));
         $earlier->addMessage(new Message(MessageRole::ASSISTANT, [
             new ReasoningContent('Private chain of thought.'),
@@ -5173,7 +5175,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            sessions: new Sessions($storage),
+            sessions: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands(self::sessionCommands()),
         ))->run();
@@ -5217,8 +5219,8 @@ MARKDOWN;
 
         try {
             $storage = new FileStorage($directory);
-            $sessions = new Sessions($storage);
-            $earlier = $sessions->start();
+            $sessions = new SessionStore($storage, 'test-user');
+            $earlier = $sessions->create();
             $earlier->addMessage(new UserMessage('The stored subject'));
             $earlier->addMessage(new AssistantMessage('The stored answer.'));
             $listed = $sessions->summaries();
@@ -5256,7 +5258,7 @@ MARKDOWN;
             (new Tui(
                 $agent,
                 terminal: $terminal,
-                sessions: new Sessions($storage),
+                sessions: new SessionStore($storage, 'test-user'),
                 inputHistory: new InputHistory($storage),
                 commands: new Commands(self::sessionCommands()),
             ))->run();
@@ -5314,8 +5316,8 @@ MARKDOWN;
             new AssistantMessage('A later answer.'),
         ));
         $storage = new InMemoryStorage();
-        $sessions = new Sessions($storage);
-        $earlier = $sessions->start();
+        $sessions = new SessionStore($storage, 'test-user');
+        $earlier = $sessions->create();
         $earlier->addMessage(new UserMessage('The earlier subject'));
         $terminal = new VirtualTerminal(rows: 30);
         EventLoop::delay(
@@ -5345,7 +5347,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            sessions: new Sessions($storage),
+            sessions: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands(self::sessionCommands()),
         ))->run();
@@ -5367,15 +5369,15 @@ MARKDOWN;
     /**
      * A null byte is the one character that could confuse a picker packing a
      * title and a key into a single value, so a title carrying one is what
-     * pins the picker to carrying Sessions instead: the title is displayed
+     * pins the picker to carrying SessionStore instead: the title is displayed
      * and nothing else, and the Session chosen is the Session opened.
      */
     public function testASessionTitledWithANullByteIsListedAndResumed(): void
     {
         $agent = new Agent();
         $storage = new InMemoryStorage();
-        $sessions = new Sessions($storage);
-        $earlier = $sessions->start();
+        $sessions = new SessionStore($storage, 'test-user');
+        $earlier = $sessions->create();
         $title = "The earlier\x00 subject";
         $earlier->addMessage(new UserMessage($title));
         self::assertSame($title, $sessions->summaries()[0]->title);
@@ -5403,7 +5405,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            sessions: new Sessions($storage),
+            sessions: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands(self::sessionCommands()),
         ))->run();
@@ -5436,8 +5438,8 @@ MARKDOWN;
             },
         );
         $storage = new InMemoryStorage();
-        $sessions = new Sessions($storage);
-        $sessions->start()->addMessage(
+        $sessions = new SessionStore($storage, 'test-user');
+        $sessions->create()->addMessage(
             new UserMessage('The earlier subject'),
         );
         $terminal = new VirtualTerminal(rows: 24);
@@ -5476,7 +5478,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            sessions: new Sessions($storage),
+            sessions: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands([
                 ...self::sessionCommands(),
@@ -5528,15 +5530,15 @@ MARKDOWN;
     {
         $agent = new Agent();
         $storage = new InMemoryStorage();
-        $sessions = new Sessions($storage);
-        $sessions->start()->addMessage(
+        $sessions = new SessionStore($storage, 'test-user');
+        $sessions->create()->addMessage(
             new UserMessage('Alpha subject'),
         );
-        $beta = $sessions->start();
+        $beta = $sessions->create();
         $beta->addMessage(new UserMessage('Beta subject'));
 
         foreach (['Gamma', 'Delta', 'Epsilon', 'Zeta'] as $subject) {
-            $sessions->start()->addMessage(
+            $sessions->create()->addMessage(
                 new UserMessage($subject . ' subject'),
             );
         }
@@ -5571,7 +5573,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            sessions: new Sessions($storage),
+            sessions: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands(self::sessionCommands()),
         ))->run();
@@ -5593,10 +5595,10 @@ MARKDOWN;
     {
         $agent = new Agent();
         $storage = new InMemoryStorage();
-        $sessions = new Sessions($storage);
-        $older = $sessions->start();
+        $sessions = new SessionStore($storage, 'test-user');
+        $older = $sessions->create();
         $older->addMessage(new UserMessage('The older subject'));
-        $sessions->start()->addMessage(
+        $sessions->create()->addMessage(
             new UserMessage('The newer subject'),
         );
         $terminal = new VirtualTerminal(rows: 24);
@@ -5620,7 +5622,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            sessions: new Sessions($storage),
+            sessions: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands(self::sessionCommands()),
         ))->run();
@@ -5655,8 +5657,8 @@ MARKDOWN;
         $agent = new Agent();
         $agent->setAiProvider($provider);
         $storage = new InMemoryStorage();
-        $sessions = new Sessions($storage);
-        $sessions->start()->addMessage(
+        $sessions = new SessionStore($storage, 'test-user');
+        $sessions->create()->addMessage(
             new UserMessage('The earlier subject'),
         );
         $terminal = new VirtualTerminal(rows: 24);
@@ -5680,7 +5682,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            sessions: new Sessions($storage),
+            sessions: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands(self::sessionCommands()),
         ))->run();
@@ -5705,8 +5707,8 @@ MARKDOWN;
         $agent = new Agent();
         $agent->setAiProvider(new FakeAIProvider());
         $storage = new InMemoryStorage();
-        $sessions = new Sessions($storage);
-        $earlier = $sessions->start();
+        $sessions = new SessionStore($storage, 'test-user');
+        $earlier = $sessions->create();
         $earlier->addMessage(new UserMessage('The earlier subject'));
         $earlier->addMessage(new AssistantMessage('The earlier answer.'));
         $terminal = new VirtualTerminal(rows: 30);
@@ -5757,7 +5759,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            sessions: new Sessions($storage),
+            sessions: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands([
                 new SessionCommandKit(),
@@ -5782,7 +5784,7 @@ MARKDOWN;
             $clearedDisplay,
         );
         self::assertSame([], $agent->getChatHistory()->getMessages());
-        // Both commands reached the one Sessions instance the runtime owns,
+        // Both commands reached the one SessionStore instance the runtime owns,
         // so the Session the first resumed is the one the second left stored.
         self::assertSame(
             ['The earlier subject'],
@@ -5798,8 +5800,8 @@ MARKDOWN;
         $agent = new Agent();
         $agent->setAiProvider(new FakeAIProvider());
         $storage = new InMemoryStorage();
-        $sessions = new Sessions($storage);
-        $earlier = $sessions->start();
+        $sessions = new SessionStore($storage, 'test-user');
+        $earlier = $sessions->create();
         $earlier->addMessage(new UserMessage('The earlier subject'));
         $terminal = new VirtualTerminal(rows: 30);
         $refusedDisplay = null;
@@ -5837,7 +5839,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            sessions: new Sessions($storage),
+            sessions: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands([
                 (new SessionCommandKit())->exclude([ClearCommand::class]),
@@ -5909,7 +5911,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            sessions: new Sessions($storage),
+            sessions: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands([
                 (new SessionCommandKit())->only([ClearCommand::class]),
