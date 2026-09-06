@@ -2,15 +2,18 @@
 
 _The Refine Interaction composition revision supersedes the TUI-owned mounting
 and rejection of module constructor composition below. The required Agent and
-optional Terminal are followed by independently optional Commands, Sessions and
-InputHistory in both the constructor and make factory. Supplied modules are
-reused; omitted defaults are created once per TUI instance. Commands owns mutable
-addCommand mounting; Tui::addCommand and setStorage are removed. Commands are
-configured before run, without collection freezing or live synchronization.
+optional Terminal are followed by independently optional Commands, SessionStore
+and InputHistory in both the constructor and make factory. Supplied modules are
+reused; omitted defaults are created once per TUI instance. Commands owns
+mutable addCommand mounting; Tui::addCommand and setStorage are removed.
+Commands are configured before run, without collection freezing or live
+synchronization. SessionStore binds Storage to a user at construction; Tui
+resolves local identity from explicit configuration, operating-system user or a
+stable local fallback, and reuses a supplied Store without rebinding it.
 Branding, no automatic mounting, first-match duplicates and single-run behavior
 remain unchanged._
 
-_ADR-0005 previously superseded History and Sessions ownership. Its revision
+_ADR-0005 previously superseded History and SessionStore ownership. Its revision
 notice now records the restored Host Application choice of initial History and
 optional module composition. The historical decision text follows; apply these
 scoped supersessions._

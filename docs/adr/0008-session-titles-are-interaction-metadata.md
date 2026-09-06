@@ -1,7 +1,7 @@
 # Session titles are interaction metadata
 
 A Session title identifies the same stored conversation in every interaction
-Adapter. `Sessions` therefore derives it from the first non-empty user-authored
+Adapter. `SessionStore` therefore derives it from the first non-empty user-authored
 content in the Session History without depending on the TUI's
 `HistoryProjection`.
 

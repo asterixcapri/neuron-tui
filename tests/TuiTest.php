@@ -5369,8 +5369,8 @@ MARKDOWN;
     /**
      * A null byte is the one character that could confuse a picker packing a
      * title and a key into a single value, so a title carrying one is what
-     * pins the picker to carrying SessionStore instead: the title is displayed
-     * and nothing else, and the Session chosen is the Session opened.
+     * pins the Picker to separate Selection option labels and values: the title
+     * is displayed and nothing else, and the Session chosen is the Session opened.
      */
     public function testASessionTitledWithANullByteIsListedAndResumed(): void
     {
