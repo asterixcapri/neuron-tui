@@ -52,12 +52,11 @@ final class Tui
         ?Commands $commands = null,
         ?SessionStore $sessions = null,
         ?InputHistory $inputHistory = null,
-        ?string $userId = null,
     ) {
         $this->commands = $commands ?? new Commands();
         $this->sessions = $sessions ?? new SessionStore(
             new InMemoryStorage(),
-            LocalUserId::resolve($userId),
+            'local',
         );
         $this->inputHistory = $inputHistory ?? new InputHistory(new InMemoryStorage());
     }
@@ -68,9 +67,8 @@ final class Tui
         ?Commands $commands = null,
         ?SessionStore $sessions = null,
         ?InputHistory $inputHistory = null,
-        ?string $userId = null,
     ): self {
-        return new self($agent, $terminal, $commands, $sessions, $inputHistory, $userId);
+        return new self($agent, $terminal, $commands, $sessions, $inputHistory);
     }
 
     public function setTitle(string $title): self
