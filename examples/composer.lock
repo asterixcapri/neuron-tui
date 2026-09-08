@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "08e20f76f23fa7d50fa8bc13afaf6ddf",
+    "content-hash": "71ba7be73c7847959dae2263d0ce4e64",
     "packages": [
         {
             "name": "amphp/amp",
@@ -976,7 +976,7 @@
         },
         {
             "name": "asterixcapri/neuron-interaction",
-            "version": "dev-main",
+            "version": "v0.8.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/asterixcapri/neuron-interaction.git",
@@ -996,7 +996,6 @@
                 "phpstan/phpstan": "^2.1",
                 "phpunit/phpunit": "^13.0"
             },
-            "default-branch": true,
             "type": "library",
             "autoload": {
                 "psr-4": {
@@ -1028,22 +1027,22 @@
             ],
             "description": "Presentation-independent interaction modules for Neuron AI Agents.",
             "support": {
-                "source": "https://github.com/asterixcapri/neuron-interaction/tree/main",
+                "source": "https://github.com/asterixcapri/neuron-interaction/tree/v0.8.0",
                 "issues": "https://github.com/asterixcapri/neuron-interaction/issues"
             },
             "time": "2026-09-06T18:31:01+00:00"
         },
         {
             "name": "asterixcapri/neuron-tui",
-            "version": "dev-main",
+            "version": "0.8.0",
             "dist": {
                 "type": "path",
                 "url": "..",
-                "reference": "f297dd76af486a4f88cb20d3ce7c35bf1f6f6482"
+                "reference": "f580eb563172a3f9f552d24749cf177c362d7eaa"
             },
             "require": {
                 "amphp/amp": "^3.0",
-                "asterixcapri/neuron-interaction": "dev-main",
+                "asterixcapri/neuron-interaction": "~0.8.0",
                 "league/commonmark": "^2.10",
                 "neuron-core/neuron-ai": "^3.0",
                 "php": ">=8.4.1",
@@ -3630,10 +3629,7 @@
     "packages-dev": [],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": {
-        "asterixcapri/neuron-interaction": 20,
-        "asterixcapri/neuron-tui": 20
-    },
+    "stability-flags": [],
     "prefer-stable": false,
     "prefer-lowest": false,
     "platform": {
