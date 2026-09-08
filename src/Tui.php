@@ -40,7 +40,7 @@ final class Tui
 
     private readonly Commands $commands;
 
-    private readonly SessionStore $sessions;
+    private readonly SessionStore $sessionStore;
 
     private readonly InputHistory $inputHistory;
 
@@ -50,11 +50,11 @@ final class Tui
         private readonly Agent $agent,
         private readonly ?TerminalInterface $terminal = null,
         ?Commands $commands = null,
-        ?SessionStore $sessions = null,
+        ?SessionStore $sessionStore = null,
         ?InputHistory $inputHistory = null,
     ) {
         $this->commands = $commands ?? new Commands();
-        $this->sessions = $sessions ?? new SessionStore(
+        $this->sessionStore = $sessionStore ?? new SessionStore(
             new InMemoryStorage(),
             'local',
         );
@@ -65,10 +65,10 @@ final class Tui
         Agent $agent,
         ?TerminalInterface $terminal = null,
         ?Commands $commands = null,
-        ?SessionStore $sessions = null,
+        ?SessionStore $sessionStore = null,
         ?InputHistory $inputHistory = null,
     ): self {
-        return new self($agent, $terminal, $commands, $sessions, $inputHistory);
+        return new self($agent, $terminal, $commands, $sessionStore, $inputHistory);
     }
 
     public function setTitle(string $title): self
@@ -127,7 +127,7 @@ final class Tui
             $this->inputHistory,
             $runtime,
             $this->commands,
-            $this->sessions,
+            $this->sessionStore,
         );
         $view->showHistory($this->agent->getChatHistory()->getMessages());
         $view->onSubmit($input->submit(...));
