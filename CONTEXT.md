@@ -16,6 +16,21 @@ already been configured by the Host Application. It may coordinate other
 Agents, but Neuron TUI sees only the Agent it converses with.
 _Avoid_: Bot, model
 
+**AgentFactoryRegistry**:
+The registered constructions a Host Application makes available under stable Agent
+identifiers, producing fresh configured Agents from the person's Configuration.
+_Avoid_: Agent pool, Command factory, current Agent
+
+**Configuration**:
+The person's saved choices for Agent construction, including the selected Agent
+identifier and application-specific model or capability settings.
+_Avoid_: Agent instance, Session settings, dependencies
+
+**ConfigurationStore**:
+The user's collection of saved Configurations, whose owner is supplied by the
+Host Application independently of its Sessions.
+_Avoid_: SessionStore, Agent registry, settings snapshot
+
 **Host Application**:
 The application that configures the Agent and starts the terminal
 interaction.

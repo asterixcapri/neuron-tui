@@ -1,6 +1,6 @@
 # Configured Agent reconstruction — shared specification
 
-Status: ready-for-agent
+Status: resolved
 Feature: command-agent-factories
 Canonical specification: [neuron-interaction — coordinated specification](../../../neuron-interaction/.scratch/command-agent-factories/spec.md)
 

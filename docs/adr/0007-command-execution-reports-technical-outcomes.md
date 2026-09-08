@@ -34,3 +34,10 @@ comparing the supplied History with the live Agent's History before replacing it
 A changed History is displayed immediately, before reporting any subsequent
 Command failure. An unchanged History preserves notices and warnings; an Agent
 replacement alone does not repaint the conversation.
+
+Session Commands explicitly prepare Agents through AgentFactoryRegistry and the
+latest saved Configuration before calling `useAgent()`. The configured-construction
+revision renames `CommandAdapterInterface` to `CommandControlsAdapterInterface`
+without changing lookup, admission, completion or technical execution outcomes.
+Factory or History-assignment exceptions remain ordinary Command failures; effects
+already performed, including persisted configuration, have no general rollback.

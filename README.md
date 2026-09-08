@@ -204,6 +204,30 @@ configuration and Session availability. Session content never restores old setti
 Replacing an Agent with the identical History object preserves conversation notices.
 The shared controls do not reconstruct the current Agent class or clone its settings.
 
+## Migrating Command integrations
+
+Use `CommandControlsAdapterInterface` in place of `CommandAdapterInterface` in
+custom Commands and Adapters. Remove `newAgent()`; expose `agentFactoryRegistry()`
+and `configurationStore()` instead. Register factories that capture required
+constructor dependencies and apply setters from saved Configuration. There is no
+automatic reconstruction of arbitrary instance configuration.
+
+Supply the same registry and stores at startup and to the TUI. Initialize `global`
+with an explicit `agent` identifier only when it is absent. Clear and Resume use
+its latest saved values; resuming an old Session does not restore an old model.
+
+For a model-changing Command, validate the selection, read fresh configuration,
+change only the model field, construct the candidate and assign the current History.
+Save the prepared configuration before calling `useAgent()`. Preparation or save
+failure leaves the current Agent active; persistence and activation are not a
+transaction. Save other runtime choices that must survive Clear, Resume or restart
+and interpret them in the factory.
+
+This source-incompatible contract is supplied by the coordinated
+`dev-feat/command-agent-factories` Neuron Interaction branch. The demo's Composer
+path repositories select that contract from the sibling checkout while preserving
+local development of both packages.
+
 ## Input history
 
 Submitted messages and Commands share one ordered Input history per configured
@@ -357,3 +381,8 @@ terminal. It requires no credentials and makes no network requests.
 ## License
 
 Neuron TUI is released under the MIT License.
+
+The demo is covered by the root test suite, including a local deterministic
+Model → Clear → Resume → restart scenario. Analyse its application code explicitly
+with `vendor/bin/phpstan analyse -c examples/phpstan.neon` after installing the
+demo dependencies in `examples/`.

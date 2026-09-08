@@ -22,6 +22,9 @@ This two-step exchange lets a TUI use a Picker and a web frontend use a later
 HTTP request. Neither presentation mechanism enters the shared module, and
 `CommandControlsAdapterInterface` need not retain temporary selection state.
 
+The configured-construction revision renames `CommandAdapterInterface` to
+`CommandControlsAdapterInterface` and removes `newAgent()`.
+
 Both Commands build through the supplied AgentFactoryRegistry using the latest
 saved global Configuration. The Host Application registers closures that restore
 constructor dependencies and setter-driven settings. Clear assigns a newly created

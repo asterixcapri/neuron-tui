@@ -33,9 +33,11 @@ $configuration = $configurationStore->read('global') ?? $configurationStore->cre
 $agentFactoryRegistry = new AgentFactoryRegistry();
 $agentFactoryRegistry->register('demo', static function (Configuration $configuration): DemoAgent {
     $model = $configuration->get('model');
-    if (!is_string($model) || !preg_match('/^(openai|anthropic):[^:]+$/D', $model)) {
+    if (!is_string($model)) {
         throw new InvalidArgumentException('The demo configuration requires a provider:model identifier.');
     }
+
+    ModelCommand::validateModel($model);
 
     return (new DemoAgent())->setModelId($model);
 });

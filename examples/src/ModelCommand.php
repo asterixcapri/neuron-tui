@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace NeuronTuiDemo;
 
+use InvalidArgumentException;
+use RuntimeException;
 use NeuronInteraction\Command\CommandArguments;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\SelectionOption;
@@ -26,15 +28,37 @@ final readonly class ModelCommand implements CommandInterface
     public function run(CommandControlsAdapterInterface $adapter, CommandArguments $arguments): void
     {
         if ($arguments->text !== '') {
-            $agent = DemoAgent::make()->setModelId($arguments->text);
+            self::validateModel($arguments->text);
+            $configuration = $adapter->configurationStore()->read('global')
+                ?? throw new RuntimeException('General configuration "global" is missing.');
+            $configuration->set('model', $arguments->text);
+            $agent = $adapter->agentFactoryRegistry()->create($configuration);
             $agent->setChatHistory($adapter->agent()->getChatHistory());
+            $adapter->configurationStore()->save($configuration);
             $adapter->useAgent($agent);
             $adapter->say("Model changed to {$arguments->text}.");
 
             return;
         }
 
-        $adapter->requestSelection(new SelectionRequest($this->name(), 'Choose a model', [
+        $adapter->requestSelection(new SelectionRequest($this->name(), 'Choose a model', self::models()));
+    }
+
+    public static function validateModel(string $model): void
+    {
+        foreach (self::models() as $option) {
+            if ($option->value === $model) {
+                return;
+            }
+        }
+
+        throw new InvalidArgumentException('Unknown demo model: ' . $model);
+    }
+
+    /** @return list<SelectionOption> */
+    private static function models(): array
+    {
+        return [
             new SelectionOption(
                 'openai:gpt-5.6-sol',
                 'OpenAI · GPT-5.6 Sol',
@@ -75,6 +99,6 @@ final readonly class ModelCommand implements CommandInterface
                 'Anthropic · Claude Haiku 4.5',
                 'Fast and affordable for simple tasks.',
             ),
-        ]));
+        ];
     }
 }

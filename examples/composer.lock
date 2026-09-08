@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "9d49b3a1015d688ef2af4187c0c72222",
+    "content-hash": "4c09306c75e924fd7aba5ba3e39aea09",
     "packages": [
         {
             "name": "amphp/amp",
@@ -976,11 +976,11 @@
         },
         {
             "name": "asterixcapri/neuron-interaction",
-            "version": "0.9.x-dev",
+            "version": "dev-feat/command-agent-factories",
             "dist": {
                 "type": "path",
                 "url": "../../neuron-interaction",
-                "reference": "79c1ce0a8c3141b142f3130ca6404f75c5ebc541"
+                "reference": "e001e7e44a70976642f079bda3f2969f11eaf7cf"
             },
             "require": {
                 "neuron-core/neuron-ai": "^4.0@dev",
@@ -1031,11 +1031,11 @@
             "dist": {
                 "type": "path",
                 "url": "..",
-                "reference": "a4f8aaf15da5c30387a9a01758dfa1d98747560b"
+                "reference": "e54691bd593a73f4e8fd1bdc17fad246ec18b014"
             },
             "require": {
                 "amphp/amp": "^3.0",
-                "asterixcapri/neuron-interaction": "~0.9.0@dev",
+                "asterixcapri/neuron-interaction": "dev-feat/command-agent-factories",
                 "league/commonmark": "^2.10",
                 "neuron-core/neuron-ai": "^4.0@dev",
                 "php": ">=8.4.1",
@@ -1054,7 +1054,8 @@
             },
             "autoload-dev": {
                 "psr-4": {
-                    "NeuronTui\\Tests\\": "tests/"
+                    "NeuronTui\\Tests\\": "tests/",
+                    "NeuronTuiDemo\\": "examples/src/"
                 }
             },
             "scripts": {
