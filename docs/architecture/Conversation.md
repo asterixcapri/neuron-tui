@@ -15,7 +15,7 @@ e la coda dei messaggi, e traduce i controlli dei comandi in effetti della TUI.
 | [ConversationRuntime](../../src/Conversation/ConversationRuntime.php) | Agent corrente, avvio e conclusione dei turni, Future ed errori. |
 | [TurnQueue](../../src/Conversation/TurnQueue.php) | Stati del turno e ordine dei messaggi in attesa, senza dipendenze da vista o provider. |
 | [AgentTurn](../../src/Conversation/AgentTurn.php) | Consuma gli eventi dell’Agent e aggiorna la vista durante la risposta. |
-| [TuiAdapter](../../src/Conversation/TuiAdapter.php) | Realizza CommandAdapterInterface nel terminale. |
+| [TuiAdapter](../../src/Conversation/TuiAdapter.php) | Realizza CommandControlsAdapterInterface nel terminale. |
 | [ConcurrentCommands](../../src/Conversation/ConcurrentCommands.php) | Decide quali comandi ammettere durante un turno. |
 
 ## Percorso di un messaggio

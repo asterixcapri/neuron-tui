@@ -18,7 +18,7 @@ use NeuronInteraction\Command\ClearCommand;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\ResumeCommand;
 use NeuronInteraction\Command\SessionCommandKit;
-use NeuronInteraction\Command\CommandAdapterInterface;
+use NeuronInteraction\Command\CommandControlsAdapterInterface;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronInteraction\Storage\FileStorage;
@@ -145,7 +145,7 @@ final class SessionCompositionTest extends TestCase
                 $inputs = $supplyInputs ? new InputHistory(new InMemoryStorage()) : null;
                 $received = [];
                 $command = $this->commandThat(
-                    static function (CommandAdapterInterface $adapter) use (&$received): void {
+                    static function (CommandControlsAdapterInterface $adapter) use (&$received): void {
                         $received[] = [$adapter->commands(), $adapter->sessionStore()];
                         if (count($received) === 1) {
                             $adapter->sessionStore()->create()->addMessage(new \NeuronAI\Chat\Messages\UserMessage('Kept by this module'));
@@ -191,7 +191,7 @@ final class SessionCompositionTest extends TestCase
             $terminal = new VirtualTerminal();
             $received = [];
             $command = $this->commandThat(
-                static function (CommandAdapterInterface $adapter) use (&$received): void {
+                static function (CommandControlsAdapterInterface $adapter) use (&$received): void {
                     $received[] = $adapter->sessionStore();
                 },
             );
@@ -249,7 +249,7 @@ final class SessionCompositionTest extends TestCase
         $terminal = new VirtualTerminal();
         $owner = null;
         $command = $this->commandThat(
-            static function (CommandAdapterInterface $adapter) use (&$owner): void {
+            static function (CommandControlsAdapterInterface $adapter) use (&$owner): void {
                 $owner = $adapter->sessionStore()->create()->getUserId();
                 $adapter->stop();
             },
@@ -268,7 +268,7 @@ final class SessionCompositionTest extends TestCase
         $received = null;
         $owner = null;
         $command = $this->commandThat(
-            static function (CommandAdapterInterface $adapter) use (&$received, &$owner): void {
+            static function (CommandControlsAdapterInterface $adapter) use (&$received, &$owner): void {
                 $received = $adapter->sessionStore();
                 $owner = $received->create()->getUserId();
                 $adapter->stop();
@@ -377,7 +377,7 @@ final class SessionCompositionTest extends TestCase
 
     private function sessionCommands(Agent &$active): Commands
     {
-        $observe = static function (CommandAdapterInterface $adapter) use (&$active): void {
+        $observe = static function (CommandControlsAdapterInterface $adapter) use (&$active): void {
             $active = $adapter->agent();
         };
 
@@ -388,12 +388,12 @@ final class SessionCompositionTest extends TestCase
     }
 
     /**
-     * @param Closure(CommandAdapterInterface<mixed>): void $run
+     * @param Closure(CommandControlsAdapterInterface<mixed>): void $run
      */
     private function commandThat(Closure $run): CommandInterface
     {
         return new class($run) implements CommandInterface {
-            /** @param Closure(CommandAdapterInterface<mixed>): void $run */
+            /** @param Closure(CommandControlsAdapterInterface<mixed>): void $run */
             public function __construct(private readonly Closure $run) {}
 
             public function name(): string
@@ -406,8 +406,8 @@ final class SessionCompositionTest extends TestCase
                 return 'Inspects the runtime composition.';
             }
 
-            /** @param CommandAdapterInterface<mixed> $adapter */
-            public function run(CommandAdapterInterface $adapter, CommandArguments $arguments): void
+            /** @param CommandControlsAdapterInterface<mixed> $adapter */
+            public function run(CommandControlsAdapterInterface $adapter, CommandArguments $arguments): void
             {
                 ($this->run)($adapter);
             }

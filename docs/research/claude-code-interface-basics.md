@@ -4,7 +4,7 @@
 > su `ConcurrentCommandInterface`, `ConcurrentControls` e `Tui::addCommand()`
 > precedono la revisione della composizione e non sono istruzioni per le API
 > correnti. Help e Leave ora appartengono a Neuron Interaction e usano
-> `CommandAdapterInterface`; il montaggio avviene tramite `Commands`.
+> `CommandControlsAdapterInterface`; il montaggio avviene tramite `Commands`.
 > La gestione dei tasti ora vive in `ConversationInput::handleInput()`; la
 > composizione e la presentazione della History iniziale in `Tui::run()`.
 > `ConversationRuntime` conserva l'Agent corrente e il ciclo dei Turn.

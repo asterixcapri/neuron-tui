@@ -1,14 +1,14 @@
 # Session commands use Command Controls
 
 _The shared-contract revision replaces `CommandControlsInterface` with
-`CommandAdapterInterface`, retaining the control verbs and adding admission
+`CommandControlsAdapterInterface`, retaining the control verbs and adding admission
 and completion. `Commands::run()` coordinates those phases; ADR-0007 describes
 the Adapter's completion output._
 
 `ClearCommand` and `ResumeCommand` belong to Neuron Interaction because they
 are the native Command interface to Sessions. Like every Command, they return
 no domain-specific result and express their interaction through
-`CommandAdapterInterface`.
+`CommandControlsAdapterInterface`.
 
 Clearing starts a Session and may say what changed. Resuming without a key
 calls `requestSelection()` with a `SelectionRequest` and then finishes. The
@@ -20,4 +20,4 @@ the selected History on the Agent and may say what changed.
 
 This two-step exchange lets a TUI use a Picker and a web frontend use a later
 HTTP request. Neither presentation mechanism enters the shared module, and
-`CommandAdapterInterface` need not retain temporary selection state.
+`CommandControlsAdapterInterface` need not retain temporary selection state.

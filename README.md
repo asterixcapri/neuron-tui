@@ -236,7 +236,7 @@ staged Git diff to the Agent for review:
 ```php
 use NeuronInteraction\Command\CommandArguments;
 use NeuronInteraction\Command\Commands;
-use NeuronInteraction\Command\CommandAdapterInterface;
+use NeuronInteraction\Command\CommandControlsAdapterInterface;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronTui\Tui;
 
@@ -252,8 +252,8 @@ final class ReviewCommand implements CommandInterface
         return 'Reviews what is staged in git.';
     }
 
-    /** @param CommandAdapterInterface<mixed> $adapter */
-    public function run(CommandAdapterInterface $adapter, CommandArguments $arguments): void
+    /** @param CommandControlsAdapterInterface<mixed> $adapter */
+    public function run(CommandControlsAdapterInterface $adapter, CommandArguments $arguments): void
     {
         $diff = shell_exec('git diff --staged') ?: '';
 

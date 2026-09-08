@@ -1,10 +1,10 @@
 # Command execution reports technical outcomes
 
 _The shared-contract revision changes the interface and return contract:
-`CommandAdapterInterface` replaces `CommandControlsInterface`, and
+`CommandControlsAdapterInterface` replaces `CommandControlsInterface`, and
 `Commands::run()` returns Adapter output instead of `CommandExecution`._
 
-Commands return `void`; they use `CommandAdapterInterface` for their visible
+Commands return `void`; they use `CommandControlsAdapterInterface` for their visible
 effects instead of defining domain-specific result types. `Commands::run()`
 coordinates lookup, admission, dispatch and completion in one call. It passes
 the technical `CommandExecution` (completed, unknown or failed) to

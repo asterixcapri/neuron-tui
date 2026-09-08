@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace NeuronTui\Conversation;
 
 use NeuronAI\Agent\Agent;
-use NeuronInteraction\Command\CommandAdapterInterface;
+use NeuronInteraction\Command\CommandControlsAdapterInterface;
 use NeuronInteraction\Command\CommandArguments;
 use NeuronInteraction\Command\CommandExecution;
 use NeuronInteraction\Command\CommandInterface;
@@ -20,10 +20,10 @@ use Throwable;
 /**
  * Terminal behavior before, during, and after one Command invocation.
  *
- * @implements CommandAdapterInterface<null>
+ * @implements CommandControlsAdapterInterface<null>
  * @internal Commands depend on the shared interface, not this Adapter.
  */
-final class TuiAdapter implements CommandAdapterInterface
+final class TuiAdapter implements CommandControlsAdapterInterface
 {
     public function __construct(
         private readonly ConversationRuntime $runtime,

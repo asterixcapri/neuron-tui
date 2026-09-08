@@ -20,7 +20,7 @@ use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\ResumeCommand;
 use NeuronInteraction\Command\SelectionOption;
 use NeuronInteraction\Command\SelectionRequest;
-use NeuronInteraction\Command\CommandAdapterInterface;
+use NeuronInteraction\Command\CommandControlsAdapterInterface;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\FileStorage;
 use NeuronInteraction\Storage\InMemoryStorage;
@@ -65,8 +65,8 @@ final class InputHistoryTest extends TestCase
                 return 'Record that the command ran.';
             }
 
-            /** @param CommandAdapterInterface<mixed> $adapter */
-            public function run(CommandAdapterInterface $adapter, CommandArguments $arguments): void
+            /** @param CommandControlsAdapterInterface<mixed> $adapter */
+            public function run(CommandControlsAdapterInterface $adapter, CommandArguments $arguments): void
             {
                 $this->arguments[] = $arguments->text;
             }
@@ -225,7 +225,7 @@ final class InputHistoryTest extends TestCase
 
         $commands = new Commands(new ObservedCommand(
             new ClearCommand(),
-            static function (CommandAdapterInterface $adapter) use (&$agent): void {
+            static function (CommandControlsAdapterInterface $adapter) use (&$agent): void {
                 $agent = $adapter->agent();
             },
         ));
@@ -287,7 +287,7 @@ final class InputHistoryTest extends TestCase
 
         $commands = new Commands(new ObservedCommand(
             new ResumeCommand(),
-            static function (CommandAdapterInterface $adapter) use (&$agent): void {
+            static function (CommandControlsAdapterInterface $adapter) use (&$agent): void {
                 $agent = $adapter->agent();
             },
         ));
@@ -713,8 +713,8 @@ final class InputHistoryTest extends TestCase
                 return 'Choose an option.';
             }
 
-            /** @param CommandAdapterInterface<mixed> $adapter */
-            public function run(CommandAdapterInterface $adapter, CommandArguments $arguments): void
+            /** @param CommandControlsAdapterInterface<mixed> $adapter */
+            public function run(CommandControlsAdapterInterface $adapter, CommandArguments $arguments): void
             {
                 if ($arguments->text !== '') {
                     $this->chosen = $arguments->text;
@@ -896,8 +896,8 @@ final class InputHistoryTest extends TestCase
                 return $this->description;
             }
 
-            /** @param CommandAdapterInterface<mixed> $adapter */
-            public function run(CommandAdapterInterface $adapter, CommandArguments $arguments): void
+            /** @param CommandControlsAdapterInterface<mixed> $adapter */
+            public function run(CommandControlsAdapterInterface $adapter, CommandArguments $arguments): void
             {
             }
         };
