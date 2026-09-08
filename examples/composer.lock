@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "71ba7be73c7847959dae2263d0ce4e64",
+    "content-hash": "d602d0fed7ecb93db8a516868a25e30b",
     "packages": [
         {
             "name": "amphp/amp",
@@ -976,16 +976,16 @@
         },
         {
             "name": "asterixcapri/neuron-interaction",
-            "version": "v0.8.0",
+            "version": "0.8.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/asterixcapri/neuron-interaction.git",
-                "reference": "3f7f639a915a792504c5f90ecba116a58ac7a712"
+                "reference": "38602fb73220e58e6fa3099df7e6d403789828e0"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/asterixcapri/neuron-interaction/zipball/3f7f639a915a792504c5f90ecba116a58ac7a712",
-                "reference": "3f7f639a915a792504c5f90ecba116a58ac7a712",
+                "url": "https://api.github.com/repos/asterixcapri/neuron-interaction/zipball/38602fb73220e58e6fa3099df7e6d403789828e0",
+                "reference": "38602fb73220e58e6fa3099df7e6d403789828e0",
                 "shasum": ""
             },
             "require": {
@@ -1002,20 +1002,7 @@
                     "NeuronInteraction\\": "src/"
                 }
             },
-            "autoload-dev": {
-                "psr-4": {
-                    "NeuronInteraction\\Tests\\": "tests/",
-                    "NeuronInteraction\\Examples\\": "examples/"
-                }
-            },
-            "scripts": {
-                "stan": [
-                    "phpstan analyse --no-progress --memory-limit=512M"
-                ],
-                "test": [
-                    "phpunit"
-                ]
-            },
+            "notification-url": "https://packagist.org/downloads/",
             "license": [
                 "MIT"
             ],
@@ -1027,10 +1014,10 @@
             ],
             "description": "Presentation-independent interaction modules for Neuron AI Agents.",
             "support": {
-                "source": "https://github.com/asterixcapri/neuron-interaction/tree/v0.8.0",
-                "issues": "https://github.com/asterixcapri/neuron-interaction/issues"
+                "issues": "https://github.com/asterixcapri/neuron-interaction/issues",
+                "source": "https://github.com/asterixcapri/neuron-interaction/tree/0.8.2"
             },
-            "time": "2026-09-06T18:31:01+00:00"
+            "time": "2026-09-08T13:41:21+00:00"
         },
         {
             "name": "asterixcapri/neuron-tui",
@@ -1038,7 +1025,7 @@
             "dist": {
                 "type": "path",
                 "url": "..",
-                "reference": "f580eb563172a3f9f552d24749cf177c362d7eaa"
+                "reference": "ed76558cc265472b44c0c985237f3b212976a741"
             },
             "require": {
                 "amphp/amp": "^3.0",
@@ -3629,7 +3616,7 @@
     "packages-dev": [],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": [],
+    "stability-flags": {},
     "prefer-stable": false,
     "prefer-lowest": false,
     "platform": {

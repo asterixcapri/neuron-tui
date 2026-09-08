@@ -27,12 +27,6 @@
             "NeuronTui\\": "src/"
         }
     },
-    "repositories": [
-        {
-            "type": "vcs",
-            "url": "https://github.com/asterixcapri/neuron-interaction"
-        }
-    ],
     "autoload-dev": {
         "psr-4": {
             "NeuronTui\\Tests\\": "tests/"

@@ -21,10 +21,6 @@
                     "asterixcapri/neuron-tui": "0.8.0"
                 }
             }
-        },
-        {
-            "type": "vcs",
-            "url": "https://github.com/asterixcapri/neuron-interaction"
         }
     ],
     "autoload": {
