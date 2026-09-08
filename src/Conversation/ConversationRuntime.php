@@ -6,7 +6,6 @@ namespace NeuronTui\Conversation;
 
 use Amp\Future;
 use NeuronAI\Agent\Agent;
-use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
 use NeuronTui\View\ConversationView;
 use NeuronTui\View\WorkingIndicator;
 use Throwable;
@@ -68,18 +67,9 @@ final class ConversationRuntime
         return $this->stopped;
     }
 
-    /**
-     * Puts another Agent in charge of answering from here on.
-     *
-     * A conversation is nobody's property: the History the Agent leaving was
-     * answering is handed to the one taking over, so what is on the screen is
-     * still what the Agent holds and nothing is said about the change until
-     * the next answer, which comes from elsewhere. A command that knows the
-     * two Agents are not interchangeable installs another History itself.
-     */
+    /** Installs the Agent already configured for the next turn. */
     public function useAgent(Agent $agent): void
     {
-        $agent->setChatHistory($this->agent->getChatHistory());
         $this->agent = $agent;
     }
 
@@ -114,11 +104,6 @@ final class ConversationRuntime
 
         try {
             $this->response->await();
-        } catch (WorkflowInterrupt $exception) {
-            $this->view->showError(
-                'Human-in-the-loop interruptions are not supported. '
-                    . $exception->getMessage(),
-            );
         } catch (Throwable $exception) {
             $this->showFailure($exception);
         }

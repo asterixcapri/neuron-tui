@@ -12,7 +12,6 @@ use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Command\SelectionOption;
 use NeuronInteraction\Command\SelectionRequest;
-use NeuronInteraction\Session\Session;
 use NeuronInteraction\Session\SessionStore;
 use NeuronTui\View\ConversationView;
 use Revolt\EventLoop;
@@ -122,15 +121,18 @@ final class TuiAdapter implements CommandAdapterInterface
         return $this->runtime->agent();
     }
 
-    public function useAgent(Agent $agent): void
+    public function newAgent(): Agent
     {
-        $this->runtime->useAgent($agent);
+        $current = $this->agent();
+
+        return $current::make();
     }
 
-    public function useSession(Session $session): void
+    public function useAgent(Agent $agent): void
     {
-        $this->agent()->setChatHistory($session);
-        $this->view->showHistory($session->getMessages());
+        $messages = $agent->getChatHistory()->getMessages();
+        $this->runtime->useAgent($agent);
+        $this->view->showHistory($messages);
     }
 
     public function commands(): Commands

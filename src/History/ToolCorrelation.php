@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronTui\History;
 
-use NeuronAI\Tools\ToolInterface;
+use NeuronAI\Tools\ToolCall;
 
 /**
  * Where each tool call was shown, so that its result can find it again.
@@ -25,7 +25,7 @@ final class ToolCorrelation
     /** @var array<string, list<int>> */
     private array $positionsByName = [];
 
-    public function called(ToolInterface $tool, int $position): void
+    public function called(ToolCall $tool, int $position): void
     {
         $callId = $tool->getCallId();
 
@@ -41,7 +41,7 @@ final class ToolCorrelation
     /**
      * Where the call this result answers was shown, if it was shown at all.
      */
-    public function calledAt(ToolInterface $tool): ?int
+    public function calledAt(ToolCall $tool): ?int
     {
         $callId = $tool->getCallId();
 

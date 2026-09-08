@@ -14,15 +14,18 @@ Requires PHP 8.4.1+ and an interactive terminal.
 
 ## Installation
 
-The `0.8.x` branch supports Neuron AI 3.
+The `0.9.x` branch targets Neuron AI 4, currently available as `4.x-dev`.
+Use `0.8.x` for Neuron AI 3.
 
 Run this command in your application's directory:
 
 ```bash
-composer require asterixcapri/neuron-tui
+composer require asterixcapri/neuron-tui:0.9.x-dev asterixcapri/neuron-interaction:0.9.x-dev "neuron-core/neuron-ai:^4.0@dev"
 ```
 
-Composer also installs Neuron Interaction and the other required dependencies.
+This development branch requires the matching Neuron Interaction `0.9.x`
+changes. Until those changes are published, use adjacent local checkouts as
+described under Development.
 
 ![Neuron TUI demo](docs/images/usage.gif)
 
@@ -109,7 +112,9 @@ not automatically register it with SessionStore or resume an earlier conversatio
 
 To persist the initial conversation, create a `FileStorage`, pass it to
 `SessionStore` with the intended user identity, and install the new Session
-directly as the Agent's Chat History:
+directly as the Agent's Chat History. In the session examples, `$agent` is a fresh
+instance of your application Agent subclass, whose defaults configure its provider
+and tools (see Creating and replacing Agents below):
 
 ```php
 use NeuronInteraction\Command\ClearCommand;
@@ -139,6 +144,42 @@ current History installed and displays a warning.
 Without a supplied Store, the TUI uses an in-memory SessionStore owned by `local`.
 To choose another owner, supply a SessionStore configured by the Host Application.
 Input history keeps its independent existing ownership model.
+
+## Creating and replacing Agents
+
+Session commands call `newAgent()` on the Command Adapter. It calls `make()` on
+the active Agent's class, so the class must support construction without required
+arguments and configure its provider, instructions and tools itself. Configure
+an application Agent subclass for conversations that use `/clear` or `/resume`.
+An initial `new Agent()->setAiProvider($provider)` works for a single conversation,
+but a recreated base Agent has no configured provider.
+
+`agent()` returns the current instance. `newAgent()` returns a fresh instance
+without activating it. `useAgent($agent)` activates the supplied instance and
+displays its History. It does not transfer the previous Agent's History.
+The separate `useSession()` operation has been removed.
+
+A command starts a new conversation like this:
+
+```php
+$agent = $adapter->newAgent();
+$agent->setChatHistory($adapter->sessionStore()->create());
+$adapter->useAgent($agent);
+```
+
+To change the Agent while continuing the same conversation, assign the current
+History explicitly before installing the replacement:
+
+```php
+$replacement->setChatHistory($adapter->agent()->getChatHistory());
+$adapter->useAgent($replacement);
+```
+
+A recreated Agent uses its class defaults. Configuration applied to the previous
+instance after construction is not copied. In the demo, `/clear` and `/resume`
+therefore reset a model selected with `/model` to `DemoAgent`'s default model.
+Each managed Session uses its storage key as its Neuron thread ID; switching
+Sessions installs a fresh Agent instead of rebinding the old one.
 
 ## Input history
 
@@ -233,7 +274,8 @@ Tui::make($agent, commands: new Commands(new ReviewCommand()))->run();
 
 `examples/` is a standalone Composer project acting as a Host Application. It
 connects the Conversation TUI to OpenAI or Anthropic and consumes this library
-through a local path repository. Install its dependencies, create the local
+through local path repositories. Check out `neuron-interaction` on `0.9.x`
+beside this repository, including the matching Agent Adapter changes. Install its dependencies, create the local
 environment file, add the credentials for the providers you want to use, then
 start it:
 
@@ -251,7 +293,10 @@ A fresh checkout needs the Composer dependencies and the agent skills, which
 are restored from `skills-lock.json`:
 
 ```bash
-composer install
+# Use the matching sibling checkout until neuron-interaction 0.9.x is published.
+cp composer.json composer.neuron4.local.json
+COMPOSER=composer.neuron4.local.json composer config repositories.neuron-interaction path ../neuron-interaction
+COMPOSER=composer.neuron4.local.json composer update
 npx skills experimental_install
 ```
 

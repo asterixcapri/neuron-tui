@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronTui\View;
 
-use NeuronAI\Tools\ToolInterface;
+use NeuronAI\Tools\ToolCall;
 use NeuronTui\History\ToolActivityText;
 use NeuronTui\History\ToolCorrelation;
 
@@ -36,7 +36,7 @@ final class ToolActivity
     /**
      * Shows a call, and reports where it was shown.
      */
-    public function start(ToolInterface $tool): int
+    public function start(ToolCall $tool): int
     {
         $this->activities[] = $this->pane->addNote(
             ToolActivityText::pending($tool),
@@ -49,7 +49,7 @@ final class ToolActivity
         return $position;
     }
 
-    public function finish(ToolInterface $tool): void
+    public function finish(ToolCall $tool): void
     {
         // A result nothing asked for is still worth showing, so it opens the
         // call it should have answered and closes it at once.

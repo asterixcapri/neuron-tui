@@ -14,7 +14,7 @@ use NeuronAI\Chat\Messages\ContentBlocks\VideoContent;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\ToolResultMessage;
-use NeuronAI\Tools\ToolInterface;
+use NeuronAI\Tools\ToolCall;
 use NeuronTui\View\DisplayableText;
 
 /**
@@ -81,7 +81,7 @@ final class HistoryProjection
         if ($message instanceof ToolCallMessage) {
             $this->say(EntryKind::Agent, $message);
 
-            foreach ($message->getTools() as $tool) {
+            foreach ($message->getToolCalls() as $tool) {
                 $this->callTool($tool);
             }
 
@@ -89,7 +89,7 @@ final class HistoryProjection
         }
 
         if ($message instanceof ToolResultMessage) {
-            foreach ($message->getTools() as $tool) {
+            foreach ($message->getToolCalls() as $tool) {
                 $this->completeTool($tool);
             }
 
@@ -115,7 +115,7 @@ final class HistoryProjection
         $this->entries[] = new Entry($kind, $contents);
     }
 
-    private function callTool(ToolInterface $tool): int
+    private function callTool(ToolCall $tool): int
     {
         $this->entries[] = new Entry(
             EntryKind::Tool,
@@ -127,7 +127,7 @@ final class HistoryProjection
         return $position;
     }
 
-    private function completeTool(ToolInterface $tool): void
+    private function completeTool(ToolCall $tool): void
     {
         // A result that finds no call of its own is still worth showing, so
         // it opens the call it should have answered and closes it at once.

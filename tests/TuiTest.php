@@ -8,8 +8,6 @@ use Closure;
 use Generator;
 use InvalidArgumentException;
 use NeuronAI\Agent\Agent;
-use NeuronAI\Agent\Middleware\ToolApproval;
-use NeuronAI\Agent\Nodes\ToolNode;
 use NeuronAI\Chat\Enums\MessageRole;
 use NeuronAI\Chat\Enums\SourceType;
 use NeuronAI\Chat\History\InMemoryChatHistory;
@@ -26,8 +24,9 @@ use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Testing\FakeAIProvider;
+use NeuronAI\Providers\ProviderResponse;
 use NeuronAI\Testing\RequestRecord;
-use NeuronAI\Tools\Tool;
+use NeuronAI\Tools\ToolCall;
 use NeuronInteraction\Command\AbstractCommandKit;
 use NeuronInteraction\Command\CommandArguments;
 use NeuronInteraction\Command\Commands;
@@ -41,6 +40,9 @@ use NeuronInteraction\Command\ResumeCommand;
 use NeuronInteraction\Command\SessionCommandKit;
 
 use NeuronInteraction\Command\CommandAdapterInterface;
+use NeuronTui\Tests\Support\CallbackTool;
+use NeuronTui\Tests\Support\ObservedCommand;
+use NeuronTui\Tests\Support\SelfConfiguredAgent;
 use NeuronTui\Tui;
 use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Session\Session;
@@ -324,7 +326,7 @@ MARKDOWN;
                 parent::__construct($response);
             }
 
-            public function chat(Message ...$messages): Message
+            public function chat(Message ...$messages): ProviderResponse
             {
                 throw new \LogicException('Neuron TUI must stream responses.');
             }
@@ -340,7 +342,7 @@ MARKDOWN;
                     $this->finalChunk,
                 );
 
-                return $response;
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = new Agent();
@@ -508,7 +510,7 @@ MARKDOWN;
                     ' second chunk',
                 );
 
-                return $response;
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = new Agent();
@@ -547,7 +549,7 @@ MARKDOWN;
                     'Response started.',
                 );
 
-                return $response;
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = new Agent();
@@ -618,7 +620,7 @@ MARKDOWN;
                 yield new TextChunk('empty-stream', '');
                 yield new TextChunk('empty-stream', " \n\t ");
 
-                return $response;
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = new Agent();
@@ -660,7 +662,7 @@ MARKDOWN;
                     $response->getContent() ?? '',
                 );
 
-                return $response;
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = new Agent();
@@ -757,7 +759,7 @@ MARKDOWN;
 
     public function testHistoricalToolActivityIsCompactAndSafe(): void
     {
-        $tool = (new Tool("read_\x00file"))
+        $tool = (new ToolCall("read_\x00file"))
             ->setCallId('history-call')
             ->setInputs([
                 'path' => "first line\nsecond line "
@@ -766,10 +768,10 @@ MARKDOWN;
             ])
             ->setResult("complete\tok \xFF" . str_repeat('y', 160)
                 . '-result-tail');
-        $firstFallback = (new Tool('search'))
+        $firstFallback = (new ToolCall('search'))
             ->setInputs(['q' => 'one'])
             ->setResult('first fallback result');
-        $secondFallback = (new Tool('search'))
+        $secondFallback = (new ToolCall('search'))
             ->setInputs(['q' => 'two'])
             ->setResult('second fallback result');
         $agent = new Agent();
@@ -818,19 +820,19 @@ MARKDOWN;
 
     public function testLiveToolCallsAreConnectedToTheirResults(): void
     {
-        $lookup = (new Tool('lookup'))
-            ->setCallId('lookup-call')
-            ->setInputs(['q' => 'alpha'])
-            ->setCallable(static fn (): string => "alpha\tresult");
-        $fallback = (new Tool('fallback'))
-            ->setInputs(['q' => 'beta'])
-            ->setCallable(static fn (): string => 'beta result');
+        $lookup = new CallbackTool('lookup', static fn (): string => "alpha\tresult");
+        $fallback = new CallbackTool('fallback', static fn (): string => 'beta result');
         $provider = new FakeAIProvider(
-            new ToolCallMessage(tools: [$lookup, $fallback]),
+            new ToolCallMessage(tools: [
+                new ToolCall('lookup', 'lookup-call', ['q' => 'alpha']),
+                new ToolCall('fallback', inputs: ['q' => 'beta']),
+            ]),
             new AssistantMessage('Both tools completed.'),
         );
         $agent = new Agent();
         $agent->setAiProvider($provider);
+        $agent->addTool($lookup);
+        $agent->addTool($fallback);
         $terminal = new VirtualTerminal(rows: 32);
         EventLoop::queue(
             static fn () => $terminal->simulateInput("Run tools\r"),
@@ -860,27 +862,26 @@ MARKDOWN;
     {
         $displayAtExecution = null;
         $terminal = new VirtualTerminal(rows: 32);
-        $tool = (new Tool('slow_lookup'))
-            ->setCallId('slow-lookup-call')
-            ->setInputs(['q' => 'alpha'])
-            ->setCallable(
-                static function () use (
-                    &$displayAtExecution,
-                    $terminal,
-                ): string {
-                    $displayAtExecution = AnsiUtils::stripAnsiCodes(
-                        $terminal->getOutput(),
-                    );
+        $tool = new CallbackTool(
+            'slow_lookup',
+            static function () use (
+                &$displayAtExecution,
+                $terminal,
+            ): string {
+                $displayAtExecution = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
 
-                    return 'alpha result';
-                },
-            );
+                return 'alpha result';
+            },
+        );
         $provider = new FakeAIProvider(
-            new ToolCallMessage(tools: [$tool]),
+            new ToolCallMessage(tools: [new ToolCall('slow_lookup', 'slow-lookup-call', ['q' => 'alpha'])]),
             new AssistantMessage('Tool completed.'),
         );
         $agent = new Agent();
         $agent->setAiProvider($provider);
+        $agent->addTool($tool);
         EventLoop::queue(
             static fn () => $terminal->simulateInput("Run tool\r"),
         );
@@ -909,22 +910,21 @@ MARKDOWN;
     {
         $displayDuringExecution = null;
         $terminal = new VirtualTerminal(rows: 32);
-        $tool = (new Tool('slow_write'))
-            ->setCallId('slow-write-call')
-            ->setInputs(['file_path' => 'example.txt'])
-            ->setCallable(
-                static function (): string {
-                    \Amp\delay(0.3);
+        $tool = new CallbackTool(
+            'slow_write',
+            static function (): string {
+                \Amp\delay(0.3);
 
-                    return 'written';
-                },
-            );
+                return 'written';
+            },
+        );
         $provider = new FakeAIProvider(
-            new ToolCallMessage(tools: [$tool]),
+            new ToolCallMessage(tools: [new ToolCall('slow_write', 'slow-write-call', ['file_path' => 'example.txt'])]),
             new AssistantMessage('File written.'),
         );
         $agent = new Agent();
         $agent->setAiProvider($provider);
+        $agent->addTool($tool);
         EventLoop::queue(
             static fn () => $terminal->simulateInput("Write file\r"),
         );
@@ -1029,7 +1029,7 @@ MARKDOWN;
         $afterClear = null;
         $forcedExit = false;
         $provider = new FakeAIProvider(new AssistantMessage('An answer.'));
-        $agent = new Agent();
+        $agent = new SelfConfiguredAgent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         EventLoop::queue(
@@ -1049,7 +1049,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.3,
-            static function () use (&$afterResume, &$resumedContent, $terminal, $agent): void {
+            static function () use (&$afterResume, &$resumedContent, $terminal, &$agent): void {
                 $afterResume = AnsiUtils::stripAnsiCodes(
                     $terminal->getOutput(),
                 );
@@ -1080,7 +1080,7 @@ MARKDOWN;
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
-            commands: new Commands(self::sessionCommands()),
+            commands: new Commands(self::observedSessionCommands($agent)),
         ))->run();
 
         // `/resume <key>` installs the Session directly without a Picker.
@@ -1327,8 +1327,8 @@ MARKDOWN;
         );
         $replacement = $this->commandThat(
             static function (CommandAdapterInterface $adapter) use ($successor, $replacementHistory): void {
+                $successor->setChatHistory($replacementHistory);
                 $adapter->useAgent($successor);
-                $adapter->useSession($replacementHistory);
             },
             '/replace',
         );
@@ -1340,7 +1340,9 @@ MARKDOWN;
             ): void {
                 $observedAgent = $adapter->agent();
                 $observedArguments = $arguments;
-                $adapter->useSession($resultingHistory);
+                $newAgent = $adapter->newAgent();
+                $newAgent->setChatHistory($resultingHistory);
+                $adapter->useAgent($newAgent);
 
                 throw new \RuntimeException('Selected command failed.');
             },
@@ -1367,7 +1369,7 @@ MARKDOWN;
         self::assertSame($successor, $observedAgent);
         self::assertSame('  /chosen value  ', $observedArguments);
         self::assertSame($originalHistory, $agent->getChatHistory());
-        self::assertSame($resultingHistory, $successor->getChatHistory());
+        self::assertSame($replacementHistory, $successor->getChatHistory());
         self::assertSame(
             ['Resulting conversation.', 'Resulting answer.'],
             array_map(static fn (Message $message): mixed => $message->getContent(), $resultingHistory->getMessages()),
@@ -1392,7 +1394,7 @@ MARKDOWN;
                 \Amp\delay(0.3);
                 yield new TextChunk('selection-stream', 'A slow answer.');
 
-                return $response;
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = new Agent();
@@ -1448,7 +1450,7 @@ MARKDOWN;
                 $adapter->agent()
                     ->setAiProvider($chosen)
                     ->setInstructions('Answer in one word.')
-                    ->addTool(new Tool('read_file'));
+                    ->addTool(new CallbackTool('read_file', static fn (): string => ''));
             },
         );
         EventLoop::queue(
@@ -1492,6 +1494,7 @@ MARKDOWN;
                 CommandAdapterInterface $adapter,
                 string $arguments,
             ) use ($successor): void {
+                $successor->setChatHistory($adapter->agent()->getChatHistory());
                 $adapter->useAgent($successor);
             },
         );
@@ -1549,8 +1552,8 @@ MARKDOWN;
                 CommandAdapterInterface $adapter,
                 string $arguments,
             ) use ($successor, $replacementSession): void {
+                $successor->setChatHistory($replacementSession);
                 $adapter->useAgent($successor);
-                $adapter->useSession($replacementSession);
             },
         );
         EventLoop::queue(
@@ -1670,7 +1673,9 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
             static function (CommandAdapterInterface $adapter, string $arguments) use ($replacementSession): void {
-                $adapter->useSession($replacementSession);
+                $newAgent = $adapter->newAgent();
+                $newAgent->setChatHistory($replacementSession);
+                $adapter->useAgent($newAgent);
 
                 throw new \RuntimeException('The command broke.');
             },
@@ -1691,7 +1696,7 @@ MARKDOWN;
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
-        // useSession() paints the new conversation before the failure is
+        // useAgent() paints the new conversation before the failure is
         // reported, so the error remains visible on that conversation.
         self::assertStringContainsString(
             'RuntimeException: The command broke.',
@@ -1828,7 +1833,7 @@ MARKDOWN;
             'Earlier question.',
             $wipedDisplay,
         );
-        self::assertSame([], $agent->getChatHistory()->getMessages());
+        self::assertCount(2, $agent->getChatHistory()->getMessages());
         // `/quit` behaves as `/exit` always did.
         self::assertFalse($forcedExit);
     }
@@ -1924,7 +1929,9 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
             static function (CommandAdapterInterface $adapter, string $arguments) use ($restored): void {
-                $adapter->useSession($restored);
+                $newAgent = $adapter->newAgent();
+                $newAgent->setChatHistory($restored);
+                $adapter->useAgent($newAgent);
             },
         );
         EventLoop::queue(
@@ -2006,7 +2013,7 @@ MARKDOWN;
                 \Amp\delay(0.4);
                 yield new TextChunk('slow-stream', 'A slow answer.');
 
-                return $response;
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = new Agent();
@@ -2067,7 +2074,7 @@ MARKDOWN;
                 \Amp\delay(0.5);
                 yield new TextChunk('slow-stream', 'A slow answer.');
 
-                return $response;
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = new Agent();
@@ -2131,7 +2138,7 @@ MARKDOWN;
                 \Amp\delay(0.5);
                 yield new TextChunk('slow-stream', 'A slow answer.');
 
-                return $response;
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = new Agent();
@@ -2197,7 +2204,7 @@ MARKDOWN;
                 $this->completed = true;
                 yield new TextChunk('slow-stream', 'A slow answer.');
 
-                return $response;
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = new Agent();
@@ -4220,7 +4227,7 @@ MARKDOWN;
                 \Amp\delay(0.5);
                 yield new TextChunk('slow-stream', 'A slow answer.');
 
-                return $response;
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = new Agent();
@@ -4296,7 +4303,7 @@ MARKDOWN;
                 \Amp\delay(0.5);
                 yield new TextChunk('slow-stream', 'A slow answer.');
 
-                return $response;
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = new Agent();
@@ -4843,9 +4850,19 @@ MARKDOWN;
     /** @return list<CommandInterface> */
     private static function sessionCommands(): array
     {
+        return [new ClearCommand(), new ResumeCommand(), new LeaveCommand()];
+    }
+
+    /** @return list<CommandInterface> */
+    private static function observedSessionCommands(Agent &$active): array
+    {
+        $observe = static function (CommandAdapterInterface $adapter) use (&$active): void {
+            $active = $adapter->agent();
+        };
+
         return [
-            new ClearCommand(),
-            new ResumeCommand(),
+            new ObservedCommand(new ClearCommand(), $observe),
+            new ObservedCommand(new ResumeCommand(), $observe),
             new LeaveCommand(),
         ];
     }
@@ -4853,7 +4870,7 @@ MARKDOWN;
     public function testTheDefaultStorageWritesNothingToDisk(): void
     {
         $provider = new FakeAIProvider(new AssistantMessage('An answer.'));
-        $agent = new Agent();
+        $agent = new SelfConfiguredAgent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $pickerDisplay = null;
@@ -4894,7 +4911,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands(self::sessionCommands()),
+            commands: new Commands(self::observedSessionCommands($agent)),
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -4966,7 +4983,7 @@ MARKDOWN;
             sessionStore: $sessionStore,
             inputHistory: new InputHistory($storage),
             commands: new Commands([
-                ...self::sessionCommands(),
+                ...self::observedSessionCommands($agent),
                 $fillSession,
             ]),
         ))->run();
@@ -4993,7 +5010,7 @@ MARKDOWN;
     public function testClearLeavesTheConversationItReplacedStored(): void
     {
         $provider = new FakeAIProvider(new AssistantMessage('An answer.'));
-        $agent = new Agent();
+        $agent = new SelfConfiguredAgent();
         $agent->setAiProvider($provider);
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
@@ -5020,7 +5037,7 @@ MARKDOWN;
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
-            commands: new Commands(self::sessionCommands()),
+            commands: new Commands(self::observedSessionCommands($agent)),
         ))->run();
 
         $listed = $sessionStore->summaries();
@@ -5062,7 +5079,7 @@ MARKDOWN;
                 \Amp\delay(0.5);
                 yield new TextChunk('slow-stream', 'A slow answer.');
 
-                return $response;
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = new Agent();
@@ -5137,7 +5154,7 @@ MARKDOWN;
         $provider = new FakeAIProvider(
             new AssistantMessage('A later answer.'),
         );
-        $agent = new Agent();
+        $agent = new SelfConfiguredAgent();
         $agent->setAiProvider($provider);
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
@@ -5177,7 +5194,7 @@ MARKDOWN;
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
-            commands: new Commands(self::sessionCommands()),
+            commands: new Commands(self::observedSessionCommands($agent)),
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -5201,6 +5218,8 @@ MARKDOWN;
                 array_slice($agent->getChatHistory()->getMessages(), 0, 2),
             ),
         );
+        $provider = $agent->getProvider();
+        self::assertInstanceOf(FakeAIProvider::class, $provider);
         $provider->assertSent(
             static fn (RequestRecord $request): bool => array_map(
                 static fn (Message $message): string => $message->getRole(),
@@ -5260,7 +5279,7 @@ MARKDOWN;
                 terminal: $terminal,
                 sessionStore: new SessionStore($storage, 'test-user'),
                 inputHistory: new InputHistory($storage),
-                commands: new Commands(self::sessionCommands()),
+                commands: new Commands(self::observedSessionCommands($agent)),
             ))->run();
 
             self::assertIsString($pickerDisplay);
@@ -5349,7 +5368,7 @@ MARKDOWN;
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
-            commands: new Commands(self::sessionCommands()),
+            commands: new Commands(self::observedSessionCommands($agent)),
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -5407,7 +5426,7 @@ MARKDOWN;
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
-            commands: new Commands(self::sessionCommands()),
+            commands: new Commands(self::observedSessionCommands($agent)),
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -5575,7 +5594,7 @@ MARKDOWN;
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
-            commands: new Commands(self::sessionCommands()),
+            commands: new Commands(self::observedSessionCommands($agent)),
         ))->run();
 
         self::assertIsString($narrowedDisplay);
@@ -5624,7 +5643,7 @@ MARKDOWN;
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
-            commands: new Commands(self::sessionCommands()),
+            commands: new Commands(self::observedSessionCommands($agent)),
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -5651,7 +5670,7 @@ MARKDOWN;
                 \Amp\delay(0.4);
                 yield new TextChunk('slow-stream', 'A slow answer.');
 
-                return $response;
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = new Agent();
@@ -5934,7 +5953,7 @@ MARKDOWN;
             'The earlier subject',
             $clearedDisplay,
         );
-        self::assertSame([], $agent->getChatHistory()->getMessages());
+        self::assertCount(2, $agent->getChatHistory()->getMessages());
     }
 
     public function testPageKeysBrowseAConversationAndReturnToLatest(): void
@@ -5950,7 +5969,9 @@ MARKDOWN;
         $history = $this->sessionWith($messages);
         $restore = $this->commandThat(
             static function (CommandAdapterInterface $adapter) use ($history): void {
-                $adapter->useSession($history);
+                $newAgent = $adapter->newAgent();
+                $newAgent->setChatHistory($history);
+                $adapter->useAgent($newAgent);
             },
         );
         $terminal = new VirtualTerminal(rows: 16);
@@ -6044,7 +6065,7 @@ MARKDOWN;
                     "\n" . $this->third,
                 );
 
-                return $response;
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = new Agent();
@@ -6102,14 +6123,12 @@ MARKDOWN;
     public function testHumanInterruptionIsExplicitlyUnsupported(): void
     {
         PublishToolCallback::$executed = false;
-        $tool = (new Tool('publish'))
-            ->setCallId('publish-call')
-            ->setInputs(['target' => 'production'])
-            ->setCallable(new PublishToolCallback());
-        $provider = new FakeAIProvider(new ToolCallMessage(tools: [$tool]));
+        $tool = new CallbackTool('publish', (new PublishToolCallback())(...));
+        $provider = new FakeAIProvider(new ToolCallMessage(tools: [new ToolCall('publish', 'publish-call', ['target' => 'production'])]));
         $agent = new Agent();
         $agent->setAiProvider($provider);
-        $agent->addMiddleware(ToolNode::class, new ToolApproval());
+        $agent->addTool($tool);
+        $tool->requireApproval();
         $terminal = new VirtualTerminal(rows: 28);
         EventLoop::queue(
             static fn () => $terminal->simulateInput("Publish now\r"),

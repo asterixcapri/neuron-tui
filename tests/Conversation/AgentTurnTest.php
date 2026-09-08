@@ -11,8 +11,11 @@ use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
 use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Testing\FakeAIProvider;
+use NeuronAI\Providers\ProviderResponse;
 use NeuronAI\Tools\Tool;
+use NeuronAI\Tools\ToolCall;
 use NeuronTui\Conversation\AgentTurn;
+use NeuronTui\Tests\Support\CallbackTool;
 use NeuronTui\View\ConversationView;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
@@ -32,7 +35,7 @@ final class AgentTurnTest extends TestCase
                 yield new TextChunk('turn-stream', 'Forty');
                 yield new TextChunk('turn-stream', '-two.');
 
-                return $response;
+                return new ProviderResponse(message: $response);
             }
         };
 
@@ -68,7 +71,7 @@ final class AgentTurnTest extends TestCase
                 yield new TextChunk('blank-stream', '');
                 yield new TextChunk('blank-stream', " \n\t ");
 
-                return $response;
+                return new ProviderResponse(message: $response);
             }
         };
 
@@ -80,16 +83,13 @@ final class AgentTurnTest extends TestCase
     public function testATurnSpentOnToolsAloneIsNotAnEmptyAnswer(): void
     {
         $terminal = new VirtualTerminal(columns: 100, rows: 24);
-        $tool = (new Tool('lookup'))
-            ->setCallId('lookup-call')
-            ->setInputs(['q' => 'alpha'])
-            ->setCallable(static fn (): string => 'alpha result');
+        $tool = new CallbackTool('lookup', static fn (): string => 'alpha result');
         $provider = new FakeAIProvider(
-            new ToolCallMessage(tools: [$tool]),
+            new ToolCallMessage(tools: [new ToolCall('lookup', 'lookup-call', ['q' => 'alpha'])]),
             new AssistantMessage(),
         );
 
-        $display = $this->respond($provider, 'Run the tool.', $terminal);
+        $display = $this->respond($provider, 'Run the tool.', $terminal, $tool);
 
         self::assertStringContainsString('● lookup {"q":"alpha"}', $display);
         self::assertStringContainsString('⎿ alpha result', $display);
@@ -137,8 +137,14 @@ final class AgentTurnTest extends TestCase
         FakeAIProvider $provider,
         string $message,
         VirtualTerminal $terminal,
+        ?Tool $tool = null,
     ): string {
         $agent = $this->agentOf($provider);
+
+        if ($tool !== null) {
+            $agent->addTool($tool);
+        }
+
         $view = new ConversationView($terminal, 'Neuron AI', 'Conversation');
         $turn = new AgentTurn($view);
 

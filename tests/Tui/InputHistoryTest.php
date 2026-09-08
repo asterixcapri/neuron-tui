@@ -13,6 +13,7 @@ use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Testing\FakeAIProvider;
+use NeuronAI\Providers\ProviderResponse;
 use NeuronInteraction\Command\CommandArguments;
 use NeuronInteraction\Command\ClearCommand;
 use NeuronInteraction\Command\CommandInterface;
@@ -24,6 +25,8 @@ use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\FileStorage;
 use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Tui;
+use NeuronTui\Tests\Support\ObservedCommand;
+use NeuronTui\Tests\Support\SelfConfiguredAgent;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
@@ -41,7 +44,7 @@ final class InputHistoryTest extends TestCase
                 \Amp\delay(0.3);
                 yield new TextChunk('slow-stream', 'A slow answer.');
 
-                return $response;
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = new Agent();
@@ -137,7 +140,7 @@ final class InputHistoryTest extends TestCase
                     $response->getContent() ?? '',
                 );
 
-                return $response;
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = new Agent();
@@ -190,7 +193,7 @@ final class InputHistoryTest extends TestCase
             new AssistantMessage('First answer.'),
             new AssistantMessage('Second answer.'),
         );
-        $agent = new Agent();
+        $agent = new SelfConfiguredAgent();
         $agent->setAiProvider($provider);
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
@@ -220,13 +223,27 @@ final class InputHistoryTest extends TestCase
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, $terminal, sessionStore: $sessionStore, inputHistory: new InputHistory($storage), commands: new Commands(new ClearCommand())))
-            ->run();
+        $commands = new Commands(new ObservedCommand(
+            new ClearCommand(),
+            static function (CommandAdapterInterface $adapter) use (&$agent): void {
+                $agent = $adapter->agent();
+            },
+        ));
+        (new Tui(
+            $agent,
+            $terminal,
+            sessionStore: $sessionStore,
+            inputHistory: new InputHistory($storage),
+            commands: $commands,
+        ))->run();
 
-        self::assertCount(2, $provider->getRecorded());
+        self::assertCount(1, $provider->getRecorded());
+        $provider = $agent->getProvider();
+        self::assertInstanceOf(FakeAIProvider::class, $provider);
+        self::assertCount(1, $provider->getRecorded());
         self::assertSame(
             'Remember across clear after clear',
-            $provider->getRecorded()[1]->messages[0]->getContent(),
+            $provider->getRecorded()[0]->messages[0]->getContent(),
         );
         self::assertCount(2, (new SessionStore($storage, 'test-user'))->summaries());
     }
@@ -234,7 +251,7 @@ final class InputHistoryTest extends TestCase
     public function testResumingASessionKeepsItsInputHistoryAvailable(): void
     {
         $provider = new FakeAIProvider(new AssistantMessage('A new answer.'));
-        $agent = new Agent();
+        $agent = new SelfConfiguredAgent();
         $agent->setAiProvider($provider);
         $storage = new InMemoryStorage();
         $earlier = (new SessionStore($storage, 'test-user'))->create();
@@ -268,9 +285,23 @@ final class InputHistoryTest extends TestCase
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, $terminal, sessionStore: new SessionStore($storage, 'test-user'), inputHistory: new InputHistory($storage), commands: new Commands(new ResumeCommand())))
-            ->run();
+        $commands = new Commands(new ObservedCommand(
+            new ResumeCommand(),
+            static function (CommandAdapterInterface $adapter) use (&$agent): void {
+                $agent = $adapter->agent();
+            },
+        ));
+        (new Tui(
+            $agent,
+            $terminal,
+            sessionStore: new SessionStore($storage, 'test-user'),
+            inputHistory: new InputHistory($storage),
+            commands: $commands,
+        ))->run();
 
+        $provider->assertNothingSent();
+        $provider = $agent->getProvider();
+        self::assertInstanceOf(FakeAIProvider::class, $provider);
         self::assertCount(1, $provider->getRecorded());
         self::assertSame(
             'Remember across resume after resume',

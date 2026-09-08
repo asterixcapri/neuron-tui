@@ -17,7 +17,8 @@ use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Chat\Messages\UserMessage;
-use NeuronAI\Tools\Tool;
+use NeuronAI\Tools\ToolCall;
+use NeuronAI\Tools\ToolOutput;
 use NeuronTui\History\Entry;
 use NeuronTui\History\EntryKind;
 use NeuronTui\History\HistoryProjection;
@@ -133,7 +134,7 @@ final class HistoryProjectionTest extends TestCase
 
     public function testAnUnsafeToolResultIsPreviewedRatherThanShownRaw(): void
     {
-        $tool = (new Tool("read_\x00file"))
+        $tool = (new ToolCall("read_\x00file"))
             ->setCallId('history-call')
             ->setInputs(['path' => "first line\nsecond line"])
             ->setResult("complete\tok \xFF" . str_repeat('y', 160)
@@ -161,7 +162,7 @@ final class HistoryProjectionTest extends TestCase
 
     public function testAToolCallIsPairedWithItsResult(): void
     {
-        $tool = (new Tool('lookup'))
+        $tool = (new ToolCall('lookup'))
             ->setCallId('lookup-call')
             ->setInputs(['q' => 'alpha'])
             ->setResult('alpha result');
@@ -183,13 +184,32 @@ final class HistoryProjectionTest extends TestCase
         self::assertStringNotContainsString('Running', $entries[1]->text);
     }
 
+    public function testMultimodalToolResultsShowOnlyTheirDisplayableText(): void
+    {
+        $call = new ToolCall('inspect', 'image-call');
+        $result = (new ToolCall('inspect', 'image-call'))->setResult(new ToolOutput([
+            new TextContent("A diagram.\x1b[2J"),
+            new ImageContent('private-image-payload', SourceType::BASE64, 'image/png'),
+        ]));
+
+        $entries = $this->project([
+            new ToolCallMessage(tools: [$call]),
+            new ToolResultMessage([$result]),
+        ]);
+
+        self::assertCount(1, $entries);
+        self::assertStringContainsString('⎿ A diagram.', $entries[0]->text);
+        self::assertStringNotContainsString('private-image-payload', $entries[0]->text);
+        self::assertStringNotContainsString("\x1b", $entries[0]->text);
+    }
+
     public function testAResultArrivingOutOfOrderStillFindsItsCall(): void
     {
-        $first = (new Tool('first'))
+        $first = (new ToolCall('first'))
             ->setCallId('first-call')
             ->setInputs(['q' => 'one'])
             ->setResult('first result');
-        $second = (new Tool('second'))
+        $second = (new ToolCall('second'))
             ->setCallId('second-call')
             ->setInputs(['q' => 'two'])
             ->setResult('second result');
@@ -208,10 +228,10 @@ final class HistoryProjectionTest extends TestCase
 
     public function testCallsWithoutACallIdArePairedInTheOrderMade(): void
     {
-        $first = (new Tool('search'))
+        $first = (new ToolCall('search'))
             ->setInputs(['q' => 'one'])
             ->setResult('first fallback result');
-        $second = (new Tool('search'))
+        $second = (new ToolCall('search'))
             ->setInputs(['q' => 'two'])
             ->setResult('second fallback result');
 
@@ -233,7 +253,7 @@ final class HistoryProjectionTest extends TestCase
 
     public function testAToolCallWhoseResultNeverArrivesIsStillShown(): void
     {
-        $abandoned = (new Tool('lookup'))
+        $abandoned = (new ToolCall('lookup'))
             ->setCallId('abandoned-call')
             ->setInputs(['q' => 'alpha']);
 
@@ -251,7 +271,7 @@ final class HistoryProjectionTest extends TestCase
 
     public function testAResultWithoutACallStillProducesAnEntry(): void
     {
-        $orphan = (new Tool('lookup'))
+        $orphan = (new ToolCall('lookup'))
             ->setCallId('orphan-call')
             ->setInputs(['q' => 'alpha'])
             ->setResult('orphan result');
@@ -267,7 +287,7 @@ final class HistoryProjectionTest extends TestCase
 
     public function testTextSentWithAToolCallComesBeforeTheActivity(): void
     {
-        $tool = (new Tool('lookup'))
+        $tool = (new ToolCall('lookup'))
             ->setCallId('lookup-call')
             ->setInputs(['q' => 'alpha']);
 
@@ -294,7 +314,7 @@ final class HistoryProjectionTest extends TestCase
 
     public function testTheProjectionCanBeRunAgainAtAnyMoment(): void
     {
-        $tool = (new Tool('lookup'))
+        $tool = (new ToolCall('lookup'))
             ->setCallId('lookup-call')
             ->setInputs(['q' => 'alpha'])
             ->setResult('alpha result');

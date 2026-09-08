@@ -50,9 +50,7 @@ final class AgentTurn
         $tools = $this->view->beginAgentResponse();
         $contents = '';
 
-        $events = $agent
-            ->stream(new UserMessage($message))
-            ->events();
+        $events = $agent->stream(new UserMessage($message));
 
         foreach ($events as $event) {
             if ($event instanceof ToolCallChunk) {
@@ -82,6 +80,12 @@ final class AgentTurn
             $contents .= $event->content;
             $this->view->appendAgentText($event->content);
             $this->view->paintPendingChanges();
+        }
+
+        if ($events->getReturn()->isInterrupted()) {
+            $this->view->showError('Human-in-the-loop interruptions are not supported.');
+
+            return;
         }
 
         $visibleContents = DisplayableText::safe($contents);

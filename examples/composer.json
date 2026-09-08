@@ -6,9 +6,9 @@
     "require": {
         "php": "^8.4.1",
         "amphp/http-client": "^5.3",
-        "asterixcapri/neuron-interaction": "~0.8.0",
-        "asterixcapri/neuron-tui": "~0.8.0",
-        "neuron-core/neuron-ai": "^3.15.26",
+        "asterixcapri/neuron-interaction": "~0.9.0@dev",
+        "asterixcapri/neuron-tui": "~0.9.0@dev",
+        "neuron-core/neuron-ai": "^4.0@dev",
         "symfony/dotenv": "^8.1"
     },
     "repositories": [
@@ -18,7 +18,17 @@
             "options": {
                 "symlink": true,
                 "versions": {
-                    "asterixcapri/neuron-tui": "0.8.0"
+                    "asterixcapri/neuron-tui": "0.9.x-dev"
+                }
+            }
+        },
+        {
+            "type": "path",
+            "url": "../../neuron-interaction",
+            "options": {
+                "symlink": true,
+                "versions": {
+                    "asterixcapri/neuron-interaction": "0.9.x-dev"
                 }
             }
         }

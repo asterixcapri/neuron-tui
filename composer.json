@@ -12,9 +12,9 @@
     "require": {
         "php": ">=8.4.1",
         "amphp/amp": "^3.0",
-        "asterixcapri/neuron-interaction": "~0.8.0",
+        "asterixcapri/neuron-interaction": "~0.9.0@dev",
         "league/commonmark": "^2.10",
-        "neuron-core/neuron-ai": "^3.0",
+        "neuron-core/neuron-ai": "^4.0@dev",
         "symfony/tui": "^8.1.2",
         "tempest/highlight": "^2.16"
     },
