@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace NeuronTui\Tests;
 
+use NeuronTui\Tests\Support\TestAgent;
+
 use Closure;
 use NeuronInteraction\Command\Commands;
-use NeuronAI\Agent\Agent;
 use NeuronInteraction\Command\AbstractCommandKit;
 use NeuronInteraction\Command\CommandArguments;
 use NeuronInteraction\Command\CommandInterface;
@@ -57,22 +58,22 @@ final class DuplicateCommandsTest extends TestCase
                 '/clear',
                 'The first duplicate.',
                 static function (
-                    CommandControlsAdapterInterface $adapter,
+                    CommandControlsAdapterInterface $controls,
                     string $arguments,
                 ) use (&$ran): void {
                     $ran[] = 'first';
-                    $adapter->stop();
+                    $controls->stop();
                 },
             );
             $second = self::command(
                 '/clear',
                 'The second duplicate.',
                 static function (
-                    CommandControlsAdapterInterface $adapter,
+                    CommandControlsAdapterInterface $controls,
                     string $arguments,
                 ) use (&$ran): void {
                     $ran[] = 'second';
-                    $adapter->stop();
+                    $controls->stop();
                 },
             );
             $terminal = new VirtualTerminal();
@@ -80,7 +81,10 @@ final class DuplicateCommandsTest extends TestCase
                 static fn () => $terminal->simulateInput("/clear\r"),
             );
 
-            (new Tui(new Agent(), $terminal, commands: $add(new Commands(), $first, $second)))->run();
+            (new Tui(TestAgent::registryForInitialAgent(new TestAgent()),
+            'test',
+            $terminal,
+            commands: $add(new Commands(), $first, $second)))->run();
 
             self::assertSame(['first'], $ran, $form);
         }
@@ -145,7 +149,10 @@ final class DuplicateCommandsTest extends TestCase
             ->addCommand(self::kit([$commands[3], $commands[4]]))
             ->addCommand([$commands[5], self::kit([$commands[6]])])
             ->addCommand(new HelpCommand());
-        (new Tui(new Agent(), $terminal, commands: $mounted))->run();
+        (new Tui(TestAgent::registryForInitialAgent(new TestAgent()),
+            'test',
+            $terminal,
+            commands: $mounted))->run();
 
         self::assertIsString($suggestions);
         self::assertInOrder($descriptions, $suggestions);
@@ -213,11 +220,11 @@ final class DuplicateCommandsTest extends TestCase
                 return $this->description;
             }
 
-            /** @param CommandControlsAdapterInterface<mixed> $adapter */
-            public function run(CommandControlsAdapterInterface $adapter, CommandArguments $arguments): void
+            /** @param CommandControlsAdapterInterface<mixed> $controls */
+            public function run(CommandControlsAdapterInterface $controls, CommandArguments $arguments): void
             {
                 if ($this->run instanceof Closure) {
-                    ($this->run)($adapter, $arguments->text);
+                    ($this->run)($controls, $arguments->text);
                 }
             }
         };

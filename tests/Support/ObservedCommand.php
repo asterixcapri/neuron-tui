@@ -25,10 +25,10 @@ final readonly class ObservedCommand implements CommandInterface
         return $this->command->describe();
     }
 
-    /** @param CommandControlsAdapterInterface<mixed> $adapter */
-    public function run(CommandControlsAdapterInterface $adapter, CommandArguments $arguments): void
+    /** @param CommandControlsAdapterInterface<mixed> $controls */
+    public function run(CommandControlsAdapterInterface $controls, CommandArguments $arguments): void
     {
-        $this->command->run($adapter, $arguments);
-        ($this->after)($adapter);
+        $this->command->run($controls, $arguments);
+        ($this->after)($controls);
     }
 }

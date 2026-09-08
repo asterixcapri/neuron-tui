@@ -25,11 +25,14 @@ HTTP request. Neither presentation mechanism enters the shared module, and
 The configured-construction revision renames `CommandAdapterInterface` to
 `CommandControlsAdapterInterface` and removes `newAgent()`.
 
-Both Commands build through the supplied AgentFactoryRegistry using the latest
-saved global Configuration. The Host Application registers closures that restore
-constructor dependencies and setter-driven settings. Clear assigns a newly created
-Session; Resume first verifies the selected Session and assigns its History. Neither
-Command saves unchanged configuration or recreates the current class implicitly.
+Both Commands request a fresh Agent through `createAgent()` on the controls.
+The Adapter connects the selected identifier, AgentFactoryRegistry and
+ConfigurationStore. Registered Agent classes implement the static
+`ConfiguredAgentInterface::createAgent(ConfigurationStore): static` contract;
+each class decides which application documents to read. No shared configuration
+key is imposed. Clear assigns a newly created Session; Resume first verifies the
+selected Session and assigns its History. Neither Command writes unchanged
+configuration or recreates the current class implicitly.
 A missing Session warns without constructing; factory and preparation failures are
 reported through ordinary Command completion before activation. This does not
 promise rollback of a Session already created during preparation.

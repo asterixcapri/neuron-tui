@@ -24,24 +24,24 @@ final readonly class ModelCommand implements CommandInterface
         return 'Changes the AI model.';
     }
 
-    /** @param CommandControlsAdapterInterface<mixed> $adapter */
-    public function run(CommandControlsAdapterInterface $adapter, CommandArguments $arguments): void
+    /** @param CommandControlsAdapterInterface<mixed> $controls */
+    public function run(CommandControlsAdapterInterface $controls, CommandArguments $arguments): void
     {
         if ($arguments->text !== '') {
             self::validateModel($arguments->text);
-            $configuration = $adapter->configurationStore()->read('global')
-                ?? throw new RuntimeException('General configuration "global" is missing.');
+            $configuration = $controls->configurationStore()->read('agent')
+                ?? throw new RuntimeException('Agent configuration "agent" is missing.');
             $configuration->set('model', $arguments->text);
-            $agent = $adapter->agentFactoryRegistry()->create($configuration);
-            $agent->setChatHistory($adapter->agent()->getChatHistory());
-            $adapter->configurationStore()->save($configuration);
-            $adapter->useAgent($agent);
-            $adapter->say("Model changed to {$arguments->text}.");
+            $controls->configurationStore()->write($configuration);
+            $agent = $controls->createAgent();
+            $agent->setChatHistory($controls->agent()->getChatHistory());
+            $controls->useAgent($agent);
+            $controls->say("Model changed to {$arguments->text}.");
 
             return;
         }
 
-        $adapter->requestSelection(new SelectionRequest($this->name(), 'Choose a model', self::models()));
+        $controls->requestSelection(new SelectionRequest($this->name(), 'Choose a model', self::models()));
     }
 
     public static function validateModel(string $model): void

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace NeuronTui\Tests\Tui;
 
+use NeuronTui\Tests\Support\TestAgent;
+
 use Generator;
 use NeuronAI\Agent\Agent;
 use NeuronInteraction\Command\Commands;
@@ -47,7 +49,7 @@ final class InputHistoryTest extends TestCase
                 return new ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         $storage = new InMemoryStorage();
         $terminal = new VirtualTerminal(rows: 24);
@@ -65,8 +67,8 @@ final class InputHistoryTest extends TestCase
                 return 'Record that the command ran.';
             }
 
-            /** @param CommandControlsAdapterInterface<mixed> $adapter */
-            public function run(CommandControlsAdapterInterface $adapter, CommandArguments $arguments): void
+            /** @param CommandControlsAdapterInterface<mixed> $controls */
+            public function run(CommandControlsAdapterInterface $controls, CommandArguments $arguments): void
             {
                 $this->arguments[] = $arguments->text;
             }
@@ -103,7 +105,12 @@ final class InputHistoryTest extends TestCase
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, $terminal, sessionStore: new SessionStore($storage, 'test-user'), inputHistory: new InputHistory($storage), commands: new Commands($command)))
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
+            $terminal,
+            sessionStore: new SessionStore($storage, 'test-user'),
+            inputHistory: new InputHistory($storage),
+            commands: new Commands($command)))
             ->run();
 
         self::assertSame(['accepted', 'accepted recalled'], $command->arguments);
@@ -143,7 +150,7 @@ final class InputHistoryTest extends TestCase
                 return new ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         $storage = new InMemoryStorage();
         $terminal = new VirtualTerminal(rows: 30);
@@ -171,7 +178,11 @@ final class InputHistoryTest extends TestCase
             },
         );
 
-        (new Tui($agent, $terminal, sessionStore: new SessionStore($storage, 'test-user'), inputHistory: new InputHistory($storage)))->run();
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
+            $terminal,
+            sessionStore: new SessionStore($storage, 'test-user'),
+            inputHistory: new InputHistory($storage)))->run();
 
         self::assertIsString($whileQueued);
         $whileQueued = AnsiUtils::stripAnsiCodes($whileQueued);
@@ -225,19 +236,17 @@ final class InputHistoryTest extends TestCase
 
         $commands = new Commands(new ObservedCommand(
             new ClearCommand(),
-            static function (CommandControlsAdapterInterface $adapter) use (&$agent): void {
-                $agent = $adapter->agent();
+            static function (CommandControlsAdapterInterface $controls) use (&$agent): void {
+                $agent = $controls->agent();
             },
         ));
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             $terminal,
             sessionStore: $sessionStore,
             inputHistory: new InputHistory($storage),
             commands: $commands,
-            agentFactoryRegistry: SelfConfiguredAgent::registry(),
-            configurationStore: SelfConfiguredAgent::configurationStore(),
-        ))->run();
+            configurationStore: SelfConfiguredAgent::configurationStore()))->run();
 
         self::assertCount(1, $provider->getRecorded());
         $provider = $agent->getProvider();
@@ -289,19 +298,17 @@ final class InputHistoryTest extends TestCase
 
         $commands = new Commands(new ObservedCommand(
             new ResumeCommand(),
-            static function (CommandControlsAdapterInterface $adapter) use (&$agent): void {
-                $agent = $adapter->agent();
+            static function (CommandControlsAdapterInterface $controls) use (&$agent): void {
+                $agent = $controls->agent();
             },
         ));
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
-            agentFactoryRegistry: SelfConfiguredAgent::registry(),
             configurationStore: SelfConfiguredAgent::configurationStore(),
             inputHistory: new InputHistory($storage),
-            commands: $commands,
-        ))->run();
+            commands: $commands))->run();
 
         $provider->assertNothingSent();
         $provider = $agent->getProvider();
@@ -319,7 +326,7 @@ final class InputHistoryTest extends TestCase
         $firstProvider = new FakeAIProvider(
             new AssistantMessage('First answer.'),
         );
-        $firstAgent = new Agent();
+        $firstAgent = new TestAgent();
         $firstAgent->setAiProvider($firstProvider);
         $firstTerminal = new VirtualTerminal(rows: 24);
 
@@ -332,12 +339,16 @@ final class InputHistoryTest extends TestCase
             0.2,
             static fn () => $firstTerminal->simulateInput("\x03"),
         );
-        (new Tui($firstAgent, $firstTerminal, sessionStore: new SessionStore($storage, 'test-user'), inputHistory: new InputHistory($storage)))->run();
+        (new Tui(TestAgent::registryForInitialAgent($firstAgent),
+            'test',
+            $firstTerminal,
+            sessionStore: new SessionStore($storage, 'test-user'),
+            inputHistory: new InputHistory($storage)))->run();
 
         $secondProvider = new FakeAIProvider(
             new AssistantMessage('Second answer.'),
         );
-        $secondAgent = new Agent();
+        $secondAgent = new TestAgent();
         $secondAgent->setAiProvider($secondProvider);
         $secondTerminal = new VirtualTerminal(rows: 24);
 
@@ -349,7 +360,11 @@ final class InputHistoryTest extends TestCase
             0.2,
             static fn () => $secondTerminal->simulateInput("\x03"),
         );
-        (new Tui($secondAgent, $secondTerminal, sessionStore: new SessionStore($storage, 'test-user'), inputHistory: new InputHistory($storage)))->run();
+        (new Tui(TestAgent::registryForInitialAgent($secondAgent),
+            'test',
+            $secondTerminal,
+            sessionStore: new SessionStore($storage, 'test-user'),
+            inputHistory: new InputHistory($storage)))->run();
 
         self::assertSame(
             'Remember between TUIs recalled',
@@ -367,7 +382,7 @@ final class InputHistoryTest extends TestCase
             $firstProvider = new FakeAIProvider(
                 new AssistantMessage('First answer.'),
             );
-            $firstAgent = new Agent();
+            $firstAgent = new TestAgent();
             $firstAgent->setAiProvider($firstProvider);
             $firstTerminal = new VirtualTerminal(rows: 24);
 
@@ -380,13 +395,17 @@ final class InputHistoryTest extends TestCase
                 0.2,
                 static fn () => $firstTerminal->simulateInput("\x03"),
             );
-            (new Tui($firstAgent, $firstTerminal, sessionStore: new SessionStore(new FileStorage($directory), 'test-user'), inputHistory: new InputHistory(new FileStorage($directory))))
+            (new Tui(TestAgent::registryForInitialAgent($firstAgent),
+            'test',
+            $firstTerminal,
+            sessionStore: new SessionStore(new FileStorage($directory), 'test-user'),
+            inputHistory: new InputHistory(new FileStorage($directory))))
                 ->run();
 
             $secondProvider = new FakeAIProvider(
                 new AssistantMessage('Second answer.'),
             );
-            $secondAgent = new Agent();
+            $secondAgent = new TestAgent();
             $secondAgent->setAiProvider($secondProvider);
             $secondTerminal = new VirtualTerminal(rows: 24);
 
@@ -398,7 +417,11 @@ final class InputHistoryTest extends TestCase
                 0.2,
                 static fn () => $secondTerminal->simulateInput("\x03"),
             );
-            (new Tui($secondAgent, $secondTerminal, sessionStore: new SessionStore(new FileStorage($directory), 'test-user'), inputHistory: new InputHistory(new FileStorage($directory))))
+            (new Tui(TestAgent::registryForInitialAgent($secondAgent),
+            'test',
+            $secondTerminal,
+            sessionStore: new SessionStore(new FileStorage($directory), 'test-user'),
+            inputHistory: new InputHistory(new FileStorage($directory))))
                 ->run();
 
             self::assertSame(
@@ -429,7 +452,7 @@ final class InputHistoryTest extends TestCase
             new AssistantMessage('First answer.'),
             new AssistantMessage('Second answer.'),
         );
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 24);
 
@@ -448,7 +471,9 @@ final class InputHistoryTest extends TestCase
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, $terminal))->run();
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
+            $terminal))->run();
 
         self::assertCount(2, $provider->getRecorded());
         self::assertSame(
@@ -462,7 +487,7 @@ final class InputHistoryTest extends TestCase
     public function testUpRecallsTheNewestSubmittedMessageAtItsEnd(): void
     {
         $provider = new FakeAIProvider(new AssistantMessage('An answer.'));
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         $storage = new InMemoryStorage();
         $terminal = new VirtualTerminal(rows: 24);
@@ -483,7 +508,11 @@ final class InputHistoryTest extends TestCase
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, $terminal, sessionStore: new SessionStore($storage, 'test-user'), inputHistory: new InputHistory($storage)))->run();
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
+            $terminal,
+            sessionStore: new SessionStore($storage, 'test-user'),
+            inputHistory: new InputHistory($storage)))->run();
 
         self::assertSame(
             ['  Remember me  ', '  Remember me  again'],
@@ -494,7 +523,7 @@ final class InputHistoryTest extends TestCase
     public function testUpWithNoStoredInputsLeavesTheComposerEmpty(): void
     {
         $provider = new FakeAIProvider(new AssistantMessage('An answer.'));
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         $storage = new InMemoryStorage();
         $terminal = new VirtualTerminal(rows: 24);
@@ -510,7 +539,11 @@ final class InputHistoryTest extends TestCase
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, $terminal, sessionStore: new SessionStore($storage, 'test-user'), inputHistory: new InputHistory($storage)))->run();
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
+            $terminal,
+            sessionStore: new SessionStore($storage, 'test-user'),
+            inputHistory: new InputHistory($storage)))->run();
 
         self::assertCount(1, $provider->getRecorded());
         self::assertSame(
@@ -537,7 +570,11 @@ final class InputHistoryTest extends TestCase
             static fn () => $fixture->terminal->simulateInput("\x03"),
         );
 
-        (new Tui($fixture->agent, $fixture->terminal, sessionStore: new SessionStore($fixture->storage, 'test-user'), inputHistory: new InputHistory($fixture->storage)))
+        (new Tui(TestAgent::registryForInitialAgent($fixture->agent),
+            'test',
+            $fixture->terminal,
+            sessionStore: new SessionStore($fixture->storage, 'test-user'),
+            inputHistory: new InputHistory($fixture->storage)))
             ->run();
 
         self::assertSame(
@@ -565,7 +602,11 @@ final class InputHistoryTest extends TestCase
             static fn () => $fixture->terminal->simulateInput("\x03"),
         );
 
-        (new Tui($fixture->agent, $fixture->terminal, sessionStore: new SessionStore($fixture->storage, 'test-user'), inputHistory: new InputHistory($fixture->storage)))
+        (new Tui(TestAgent::registryForInitialAgent($fixture->agent),
+            'test',
+            $fixture->terminal,
+            sessionStore: new SessionStore($fixture->storage, 'test-user'),
+            inputHistory: new InputHistory($fixture->storage)))
             ->run();
 
         self::assertSame(
@@ -593,7 +634,11 @@ final class InputHistoryTest extends TestCase
             static fn () => $fixture->terminal->simulateInput("\x03"),
         );
 
-        (new Tui($fixture->agent, $fixture->terminal, sessionStore: new SessionStore($fixture->storage, 'test-user'), inputHistory: new InputHistory($fixture->storage)))
+        (new Tui(TestAgent::registryForInitialAgent($fixture->agent),
+            'test',
+            $fixture->terminal,
+            sessionStore: new SessionStore($fixture->storage, 'test-user'),
+            inputHistory: new InputHistory($fixture->storage)))
             ->run();
 
         self::assertSame(
@@ -620,7 +665,11 @@ final class InputHistoryTest extends TestCase
             static fn () => $fixture->terminal->simulateInput("\x03"),
         );
 
-        (new Tui($fixture->agent, $fixture->terminal, sessionStore: new SessionStore($fixture->storage, 'test-user'), inputHistory: new InputHistory($fixture->storage)))
+        (new Tui(TestAgent::registryForInitialAgent($fixture->agent),
+            'test',
+            $fixture->terminal,
+            sessionStore: new SessionStore($fixture->storage, 'test-user'),
+            inputHistory: new InputHistory($fixture->storage)))
             ->run();
 
         self::assertSame(
@@ -647,7 +696,11 @@ final class InputHistoryTest extends TestCase
             static fn () => $fixture->terminal->simulateInput("\x03"),
         );
 
-        (new Tui($fixture->agent, $fixture->terminal, sessionStore: new SessionStore($fixture->storage, 'test-user'), inputHistory: new InputHistory($fixture->storage)))
+        (new Tui(TestAgent::registryForInitialAgent($fixture->agent),
+            'test',
+            $fixture->terminal,
+            sessionStore: new SessionStore($fixture->storage, 'test-user'),
+            inputHistory: new InputHistory($fixture->storage)))
             ->run();
 
         self::assertSame(
@@ -684,7 +737,12 @@ final class InputHistoryTest extends TestCase
             },
         );
 
-        (new Tui($fixture->agent, $fixture->terminal, sessionStore: new SessionStore($fixture->storage, 'test-user'), inputHistory: new InputHistory($fixture->storage), commands: new Commands([
+        (new Tui(TestAgent::registryForInitialAgent($fixture->agent),
+            'test',
+            $fixture->terminal,
+            sessionStore: new SessionStore($fixture->storage, 'test-user'),
+            inputHistory: new InputHistory($fixture->storage),
+            commands: new Commands([
                 self::commandNamed('/alpha', 'The first suggestion.'),
                 self::commandNamed('/album', 'The second suggestion.'),
             ])))
@@ -699,7 +757,7 @@ final class InputHistoryTest extends TestCase
 
     public function testPickerArrowsDoNotNavigateInputHistory(): void
     {
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider(new FakeAIProvider());
         $storage = new InMemoryStorage();
         $storage->write('input-history', 'entries', ['stored input']);
@@ -717,8 +775,8 @@ final class InputHistoryTest extends TestCase
                 return 'Choose an option.';
             }
 
-            /** @param CommandControlsAdapterInterface<mixed> $adapter */
-            public function run(CommandControlsAdapterInterface $adapter, CommandArguments $arguments): void
+            /** @param CommandControlsAdapterInterface<mixed> $controls */
+            public function run(CommandControlsAdapterInterface $controls, CommandArguments $arguments): void
             {
                 if ($arguments->text !== '') {
                     $this->chosen = $arguments->text;
@@ -726,7 +784,7 @@ final class InputHistoryTest extends TestCase
                     return;
                 }
 
-                $adapter->requestSelection(new SelectionRequest($this->name(), 'Options', [
+                $controls->requestSelection(new SelectionRequest($this->name(), 'Options', [
                     new SelectionOption('first', 'First option'),
                     new SelectionOption('last', 'Last option'),
                 ]));
@@ -745,7 +803,12 @@ final class InputHistoryTest extends TestCase
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, $terminal, sessionStore: new SessionStore($storage, 'test-user'), inputHistory: new InputHistory($storage), commands: new Commands($command)))
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
+            $terminal,
+            sessionStore: new SessionStore($storage, 'test-user'),
+            inputHistory: new InputHistory($storage),
+            commands: new Commands($command)))
             ->run();
 
         self::assertSame('last', $command->chosen);
@@ -766,7 +829,11 @@ final class InputHistoryTest extends TestCase
             static fn () => $fixture->terminal->simulateInput("\x03"),
         );
 
-        (new Tui($fixture->agent, $fixture->terminal, sessionStore: new SessionStore($fixture->storage, 'test-user'), inputHistory: new InputHistory($fixture->storage)))
+        (new Tui(TestAgent::registryForInitialAgent($fixture->agent),
+            'test',
+            $fixture->terminal,
+            sessionStore: new SessionStore($fixture->storage, 'test-user'),
+            inputHistory: new InputHistory($fixture->storage)))
             ->run();
 
         self::assertSame(
@@ -819,7 +886,12 @@ final class InputHistoryTest extends TestCase
             },
         );
 
-        (new Tui($fixture->agent, $fixture->terminal, sessionStore: new SessionStore($fixture->storage, 'test-user'), inputHistory: new InputHistory($fixture->storage), commands: new Commands(self::commandNamed('/probe', 'Runs the probe.'))))
+        (new Tui(TestAgent::registryForInitialAgent($fixture->agent),
+            'test',
+            $fixture->terminal,
+            sessionStore: new SessionStore($fixture->storage, 'test-user'),
+            inputHistory: new InputHistory($fixture->storage),
+            commands: new Commands(self::commandNamed('/probe', 'Runs the probe.'))))
             ->run();
 
         self::assertIsString($recalled);
@@ -861,7 +933,12 @@ final class InputHistoryTest extends TestCase
             },
         );
 
-        (new Tui($fixture->agent, $fixture->terminal, sessionStore: new SessionStore($fixture->storage, 'test-user'), inputHistory: new InputHistory($fixture->storage), commands: new Commands(self::commandNamed('/probe', 'Runs the probe.'))))
+        (new Tui(TestAgent::registryForInitialAgent($fixture->agent),
+            'test',
+            $fixture->terminal,
+            sessionStore: new SessionStore($fixture->storage, 'test-user'),
+            inputHistory: new InputHistory($fixture->storage),
+            commands: new Commands(self::commandNamed('/probe', 'Runs the probe.'))))
             ->run();
 
         self::assertIsString($display);
@@ -900,8 +977,8 @@ final class InputHistoryTest extends TestCase
                 return $this->description;
             }
 
-            /** @param CommandControlsAdapterInterface<mixed> $adapter */
-            public function run(CommandControlsAdapterInterface $adapter, CommandArguments $arguments): void
+            /** @param CommandControlsAdapterInterface<mixed> $controls */
+            public function run(CommandControlsAdapterInterface $controls, CommandArguments $arguments): void
             {
             }
         };
@@ -925,7 +1002,7 @@ final readonly class InputHistoryTuiFixture
         $this->provider = new FakeAIProvider(
             new AssistantMessage('An answer.'),
         );
-        $this->agent = new Agent();
+        $this->agent = new TestAgent();
         $this->agent->setAiProvider($this->provider);
         $this->storage = new InMemoryStorage();
         $this->storage->write('input-history', 'entries', $entries);

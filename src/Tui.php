@@ -46,23 +46,23 @@ final class Tui
 
     private readonly InputHistory $inputHistory;
 
-    private readonly AgentFactoryRegistry $agentFactoryRegistry;
+    private readonly Agent $agent;
 
     private readonly ConfigurationStore $configurationStore;
 
     private bool $started = false;
 
     public function __construct(
-        private readonly Agent $agent,
+        private readonly AgentFactoryRegistry $agentFactoryRegistry,
+        private readonly string $initialAgentIdentifier,
         private readonly ?TerminalInterface $terminal = null,
         ?Commands $commands = null,
         ?SessionStore $sessionStore = null,
         ?InputHistory $inputHistory = null,
-        ?AgentFactoryRegistry $agentFactoryRegistry = null,
         ?ConfigurationStore $configurationStore = null,
     ) {
-        $this->agentFactoryRegistry = $agentFactoryRegistry ?? new AgentFactoryRegistry();
         $this->configurationStore = $configurationStore ?? new ConfigurationStore(new InMemoryStorage(), 'local');
+        $this->agent = $this->agentFactoryRegistry->create($this->initialAgentIdentifier, $this->configurationStore);
         $this->commands = $commands ?? new Commands();
         $this->sessionStore = $sessionStore ?? new SessionStore(
             new InMemoryStorage(),
@@ -72,15 +72,23 @@ final class Tui
     }
 
     public static function make(
-        Agent $agent,
+        AgentFactoryRegistry $agentFactoryRegistry,
+        string $initialAgentIdentifier,
         ?TerminalInterface $terminal = null,
         ?Commands $commands = null,
         ?SessionStore $sessionStore = null,
         ?InputHistory $inputHistory = null,
-        ?AgentFactoryRegistry $agentFactoryRegistry = null,
         ?ConfigurationStore $configurationStore = null,
     ): self {
-        return new self($agent, $terminal, $commands, $sessionStore, $inputHistory, $agentFactoryRegistry, $configurationStore);
+        return new self(
+            $agentFactoryRegistry,
+            $initialAgentIdentifier,
+            $terminal,
+            $commands,
+            $sessionStore,
+            $inputHistory,
+            $configurationStore,
+        );
     }
 
     public function setTitle(string $title): self
@@ -142,6 +150,7 @@ final class Tui
             $this->sessionStore,
             $this->agentFactoryRegistry,
             $this->configurationStore,
+            $this->initialAgentIdentifier,
         );
         $view->showHistory($this->agent->getChatHistory()->getMessages());
         $view->onSubmit($input->submit(...));

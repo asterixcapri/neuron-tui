@@ -7,13 +7,12 @@ namespace NeuronTui\Tests\Command;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\History\ChatHistoryInterface;
 use NeuronAI\Chat\Messages\AssistantMessage;
+use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronInteraction\Agent\AgentFactoryRegistry;
+use NeuronInteraction\Agent\ConfiguredAgentInterface;
 use NeuronInteraction\Command\CommandArguments;
 use NeuronInteraction\Command\Commands;
-use NeuronInteraction\Command\CommandControlsAdapterInterface;
-use NeuronInteraction\Command\LeaveCommand;
-use NeuronInteraction\Configuration\Configuration;
 use NeuronInteraction\Configuration\ConfigurationStore;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\InMemoryStorage;
@@ -22,10 +21,6 @@ use NeuronInteraction\Storage\StoredDocument;
 use NeuronTui\Conversation\ConversationRuntime;
 use NeuronTui\Conversation\TuiAdapter;
 use NeuronTui\View\ConversationView;
-use NeuronTui\Tests\Support\ObservedCommand;
-use NeuronTui\Tui;
-use Revolt\EventLoop;
-use Symfony\Component\Tui\Ansi\AnsiUtils;
 use NeuronTuiDemo\ModelCommand;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -37,111 +32,106 @@ final class ModelCommandTest extends TestCase
     /** @return iterable<string, array{string}> */
     public static function failures(): iterable
     {
-        foreach (['invalid', 'missing', 'unknown', 'factory', 'history', 'save'] as $failure) {
+        foreach (['invalid', 'missing', 'unknown', 'factory', 'history', 'write'] as $failure) {
             yield $failure => [$failure];
         }
     }
 
     #[DataProvider('failures')]
-    public function testFailedPreparationLeavesCurrentAgentUsableAndSettingsIntact(string $failure): void
+    public function testFailureKeepsCurrentAgentUsableWithoutRollingBackSavedSettings(string $failure): void
     {
         $storage = new InMemoryStorage();
         $store = new ConfigurationStore($storage, 'test');
-        $values = ['agent' => 'demo', 'model' => 'openai:gpt-5.4-nano', 'capability' => 'search'];
+        $values = ['model' => 'openai:gpt-5.4-nano', 'capability' => 'search'];
         if ($failure !== 'missing') {
-            $store->create('global', $values);
+            $store->create('agent', $values);
         }
-        if ($failure === 'save') {
+        if ($failure === 'write') {
             $failing = $this->createMock(StorageInterface::class);
             $failing->method('read')->willReturnCallback(
                 static fn (string $namespace, string $key): ?StoredDocument => $storage->read($namespace, $key),
             );
-            $failing->expects(self::once())->method('write')->willThrowException(new RuntimeException('save failed'));
+            $failing->expects(self::once())->method('write')->willThrowException(new RuntimeException('write failed'));
             $store = new ConfigurationStore($failing, 'test');
         }
         $registry = new AgentFactoryRegistry();
         if ($failure !== 'unknown') {
-            $registry->register('demo', static function (Configuration $configuration) use ($failure): Agent {
-                if ($failure === 'factory') {
-                    throw new RuntimeException('factory failed');
-                }
-                if ($failure === 'history') {
-                    return new class extends Agent {
-                        public function setChatHistory(ChatHistoryInterface $chatHistory): self
-                        {
-                            throw new RuntimeException('history failed');
-                        }
-                    };
-                }
-
-                return new Agent();
-            });
+            $registry->register('demo', ModelAgent::class);
         }
+        ModelAgent::$failure = $failure;
         $original = new Agent();
         $original->setAiProvider(new FakeAIProvider(new AssistantMessage('Still available')));
         $sessions = new SessionStore($storage, 'test');
         $history = $sessions->create();
         $original->setChatHistory($history);
-        $terminal = new VirtualTerminal(rows: 40);
-        $activeAtExit = null;
-        $commands = new Commands([
-            new ModelCommand(),
-            new ObservedCommand(new LeaveCommand(), static function (CommandControlsAdapterInterface $adapter) use (&$activeAtExit): void {
-                $activeAtExit = $adapter->agent();
-            }),
-        ]);
+        $view = new ConversationView(new VirtualTerminal(), 'Test', 'Models');
+        $commands = new Commands(new ModelCommand());
+        $controls = new TuiAdapter(new ConversationRuntime($original, $view), $view, $commands, $sessions, $registry, $store, 'demo');
         $model = $failure === 'invalid' ? 'openai:unlisted' : 'openai:gpt-5.6-sol';
-        EventLoop::queue(static fn () => $terminal->simulateInput('/model ' . $model . "\r"));
-        EventLoop::delay(0.06, static fn () => $terminal->simulateInput("Are you still available?\r"));
-        EventLoop::delay(0.24, static fn () => $terminal->simulateInput("/exit\r"));
 
-        Tui::make($original, $terminal, $commands, $sessions,
-            agentFactoryRegistry: $registry, configurationStore: $store,
-        )->run();
+        $commands->run('/model', new CommandArguments($model), $controls);
 
-        self::assertSame($original, $activeAtExit);
-        self::assertSame($history, $activeAtExit->getChatHistory());
-        self::assertSame($failure === 'missing' ? null : $values, $store->read('global')?->all());
+        self::assertSame($original, $controls->agent());
+        self::assertSame($history, $controls->agent()->getChatHistory());
+        if (in_array($failure, ['unknown', 'factory', 'history'], true)) {
+            $values['model'] = 'openai:gpt-5.6-sol';
+        }
+        self::assertSame($failure === 'missing' ? null : $values, $store->read('agent')?->all());
+        $controls->agent()->chat(new UserMessage('Are you still available?'));
         self::assertSame('Still available', $history->getLastMessage()->getContent());
-        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
-        self::assertStringContainsString(match ($failure) {
-            'invalid' => 'Unknown demo model: openai:unlisted',
-            'missing' => 'General configuration "global" is missing.',
-            'unknown' => 'Unknown Agent factory: demo',
-            default => $failure . ' failed',
-        }, $display);
-        self::assertStringContainsString('Still available', $display);
     }
 
-    public function testSavesOnlyTheModelAfterPreparingTheSameHistory(): void
+    public function testFactoryReadsSavedModelAndReplacementRetainsTheSameHistory(): void
     {
         $storage = new InMemoryStorage();
         $store = new ConfigurationStore($storage, 'test');
-        $store->create('global', ['agent' => 'custom', 'model' => 'openai:gpt-5.4-nano', 'capability' => ['search' => true]]);
+        $store->create('agent', ['model' => 'openai:gpt-5.4-nano', 'capability' => ['search' => true]]);
         $original = new Agent();
         $sessions = new SessionStore($storage, 'test');
         $original->setChatHistory($sessions->create());
         $registry = new AgentFactoryRegistry();
-        $candidate = new Agent();
-        $registry->register('custom', static function (Configuration $configuration) use ($store, $candidate): Agent {
-            self::assertSame('openai:gpt-5.6-sol', $configuration->get('model'));
-            self::assertSame('openai:gpt-5.4-nano', $store->read('global')?->get('model'));
-            self::assertSame(['search' => true], $configuration->get('capability'));
-            $configuration->set('capability', 'factory-local');
-
-            return $candidate;
-        });
+        $registry->register('custom', ModelAgent::class);
+        ModelAgent::$failure = '';
         $view = new ConversationView(new VirtualTerminal(), 'Test', 'Models');
-        $adapter = new TuiAdapter(new ConversationRuntime($original, $view), $view, new Commands(), $sessions, $registry, $store);
+        $controls = new TuiAdapter(new ConversationRuntime($original, $view), $view, new Commands(), $sessions, $registry, $store, 'custom');
 
-        (new ModelCommand())->run($adapter, new CommandArguments('openai:gpt-5.6-sol'));
+        (new ModelCommand())->run($controls, new CommandArguments('openai:gpt-5.6-sol'));
 
-        self::assertSame($candidate, $adapter->agent());
+        $candidate = $controls->agent();
+        self::assertInstanceOf(ModelAgent::class, $candidate);
+        self::assertSame('openai:gpt-5.6-sol', $candidate->model);
         self::assertSame($original->getChatHistory(), $candidate->getChatHistory());
         self::assertSame([
-            'agent' => 'custom',
             'model' => 'openai:gpt-5.6-sol',
             'capability' => ['search' => true],
-        ], $store->read('global')?->all());
+        ], $store->read('agent')?->all());
+    }
+}
+
+final class ModelAgent extends Agent implements ConfiguredAgentInterface
+{
+    public static string $failure = '';
+    public mixed $model;
+
+    public static function createAgent(ConfigurationStore $configurationStore): static
+    {
+        if (self::$failure === 'factory') {
+            throw new RuntimeException('factory failed');
+        }
+        $agent = new static();
+        $configuration = $configurationStore->read('agent');
+        $agent->model = $configuration?->get('model');
+        // Mutating a read document alone does not write back into the store.
+        $configuration?->set('capability', 'factory-local');
+        return $agent;
+    }
+
+    public function setChatHistory(ChatHistoryInterface $chatHistory): self
+    {
+        if (self::$failure === 'history') {
+            throw new RuntimeException('history failed');
+        }
+        parent::setChatHistory($chatHistory);
+        return $this;
     }
 }

@@ -1,5 +1,12 @@
 # The TUI is composed around a required Agent
 
+> The construction API described here is superseded by the
+> [configured Agent contract](../../README.md#creating-and-replacing-agents).
+> Tui now receives an AgentFactoryRegistry and `initialAgentIdentifier`, and
+> creates the initial Agent itself. The existing History and independent module
+> behavior described below remain applicable.
+
+
 _The Refine Interaction composition revision supersedes the TUI-owned mounting
 and rejection of module constructor composition below. The required Agent and
 optional Terminal are followed by independently optional Commands, SessionStore

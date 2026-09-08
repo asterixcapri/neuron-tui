@@ -83,6 +83,7 @@ final class TuiAdapterTest extends TestCase
             new SessionStore(new InMemoryStorage(), 'test-user'),
             new \NeuronInteraction\Agent\AgentFactoryRegistry(),
             new \NeuronInteraction\Configuration\ConfigurationStore(new InMemoryStorage(), 'test-user'),
+            'test',
         );
     }
 }

@@ -34,6 +34,7 @@ final class TuiAdapter implements CommandControlsAdapterInterface
         private readonly SessionStore $sessions,
         private readonly AgentFactoryRegistry $agentFactoryRegistry,
         private readonly ConfigurationStore $configurationStore,
+        private readonly string $agentIdentifier,
     ) {
     }
 
@@ -111,7 +112,15 @@ final class TuiAdapter implements CommandControlsAdapterInterface
                     $this->commands->run(
                         $request->command,
                         new CommandArguments($chosen),
-                        new self($this->runtime, $this->view, $this->commands, $this->sessions, $this->agentFactoryRegistry, $this->configurationStore),
+                        new self(
+                            $this->runtime,
+                            $this->view,
+                            $this->commands,
+                            $this->sessions,
+                            $this->agentFactoryRegistry,
+                            $this->configurationStore,
+                            $this->agentIdentifier,
+                        ),
                     );
                 }
             } catch (Throwable $exception) {
@@ -141,9 +150,9 @@ final class TuiAdapter implements CommandControlsAdapterInterface
         return $this->commands;
     }
 
-    public function agentFactoryRegistry(): AgentFactoryRegistry
+    public function createAgent(): Agent
     {
-        return $this->agentFactoryRegistry;
+        return $this->agentFactoryRegistry->create($this->agentIdentifier, $this->configurationStore);
     }
 
     public function configurationStore(): ConfigurationStore

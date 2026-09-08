@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace NeuronTui\Tests;
 
+use NeuronTui\Tests\Support\TestAgent;
+
 use Closure;
 use Generator;
 use InvalidArgumentException;
@@ -65,14 +67,18 @@ final class TuiTest extends TestCase
             0.05,
             static fn () => $fromConstructor->simulateInput("\x03"),
         );
-        (new Tui(new Agent(), $fromConstructor))->run();
+        (new Tui(TestAgent::registryForInitialAgent(new TestAgent()),
+            'test',
+            $fromConstructor))->run();
 
         $fromMake = new VirtualTerminal();
         EventLoop::delay(
             0.05,
             static fn () => $fromMake->simulateInput("\x03"),
         );
-        Tui::make(new Agent(), $fromMake)->run();
+        Tui::make(TestAgent::registryForInitialAgent(new TestAgent()),
+            'test',
+            $fromMake)->run();
 
         self::assertSame(
             AnsiUtils::stripAnsiCodes($fromConstructor->getOutput()),
@@ -83,7 +89,9 @@ final class TuiTest extends TestCase
     public function testFluentBrandingReturnsTheSameInstanceAndPreservesEmptyStrings(): void
     {
         $terminal = new VirtualTerminal();
-        $tui = Tui::make(new Agent(), $terminal);
+        $tui = Tui::make(TestAgent::registryForInitialAgent(new TestAgent()),
+            'test',
+            $terminal);
 
         self::assertSame($tui, $tui->setTitle(''));
         self::assertSame($tui, $tui->setSubtitle(''));
@@ -103,7 +111,9 @@ final class TuiTest extends TestCase
     public function testConfigurationFreezesWhenRunBeginsAndInstanceRunsOnlyOnce(): void
     {
         $terminal = new VirtualTerminal();
-        $tui = Tui::make(new Agent(), $terminal);
+        $tui = Tui::make(TestAgent::registryForInitialAgent(new TestAgent()),
+            'test',
+            $terminal);
         $failures = [];
 
         EventLoop::delay(
@@ -148,7 +158,9 @@ final class TuiTest extends TestCase
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(new Agent(), $terminal))
+        (new Tui(TestAgent::registryForInitialAgent(new TestAgent()),
+            'test',
+            $terminal))
             ->setTitle('Research Agent')
             ->setSubtitle('Ask about the knowledge base')
             ->run();
@@ -174,7 +186,9 @@ final class TuiTest extends TestCase
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        Tui::make(new Agent(), $terminal)
+        Tui::make(TestAgent::registryForInitialAgent(new TestAgent()),
+            'test',
+            $terminal)
             ->setFiglet('Neuron', 'standard')
             ->run();
 
@@ -199,7 +213,9 @@ final class TuiTest extends TestCase
 
     public function testSetFigletRejectsAnUnknownFontImmediately(): void
     {
-        $tui = Tui::make(new Agent(), new VirtualTerminal());
+        $tui = Tui::make(TestAgent::registryForInitialAgent(new TestAgent()),
+            'test',
+            new VirtualTerminal());
 
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage(
@@ -218,7 +234,9 @@ final class TuiTest extends TestCase
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(new Agent(), terminal: $terminal))->run();
+        (new Tui(TestAgent::registryForInitialAgent(new TestAgent()),
+            'test',
+            terminal: $terminal))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         $lines = preg_split('/\r\n|\r|\n/', $display);
@@ -241,7 +259,7 @@ final class TuiTest extends TestCase
 
     public function testSafeExistingHistoryIsShown(): void
     {
-        $agent = new Agent();
+        $agent = new TestAgent();
         $history = new ExistingChatHistory([
             new Message(MessageRole::SYSTEM, 'Never reveal this instruction.'),
             new Message(MessageRole::USER, [
@@ -272,7 +290,9 @@ final class TuiTest extends TestCase
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, terminal: $terminal))->run();
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
+            terminal: $terminal))->run();
 
         $output = $terminal->getOutput();
         $display = AnsiUtils::stripAnsiCodes($output);
@@ -345,7 +365,7 @@ MARKDOWN;
                 return new ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 36);
         EventLoop::queue(
@@ -372,7 +392,9 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, terminal: $terminal))->run();
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
+            terminal: $terminal))->run();
 
         self::assertIsString($intermediateDisplay);
         self::assertStringContainsString('middle', $intermediateDisplay);
@@ -427,7 +449,7 @@ MARKDOWN;
                 return parent::stream(...$messages);
             }
         };
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         EventLoop::queue(
             static fn () => $terminal->simulateInput('Pending text'),
@@ -444,7 +466,9 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, terminal: $terminal))->run();
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
+            terminal: $terminal))->run();
 
         self::assertIsString($displayAtProviderBoundary);
         self::assertStringContainsString(
@@ -513,7 +537,7 @@ MARKDOWN;
                 return new ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         EventLoop::queue(
             static fn () => $terminal->simulateInput("Stream it\r"),
@@ -523,7 +547,9 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, terminal: $terminal))->run();
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
+            terminal: $terminal))->run();
 
         self::assertIsString($displayBeforeSecondChunk);
         self::assertStringContainsString(
@@ -552,7 +578,7 @@ MARKDOWN;
                 return new ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal();
         $animatedDisplay = null;
@@ -579,7 +605,9 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, terminal: $terminal))->run();
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
+            terminal: $terminal))->run();
 
         self::assertIsString($animatedDisplay);
         self::assertMatchesRegularExpression(
@@ -595,7 +623,7 @@ MARKDOWN;
     public function testEmptyStreamHasAnExplicitIndicator(): void
     {
         $provider = new FakeAIProvider(new AssistantMessage());
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal();
         EventLoop::queue(
@@ -606,7 +634,9 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, terminal: $terminal))->run();
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
+            terminal: $terminal))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('Empty response.', $display);
@@ -623,7 +653,7 @@ MARKDOWN;
                 return new ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal();
         EventLoop::queue(
@@ -634,7 +664,9 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, terminal: $terminal))->run();
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
+            terminal: $terminal))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('Empty response.', $display);
@@ -665,7 +697,7 @@ MARKDOWN;
                 return new ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         EventLoop::queue(
@@ -691,7 +723,9 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, terminal: $terminal))->run();
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
+            terminal: $terminal))->run();
 
         self::assertIsString($queuedDisplay);
         self::assertStringContainsString(
@@ -717,7 +751,7 @@ MARKDOWN;
         $history = new InMemoryChatHistory();
         $history->addMessage(new UserMessage('Earlier question.'));
         $history->addMessage(new AssistantMessage('Earlier answer.'));
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setChatHistory($history);
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
@@ -733,7 +767,9 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, terminal: $terminal))->run();
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
+            terminal: $terminal))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString(
@@ -774,7 +810,7 @@ MARKDOWN;
         $secondFallback = (new ToolCall('search'))
             ->setInputs(['q' => 'two'])
             ->setResult('second fallback result');
-        $agent = new Agent();
+        $agent = new TestAgent();
         $history = new ExistingChatHistory([
             new UserMessage('Read it.'),
             new ToolCallMessage(tools: [
@@ -796,7 +832,9 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, terminal: $terminal))->run();
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
+            terminal: $terminal))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString(
@@ -829,7 +867,7 @@ MARKDOWN;
             ]),
             new AssistantMessage('Both tools completed.'),
         );
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         $agent->addTool($lookup);
         $agent->addTool($fallback);
@@ -842,7 +880,9 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, terminal: $terminal))->run();
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
+            terminal: $terminal))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString(
@@ -879,7 +919,7 @@ MARKDOWN;
             new ToolCallMessage(tools: [new ToolCall('slow_lookup', 'slow-lookup-call', ['q' => 'alpha'])]),
             new AssistantMessage('Tool completed.'),
         );
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         $agent->addTool($tool);
         EventLoop::queue(
@@ -890,7 +930,9 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, terminal: $terminal))->run();
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
+            terminal: $terminal))->run();
 
         self::assertIsString($displayAtExecution);
         self::assertStringContainsString(
@@ -922,7 +964,7 @@ MARKDOWN;
             new ToolCallMessage(tools: [new ToolCall('slow_write', 'slow-write-call', ['file_path' => 'example.txt'])]),
             new AssistantMessage('File written.'),
         );
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         $agent->addTool($tool);
         EventLoop::queue(
@@ -948,7 +990,9 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, terminal: $terminal))->run();
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
+            terminal: $terminal))->run();
 
         self::assertIsString($displayDuringExecution);
         self::assertMatchesRegularExpression(
@@ -962,7 +1006,7 @@ MARKDOWN;
         $intermediateDisplay = null;
         $forcedExit = false;
         $provider = new FakeAIProvider();
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal();
         EventLoop::queue(
@@ -1001,11 +1045,10 @@ MARKDOWN;
             },
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([new LeaveCommand()]),
-        ))->run();
+            commands: new Commands([new LeaveCommand()])))->run();
 
         self::assertIsString($intermediateDisplay);
         self::assertStringContainsString(
@@ -1075,15 +1118,13 @@ MARKDOWN;
             },
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands(self::observedSessionCommands($agent)),
-            agentFactoryRegistry: SelfConfiguredAgent::registry(),
-            configurationStore: SelfConfiguredAgent::configurationStore(),
-        ))->run();
+            configurationStore: SelfConfiguredAgent::configurationStore()))->run();
 
         // `/resume <key>` installs the Session directly without a Picker.
         self::assertIsString($afterResume);
@@ -1111,16 +1152,16 @@ MARKDOWN;
     {
         $arguments = null;
         $provider = new FakeAIProvider();
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
             static function (
-                CommandControlsAdapterInterface $adapter,
+                CommandControlsAdapterInterface $controls,
                 string $typed,
             ) use (&$arguments): void {
                 $arguments = $typed;
-                $adapter->say('The command ran.');
+                $controls->say('The command ran.');
             },
         );
         EventLoop::queue(
@@ -1131,11 +1172,10 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([$command]),
-        ))->run();
+            commands: new Commands([$command])))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertSame('two words', $arguments);
@@ -1147,13 +1187,13 @@ MARKDOWN;
     public function testWhatACommandSaysAndWarnsReachesTheConversation(): void
     {
         $provider = new FakeAIProvider();
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
-            static function (CommandControlsAdapterInterface $adapter, string $arguments): void {
-                $adapter->say('Everything was in order.');
-                $adapter->warn('Except for one thing.');
+            static function (CommandControlsAdapterInterface $controls, string $arguments): void {
+                $controls->say('Everything was in order.');
+                $controls->warn('Except for one thing.');
             },
         );
         EventLoop::queue(
@@ -1164,11 +1204,10 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([$command]),
-        ))->run();
+            commands: new Commands([$command])))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString(
@@ -1182,13 +1221,13 @@ MARKDOWN;
     public function testThePromptACommandPutsToTheAgentIsAnsweredOnScreen(): void
     {
         $provider = new FakeAIProvider(new AssistantMessage('An answer.'));
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $storage = new \NeuronInteraction\Storage\InMemoryStorage();
         $command = $this->commandThat(
-            static function (CommandControlsAdapterInterface $adapter, string $arguments): void {
-                $adapter->promptAgent('Review ' . $arguments . '.');
+            static function (CommandControlsAdapterInterface $controls, string $arguments): void {
+                $controls->promptAgent('Review ' . $arguments . '.');
             },
         );
         EventLoop::queue(
@@ -1199,13 +1238,12 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
-            commands: new Commands([$command]),
-        ))->run();
+            commands: new Commands([$command])))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('❯ Review this diff.', $display);
@@ -1228,17 +1266,17 @@ MARKDOWN;
         $events = [];
         $beforeChoice = null;
         $command = $this->commandThat(
-            static function (CommandControlsAdapterInterface $adapter, string $arguments) use (&$events): void {
+            static function (CommandControlsAdapterInterface $controls, string $arguments) use (&$events): void {
                 if ($arguments !== '') {
                     $events[] = $arguments;
 
                     return;
                 }
 
-                $adapter->requestSelection(new SelectionRequest('/probe', 'Models', [
+                $controls->requestSelection(new SelectionRequest('/probe', 'Models', [
                     new SelectionOption('stable-value', 'Visible label', 'Optional detail'),
                 ]));
-                $adapter->say('Request submitted.');
+                $controls->say('Request submitted.');
                 $events[] = 'first invocation finished';
             },
         );
@@ -1249,13 +1287,12 @@ MARKDOWN;
         });
         EventLoop::delay(0.16, static fn () => $terminal->simulateInput("\x03"));
 
-        Tui::make(
-            new Agent(),
+        Tui::make(TestAgent::registryForInitialAgent(new TestAgent()),
+            'test',
             $terminal,
             commands: new Commands($command),
             sessionStore: new SessionStore($storage, 'test-user'),
-            inputHistory: new InputHistory($storage),
-        )->run();
+            inputHistory: new InputHistory($storage))->run();
 
         self::assertSame(['first invocation finished'], $beforeChoice);
         self::assertSame(['first invocation finished', 'stable-value'], $events);
@@ -1269,11 +1306,11 @@ MARKDOWN;
         $forcedExit = false;
         $selected = false;
         $requester = $this->commandThat(
-            static function (CommandControlsAdapterInterface $adapter): void {
-                $adapter->requestSelection(new SelectionRequest('/apply', 'Abandoned selection', [
+            static function (CommandControlsAdapterInterface $controls): void {
+                $controls->requestSelection(new SelectionRequest('/apply', 'Abandoned selection', [
                     new SelectionOption('unused', 'Must not appear'),
                 ]));
-                $adapter->stop();
+                $controls->stop();
             },
             '/choose',
         );
@@ -1289,7 +1326,10 @@ MARKDOWN;
             $terminal->simulateInput("\x03");
         });
 
-        Tui::make(new Agent(), $terminal, commands: new Commands([$requester, $target]))->run();
+        Tui::make(TestAgent::registryForInitialAgent(new TestAgent()),
+            'test',
+            $terminal,
+            commands: new Commands([$requester, $target]))->run();
 
         EventLoop::cancel($fallback);
         // Run the queued presentation callback even if shutdown resumed run()
@@ -1308,10 +1348,10 @@ MARKDOWN;
     {
         $terminal = new VirtualTerminal(rows: 30);
         $inputHistory = new InputHistory(new InMemoryStorage());
-        $agent = new Agent();
+        $agent = new TestAgent();
         $originalHistory = new ExistingChatHistory([new UserMessage('Original conversation.')]);
         $agent->setChatHistory($originalHistory);
-        $successor = new Agent();
+        $successor = new TestAgent();
         $replacementHistory = $this->sessionWith([new UserMessage('Replacement conversation.')]);
         $resultingHistory = $this->sessionWith([
             new UserMessage('Resulting conversation.'),
@@ -1320,31 +1360,31 @@ MARKDOWN;
         $observedAgent = null;
         $observedArguments = null;
         $requester = $this->commandThat(
-            static function (CommandControlsAdapterInterface $adapter): void {
-                $adapter->requestSelection(new SelectionRequest('/apply', 'Choose an action', [
+            static function (CommandControlsAdapterInterface $controls): void {
+                $controls->requestSelection(new SelectionRequest('/apply', 'Choose an action', [
                     new SelectionOption('  /chosen value  ', 'Apply to the current Agent'),
                 ]));
             },
             '/choose',
         );
         $replacement = $this->commandThat(
-            static function (CommandControlsAdapterInterface $adapter) use ($successor, $replacementHistory): void {
+            static function (CommandControlsAdapterInterface $controls) use ($successor, $replacementHistory): void {
                 $successor->setChatHistory($replacementHistory);
-                $adapter->useAgent($successor);
+                $controls->useAgent($successor);
             },
             '/replace',
         );
         $target = $this->commandThat(
-            static function (CommandControlsAdapterInterface $adapter, string $arguments) use (
+            static function (CommandControlsAdapterInterface $controls, string $arguments) use (
                 &$observedAgent,
                 &$observedArguments,
                 $resultingHistory,
             ): void {
-                $observedAgent = $adapter->agent();
+                $observedAgent = $controls->agent();
                 $observedArguments = $arguments;
-                $newAgent = new Agent();
+                $newAgent = new TestAgent();
                 $newAgent->setChatHistory($resultingHistory);
-                $adapter->useAgent($newAgent);
+                $controls->useAgent($newAgent);
 
                 throw new \RuntimeException('Selected command failed.');
             },
@@ -1361,12 +1401,11 @@ MARKDOWN;
         });
         EventLoop::delay(0.16, static fn () => $terminal->simulateInput("\x03"));
 
-        Tui::make(
-            $agent,
+        Tui::make(TestAgent::registryForInitialAgent($agent),
+            'test',
             $terminal,
             commands: new Commands([$requester, $replacement, $target]),
-            inputHistory: $inputHistory,
-        )->run();
+            inputHistory: $inputHistory)->run();
 
         self::assertSame($successor, $observedAgent);
         self::assertSame('  /chosen value  ', $observedArguments);
@@ -1399,14 +1438,14 @@ MARKDOWN;
                 return new ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         $requester = $this->commandThat(
-            static function (CommandControlsAdapterInterface $adapter): void {
-                $adapter->requestSelection(new SelectionRequest('/apply', 'Choose an action', [
+            static function (CommandControlsAdapterInterface $controls): void {
+                $controls->requestSelection(new SelectionRequest('/apply', 'Choose an action', [
                     new SelectionOption('selected-value', 'An action'),
                 ]));
-                $adapter->promptAgent('Generated request.');
+                $controls->promptAgent('Generated request.');
             },
             '/choose',
         );
@@ -1420,12 +1459,11 @@ MARKDOWN;
         EventLoop::delay(0.08, static fn () => $terminal->simulateInput("\r"));
         EventLoop::delay(0.4, static fn () => $terminal->simulateInput("\x03"));
 
-        Tui::make(
-            $agent,
+        Tui::make(TestAgent::registryForInitialAgent($agent),
+            'test',
             $terminal,
             commands: new Commands([$requester, $target]),
-            inputHistory: $inputHistory,
-        )->run();
+            inputHistory: $inputHistory)->run();
 
         self::assertFalse($selected);
         self::assertStringContainsString(
@@ -1441,15 +1479,15 @@ MARKDOWN;
     {
         $abandoned = new FakeAIProvider(new AssistantMessage('The old one.'));
         $chosen = new FakeAIProvider(new AssistantMessage('The new one.'));
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($abandoned);
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
             static function (
-                CommandControlsAdapterInterface $adapter,
+                CommandControlsAdapterInterface $controls,
                 string $arguments,
             ) use ($chosen): void {
-                $adapter->agent()
+                $controls->agent()
                     ->setAiProvider($chosen)
                     ->setInstructions('Answer in one word.')
                     ->addTool(new CallbackTool('read_file', static fn (): string => ''));
@@ -1467,11 +1505,10 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([$command]),
-        ))->run();
+            commands: new Commands([$command])))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('The new one.', $display);
@@ -1486,18 +1523,18 @@ MARKDOWN;
     {
         $abandoned = new FakeAIProvider(new AssistantMessage('The old one.'));
         $chosen = new FakeAIProvider(new AssistantMessage('The new one.'));
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($abandoned);
-        $successor = new Agent();
+        $successor = new TestAgent();
         $successor->setAiProvider($chosen);
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
             static function (
-                CommandControlsAdapterInterface $adapter,
+                CommandControlsAdapterInterface $controls,
                 string $arguments,
             ) use ($successor): void {
-                $successor->setChatHistory($adapter->agent()->getChatHistory());
-                $adapter->useAgent($successor);
+                $successor->setChatHistory($controls->agent()->getChatHistory());
+                $controls->useAgent($successor);
             },
         );
         EventLoop::queue(
@@ -1516,11 +1553,10 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([$command]),
-        ))->run();
+            commands: new Commands([$command])))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         // The conversation held by the Agent that answered first is still on
@@ -1543,19 +1579,19 @@ MARKDOWN;
     {
         $abandoned = new FakeAIProvider(new AssistantMessage('The old one.'));
         $chosen = new FakeAIProvider(new AssistantMessage('The new one.'));
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($abandoned);
-        $successor = new Agent();
+        $successor = new TestAgent();
         $successor->setAiProvider($chosen);
         $replacementSession = (new SessionStore(new InMemoryStorage(), 'test-user'))->create();
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
             static function (
-                CommandControlsAdapterInterface $adapter,
+                CommandControlsAdapterInterface $controls,
                 string $arguments,
             ) use ($successor, $replacementSession): void {
                 $successor->setChatHistory($replacementSession);
-                $adapter->useAgent($successor);
+                $controls->useAgent($successor);
             },
         );
         EventLoop::queue(
@@ -1574,11 +1610,10 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([$command]),
-        ))->run();
+            commands: new Commands([$command])))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('The new one.', $display);
@@ -1596,12 +1631,12 @@ MARKDOWN;
     public function testACommandCanLeaveTheTerminal(): void
     {
         $forcedExit = false;
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
-            static function (CommandControlsAdapterInterface $adapter, string $arguments): void {
-                $adapter->stop();
+            static function (CommandControlsAdapterInterface $controls, string $arguments): void {
+                $controls->stop();
             },
             '/quit',
         );
@@ -1616,11 +1651,10 @@ MARKDOWN;
             },
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([$command]),
-        ))->run();
+            commands: new Commands([$command])))->run();
 
         self::assertFalse($forcedExit);
     }
@@ -1628,11 +1662,11 @@ MARKDOWN;
     public function testACommandThatFailsLeavesAnErrorLineAndAUsableTerminal(): void
     {
         $provider = new FakeAIProvider(new AssistantMessage('An answer.'));
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
-            static function (CommandControlsAdapterInterface $adapter, string $arguments): void {
+            static function (CommandControlsAdapterInterface $controls, string $arguments): void {
                 throw new \RuntimeException('The command broke.');
             },
         );
@@ -1648,11 +1682,10 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([$command]),
-        ))->run();
+            commands: new Commands([$command])))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString(
@@ -1665,7 +1698,7 @@ MARKDOWN;
 
     public function testACommandThatFailsAfterChangingConversationSaysSoOnTheNewOne(): void
     {
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider(new FakeAIProvider());
         $agent->setChatHistory(new ExistingChatHistory([
             new UserMessage('Earlier question.'),
@@ -1674,10 +1707,10 @@ MARKDOWN;
         $replacementSession = (new SessionStore(new InMemoryStorage(), 'test-user'))->create();
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
-            static function (CommandControlsAdapterInterface $adapter, string $arguments) use ($replacementSession): void {
-                $newAgent = new Agent();
+            static function (CommandControlsAdapterInterface $controls, string $arguments) use ($replacementSession): void {
+                $newAgent = new TestAgent();
                 $newAgent->setChatHistory($replacementSession);
-                $adapter->useAgent($newAgent);
+                $controls->useAgent($newAgent);
 
                 throw new \RuntimeException('The command broke.');
             },
@@ -1690,11 +1723,10 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([$command]),
-        ))->run();
+            commands: new Commands([$command])))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -1711,7 +1743,7 @@ MARKDOWN;
     {
         $forcedExit = false;
         $provider = new FakeAIProvider();
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         EventLoop::queue(
@@ -1744,7 +1776,9 @@ MARKDOWN;
             },
         );
 
-        (new Tui($agent, terminal: $terminal))->run();
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
+            terminal: $terminal))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -1774,7 +1808,7 @@ MARKDOWN;
         $forcedExit = false;
         $unknownDisplay = null;
         $wipedDisplay = null;
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider(new FakeAIProvider());
         $agent->setChatHistory(new ExistingChatHistory([
             new UserMessage('Earlier question.'),
@@ -1813,16 +1847,14 @@ MARKDOWN;
             },
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
             commands: new Commands([
                 new ClearCommand('/wipe'),
                 new LeaveCommand('/quit'),
             ]),
-            agentFactoryRegistry: SelfConfiguredAgent::registry(),
-            configurationStore: SelfConfiguredAgent::configurationStore(),
-        ))->run();
+            configurationStore: SelfConfiguredAgent::configurationStore()))->run();
 
         // The name it was given is the only name it answers to.
         self::assertIsString($unknownDisplay);
@@ -1848,11 +1880,11 @@ MARKDOWN;
     public function testHelpListsTheMountedCommandsWithTheirDescriptions(): void
     {
         $provider = new FakeAIProvider();
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
-            static function (CommandControlsAdapterInterface $adapter, string $arguments): void {
+            static function (CommandControlsAdapterInterface $controls, string $arguments): void {
             },
         );
         EventLoop::queue(
@@ -1863,11 +1895,10 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([new HelpCommand(), new LeaveCommand(), $command]),
-        ))->run();
+            commands: new Commands([new HelpCommand(), new LeaveCommand(), $command])))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -1896,7 +1927,7 @@ MARKDOWN;
     public function testATerminalWithoutHelpMountedDoesNotAnswerToIt(): void
     {
         $provider = new FakeAIProvider();
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         EventLoop::queue(
@@ -1907,11 +1938,10 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([new LeaveCommand()]),
-        ))->run();
+            commands: new Commands([new LeaveCommand()])))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -1924,7 +1954,7 @@ MARKDOWN;
 
     public function testTheScreenShowsTheSessionACommandSelected(): void
     {
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider(new FakeAIProvider());
         $restored = $this->sessionWith([
             new UserMessage('A restored question.'),
@@ -1932,10 +1962,10 @@ MARKDOWN;
         ]);
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
-            static function (CommandControlsAdapterInterface $adapter, string $arguments) use ($restored): void {
-                $newAgent = new Agent();
+            static function (CommandControlsAdapterInterface $controls, string $arguments) use ($restored): void {
+                $newAgent = new TestAgent();
                 $newAgent->setChatHistory($restored);
-                $adapter->useAgent($newAgent);
+                $controls->useAgent($newAgent);
             },
         );
         EventLoop::queue(
@@ -1953,11 +1983,10 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([$command]),
-        ))->run();
+            commands: new Commands([$command])))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -1970,14 +1999,14 @@ MARKDOWN;
 
     public function testACommandThatLeavesTheConversationAloneLeavesTheScreenAlone(): void
     {
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider(new FakeAIProvider(
             new AssistantMessage('An answer.'),
         ));
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
-            static function (CommandControlsAdapterInterface $adapter, string $arguments): void {
-                $adapter->say('The command ran.');
+            static function (CommandControlsAdapterInterface $controls, string $arguments): void {
+                $controls->say('The command ran.');
             },
         );
         EventLoop::queue(
@@ -1992,11 +2021,10 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([$command]),
-        ))->run();
+            commands: new Commands([$command])))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -2020,12 +2048,12 @@ MARKDOWN;
                 return new ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
             static function (
-                CommandControlsAdapterInterface $adapter,
+                CommandControlsAdapterInterface $controls,
                 string $arguments,
             ) use (&$ran): void {
                 $ran = true;
@@ -2049,11 +2077,10 @@ MARKDOWN;
             },
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([$command]),
-        ))->run();
+            commands: new Commands([$command])))->run();
 
         self::assertIsString($refusedDisplay);
         self::assertStringContainsString(
@@ -2081,7 +2108,7 @@ MARKDOWN;
                 return new ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 24);
         $command = new HelpCommand('/probe');
@@ -2105,11 +2132,10 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([$command]),
-        ))->run();
+            commands: new Commands([$command])))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -2145,7 +2171,7 @@ MARKDOWN;
                 return new ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 24);
         EventLoop::queue(
@@ -2172,11 +2198,10 @@ MARKDOWN;
             },
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([new HelpCommand(), new LeaveCommand()]),
-        ))->run();
+            commands: new Commands([new HelpCommand(), new LeaveCommand()])))->run();
 
         self::assertIsString($midTurnDisplay);
         self::assertStringContainsString(
@@ -2211,7 +2236,7 @@ MARKDOWN;
                 return new ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 24);
         EventLoop::queue(
@@ -2242,11 +2267,10 @@ MARKDOWN;
             },
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([new HelpCommand('/guide'), new LeaveCommand('/quit')]),
-        ))->run();
+            commands: new Commands([new HelpCommand('/guide'), new LeaveCommand('/quit')])))->run();
 
         self::assertIsString($midTurnDisplay);
         self::assertStringContainsString(
@@ -2268,7 +2292,7 @@ MARKDOWN;
      */
     public function testAKitCanCarrySharedCommands(): void
     {
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(rows: 24);
         $kit = new
@@ -2287,11 +2311,10 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("/exit\r"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([$kit]),
-        ))->run();
+            commands: new Commands([$kit])))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -2313,16 +2336,16 @@ MARKDOWN;
     {
         $chosen = 'nothing yet';
         $pickerDisplay = null;
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
             static function (
-                CommandControlsAdapterInterface $adapter,
+                CommandControlsAdapterInterface $controls,
                 string $arguments,
             ) use (&$chosen): void {
                 if ($arguments === '') {
-                    $adapter->requestSelection(new SelectionRequest('/probe', 'Models', [
+                    $controls->requestSelection(new SelectionRequest('/probe', 'Models', [
                         new SelectionOption('haiku', 'Claude Haiku'),
                         new SelectionOption('007', 'Claude Opus'),
                     ]));
@@ -2331,7 +2354,7 @@ MARKDOWN;
                 }
 
                 $chosen = $arguments;
-                $adapter->say('Chosen: ' . $chosen);
+                $controls->say('Chosen: ' . $chosen);
             },
         );
         EventLoop::delay(
@@ -2357,11 +2380,10 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([$command]),
-        ))->run();
+            commands: new Commands([$command])))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -2384,17 +2406,17 @@ MARKDOWN;
         $chosen = null;
         $initialDisplay = null;
         $movedDisplay = null;
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(columns: 48, rows: 30);
         $command = $this->commandThat(
             static function (
-                CommandControlsAdapterInterface $adapter,
+                CommandControlsAdapterInterface $controls,
                 string $arguments,
             ) use (&$chosen): void {
-                $adapter->say('History remains visible.');
+                $controls->say('History remains visible.');
                 if ($arguments === '') {
-                    $adapter->requestSelection(new SelectionRequest(
+                    $controls->requestSelection(new SelectionRequest(
                         '/probe',
                         'Models',
                         [
@@ -2445,11 +2467,10 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([$command]),
-        ))->run();
+            commands: new Commands([$command])))->run();
 
         self::assertIsString($initialDisplay);
         self::assertStringContainsString('History remains visible.', $initialDisplay);
@@ -2485,13 +2506,13 @@ MARKDOWN;
     {
         $withoutDescription = null;
         $withDescription = null;
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(columns: 32, rows: 30);
         $command = $this->commandThat(
-            static function (CommandControlsAdapterInterface $adapter, string $arguments): void {
+            static function (CommandControlsAdapterInterface $controls, string $arguments): void {
                 if ($arguments === '') {
-                    $adapter->requestSelection(new SelectionRequest('/probe', 'First choice', [
+                    $controls->requestSelection(new SelectionRequest('/probe', 'First choice', [
                         new SelectionOption('first', 'First option'),
                     ]));
 
@@ -2502,7 +2523,7 @@ MARKDOWN;
                     return;
                 }
 
-                $adapter->requestSelection(new SelectionRequest(
+                $controls->requestSelection(new SelectionRequest(
                     '/probe',
                     'Second choice',
                     [new SelectionOption('second', 'Second option')],
@@ -2551,11 +2572,10 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([$command]),
-        ))->run();
+            commands: new Commands([$command])))->run();
 
         self::assertIsString($withoutDescription);
         $withoutLines = explode("\n", str_replace("\r", '', $withoutDescription));
@@ -2581,16 +2601,16 @@ MARKDOWN;
     {
         $chosen = null;
         $pickerOutput = null;
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(columns: 42, rows: 32);
         $command = $this->commandThat(
             static function (
-                CommandControlsAdapterInterface $adapter,
+                CommandControlsAdapterInterface $controls,
                 string $arguments,
             ) use (&$chosen): void {
                 if ($arguments === '') {
-                    $adapter->requestSelection(new SelectionRequest('/probe', 'Models', [
+                    $controls->requestSelection(new SelectionRequest('/probe', 'Models', [
                         new SelectionOption(
                             'detailed',
                             "A selected label with a supplied\nline break and enough text to need more than two visual lines",
@@ -2621,11 +2641,10 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([$command]),
-        ))->run();
+            commands: new Commands([$command])))->run();
 
         self::assertIsString($pickerOutput);
         $display = str_replace(
@@ -2705,12 +2724,12 @@ MARKDOWN;
     {
         $chosen = null;
         $scrolledDisplay = null;
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(rows: 40);
         $command = $this->commandThat(
             static function (
-                CommandControlsAdapterInterface $adapter,
+                CommandControlsAdapterInterface $controls,
                 string $arguments,
             ) use (&$chosen): void {
                 $options = [];
@@ -2724,7 +2743,7 @@ MARKDOWN;
                 }
 
                 if ($arguments === '') {
-                    $adapter->requestSelection(new SelectionRequest('/probe', 'Models', $options));
+                    $controls->requestSelection(new SelectionRequest('/probe', 'Models', $options));
 
                     return;
                 }
@@ -2757,11 +2776,10 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([$command]),
-        ))->run();
+            commands: new Commands([$command])))->run();
 
         self::assertIsString($scrolledDisplay);
         self::assertStringContainsString('→ Label 9', $scrolledDisplay);
@@ -2779,16 +2797,16 @@ MARKDOWN;
         $initialDisplay = null;
         $scrolledDisplay = null;
         $wrappedDisplay = null;
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(columns: 36, rows: 40);
         $command = $this->commandThat(
             static function (
-                CommandControlsAdapterInterface $adapter,
+                CommandControlsAdapterInterface $controls,
                 string $arguments,
             ) use (&$chosen): void {
                 if ($arguments === '') {
-                    $adapter->requestSelection(new SelectionRequest('/probe', 'Viewport', [
+                    $controls->requestSelection(new SelectionRequest('/probe', 'Viewport', [
                         new SelectionOption('one', 'Option one', 'Detail one'),
                         new SelectionOption('two', 'Option two'),
                         new SelectionOption(
@@ -2854,11 +2872,10 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([$command]),
-        ))->run();
+            commands: new Commands([$command])))->run();
 
         self::assertIsString($initialDisplay);
         self::assertStringContainsString('→ Option one', $initialDisplay);
@@ -2888,12 +2905,12 @@ MARKDOWN;
         $lowDisplay = null;
         $grownDisplay = null;
         $reopenedDisplay = null;
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(columns: 40, rows: 30);
         $command = $this->commandThat(
             static function (
-                CommandControlsAdapterInterface $adapter,
+                CommandControlsAdapterInterface $controls,
                 string $arguments,
             ) use (&$chosen): void {
                 $options = [
@@ -2913,7 +2930,7 @@ MARKDOWN;
                     new SelectionOption('six', 'Match sixth choice'),
                 ];
                 if ($arguments === '') {
-                    $adapter->requestSelection(new SelectionRequest('/probe', 'Resizable', $options));
+                    $controls->requestSelection(new SelectionRequest('/probe', 'Resizable', $options));
 
                     return;
                 }
@@ -2923,7 +2940,7 @@ MARKDOWN;
                 }
 
                 $chosen = $arguments;
-                $adapter->requestSelection(new SelectionRequest('/probe', 'Reopened', array_map(
+                $controls->requestSelection(new SelectionRequest('/probe', 'Reopened', array_map(
                     static fn (SelectionOption $option): SelectionOption => new SelectionOption(
                         'done:' . $option->value,
                         $option->label,
@@ -2996,11 +3013,10 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([$command]),
-        ))->run();
+            commands: new Commands([$command])))->run();
 
         self::assertIsString($shortDisplay);
         self::assertStringContainsString('Resizable (3 of 6)', $shortDisplay);
@@ -3047,16 +3063,16 @@ MARKDOWN;
     public function testAnAbandonedChoiceDoesNotInvokeItsTargetCommand(): void
     {
         $chosen = 'nothing yet';
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
             static function (
-                CommandControlsAdapterInterface $adapter,
+                CommandControlsAdapterInterface $controls,
                 string $arguments,
             ) use (&$chosen): void {
                 if ($arguments === '') {
-                    $adapter->requestSelection(new SelectionRequest('/probe', 'Models', [
+                    $controls->requestSelection(new SelectionRequest('/probe', 'Models', [
                         new SelectionOption('haiku', 'Claude Haiku'),
                     ]));
 
@@ -3064,7 +3080,7 @@ MARKDOWN;
                 }
 
                 $chosen = $arguments;
-                $adapter->say('Chosen: ' . $chosen);
+                $controls->say('Chosen: ' . $chosen);
             },
         );
         EventLoop::delay(
@@ -3090,11 +3106,10 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([$command]),
-        ))->run();
+            commands: new Commands([$command])))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -3112,16 +3127,16 @@ MARKDOWN;
     {
         $chosen = 'nothing yet';
         $completions = 0;
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
             static function (
-                CommandControlsAdapterInterface $adapter,
+                CommandControlsAdapterInterface $controls,
                 string $arguments,
             ) use (&$chosen, &$completions): void {
                 if ($arguments === '') {
-                    $adapter->requestSelection(new SelectionRequest('/probe', 'Models', [
+                    $controls->requestSelection(new SelectionRequest('/probe', 'Models', [
                         new SelectionOption('haiku', 'Claude Haiku'),
                     ]));
 
@@ -3141,11 +3156,10 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([$command]),
-        ))->run();
+            commands: new Commands([$command])))->run();
 
         self::assertSame('nothing yet', $chosen);
         self::assertSame(0, $completions);
@@ -3155,16 +3169,16 @@ MARKDOWN;
     {
         $chosen = 'nothing yet';
         $narrowedDisplay = null;
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
             static function (
-                CommandControlsAdapterInterface $adapter,
+                CommandControlsAdapterInterface $controls,
                 string $arguments,
             ) use (&$chosen): void {
                 if ($arguments === '') {
-                    $adapter->requestSelection(new SelectionRequest('/probe', 'Models', [
+                    $controls->requestSelection(new SelectionRequest('/probe', 'Models', [
                         new SelectionOption('haiku', 'Claude Haiku'),
                         new SelectionOption('opus', 'Claude Opus'),
                         new SelectionOption('sonnet', 'Claude Sonnet'),
@@ -3204,11 +3218,10 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([$command]),
-        ))->run();
+            commands: new Commands([$command])))->run();
 
         self::assertIsString($narrowedDisplay);
         self::assertStringContainsString('Claude Opus', $narrowedDisplay);
@@ -3223,16 +3236,16 @@ MARKDOWN;
         $shortDisplay = null;
         $longDisplay = null;
         $filteredDisplay = null;
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
             static function (
-                CommandControlsAdapterInterface $adapter,
+                CommandControlsAdapterInterface $controls,
                 string $arguments,
             ) use (&$shortChoice, &$longChoice): void {
                 if ($arguments === '') {
-                    $adapter->requestSelection(new SelectionRequest('/probe', 'Short choice', [
+                    $controls->requestSelection(new SelectionRequest('/probe', 'Short choice', [
                         new SelectionOption('short-1', 'Short one'),
                         new SelectionOption('short-2', 'Short two'),
                         new SelectionOption('short-3', 'Short three'),
@@ -3250,7 +3263,7 @@ MARKDOWN;
                 }
 
                 $shortChoice = $arguments;
-                $adapter->requestSelection(new SelectionRequest('/probe', 'Long choice', [
+                $controls->requestSelection(new SelectionRequest('/probe', 'Long choice', [
                     new SelectionOption('long-1', 'Long one'),
                     new SelectionOption('long-2', 'Long two'),
                     new SelectionOption('long-3', 'Long three'),
@@ -3298,11 +3311,10 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([$command]),
-        ))->run();
+            commands: new Commands([$command])))->run();
 
         self::assertIsString($shortDisplay);
         self::assertStringNotContainsString('Search:', $shortDisplay);
@@ -3320,16 +3332,16 @@ MARKDOWN;
     {
         $chosen = null;
         $filteredDisplay = null;
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(columns: 38, rows: 32);
         $command = $this->commandThat(
             static function (
-                CommandControlsAdapterInterface $adapter,
+                CommandControlsAdapterInterface $controls,
                 string $arguments,
             ) use (&$chosen): void {
                 if ($arguments === '') {
-                    $adapter->requestSelection(new SelectionRequest('/probe', 'Models', [
+                    $controls->requestSelection(new SelectionRequest('/probe', 'Models', [
                         new SelectionOption('alpha', 'Alpha'),
                         new SelectionOption(
                             'detail',
@@ -3378,11 +3390,10 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([$command]),
-        ))->run();
+            commands: new Commands([$command])))->run();
 
         self::assertIsString($filteredDisplay);
         self::assertStringContainsString('Models (1 of 3)', $filteredDisplay);
@@ -3406,12 +3417,12 @@ MARKDOWN;
         $afterEnter = null;
         $restoredDisplay = null;
         $reopenedDisplay = null;
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
             static function (
-                CommandControlsAdapterInterface $adapter,
+                CommandControlsAdapterInterface $controls,
                 string $arguments,
             ) use (&$first, &$second): void {
                 $options = [
@@ -3423,7 +3434,7 @@ MARKDOWN;
                     new SelectionOption('six', 'Option six'),
                 ];
                 if ($arguments === '' || $arguments === 'reopen') {
-                    $adapter->requestSelection(new SelectionRequest(
+                    $controls->requestSelection(new SelectionRequest(
                         '/probe',
                         $arguments === '' ? 'First opening' : 'Second opening',
                         $options,
@@ -3501,11 +3512,10 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([$command]),
-        ))->run();
+            commands: new Commands([$command])))->run();
 
         self::assertIsString($emptyDisplay);
         self::assertStringContainsString('First opening (0 of 0)', $emptyDisplay);
@@ -3544,7 +3554,7 @@ MARKDOWN;
     public function testWritingASlashShowsTheMountedCommandsWithTheirDescriptions(): void
     {
         $provider = new FakeAIProvider();
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $display = null;
@@ -3564,11 +3574,10 @@ MARKDOWN;
             },
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([new HelpCommand(), new LeaveCommand()]),
-        ))->run();
+            commands: new Commands([new HelpCommand(), new LeaveCommand()])))->run();
 
         self::assertIsString($display);
         self::assertStringContainsString('/help', $display);
@@ -3594,7 +3603,7 @@ MARKDOWN;
      */
     public function testTheSuggestionsSitAboveAComposerThatKeepsTakingText(): void
     {
-        $agent = new Agent();
+        $agent = new TestAgent();
         $terminal = new VirtualTerminal(rows: 30);
         $display = null;
         EventLoop::delay(
@@ -3613,11 +3622,10 @@ MARKDOWN;
             },
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([new HelpCommand()]),
-        ))->run();
+            commands: new Commands([new HelpCommand()])))->run();
 
         self::assertIsString($display);
         $lines = preg_split('/\r\n|\r|\n/', $display);
@@ -3651,13 +3659,13 @@ MARKDOWN;
      */
     public function testMoreCommandsThanFitAreCountedRatherThanDropped(): void
     {
-        $agent = new Agent();
+        $agent = new TestAgent();
         $terminal = new VirtualTerminal(rows: 30);
         $commands = [];
 
         for ($place = 0; $place < 10; ++$place) {
             $commands[] = $this->commandThat(
-                static function (CommandControlsAdapterInterface $adapter, string $arguments): void {
+                static function (CommandControlsAdapterInterface $controls, string $arguments): void {
                 },
                 '/cmd' . $place,
             );
@@ -3680,11 +3688,10 @@ MARKDOWN;
             },
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands($commands),
-        ))->run();
+            commands: new Commands($commands)))->run();
 
         self::assertIsString($display);
         self::assertStringContainsString('/cmd0', $display);
@@ -3699,7 +3706,7 @@ MARKDOWN;
      */
     public function testASpaceANewLineOrADeletedSlashTakesTheSuggestionsAway(): void
     {
-        $agent = new Agent();
+        $agent = new TestAgent();
         $terminal = new VirtualTerminal(rows: 30);
         $open = null;
         $afterSpace = null;
@@ -3769,11 +3776,10 @@ MARKDOWN;
             },
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([new HelpCommand()]),
-        ))->run();
+            commands: new Commands([new HelpCommand()])))->run();
 
         self::assertIsString($open);
         self::assertStringContainsString(
@@ -3795,7 +3801,7 @@ MARKDOWN;
      */
     public function testASlashInTheMiddleOfAMessageSuggestsNothing(): void
     {
-        $agent = new Agent();
+        $agent = new TestAgent();
         $terminal = new VirtualTerminal(rows: 30);
         $display = null;
         EventLoop::delay(
@@ -3814,11 +3820,10 @@ MARKDOWN;
             },
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([new HelpCommand()]),
-        ))->run();
+            commands: new Commands([new HelpCommand()])))->run();
 
         self::assertIsString($display);
         self::assertStringNotContainsString(
@@ -3832,7 +3837,7 @@ MARKDOWN;
      */
     public function testATerminalWithoutCommandsSaysNothingMatches(): void
     {
-        $agent = new Agent();
+        $agent = new TestAgent();
         $terminal = new VirtualTerminal(rows: 30);
         $display = null;
         EventLoop::delay(
@@ -3851,7 +3856,9 @@ MARKDOWN;
             },
         );
 
-        (new Tui($agent, terminal: $terminal))->run();
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
+            terminal: $terminal))->run();
 
         self::assertIsString($display);
         self::assertStringContainsString('No commands match "/"', $display);
@@ -3868,11 +3875,11 @@ MARKDOWN;
             [
                 $this->commandThat(
                     static function (
-                        CommandControlsAdapterInterface $adapter,
+                        CommandControlsAdapterInterface $controls,
                         string $written,
                     ) use (&$arguments): void {
                         $arguments = $written;
-                        $adapter->say('Alpha ran.');
+                        $controls->say('Alpha ran.');
                     },
                     '/alpha',
                 ),
@@ -3900,12 +3907,12 @@ MARKDOWN;
             &$arguments,
         ): Closure {
             return static function (
-                CommandControlsAdapterInterface $adapter,
+                CommandControlsAdapterInterface $controls,
                 string $written,
             ) use ($name, &$ran, &$arguments): void {
                 $ran = $name;
                 $arguments = $written;
-                $adapter->say($name . ' ran.');
+                $controls->say($name . ' ran.');
             };
         };
         $display = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
@@ -4172,7 +4179,10 @@ MARKDOWN;
             },
         );
 
-        $tui = new Tui(new Agent(), $terminal, commands: new Commands($commands));
+        $tui = new Tui(TestAgent::registryForInitialAgent(new TestAgent()),
+            'test',
+            $terminal,
+            commands: new Commands($commands));
 
         $tui->run();
 
@@ -4207,7 +4217,7 @@ MARKDOWN;
             }
 
             public function run(
-                CommandControlsAdapterInterface $adapter,
+                CommandControlsAdapterInterface $controls,
                 CommandArguments $arguments,
             ): void {
             }
@@ -4234,12 +4244,12 @@ MARKDOWN;
                 return new ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $concurrent = new HelpCommand('/pulse');
         $refused = $this->commandThat(
-            static function (CommandControlsAdapterInterface $adapter, string $arguments): void {
+            static function (CommandControlsAdapterInterface $controls, string $arguments): void {
             },
             '/probe',
         );
@@ -4278,11 +4288,10 @@ MARKDOWN;
             },
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([$refused, $concurrent]),
-        ))->run();
+            commands: new Commands([$refused, $concurrent])))->run();
 
         self::assertIsString($midTurnDisplay);
         self::assertStringContainsString('/pulse', $midTurnDisplay);
@@ -4310,11 +4319,11 @@ MARKDOWN;
                 return new ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $refused = $this->commandThat(
-            static function (CommandControlsAdapterInterface $adapter, string $arguments): void {
+            static function (CommandControlsAdapterInterface $controls, string $arguments): void {
             },
             '/probe',
         );
@@ -4343,11 +4352,10 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([$refused]),
-        ))->run();
+            commands: new Commands([$refused])))->run();
 
         self::assertIsString($midTurnDisplay);
         self::assertStringContainsString(
@@ -4364,16 +4372,16 @@ MARKDOWN;
     public function testNoSuggestionsAreShownWhileAPickerIsOpen(): void
     {
         $choosingDisplay = null;
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
-            static function (CommandControlsAdapterInterface $adapter, string $arguments): void {
+            static function (CommandControlsAdapterInterface $controls, string $arguments): void {
                 if ($arguments !== '') {
                     return;
                 }
 
-                $adapter->requestSelection(new SelectionRequest('/probe', 'Models', [
+                $controls->requestSelection(new SelectionRequest('/probe', 'Models', [
                     new SelectionOption('haiku', 'Claude Haiku'),
                 ]));
             },
@@ -4400,11 +4408,10 @@ MARKDOWN;
             },
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([$command]),
-        ))->run();
+            commands: new Commands([$command])))->run();
 
         self::assertIsString($choosingDisplay);
         // The picker is what is on screen, and the slash went to it.
@@ -4488,13 +4495,13 @@ MARKDOWN;
      */
     public function testTabWritesTheChosenNameAndTheArgumentsFollowIt(): void
     {
-        $agent = new Agent();
+        $agent = new TestAgent();
         $terminal = new VirtualTerminal(rows: 30);
         $ran = null;
         $arguments = null;
         $note = static function (string $name) use (&$ran, &$arguments) {
             return static function (
-                CommandControlsAdapterInterface $adapter,
+                CommandControlsAdapterInterface $controls,
                 string $written,
             ) use ($name, &$ran, &$arguments): void {
                 $ran = $name;
@@ -4530,14 +4537,13 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
             commands: new Commands([
                 $this->commandThat($note('/alpha'), '/alpha'),
                 $this->commandThat($note('/album'), '/album'),
-            ]),
-        ))->run();
+            ])))->run();
 
         self::assertIsString($completed);
         // The name that was chosen, written whole, with the list gone.
@@ -4556,7 +4562,7 @@ MARKDOWN;
      */
     public function testTabWritesNothingWhenNoCommandMatches(): void
     {
-        $agent = new Agent();
+        $agent = new TestAgent();
         $terminal = new VirtualTerminal(rows: 30);
         EventLoop::delay(
             0.05,
@@ -4575,11 +4581,10 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([self::commandNamed('/alpha', 'The only one.')]),
-        ))->run();
+            commands: new Commands([self::commandNamed('/alpha', 'The only one.')])))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -4598,7 +4603,7 @@ MARKDOWN;
     public function testTabWritesNothingWhileTheListIsClosed(): void
     {
         $provider = new FakeAIProvider(new AssistantMessage('An answer.'));
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         EventLoop::delay(
@@ -4618,7 +4623,9 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, terminal: $terminal))->run();
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
+            terminal: $terminal))->run();
 
         $provider->assertSent(
             static fn (RequestRecord $request): bool
@@ -4632,7 +4639,7 @@ MARKDOWN;
      */
     public function testEscapeClosesTheListAndTheNextOneEmptiesTheDraft(): void
     {
-        $agent = new Agent();
+        $agent = new TestAgent();
         $terminal = new VirtualTerminal(rows: 30);
         $closed = null;
         $emptied = null;
@@ -4667,11 +4674,10 @@ MARKDOWN;
             },
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([new HelpCommand()]),
-        ))->run();
+            commands: new Commands([new HelpCommand()])))->run();
 
         self::assertIsString($closed);
         self::assertStringNotContainsString(
@@ -4753,7 +4759,7 @@ MARKDOWN;
      */
     public function testTheStatusLineNamesTheKeysWhileTheListIsOpen(): void
     {
-        $agent = new Agent();
+        $agent = new TestAgent();
         $terminal = new VirtualTerminal(rows: 30);
         $open = null;
         $closed = null;
@@ -4784,11 +4790,10 @@ MARKDOWN;
             },
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands([new HelpCommand()]),
-        ))->run();
+            commands: new Commands([new HelpCommand()])))->run();
 
         self::assertIsString($open);
         self::assertStringContainsString('↑↓ moves', $open);
@@ -4831,10 +4836,10 @@ MARKDOWN;
                 return 'Does what the test says.';
             }
 
-            /** @param CommandControlsAdapterInterface<mixed> $adapter */
-            public function run(CommandControlsAdapterInterface $adapter, CommandArguments $arguments): void
+            /** @param CommandControlsAdapterInterface<mixed> $controls */
+            public function run(CommandControlsAdapterInterface $controls, CommandArguments $arguments): void
             {
-                ($this->run)($adapter, $arguments->text);
+                ($this->run)($controls, $arguments->text);
             }
         };
     }
@@ -4860,8 +4865,8 @@ MARKDOWN;
     /** @return list<CommandInterface> */
     private static function observedSessionCommands(Agent &$active): array
     {
-        $observe = static function (CommandControlsAdapterInterface $adapter) use (&$active): void {
-            $active = $adapter->agent();
+        $observe = static function (CommandControlsAdapterInterface $controls) use (&$active): void {
+            $active = $controls->agent();
         };
 
         return [
@@ -4912,13 +4917,11 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
             commands: new Commands(self::observedSessionCommands($agent)),
-            agentFactoryRegistry: SelfConfiguredAgent::registry(),
-            configurationStore: SelfConfiguredAgent::configurationStore(),
-        ))->run();
+            configurationStore: SelfConfiguredAgent::configurationStore()))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -4945,14 +4948,14 @@ MARKDOWN;
 
     public function testClearOpensAnEmptySessionOverTheOneOnScreen(): void
     {
-        $agent = new Agent();
+        $agent = new TestAgent();
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
         $agent->setChatHistory($sessionStore->create());
         $earlier = null;
         $fillSession = $this->commandThat(
-            static function (CommandControlsAdapterInterface $adapter) use (&$earlier): void {
-                $earlier = $adapter->agent()->getChatHistory();
+            static function (CommandControlsAdapterInterface $controls) use (&$earlier): void {
+                $earlier = $controls->agent()->getChatHistory();
                 $earlier->addMessage(new UserMessage('Earlier question.'));
                 $earlier->addMessage(new AssistantMessage('Earlier answer.'));
             },
@@ -4983,8 +4986,8 @@ MARKDOWN;
             },
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
             sessionStore: $sessionStore,
             inputHistory: new InputHistory($storage),
@@ -4992,9 +4995,7 @@ MARKDOWN;
                 ...self::observedSessionCommands($agent),
                 $fillSession,
             ]),
-            agentFactoryRegistry: SelfConfiguredAgent::registry(),
-            configurationStore: SelfConfiguredAgent::configurationStore(),
-        ))->run();
+            configurationStore: SelfConfiguredAgent::configurationStore()))->run();
 
         self::assertIsString($clearedDisplay);
         self::assertStringContainsString('draft', $clearedDisplay);
@@ -5040,15 +5041,13 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands(self::observedSessionCommands($agent)),
-            agentFactoryRegistry: SelfConfiguredAgent::registry(),
-            configurationStore: SelfConfiguredAgent::configurationStore(),
-        ))->run();
+            configurationStore: SelfConfiguredAgent::configurationStore()))->run();
 
         $listed = $sessionStore->summaries();
 
@@ -5092,12 +5091,12 @@ MARKDOWN;
                 return new ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         $ongoing = null;
         $remember = $this->commandThat(
-            static function (CommandControlsAdapterInterface $adapter) use (&$ongoing): void {
-                $ongoing = $adapter->agent()->getChatHistory();
+            static function (CommandControlsAdapterInterface $controls) use (&$ongoing): void {
+                $ongoing = $controls->agent()->getChatHistory();
             },
         );
         $storage = new InMemoryStorage();
@@ -5136,8 +5135,8 @@ MARKDOWN;
             },
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
@@ -5145,9 +5144,7 @@ MARKDOWN;
                 ...self::sessionCommands(),
                 $remember,
             ]),
-            agentFactoryRegistry: SelfConfiguredAgent::registry(),
-            configurationStore: SelfConfiguredAgent::configurationStore(),
-        ))->run();
+            configurationStore: SelfConfiguredAgent::configurationStore()))->run();
 
         self::assertIsString($refusedDisplay);
         self::assertStringContainsString(
@@ -5201,15 +5198,13 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
-            agentFactoryRegistry: SelfConfiguredAgent::registry(),
             configurationStore: SelfConfiguredAgent::configurationStore(),
             inputHistory: new InputHistory($storage),
-            commands: new Commands(self::observedSessionCommands($agent)),
-        ))->run();
+            commands: new Commands(self::observedSessionCommands($agent))))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -5266,7 +5261,7 @@ MARKDOWN;
             $storedBytes = $document->size();
             self::assertLessThan(1_024, $storedBytes);
 
-            $agent = new Agent();
+            $agent = new TestAgent();
             $terminal = new VirtualTerminal(rows: 30);
             $pickerDisplay = null;
             EventLoop::delay(
@@ -5288,15 +5283,13 @@ MARKDOWN;
                 static fn () => $terminal->simulateInput("\x03"),
             );
 
-            (new Tui(
-                $agent,
-                terminal: $terminal,
-                sessionStore: new SessionStore($storage, 'test-user'),
-                agentFactoryRegistry: SelfConfiguredAgent::registry(),
-                configurationStore: SelfConfiguredAgent::configurationStore(),
-                inputHistory: new InputHistory($storage),
-                commands: new Commands(self::observedSessionCommands($agent)),
-            ))->run();
+            (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
+            terminal: $terminal,
+            sessionStore: new SessionStore($storage, 'test-user'),
+            configurationStore: SelfConfiguredAgent::configurationStore(),
+            inputHistory: new InputHistory($storage),
+            commands: new Commands(self::observedSessionCommands($agent))))->run();
 
             self::assertIsString($pickerDisplay);
             self::assertStringContainsString(
@@ -5346,7 +5339,7 @@ MARKDOWN;
      */
     public function testTheSessionPickerStillResumesWhenOpenedASecondTime(): void
     {
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider(new FakeAIProvider(
             new AssistantMessage('A later answer.'),
         ));
@@ -5379,15 +5372,13 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
-            agentFactoryRegistry: SelfConfiguredAgent::registry(),
             configurationStore: SelfConfiguredAgent::configurationStore(),
             inputHistory: new InputHistory($storage),
-            commands: new Commands(self::observedSessionCommands($agent)),
-        ))->run();
+            commands: new Commands(self::observedSessionCommands($agent))))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -5411,7 +5402,7 @@ MARKDOWN;
      */
     public function testASessionTitledWithANullByteIsListedAndResumed(): void
     {
-        $agent = new Agent();
+        $agent = new TestAgent();
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
         $earlier = $sessionStore->create();
@@ -5439,15 +5430,13 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
-            agentFactoryRegistry: SelfConfiguredAgent::registry(),
             configurationStore: SelfConfiguredAgent::configurationStore(),
             inputHistory: new InputHistory($storage),
-            commands: new Commands(self::observedSessionCommands($agent)),
-        ))->run();
+            commands: new Commands(self::observedSessionCommands($agent))))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -5469,11 +5458,11 @@ MARKDOWN;
 
     public function testEscapeLeavesTheSessionPickerWithTheSameSession(): void
     {
-        $agent = new Agent();
+        $agent = new TestAgent();
         $ongoing = null;
         $remember = $this->commandThat(
-            static function (CommandControlsAdapterInterface $adapter) use (&$ongoing): void {
-                $ongoing = $adapter->agent()->getChatHistory();
+            static function (CommandControlsAdapterInterface $controls) use (&$ongoing): void {
+                $ongoing = $controls->agent()->getChatHistory();
             },
         );
         $storage = new InMemoryStorage();
@@ -5514,16 +5503,15 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands([
                 ...self::sessionCommands(),
                 $remember,
-            ]),
-        ))->run();
+            ])))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -5542,7 +5530,7 @@ MARKDOWN;
 
     public function testResumeSaysSoWhenThereIsNothingToReturnTo(): void
     {
-        $agent = new Agent();
+        $agent = new TestAgent();
         $terminal = new VirtualTerminal(rows: 24);
         EventLoop::delay(
             0.04,
@@ -5553,11 +5541,10 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
-            commands: new Commands(self::sessionCommands()),
-        ))->run();
+            commands: new Commands(self::sessionCommands())))->run();
 
         self::assertStringContainsString(
             'There is no earlier Session to return to yet.',
@@ -5567,7 +5554,7 @@ MARKDOWN;
 
     public function testTypingNarrowsThePickerInsteadOfTheComposer(): void
     {
-        $agent = new Agent();
+        $agent = new TestAgent();
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
         $sessionStore->create()->addMessage(
@@ -5609,15 +5596,13 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
-            agentFactoryRegistry: SelfConfiguredAgent::registry(),
             configurationStore: SelfConfiguredAgent::configurationStore(),
             inputHistory: new InputHistory($storage),
-            commands: new Commands(self::observedSessionCommands($agent)),
-        ))->run();
+            commands: new Commands(self::observedSessionCommands($agent))))->run();
 
         self::assertIsString($narrowedDisplay);
         self::assertStringContainsString('Beta subject', $narrowedDisplay);
@@ -5634,7 +5619,7 @@ MARKDOWN;
 
     public function testArrowKeysChooseAnotherSessionInThePicker(): void
     {
-        $agent = new Agent();
+        $agent = new TestAgent();
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
         $older = $sessionStore->create();
@@ -5660,15 +5645,13 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
-            agentFactoryRegistry: SelfConfiguredAgent::registry(),
             configurationStore: SelfConfiguredAgent::configurationStore(),
             inputHistory: new InputHistory($storage),
-            commands: new Commands(self::observedSessionCommands($agent)),
-        ))->run();
+            commands: new Commands(self::observedSessionCommands($agent))))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -5697,7 +5680,7 @@ MARKDOWN;
                 return new ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
@@ -5722,15 +5705,13 @@ MARKDOWN;
             },
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
-            agentFactoryRegistry: SelfConfiguredAgent::registry(),
             configurationStore: SelfConfiguredAgent::configurationStore(),
             inputHistory: new InputHistory($storage),
-            commands: new Commands(self::sessionCommands()),
-        ))->run();
+            commands: new Commands(self::sessionCommands())))->run();
 
         self::assertIsString($refusedDisplay);
         self::assertStringContainsString(
@@ -5749,7 +5730,7 @@ MARKDOWN;
      */
     public function testMountingAKitMountsEveryCommandItOffers(): void
     {
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider(new FakeAIProvider());
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
@@ -5801,8 +5782,8 @@ MARKDOWN;
             },
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
@@ -5810,9 +5791,7 @@ MARKDOWN;
                 new SessionCommandKit(),
                 new LeaveCommand(),
             ]),
-            agentFactoryRegistry: SelfConfiguredAgent::registry(),
-            configurationStore: SelfConfiguredAgent::configurationStore(),
-        ))->run();
+            configurationStore: SelfConfiguredAgent::configurationStore()))->run();
 
         self::assertIsString($pickerDisplay);
         self::assertStringContainsString(
@@ -5844,7 +5823,7 @@ MARKDOWN;
 
     public function testAKitCanBeMountedWithSomeOfItsCommandsLeftOut(): void
     {
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider(new FakeAIProvider());
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
@@ -5883,8 +5862,8 @@ MARKDOWN;
             },
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
@@ -5892,9 +5871,7 @@ MARKDOWN;
                 (new SessionCommandKit())->exclude([ClearCommand::class]),
                 new LeaveCommand(),
             ]),
-            agentFactoryRegistry: SelfConfiguredAgent::registry(),
-            configurationStore: SelfConfiguredAgent::configurationStore(),
-        ))->run();
+            configurationStore: SelfConfiguredAgent::configurationStore()))->run();
 
         self::assertIsString($refusedDisplay);
         self::assertStringContainsString(
@@ -5914,7 +5891,7 @@ MARKDOWN;
 
     public function testAKitCanBeMountedKeepingOnlySomeOfItsCommands(): void
     {
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider(new FakeAIProvider());
         $storage = new InMemoryStorage();
         $agent->setChatHistory(new ExistingChatHistory([
@@ -5957,8 +5934,8 @@ MARKDOWN;
             },
         );
 
-        (new Tui(
-            $agent,
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
@@ -5966,9 +5943,7 @@ MARKDOWN;
                 (new SessionCommandKit())->only([ClearCommand::class]),
                 new LeaveCommand(),
             ]),
-            agentFactoryRegistry: SelfConfiguredAgent::registry(),
-            configurationStore: SelfConfiguredAgent::configurationStore(),
-        ))->run();
+            configurationStore: SelfConfiguredAgent::configurationStore()))->run();
 
         self::assertIsString($refusedDisplay);
         self::assertStringContainsString(
@@ -5997,13 +5972,13 @@ MARKDOWN;
             $messages[] = new AssistantMessage("Answer {$turn}");
         }
 
-        $agent = new Agent();
+        $agent = new TestAgent();
         $history = $this->sessionWith($messages);
         $restore = $this->commandThat(
-            static function (CommandControlsAdapterInterface $adapter) use ($history): void {
-                $newAgent = new Agent();
+            static function (CommandControlsAdapterInterface $controls) use ($history): void {
+                $newAgent = new TestAgent();
                 $newAgent->setChatHistory($history);
-                $adapter->useAgent($newAgent);
+                $controls->useAgent($newAgent);
             },
         );
         $terminal = new VirtualTerminal(rows: 16);
@@ -6043,7 +6018,10 @@ MARKDOWN;
             },
         );
 
-        (new Tui($agent, terminal: $terminal, commands: new Commands($restore)))
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
+            terminal: $terminal,
+            commands: new Commands($restore)))
             ->run();
 
         self::assertIsString($initialDisplay);
@@ -6100,7 +6078,7 @@ MARKDOWN;
                 return new ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 16);
         $followingDisplay = null;
@@ -6141,7 +6119,9 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, terminal: $terminal))->run();
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
+            terminal: $terminal))->run();
 
         self::assertIsString($followingDisplay);
         self::assertStringContainsString('anchor 12', $followingDisplay);
@@ -6157,7 +6137,7 @@ MARKDOWN;
         PublishToolCallback::$executed = false;
         $tool = new CallbackTool('publish', (new PublishToolCallback())(...));
         $provider = new FakeAIProvider(new ToolCallMessage(tools: [new ToolCall('publish', 'publish-call', ['target' => 'production'])]));
-        $agent = new Agent();
+        $agent = new TestAgent();
         $agent->setAiProvider($provider);
         $agent->addTool($tool);
         $tool->requireApproval();
@@ -6174,7 +6154,9 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, terminal: $terminal))->run();
+        (new Tui(TestAgent::registryForInitialAgent($agent),
+            'test',
+            terminal: $terminal))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString(
@@ -6194,7 +6176,9 @@ MARKDOWN;
         $this->expectException(\LogicException::class);
         $this->expectExceptionMessage('Terminal could not initialize.');
 
-        (new Tui(new Agent(), terminal: new FailingTerminal()))->run();
+        (new Tui(TestAgent::registryForInitialAgent(new TestAgent()),
+            'test',
+            terminal: new FailingTerminal()))->run();
     }
 
     public function testDefaultTerminalRejectsNonInteractiveInput(): void
@@ -6208,7 +6192,8 @@ MARKDOWN;
             'Neuron TUI requires an interactive TTY.',
         );
 
-        (new Tui(new Agent()))->run();
+        (new Tui(TestAgent::registryForInitialAgent(new TestAgent()),
+            'test'))->run();
     }
 }
 

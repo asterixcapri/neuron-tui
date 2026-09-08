@@ -4,16 +4,14 @@ declare(strict_types=1);
 
 namespace NeuronTui\Tests\Tui;
 
+use NeuronTui\Tests\Support\TestAgent;
+
 use NeuronAI\Agent\Agent;
-use NeuronAI\Chat\Messages\AssistantMessage;
-use NeuronAI\Testing\FakeAIProvider;
-use NeuronInteraction\Agent\AgentFactoryRegistry;
 use NeuronInteraction\Command\ClearCommand;
 use NeuronInteraction\Command\CommandControlsAdapterInterface;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Command\ResumeCommand;
-use NeuronInteraction\Configuration\Configuration;
 use NeuronInteraction\Configuration\ConfigurationStore;
 use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Session\Session;
@@ -37,19 +35,18 @@ final class ModelPersistenceTest extends TestCase
             $storage = new FileStorage($directory);
             $sessions = new SessionStore($storage, 'alice');
             $configurations = new ConfigurationStore($storage, 'alice');
-            $configuration = $configurations->create('global', [
+            $configurations->create('agent', [
                 'agent' => 'demo', 'model' => 'openai:gpt-5.6-sol', 'capability' => 'enabled', 'unrelated' => ['theme' => 'dark'],
             ]);
-            $registry = $this->registry();
-            $active = $registry->create($configuration);
+            $active = ConfiguredAgent::createAgent($configurations);
             $initialAgent = $active;
             $initial = $sessions->create();
             $active->setChatHistory($initial);
             $terminal = new VirtualTerminal(rows: 40);
             $inputs = new InputHistory($storage);
             $agents = [];
-            $observe = static function (CommandControlsAdapterInterface $adapter) use (&$active, &$agents): void {
-                $active = $adapter->agent();
+            $observe = static function (CommandControlsAdapterInterface $controls) use (&$active, &$agents): void {
+                $active = $controls->agent();
                 $agents[] = $active;
             };
             $commands = new Commands(array_map(
@@ -59,10 +56,10 @@ final class ModelPersistenceTest extends TestCase
             EventLoop::queue(static fn () => $terminal->simulateInput("Initial question\r"));
             EventLoop::delay(0.15, static fn () => $terminal->simulateInput("/model\r"));
             EventLoop::delay(0.2, static function () use ($configurations, $terminal): void {
-                $fresh = $configurations->read('global');
+                $fresh = $configurations->read('agent');
                 self::assertNotNull($fresh);
                 $fresh->set('capability', 'updated');
-                $configurations->save($fresh);
+                $configurations->write($fresh);
                 $terminal->simulateInput("\x1b[B");
             });
             EventLoop::delay(0.24, static fn () => $terminal->simulateInput("\r"));
@@ -73,7 +70,13 @@ final class ModelPersistenceTest extends TestCase
             EventLoop::delay(0.78, static fn () => $terminal->simulateInput("Back in the original\r"));
             EventLoop::delay(0.96, static fn () => $terminal->simulateInput("\x03"));
 
-            Tui::make($active, $terminal, $commands, $sessions, $inputs, $registry, $configurations)->run();
+            Tui::make(TestAgent::registryForInitialAgent($active),
+            'test',
+            $terminal,
+            $commands,
+            $sessions,
+            $inputs,
+            $configurations)->run();
 
             self::assertCount(4, $agents); // Selection request, selected model, Clear, Resume.
             self::assertSame($initialAgent, $agents[0]);
@@ -95,21 +98,22 @@ final class ModelPersistenceTest extends TestCase
             // A new composition reopens both stores and explicitly chooses its startup Session.
             $reopenedStorage = new FileStorage($directory);
             $reopenedConfigurations = new ConfigurationStore($reopenedStorage, 'alice');
-            $saved = $reopenedConfigurations->read('global');
+            $saved = $reopenedConfigurations->read('agent');
             self::assertNotNull($saved);
             self::assertSame(['agent' => 'demo', 'model' => 'openai:gpt-5.6-terra', 'capability' => 'updated', 'unrelated' => ['theme' => 'dark']], $saved->all());
             $reopenedSessions = new SessionStore($reopenedStorage, 'alice');
             $history = $reopenedSessions->read($initial->getKey());
             self::assertInstanceOf(Session::class, $history);
-            $freshRegistry = $this->registry();
-            $freshAgent = $freshRegistry->create($saved);
+            $freshAgent = ConfiguredAgent::createAgent($reopenedConfigurations);
             $freshAgent->setChatHistory($history);
             $freshTerminal = new VirtualTerminal(rows: 40);
             EventLoop::queue(static fn () => $freshTerminal->simulateInput("After restart\r"));
             EventLoop::delay(0.18, static fn () => $freshTerminal->simulateInput("\x03"));
-            Tui::make($freshAgent, $freshTerminal, sessionStore: $reopenedSessions,
-                agentFactoryRegistry: $freshRegistry, configurationStore: $reopenedConfigurations,
-            )->run();
+            Tui::make(TestAgent::registryForInitialAgent($freshAgent),
+            'test',
+            $freshTerminal,
+            sessionStore: $reopenedSessions,
+            configurationStore: $reopenedConfigurations)->run();
             self::assertSame($initial->getKey(), $freshAgent->getThreadId());
             self::assertCount(8, $history->getMessages());
             self::assertSame('openai:gpt-5.6-terra / updated', $history->getMessages()[7]->getContent());
@@ -125,22 +129,5 @@ final class ModelPersistenceTest extends TestCase
                 rmdir($directory);
             }
         }
-    }
-
-    private function registry(): AgentFactoryRegistry
-    {
-        $registry = new AgentFactoryRegistry();
-        $registry->register('demo', static function (Configuration $configuration): Agent {
-            $model = $configuration->get('model');
-            $capability = $configuration->get('capability');
-            self::assertIsString($model);
-            self::assertIsString($capability);
-
-            return (new ConfiguredAgent(
-                static fn (string $option): FakeAIProvider => new FakeAIProvider(new AssistantMessage($model . ' / ' . $option)),
-            ))->setCapability($capability);
-        });
-
-        return $registry;
     }
 }

@@ -30,6 +30,7 @@ final class ConversationInput
         private readonly SessionStore $sessions,
         private readonly AgentFactoryRegistry $agentFactoryRegistry,
         private readonly ConfigurationStore $configurationStore,
+        private readonly string $agentIdentifier,
     ) {
     }
 
@@ -52,7 +53,15 @@ final class ConversationInput
             $this->commands->run(
                 $submission->name,
                 $submission->arguments,
-                new TuiAdapter($this->runtime, $this->view, $this->commands, $this->sessions, $this->agentFactoryRegistry, $this->configurationStore),
+                new TuiAdapter(
+                    $this->runtime,
+                    $this->view,
+                    $this->commands,
+                    $this->sessions,
+                    $this->agentFactoryRegistry,
+                    $this->configurationStore,
+                    $this->agentIdentifier,
+                ),
             );
 
             return;
