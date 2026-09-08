@@ -5,6 +5,12 @@ declare(strict_types=1);
 namespace NeuronTui\Tests\Tui;
 
 use Closure;
+use NeuronInteraction\Agent\AgentFactoryRegistry;
+use NeuronInteraction\Configuration\Configuration;
+use NeuronInteraction\Configuration\ConfigurationStore;
+use NeuronInteraction\Command\SelectionOption;
+use NeuronInteraction\Command\SelectionRequest;
+use NeuronTui\Tests\Support\ConfiguredAgent;
 use NeuronAI\Chat\Messages\AssistantMessage;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Testing\FakeAIProvider;
@@ -74,7 +80,7 @@ final class SessionCompositionTest extends TestCase
             EventLoop::delay(0.23, static fn () => $terminal->simulateInput("\r"));
             EventLoop::delay(0.29, static fn () => $terminal->simulateInput("\x03"));
 
-            Tui::make($agent, $terminal, $this->sessionCommands($agent), $sessionStore)->run();
+            Tui::make($agent, $terminal, $this->sessionCommands($agent), $sessionStore, agentFactoryRegistry: SelfConfiguredAgent::registry(), configurationStore: SelfConfiguredAgent::configurationStore())->run();
 
             self::assertEquals($initialMessages, $startup);
             self::assertIsArray($beforeClear);
@@ -146,7 +152,7 @@ final class SessionCompositionTest extends TestCase
                 $received = [];
                 $command = $this->commandThat(
                     static function (CommandControlsAdapterInterface $adapter) use (&$received): void {
-                        $received[] = [$adapter->commands(), $adapter->sessionStore()];
+                        $received[] = [$adapter->commands(), $adapter->sessionStore(), $adapter->agentFactoryRegistry(), $adapter->configurationStore()];
                         if (count($received) === 1) {
                             $adapter->sessionStore()->create()->addMessage(new \NeuronAI\Chat\Messages\UserMessage('Kept by this module'));
                         } else {
@@ -316,7 +322,7 @@ final class SessionCompositionTest extends TestCase
             });
             EventLoop::delay(0.29, static fn () => $terminal->simulateInput("\x03"));
 
-            Tui::make($agent, $terminal, $this->sessionCommands($agent), $sessionStore)->run();
+            Tui::make($agent, $terminal, $this->sessionCommands($agent), $sessionStore, agentFactoryRegistry: SelfConfiguredAgent::registry(), configurationStore: SelfConfiguredAgent::configurationStore())->run();
 
             self::assertInstanceOf(Session::class, $cleared);
             self::assertSame('alice', $cleared->getUserId());
@@ -373,6 +379,114 @@ final class SessionCompositionTest extends TestCase
             AnsiUtils::stripAnsiCodes($terminal->getOutput()),
         );
         self::assertSame([], $sessionStore->summaries());
+    }
+
+    public function testClearReconstructsAnAgentWithRequiredDependenciesAndSavedCapabilities(): void
+    {
+        $storage = new InMemoryStorage();
+        $sessions = new SessionStore($storage, 'alice');
+        $configurations = new ConfigurationStore($storage, 'alice');
+        $configuration = $configurations->create('global', ['agent' => 'configured', 'model' => 'selected', 'capability' => 'enabled']);
+        $registry = new AgentFactoryRegistry();
+        $registry->register('configured', static function (Configuration $configuration): Agent {
+            $model = $configuration->get('model');
+            $capability = $configuration->get('capability');
+            self::assertIsString($model);
+            self::assertIsString($capability);
+
+            return (new ConfiguredAgent(
+                static fn (string $option): FakeAIProvider => new FakeAIProvider(new AssistantMessage($model . ' / ' . $option)),
+            ))->setCapability($capability);
+        });
+        $agent = $registry->create($configuration);
+        $original = $agent;
+        $initial = $sessions->create();
+        $agent->setChatHistory($initial);
+        $terminal = new VirtualTerminal(rows: 40);
+        EventLoop::queue(static fn () => $terminal->simulateInput("Initial question\r"));
+        EventLoop::delay(0.15, static fn () => $terminal->simulateInput("/clear\r"));
+        EventLoop::delay(0.2, static fn () => $terminal->simulateInput("After clear\r"));
+        EventLoop::delay(0.4, static fn () => $terminal->simulateInput("\x03"));
+
+        Tui::make($agent, $terminal, $this->sessionCommands($agent), $sessions,
+            agentFactoryRegistry: $registry, configurationStore: $configurations,
+        )->run();
+
+        self::assertNotSame($original, $agent);
+        $current = $agent->getChatHistory();
+        self::assertInstanceOf(Session::class, $current);
+        self::assertNotSame($initial->getKey(), $current->getKey());
+        self::assertSame($current->getKey(), $agent->getThreadId());
+        self::assertSame('selected / enabled', $current->getMessages()[1]->getContent());
+        self::assertSame('selected / enabled', $initial->getMessages()[1]->getContent());
+        self::assertCount(2, $sessions->summaries());
+        self::assertSame($configuration->all(), $configurations->read('global')?->all());
+        self::assertStringContainsString('selected / enabled', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
+    }
+
+    public function testClearPreparationFailuresKeepTheCurrentAgentUsable(): void
+    {
+        foreach (['missing', 'unknown', 'throwing'] as $failure) {
+            $registry = new AgentFactoryRegistry();
+            $configurations = new ConfigurationStore(new InMemoryStorage(), 'alice');
+            if ($failure !== 'missing') {
+                $configurations->create('global', ['agent' => $failure]);
+            }
+            $registry->register('throwing', static function (): Agent {
+                throw new \RuntimeException('Factory dependency unavailable.');
+            });
+            $agent = new Agent();
+            $original = $agent;
+            $history = $agent->getChatHistory();
+            $agent->setAiProvider(new FakeAIProvider(new AssistantMessage('Still answering.')));
+            $terminal = new VirtualTerminal(rows: 40);
+            EventLoop::queue(static fn () => $terminal->simulateInput("/clear\r"));
+            EventLoop::delay(0.05, static fn () => $terminal->simulateInput("Continue\r"));
+            EventLoop::delay(0.2, static fn () => $terminal->simulateInput("\x03"));
+
+            Tui::make($agent, $terminal, $this->sessionCommands($agent),
+                agentFactoryRegistry: $registry, configurationStore: $configurations,
+            )->run();
+
+            self::assertSame($original, $agent);
+            self::assertSame($history, $agent->getChatHistory());
+            self::assertSame('Still answering.', $history->getMessages()[1]->getContent());
+            $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+            self::assertStringContainsString('Still answering.', $display);
+            self::assertStringContainsString(match ($failure) {
+                'missing' => 'General configuration "global" is missing.',
+                'unknown' => 'unknown',
+                'throwing' => 'Factory dependency unavailable.',
+            }, $display);
+        }
+    }
+
+    public function testDeferredSelectionRetainsTheSuppliedModulesAndReadsFreshConfiguration(): void
+    {
+        $registry = new AgentFactoryRegistry();
+        $configurations = new ConfigurationStore(new InMemoryStorage(), 'alice');
+        $configuration = $configurations->create('global', ['choice' => 'before']);
+        $received = [];
+        $command = $this->commandThat(static function (CommandControlsAdapterInterface $adapter) use (&$received): void {
+            $received[] = [$adapter->agentFactoryRegistry(), $adapter->configurationStore(), $adapter->configurationStore()->read('global')?->get('choice')];
+            if (count($received) === 1) {
+                $adapter->requestSelection(new SelectionRequest('/inspect', 'Choose', [new SelectionOption('chosen', 'Continue')]));
+            }
+        });
+        $terminal = new VirtualTerminal();
+        EventLoop::queue(static fn () => $terminal->simulateInput("/inspect\r"));
+        EventLoop::delay(0.05, static function () use ($terminal, $configuration, $configurations): void {
+            $configuration->set('choice', 'after');
+            $configurations->save($configuration);
+            $terminal->simulateInput("\r");
+        });
+        EventLoop::delay(0.1, static fn () => $terminal->simulateInput("\x03"));
+
+        Tui::make(new Agent(), $terminal, new Commands($command),
+            agentFactoryRegistry: $registry, configurationStore: $configurations,
+        )->run();
+
+        self::assertSame([[$registry, $configurations, 'before'], [$registry, $configurations, 'after']], $received);
     }
 
     private function sessionCommands(Agent &$active): Commands

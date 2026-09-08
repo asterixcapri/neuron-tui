@@ -96,6 +96,8 @@ final class TuiAdapterTest extends TestCase
             $view,
             new Commands(),
             new SessionStore(new InMemoryStorage(), 'test-user'),
+            new \NeuronInteraction\Agent\AgentFactoryRegistry(),
+            new \NeuronInteraction\Configuration\ConfigurationStore(new InMemoryStorage(), 'test-user'),
         );
     }
 }

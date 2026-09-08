@@ -10,6 +10,8 @@ use NeuronInteraction\Command\CommandArguments;
 use NeuronInteraction\Command\CommandExecution;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Agent\AgentFactoryRegistry;
+use NeuronInteraction\Configuration\ConfigurationStore;
 use NeuronInteraction\Command\SelectionOption;
 use NeuronInteraction\Command\SelectionRequest;
 use NeuronInteraction\Session\SessionStore;
@@ -30,6 +32,8 @@ final class TuiAdapter implements CommandControlsAdapterInterface
         private readonly ConversationView $view,
         private readonly Commands $commands,
         private readonly SessionStore $sessions,
+        private readonly AgentFactoryRegistry $agentFactoryRegistry,
+        private readonly ConfigurationStore $configurationStore,
     ) {
     }
 
@@ -107,7 +111,7 @@ final class TuiAdapter implements CommandControlsAdapterInterface
                     $this->commands->run(
                         $request->command,
                         new CommandArguments($chosen),
-                        new self($this->runtime, $this->view, $this->commands, $this->sessions),
+                        new self($this->runtime, $this->view, $this->commands, $this->sessions, $this->agentFactoryRegistry, $this->configurationStore),
                     );
                 }
             } catch (Throwable $exception) {
@@ -138,6 +142,16 @@ final class TuiAdapter implements CommandControlsAdapterInterface
     public function commands(): Commands
     {
         return $this->commands;
+    }
+
+    public function agentFactoryRegistry(): AgentFactoryRegistry
+    {
+        return $this->agentFactoryRegistry;
+    }
+
+    public function configurationStore(): ConfigurationStore
+    {
+        return $this->configurationStore;
     }
 
     public function sessionStore(): SessionStore

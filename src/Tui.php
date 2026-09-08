@@ -8,6 +8,8 @@ use InvalidArgumentException;
 use LogicException;
 use NeuronAI\Agent\Agent;
 use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Agent\AgentFactoryRegistry;
+use NeuronInteraction\Configuration\ConfigurationStore;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Storage\InMemoryStorage;
@@ -44,6 +46,10 @@ final class Tui
 
     private readonly InputHistory $inputHistory;
 
+    private readonly AgentFactoryRegistry $agentFactoryRegistry;
+
+    private readonly ConfigurationStore $configurationStore;
+
     private bool $started = false;
 
     public function __construct(
@@ -52,7 +58,11 @@ final class Tui
         ?Commands $commands = null,
         ?SessionStore $sessionStore = null,
         ?InputHistory $inputHistory = null,
+        ?AgentFactoryRegistry $agentFactoryRegistry = null,
+        ?ConfigurationStore $configurationStore = null,
     ) {
+        $this->agentFactoryRegistry = $agentFactoryRegistry ?? new AgentFactoryRegistry();
+        $this->configurationStore = $configurationStore ?? new ConfigurationStore(new InMemoryStorage(), 'local');
         $this->commands = $commands ?? new Commands();
         $this->sessionStore = $sessionStore ?? new SessionStore(
             new InMemoryStorage(),
@@ -67,8 +77,10 @@ final class Tui
         ?Commands $commands = null,
         ?SessionStore $sessionStore = null,
         ?InputHistory $inputHistory = null,
+        ?AgentFactoryRegistry $agentFactoryRegistry = null,
+        ?ConfigurationStore $configurationStore = null,
     ): self {
-        return new self($agent, $terminal, $commands, $sessionStore, $inputHistory);
+        return new self($agent, $terminal, $commands, $sessionStore, $inputHistory, $agentFactoryRegistry, $configurationStore);
     }
 
     public function setTitle(string $title): self
@@ -128,6 +140,8 @@ final class Tui
             $runtime,
             $this->commands,
             $this->sessionStore,
+            $this->agentFactoryRegistry,
+            $this->configurationStore,
         );
         $view->showHistory($this->agent->getChatHistory()->getMessages());
         $view->onSubmit($input->submit(...));

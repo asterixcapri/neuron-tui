@@ -235,6 +235,8 @@ final class InputHistoryTest extends TestCase
             sessionStore: $sessionStore,
             inputHistory: new InputHistory($storage),
             commands: $commands,
+            agentFactoryRegistry: SelfConfiguredAgent::registry(),
+            configurationStore: SelfConfiguredAgent::configurationStore(),
         ))->run();
 
         self::assertCount(1, $provider->getRecorded());

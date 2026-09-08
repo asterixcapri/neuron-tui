@@ -112,20 +112,37 @@ not automatically register it with SessionStore or resume an earlier conversatio
 
 To persist the initial conversation, create a `FileStorage`, pass it to
 `SessionStore` with the intended user identity, and install the new Session
-directly as the Agent's Chat History. In the session examples, `$agent` is a fresh
-instance of your application Agent subclass, whose defaults configure its provider
-and tools (see Creating and replacing Agents below):
+directly as the Agent's Chat History. Register reproducible construction and read
+the saved general configuration before creating the initial Agent:
 
 ```php
 use NeuronInteraction\Command\ClearCommand;
 use NeuronInteraction\Command\ResumeCommand;
 use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Agent\AgentFactoryRegistry;
+use NeuronInteraction\Configuration\Configuration;
+use NeuronInteraction\Configuration\ConfigurationStore;
 use NeuronInteraction\Storage\FileStorage;
 use NeuronInteraction\Session\SessionStore;
 use NeuronTui\Tui;
 
 $storage = new FileStorage(__DIR__ . '/.storage');
 $sessionStore = new SessionStore($storage, 'local-user');
+$configurationStore = new ConfigurationStore($storage, 'local-user');
+$configuration = $configurationStore->read('global') ?? $configurationStore->create('global', [
+    'agent' => 'assistant',
+    'model' => 'my-model',
+]);
+$agentFactoryRegistry = new AgentFactoryRegistry();
+$agentFactoryRegistry->register('assistant', static function (Configuration $configuration) use ($providerClient): MyAgent {
+    $model = $configuration->get('model');
+    if (!is_string($model) || $model === '') {
+        throw new InvalidArgumentException('A model is required.');
+    }
+
+    return (new MyAgent($providerClient))->setModel($model);
+});
+$agent = $agentFactoryRegistry->create($configuration);
 
 $agent->setChatHistory($sessionStore->create()); // Or read and check an explicitly chosen key.
 
@@ -133,6 +150,8 @@ Tui::make(
     $agent,
     commands: new Commands([new ClearCommand(), new ResumeCommand()]),
     sessionStore: $sessionStore,
+    agentFactoryRegistry: $agentFactoryRegistry,
+    configurationStore: $configurationStore,
 )->run();
 ```
 
@@ -147,39 +166,41 @@ Input history keeps its independent existing ownership model.
 
 ## Creating and replacing Agents
 
-Session commands call `newAgent()` on the Command Adapter. It calls `make()` on
-the active Agent's class, so the class must support construction without required
-arguments and configure its provider, instructions and tools itself. Configure
-an application Agent subclass for conversations that use `/clear` or `/resume`.
-An initial `new Agent()->setAiProvider($provider)` works for a single conversation,
-but a recreated base Agent has no configured provider.
+`ClearCommand` reads `global` from `configurationStore()` and asks
+`agentFactoryRegistry()` to construct a fresh Agent. The registered closure owns
+constructor dependencies, provider setup and setters. It receives a detached
+Configuration; its `agent` field selects the registered identifier. Store durable
+model and capability choices in Configuration so later construction reproduces them.
+`MyAgent` and `$providerClient` above represent application-owned code and dependencies.
 
-`agent()` returns the current instance. `newAgent()` returns a fresh instance
-without activating it. `useAgent($agent)` activates the supplied instance and
-displays its History. It does not transfer the previous Agent's History.
-The separate `useSession()` operation has been removed.
+The TUI accepts these modules after its existing positional arguments, and shares
+the same instances with every Command, including deferred Picker continuations.
+Omitted modules remain empty in memory for the run; the TUI does not infer settings
+from the initial Agent. Plain conversations and unrelated Commands need no factory.
+Clear with missing configuration or a failed factory reports an ordinary Command
+failure and keeps the previous Agent active.
 
-A command starts a new conversation like this:
+`agent()` returns the live instance. `useAgent($agent)` activates the supplied
+prepared instance and displays its History. Commands assign History explicitly:
 
 ```php
-$agent = $adapter->newAgent();
+$configuration = $adapter->configurationStore()->read('global');
+if ($configuration === null) {
+    throw new RuntimeException('Missing global configuration.');
+}
+$agent = $adapter->agentFactoryRegistry()->create($configuration);
 $agent->setChatHistory($adapter->sessionStore()->create());
 $adapter->useAgent($agent);
 ```
 
-To change the Agent while continuing the same conversation, assign the current
-History explicitly before installing the replacement:
+To continue the same conversation, assign the current Agent's History instead.
+The registry never assigns History or accesses storage. Failure before activation
+keeps the previous Agent, although a Session created before History assignment
+fails can remain stored.
 
-```php
-$replacement->setChatHistory($adapter->agent()->getChatHistory());
-$adapter->useAgent($replacement);
-```
-
-A recreated Agent uses its class defaults. Configuration applied to the previous
-instance after construction is not copied. In the demo, `/clear` and `/resume`
-therefore reset a model selected with `/model` to `DemoAgent`'s default model.
-Each managed Session uses its storage key as its Neuron thread ID; switching
-Sessions installs a fresh Agent instead of rebinding the old one.
+During this migration, Resume still uses the transitional `newAgent()` control;
+its migration to saved configuration follows Clear. Do not release these revisions
+independently of the coordinated Interaction contract update.
 
 ## Input history
 
@@ -205,11 +226,29 @@ use NeuronInteraction\Command\ClearCommand;
 use NeuronInteraction\Command\ResumeCommand;
 use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Session\SessionStore;
+use NeuronInteraction\Agent\AgentFactoryRegistry;
+use NeuronInteraction\Configuration\Configuration;
+use NeuronInteraction\Configuration\ConfigurationStore;
 use NeuronInteraction\Storage\FileStorage;
 use NeuronTui\Tui;
 
 $storage = new FileStorage(__DIR__ . '/.storage');
 $sessionStore = new SessionStore($storage, 'local-user');
+$configurationStore = new ConfigurationStore($storage, 'local-user');
+$configuration = $configurationStore->read('global') ?? $configurationStore->create('global', [
+    'agent' => 'assistant',
+    'model' => 'my-model',
+]);
+$agentFactoryRegistry = new AgentFactoryRegistry();
+$agentFactoryRegistry->register('assistant', static function (Configuration $configuration) use ($providerClient): MyAgent {
+    $model = $configuration->get('model');
+    if (!is_string($model) || $model === '') {
+        throw new InvalidArgumentException('A model is required.');
+    }
+
+    return (new MyAgent($providerClient))->setModel($model);
+});
+$agent = $agentFactoryRegistry->create($configuration);
 
 $agent->setChatHistory($sessionStore->create());
 
@@ -224,6 +263,8 @@ Tui::make(
     $agent,
     commands: $commands,
     sessionStore: $sessionStore,
+    agentFactoryRegistry: $agentFactoryRegistry,
+    configurationStore: $configurationStore,
     inputHistory: new InputHistory($storage),
 )->run();
 ```

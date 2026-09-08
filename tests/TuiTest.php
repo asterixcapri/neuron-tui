@@ -1081,6 +1081,8 @@ MARKDOWN;
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands(self::observedSessionCommands($agent)),
+            agentFactoryRegistry: SelfConfiguredAgent::registry(),
+            configurationStore: SelfConfiguredAgent::configurationStore(),
         ))->run();
 
         // `/resume <key>` installs the Session directly without a Picker.
@@ -1818,6 +1820,8 @@ MARKDOWN;
                 new ClearCommand('/wipe'),
                 new LeaveCommand('/quit'),
             ]),
+            agentFactoryRegistry: SelfConfiguredAgent::registry(),
+            configurationStore: SelfConfiguredAgent::configurationStore(),
         ))->run();
 
         // The name it was given is the only name it answers to.
@@ -4912,6 +4916,8 @@ MARKDOWN;
             $agent,
             terminal: $terminal,
             commands: new Commands(self::observedSessionCommands($agent)),
+            agentFactoryRegistry: SelfConfiguredAgent::registry(),
+            configurationStore: SelfConfiguredAgent::configurationStore(),
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -4986,6 +4992,8 @@ MARKDOWN;
                 ...self::observedSessionCommands($agent),
                 $fillSession,
             ]),
+            agentFactoryRegistry: SelfConfiguredAgent::registry(),
+            configurationStore: SelfConfiguredAgent::configurationStore(),
         ))->run();
 
         self::assertIsString($clearedDisplay);
@@ -5038,6 +5046,8 @@ MARKDOWN;
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands(self::observedSessionCommands($agent)),
+            agentFactoryRegistry: SelfConfiguredAgent::registry(),
+            configurationStore: SelfConfiguredAgent::configurationStore(),
         ))->run();
 
         $listed = $sessionStore->summaries();
@@ -5135,6 +5145,8 @@ MARKDOWN;
                 ...self::sessionCommands(),
                 $remember,
             ]),
+            agentFactoryRegistry: SelfConfiguredAgent::registry(),
+            configurationStore: SelfConfiguredAgent::configurationStore(),
         ))->run();
 
         self::assertIsString($refusedDisplay);
@@ -5784,6 +5796,8 @@ MARKDOWN;
                 new SessionCommandKit(),
                 new LeaveCommand(),
             ]),
+            agentFactoryRegistry: SelfConfiguredAgent::registry(),
+            configurationStore: SelfConfiguredAgent::configurationStore(),
         ))->run();
 
         self::assertIsString($pickerDisplay);
@@ -5864,6 +5878,8 @@ MARKDOWN;
                 (new SessionCommandKit())->exclude([ClearCommand::class]),
                 new LeaveCommand(),
             ]),
+            agentFactoryRegistry: SelfConfiguredAgent::registry(),
+            configurationStore: SelfConfiguredAgent::configurationStore(),
         ))->run();
 
         self::assertIsString($refusedDisplay);
@@ -5936,6 +5952,8 @@ MARKDOWN;
                 (new SessionCommandKit())->only([ClearCommand::class]),
                 new LeaveCommand(),
             ]),
+            agentFactoryRegistry: SelfConfiguredAgent::registry(),
+            configurationStore: SelfConfiguredAgent::configurationStore(),
         ))->run();
 
         self::assertIsString($refusedDisplay);
