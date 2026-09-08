@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "38ad42adfde657cd5512530c30359bb1",
+    "content-hash": "bde1b84ae9adf340d19d5250285f6b6a",
     "packages": [
         {
             "name": "amphp/amp",
@@ -89,7 +89,7 @@
         },
         {
             "name": "asterixcapri/neuron-interaction",
-            "version": "dev-main",
+            "version": "v0.8.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/asterixcapri/neuron-interaction.git",
@@ -109,7 +109,6 @@
                 "phpstan/phpstan": "^2.1",
                 "phpunit/phpunit": "^13.0"
             },
-            "default-branch": true,
             "type": "library",
             "autoload": {
                 "psr-4": {
@@ -141,7 +140,7 @@
             ],
             "description": "Presentation-independent interaction modules for Neuron AI Agents.",
             "support": {
-                "source": "https://github.com/asterixcapri/neuron-interaction/tree/main",
+                "source": "https://github.com/asterixcapri/neuron-interaction/tree/v0.8.0",
                 "issues": "https://github.com/asterixcapri/neuron-interaction/issues"
             },
             "time": "2026-09-06T18:31:01+00:00"
@@ -4262,9 +4261,7 @@
     ],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": {
-        "asterixcapri/neuron-interaction": 20
-    },
+    "stability-flags": [],
     "prefer-stable": false,
     "prefer-lowest": false,
     "platform": {
