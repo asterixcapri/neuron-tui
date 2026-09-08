@@ -1,7 +1,8 @@
 /vendor/
+/composer.lock
 /.phpunit.cache/
-.claude
-.agents
-.pi
-.codex
 /.phpstan.cache/
+.agents
+.claude
+.codex
+.pi
