@@ -125,18 +125,15 @@ final class TuiAdapter implements CommandControlsAdapterInterface
         return $this->runtime->agent();
     }
 
-    public function newAgent(): Agent
-    {
-        $current = $this->agent();
-
-        return $current::make();
-    }
-
     public function useAgent(Agent $agent): void
     {
-        $messages = $agent->getChatHistory()->getMessages();
+        $history = $agent->getChatHistory();
+        $sameHistory = $history === $this->agent()->getChatHistory();
+        $messages = $history->getMessages();
         $this->runtime->useAgent($agent);
-        $this->view->showHistory($messages);
+        if (!$sameHistory) {
+            $this->view->showHistory($messages);
+        }
     }
 
     public function commands(): Commands

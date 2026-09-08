@@ -86,8 +86,8 @@ _Avoid_: Async command, background command, command that runs while working
 **Command controls**:
 The presentation-independent verbs and shared interaction state available to
 a Command for one execution. They cover notices, warnings, Agent prompts,
-selections, the answering Agent, mounted Commands, SessionStore, and leaving the
-interaction.
+selections, the answering Agent, mounted Commands, SessionStore,
+ConfigurationStore, AgentFactoryRegistry, and leaving the interaction.
 _Avoid_: Command context, environment, facade, API
 
 **Command Adapter**:

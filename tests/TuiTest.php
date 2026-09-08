@@ -1342,7 +1342,7 @@ MARKDOWN;
             ): void {
                 $observedAgent = $adapter->agent();
                 $observedArguments = $arguments;
-                $newAgent = $adapter->newAgent();
+                $newAgent = new Agent();
                 $newAgent->setChatHistory($resultingHistory);
                 $adapter->useAgent($newAgent);
 
@@ -1675,7 +1675,7 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
             static function (CommandControlsAdapterInterface $adapter, string $arguments) use ($replacementSession): void {
-                $newAgent = $adapter->newAgent();
+                $newAgent = new Agent();
                 $newAgent->setChatHistory($replacementSession);
                 $adapter->useAgent($newAgent);
 
@@ -1933,7 +1933,7 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
             static function (CommandControlsAdapterInterface $adapter, string $arguments) use ($restored): void {
-                $newAgent = $adapter->newAgent();
+                $newAgent = new Agent();
                 $newAgent->setChatHistory($restored);
                 $adapter->useAgent($newAgent);
             },
@@ -5205,6 +5205,8 @@ MARKDOWN;
             $agent,
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
+            agentFactoryRegistry: SelfConfiguredAgent::registry(),
+            configurationStore: SelfConfiguredAgent::configurationStore(),
             inputHistory: new InputHistory($storage),
             commands: new Commands(self::observedSessionCommands($agent)),
         ))->run();
@@ -5290,6 +5292,8 @@ MARKDOWN;
                 $agent,
                 terminal: $terminal,
                 sessionStore: new SessionStore($storage, 'test-user'),
+                agentFactoryRegistry: SelfConfiguredAgent::registry(),
+                configurationStore: SelfConfiguredAgent::configurationStore(),
                 inputHistory: new InputHistory($storage),
                 commands: new Commands(self::observedSessionCommands($agent)),
             ))->run();
@@ -5379,6 +5383,8 @@ MARKDOWN;
             $agent,
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
+            agentFactoryRegistry: SelfConfiguredAgent::registry(),
+            configurationStore: SelfConfiguredAgent::configurationStore(),
             inputHistory: new InputHistory($storage),
             commands: new Commands(self::observedSessionCommands($agent)),
         ))->run();
@@ -5437,6 +5443,8 @@ MARKDOWN;
             $agent,
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
+            agentFactoryRegistry: SelfConfiguredAgent::registry(),
+            configurationStore: SelfConfiguredAgent::configurationStore(),
             inputHistory: new InputHistory($storage),
             commands: new Commands(self::observedSessionCommands($agent)),
         ))->run();
@@ -5605,6 +5613,8 @@ MARKDOWN;
             $agent,
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
+            agentFactoryRegistry: SelfConfiguredAgent::registry(),
+            configurationStore: SelfConfiguredAgent::configurationStore(),
             inputHistory: new InputHistory($storage),
             commands: new Commands(self::observedSessionCommands($agent)),
         ))->run();
@@ -5654,6 +5664,8 @@ MARKDOWN;
             $agent,
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
+            agentFactoryRegistry: SelfConfiguredAgent::registry(),
+            configurationStore: SelfConfiguredAgent::configurationStore(),
             inputHistory: new InputHistory($storage),
             commands: new Commands(self::observedSessionCommands($agent)),
         ))->run();
@@ -5714,6 +5726,8 @@ MARKDOWN;
             $agent,
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
+            agentFactoryRegistry: SelfConfiguredAgent::registry(),
+            configurationStore: SelfConfiguredAgent::configurationStore(),
             inputHistory: new InputHistory($storage),
             commands: new Commands(self::sessionCommands()),
         ))->run();
@@ -5987,7 +6001,7 @@ MARKDOWN;
         $history = $this->sessionWith($messages);
         $restore = $this->commandThat(
             static function (CommandControlsAdapterInterface $adapter) use ($history): void {
-                $newAgent = $adapter->newAgent();
+                $newAgent = new Agent();
                 $newAgent->setChatHistory($history);
                 $adapter->useAgent($newAgent);
             },

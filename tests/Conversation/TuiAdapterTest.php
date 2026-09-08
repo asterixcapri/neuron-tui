@@ -6,9 +6,7 @@ namespace NeuronTui\Tests\Conversation;
 
 use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\History\InMemoryChatHistory;
-use NeuronAI\Chat\Messages\AssistantMessage;
 use NeuronAI\Chat\Messages\UserMessage;
-use NeuronAI\Testing\FakeAIProvider;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\InMemoryStorage;
@@ -22,27 +20,6 @@ use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
 final class TuiAdapterTest extends TestCase
 {
-    public function testNewAgentRecreatesTheCurrentClassWithItsDefaultsWithoutActivatingIt(): void
-    {
-        $current = new SelfConfiguredAgent(threadId: 'original');
-        $changedProvider = new FakeAIProvider(new AssistantMessage('Changed answer.'));
-        $current->setAiProvider($changedProvider);
-        $current->chat(new UserMessage('Original question.'));
-        $adapter = $this->adapter($current);
-
-        $fresh = $adapter->newAgent();
-
-        self::assertInstanceOf(SelfConfiguredAgent::class, $fresh);
-        self::assertNotSame($current, $fresh);
-        self::assertSame($current, $adapter->agent());
-        self::assertNull($fresh->getThreadId());
-        self::assertNotSame($changedProvider, $fresh->getProvider());
-        $fresh->setChatHistory(new InMemoryChatHistory('new'));
-        self::assertSame('An answer.', $fresh->chat(new UserMessage('New question.'))->getMessage()?->getContent());
-        self::assertSame('original', $current->getThreadId());
-        self::assertCount(2, $current->getChatHistory()->getMessages());
-    }
-
     public function testUseAgentActivatesAndDisplaysTheSuppliedConversation(): void
     {
         $original = new Agent(threadId: 'A');
@@ -65,26 +42,34 @@ final class TuiAdapterTest extends TestCase
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('Conversation B', $display);
         self::assertStringNotContainsString('Conversation A', $display);
-        self::assertInstanceOf(SelfConfiguredAgent::class, $adapter->newAgent());
     }
 
-    public function testConstructionFailureLeavesTheCurrentAgentInPlace(): void
+    public function testReplacingAnAgentWithTheSameHistoryPreservesNotices(): void
     {
-        $current = new class('required') extends Agent {
-            public function __construct(string $required)
-            {
-                parent::__construct(threadId: $required);
-            }
-        };
-        $adapter = $this->adapter($current);
+        $original = new Agent();
+        $history = new InMemoryChatHistory();
+        $history->addMessage(new UserMessage('Retained conversation'));
+        $original->setChatHistory($history);
+        $terminal = new VirtualTerminal(rows: 24);
+        $view = new ConversationView($terminal, 'Test', 'Conversation');
+        $adapter = $this->adapter($original, $view);
+        $view->showHistory($history->getMessages());
+        $adapter->say('Retained notice');
+        $view->paintPendingChanges();
+        $terminal->clearOutput();
+        $replacement = new Agent();
+        $replacement->setChatHistory($history);
 
-        try {
-            $adapter->newAgent();
-            self::fail('The constructor requires an argument.');
-        } catch (\ArgumentCountError) {
-            self::assertSame($current, $adapter->agent());
-            self::assertSame('required', $current->getThreadId());
-        }
+        $adapter->useAgent($replacement);
+        $view->paintPendingChanges();
+        self::assertSame('', $terminal->getOutput(), 'Replacing only the Agent must not reset the displayed History or notices.');
+        $adapter->say('Replacement active');
+        $view->paintPendingChanges();
+
+        self::assertSame($replacement, $adapter->agent());
+        self::assertSame($history, $replacement->getChatHistory());
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+        self::assertStringContainsString('Replacement active', $display);
     }
 
     private function adapter(Agent $agent, ?ConversationView $view = null): TuiAdapter

@@ -29,7 +29,8 @@ after a failure.
 
 This keeps the invocation protocol inside `Commands::run()` and the environment's
 operations and output inside its Adapter. Callers need no separate runner or
-manual completion call. The TUI captures History only after admission, compares
-it with the current Agent's History after dispatch, and reconciles a replacement
-before reporting any Command failure. An unchanged History preserves notices
-and warnings; an Agent replacement alone does not repaint the conversation.
+manual completion call. The TUI activates prepared Agents through `useAgent()`,
+comparing the supplied History with the live Agent's History before replacing it.
+A changed History is displayed immediately, before reporting any subsequent
+Command failure. An unchanged History preserves notices and warnings; an Agent
+replacement alone does not repaint the conversation.

@@ -381,7 +381,7 @@ final class SessionCompositionTest extends TestCase
         self::assertSame([], $sessionStore->summaries());
     }
 
-    public function testClearReconstructsAnAgentWithRequiredDependenciesAndSavedCapabilities(): void
+    public function testClearAndDeferredResumeUseRequiredDependenciesAndTheLatestSavedCapabilities(): void
     {
         $storage = new InMemoryStorage();
         $sessions = new SessionStore($storage, 'alice');
@@ -406,7 +406,21 @@ final class SessionCompositionTest extends TestCase
         EventLoop::queue(static fn () => $terminal->simulateInput("Initial question\r"));
         EventLoop::delay(0.15, static fn () => $terminal->simulateInput("/clear\r"));
         EventLoop::delay(0.2, static fn () => $terminal->simulateInput("After clear\r"));
-        EventLoop::delay(0.4, static fn () => $terminal->simulateInput("\x03"));
+        $clearedAgent = null;
+        EventLoop::delay(0.4, static function () use (&$agent, &$clearedAgent, $terminal): void {
+            $clearedAgent = $agent;
+            $terminal->simulateInput("/resume\r");
+        });
+        EventLoop::delay(0.45, static function () use ($configuration, $configurations, $terminal): void {
+            $configuration->set('model', 'latest');
+            $configuration->set('capability', 'updated');
+            $configurations->save($configuration);
+            // Select the original Session after the newer cleared one.
+            $terminal->simulateInput("\x1b[B");
+        });
+        EventLoop::delay(0.48, static fn () => $terminal->simulateInput("\r"));
+        EventLoop::delay(0.55, static fn () => $terminal->simulateInput("After resume\r"));
+        EventLoop::delay(0.7, static fn () => $terminal->simulateInput("\x03"));
 
         Tui::make($agent, $terminal, $this->sessionCommands($agent), $sessions,
             agentFactoryRegistry: $registry, configurationStore: $configurations,
@@ -415,49 +429,59 @@ final class SessionCompositionTest extends TestCase
         self::assertNotSame($original, $agent);
         $current = $agent->getChatHistory();
         self::assertInstanceOf(Session::class, $current);
-        self::assertNotSame($initial->getKey(), $current->getKey());
+        self::assertNotNull($clearedAgent);
+        self::assertNotSame($original, $clearedAgent);
+        self::assertNotSame($clearedAgent, $agent);
+        self::assertNotSame($initial->getKey(), $clearedAgent->getThreadId());
+        self::assertSame('selected / enabled', $clearedAgent->getChatHistory()->getMessages()[1]->getContent());
+        self::assertSame($initial->getKey(), $current->getKey());
         self::assertSame($current->getKey(), $agent->getThreadId());
-        self::assertSame('selected / enabled', $current->getMessages()[1]->getContent());
+        self::assertCount(4, $current->getMessages());
+        self::assertSame('latest / updated', $current->getMessages()[3]->getContent());
         self::assertSame('selected / enabled', $initial->getMessages()[1]->getContent());
         self::assertCount(2, $sessions->summaries());
         self::assertSame($configuration->all(), $configurations->read('global')?->all());
         self::assertStringContainsString('selected / enabled', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
     }
 
-    public function testClearPreparationFailuresKeepTheCurrentAgentUsable(): void
+    public function testClearAndResumePreparationFailuresKeepTheCurrentAgentUsable(): void
     {
-        foreach (['missing', 'unknown', 'throwing'] as $failure) {
-            $registry = new AgentFactoryRegistry();
-            $configurations = new ConfigurationStore(new InMemoryStorage(), 'alice');
-            if ($failure !== 'missing') {
-                $configurations->create('global', ['agent' => $failure]);
+        foreach (['/clear', '/resume'] as $identifier) {
+            foreach (['missing', 'unknown', 'throwing'] as $failure) {
+                $registry = new AgentFactoryRegistry();
+                $configurations = new ConfigurationStore(new InMemoryStorage(), 'alice');
+                if ($failure !== 'missing') {
+                    $configurations->create('global', ['agent' => $failure]);
+                }
+                $registry->register('throwing', static function (): Agent {
+                    throw new \RuntimeException('Factory dependency unavailable.');
+                });
+                $agent = new Agent();
+                $original = $agent;
+                $history = $agent->getChatHistory();
+                $agent->setAiProvider(new FakeAIProvider(new AssistantMessage('Still answering.')));
+                $terminal = new VirtualTerminal(rows: 40);
+                $sessions = new SessionStore(new InMemoryStorage(), 'alice');
+                $saved = $sessions->create();
+                EventLoop::queue(static fn () => $terminal->simulateInput($identifier . ($identifier === '/resume' ? ' ' . $saved->getKey() : '') . "\r"));
+                EventLoop::delay(0.05, static fn () => $terminal->simulateInput("Continue\r"));
+                EventLoop::delay(0.2, static fn () => $terminal->simulateInput("\x03"));
+
+                Tui::make($agent, $terminal, $this->sessionCommands($agent), $sessions,
+                    agentFactoryRegistry: $registry, configurationStore: $configurations,
+                )->run();
+
+                self::assertSame($original, $agent);
+                self::assertSame($history, $agent->getChatHistory());
+                self::assertSame('Still answering.', $history->getMessages()[1]->getContent());
+                $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+                self::assertStringContainsString('Still answering.', $display);
+                self::assertStringContainsString(match ($failure) {
+                    'missing' => 'General configuration "global" is missing.',
+                    'unknown' => 'unknown',
+                    'throwing' => 'Factory dependency unavailable.',
+                }, $display);
             }
-            $registry->register('throwing', static function (): Agent {
-                throw new \RuntimeException('Factory dependency unavailable.');
-            });
-            $agent = new Agent();
-            $original = $agent;
-            $history = $agent->getChatHistory();
-            $agent->setAiProvider(new FakeAIProvider(new AssistantMessage('Still answering.')));
-            $terminal = new VirtualTerminal(rows: 40);
-            EventLoop::queue(static fn () => $terminal->simulateInput("/clear\r"));
-            EventLoop::delay(0.05, static fn () => $terminal->simulateInput("Continue\r"));
-            EventLoop::delay(0.2, static fn () => $terminal->simulateInput("\x03"));
-
-            Tui::make($agent, $terminal, $this->sessionCommands($agent),
-                agentFactoryRegistry: $registry, configurationStore: $configurations,
-            )->run();
-
-            self::assertSame($original, $agent);
-            self::assertSame($history, $agent->getChatHistory());
-            self::assertSame('Still answering.', $history->getMessages()[1]->getContent());
-            $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
-            self::assertStringContainsString('Still answering.', $display);
-            self::assertStringContainsString(match ($failure) {
-                'missing' => 'General configuration "global" is missing.',
-                'unknown' => 'unknown',
-                'throwing' => 'Factory dependency unavailable.',
-            }, $display);
         }
     }
 

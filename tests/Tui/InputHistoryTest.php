@@ -297,6 +297,8 @@ final class InputHistoryTest extends TestCase
             $agent,
             $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
+            agentFactoryRegistry: SelfConfiguredAgent::registry(),
+            configurationStore: SelfConfiguredAgent::configurationStore(),
             inputHistory: new InputHistory($storage),
             commands: $commands,
         ))->run();

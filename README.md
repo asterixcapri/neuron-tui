@@ -166,7 +166,7 @@ Input history keeps its independent existing ownership model.
 
 ## Creating and replacing Agents
 
-`ClearCommand` reads `global` from `configurationStore()` and asks
+`ClearCommand` and `ResumeCommand` read `global` from `configurationStore()` and ask
 `agentFactoryRegistry()` to construct a fresh Agent. The registered closure owns
 constructor dependencies, provider setup and setters. It receives a detached
 Configuration; its `agent` field selects the registered identifier. Store durable
@@ -177,7 +177,7 @@ The TUI accepts these modules after its existing positional arguments, and share
 the same instances with every Command, including deferred Picker continuations.
 Omitted modules remain empty in memory for the run; the TUI does not infer settings
 from the initial Agent. Plain conversations and unrelated Commands need no factory.
-Clear with missing configuration or a failed factory reports an ordinary Command
+Clear or Resume with missing configuration or a failed factory reports an ordinary Command
 failure and keeps the previous Agent active.
 
 `agent()` returns the live instance. `useAgent($agent)` activates the supplied
@@ -198,9 +198,11 @@ The registry never assigns History or accesses storage. Failure before activatio
 keeps the previous Agent, although a Session created before History assignment
 fails can remain stored.
 
-During this migration, Resume still uses the transitional `newAgent()` control;
-its migration to saved configuration follows Clear. Do not release these revisions
-independently of the coordinated Interaction contract update.
+Resume checks that the selected Session still exists before constructing an Agent.
+Opening the Picker constructs nothing; selecting later rereads the current saved
+configuration and Session availability. Session content never restores old settings.
+Replacing an Agent with the identical History object preserves conversation notices.
+The shared controls do not reconstruct the current Agent class or clone its settings.
 
 ## Input history
 
