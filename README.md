@@ -12,17 +12,17 @@ can use the same features in backend applications too.
 
 Requires PHP 8.4.1+ and an interactive terminal.
 
-## Release compatibility
+## Installation
 
-The `0.8.x` releases support Neuron AI 3 and depend on Neuron Interaction
-`~0.8.0`. The `v0.8.0` tag preserves this release; ongoing maintenance of the
-Neuron 3 line is not planned. A `0.8.x` branch can be created from the tag if a
-patch is needed.
+The `0.8.x` branch supports Neuron AI 3.
 
-Development continues on `main` toward `0.9.0` for Neuron AI 4, with tool
-approval and interoperability improvements planned. Neuron 4 support is not
-part of `0.8.0`. Public APIs may change between minor releases while the
-packages remain below `1.0.0`.
+Run this command in your application's directory:
+
+```bash
+composer require asterixcapri/neuron-tui
+```
+
+Composer also installs Neuron Interaction and the other required dependencies.
 
 ![Neuron TUI demo](docs/images/usage.gif)
 
