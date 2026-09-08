@@ -115,7 +115,7 @@ $agent->setChatHistory($sessionStore->create()); // Or read and check an explici
 Tui::make(
     $agent,
     commands: new Commands([new ClearCommand(), new ResumeCommand()]),
-    sessions: $sessionStore,
+    sessionStore: $sessionStore,
 )->run();
 ```
 
@@ -170,7 +170,7 @@ $commands = new Commands([
 Tui::make(
     $agent,
     commands: $commands,
-    sessions: $sessionStore,
+    sessionStore: $sessionStore,
     inputHistory: new InputHistory($storage),
 )->run();
 ```

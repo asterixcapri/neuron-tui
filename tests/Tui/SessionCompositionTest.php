@@ -103,7 +103,7 @@ final class SessionCompositionTest extends TestCase
         $terminal = new VirtualTerminal();
         EventLoop::delay(0.12, static fn () => $terminal->simulateInput("\x03"));
 
-        Tui::make($agent, $terminal, sessions: $sessionStore)->run();
+        Tui::make($agent, $terminal, sessionStore: $sessionStore)->run();
 
         self::assertSame($initial, $agent->getChatHistory());
         self::assertCount(1, $sessionStore->summaries());
@@ -123,7 +123,7 @@ final class SessionCompositionTest extends TestCase
                 (new Tui(
                     new Agent(),
                     $terminal,
-                    sessions: $supplySessionStore ? new SessionStore(new InMemoryStorage(), 'test-user') : null,
+                    sessionStore: $supplySessionStore ? new SessionStore(new InMemoryStorage(), 'test-user') : null,
                     inputHistory: $inputs,
                 ))->run();
 
@@ -208,7 +208,7 @@ final class SessionCompositionTest extends TestCase
 
             EventLoop::delay(0.07, static fn () => $terminal->simulateInput("/resume\r"));
 
-            Tui::make($agent, $terminal, commands: new Commands([$command, new ResumeCommand()]), sessions: $supplySessionStore ? new SessionStore($storage, 'test-user') : null)->run();
+            Tui::make($agent, $terminal, commands: new Commands([$command, new ResumeCommand()]), sessionStore: $supplySessionStore ? new SessionStore($storage, 'test-user') : null)->run();
 
             self::assertCount(2, $received);
             self::assertInstanceOf(SessionStore::class, $received[0]);
@@ -278,7 +278,7 @@ final class SessionCompositionTest extends TestCase
             new Agent(),
             $terminal,
             new Commands($command),
-            sessions: $sessionStore,
+            sessionStore: $sessionStore,
         ))->run();
 
         self::assertSame($sessionStore, $received);

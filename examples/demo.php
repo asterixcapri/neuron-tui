@@ -40,7 +40,7 @@ $commands = (new Commands())->addCommand([
 Tui::make(
     $agent,
     commands: $commands,
-    sessions: $sessionStore,
+    sessionStore: $sessionStore,
     inputHistory: $inputHistory,
 )
     ->setFiglet('NeuronTUI')

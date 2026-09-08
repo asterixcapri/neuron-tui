@@ -1078,7 +1078,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            sessions: new SessionStore($storage, 'test-user'),
+            sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands(self::sessionCommands()),
         ))->run();
@@ -1200,7 +1200,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            sessions: new SessionStore($storage, 'test-user'),
+            sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands([$command]),
         ))->run();
@@ -1251,7 +1251,7 @@ MARKDOWN;
             new Agent(),
             $terminal,
             commands: new Commands($command),
-            sessions: new SessionStore($storage, 'test-user'),
+            sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
         )->run();
 
@@ -4963,7 +4963,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            sessions: $sessionStore,
+            sessionStore: $sessionStore,
             inputHistory: new InputHistory($storage),
             commands: new Commands([
                 ...self::sessionCommands(),
@@ -5018,7 +5018,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            sessions: new SessionStore($storage, 'test-user'),
+            sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands(self::sessionCommands()),
         ))->run();
@@ -5112,7 +5112,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            sessions: new SessionStore($storage, 'test-user'),
+            sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands([
                 ...self::sessionCommands(),
@@ -5175,7 +5175,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            sessions: new SessionStore($storage, 'test-user'),
+            sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands(self::sessionCommands()),
         ))->run();
@@ -5258,7 +5258,7 @@ MARKDOWN;
             (new Tui(
                 $agent,
                 terminal: $terminal,
-                sessions: new SessionStore($storage, 'test-user'),
+                sessionStore: new SessionStore($storage, 'test-user'),
                 inputHistory: new InputHistory($storage),
                 commands: new Commands(self::sessionCommands()),
             ))->run();
@@ -5347,7 +5347,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            sessions: new SessionStore($storage, 'test-user'),
+            sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands(self::sessionCommands()),
         ))->run();
@@ -5405,7 +5405,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            sessions: new SessionStore($storage, 'test-user'),
+            sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands(self::sessionCommands()),
         ))->run();
@@ -5478,7 +5478,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            sessions: new SessionStore($storage, 'test-user'),
+            sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands([
                 ...self::sessionCommands(),
@@ -5573,7 +5573,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            sessions: new SessionStore($storage, 'test-user'),
+            sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands(self::sessionCommands()),
         ))->run();
@@ -5622,7 +5622,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            sessions: new SessionStore($storage, 'test-user'),
+            sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands(self::sessionCommands()),
         ))->run();
@@ -5682,7 +5682,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            sessions: new SessionStore($storage, 'test-user'),
+            sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands(self::sessionCommands()),
         ))->run();
@@ -5759,7 +5759,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            sessions: new SessionStore($storage, 'test-user'),
+            sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands([
                 new SessionCommandKit(),
@@ -5839,7 +5839,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            sessions: new SessionStore($storage, 'test-user'),
+            sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands([
                 (new SessionCommandKit())->exclude([ClearCommand::class]),
@@ -5911,7 +5911,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            sessions: new SessionStore($storage, 'test-user'),
+            sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands([
                 (new SessionCommandKit())->only([ClearCommand::class]),
