@@ -22,7 +22,7 @@ final class ConversationRuntime
 {
     private readonly WorkingIndicator $workingIndicator;
 
-    private readonly TurnQueue $turns;
+    private readonly TurnQueue $turnQueue;
 
     private readonly AgentTurn $agentTurn;
 
@@ -36,13 +36,13 @@ final class ConversationRuntime
         private readonly ConversationView $view,
     ) {
         $this->workingIndicator = $this->view->workingIndicator();
-        $this->turns = new TurnQueue();
+        $this->turnQueue = new TurnQueue();
         $this->agentTurn = new AgentTurn($this->view);
     }
 
     public function send(MessageForAgent $message): void
     {
-        $accepted = $this->turns->accept($message->contents);
+        $accepted = $this->turnQueue->accept($message->contents);
 
         if ($accepted === null) {
             $this->showQueue();
@@ -60,7 +60,7 @@ final class ConversationRuntime
 
     public function isBusy(): bool
     {
-        return $this->turns->isBusy();
+        return $this->turnQueue->isBusy();
     }
 
     public function isStopped(): bool
@@ -89,7 +89,7 @@ final class ConversationRuntime
             return false;
         }
 
-        $message = $this->turns->beginWorking();
+        $message = $this->turnQueue->beginWorking();
 
         if ($message !== null) {
             // The Agent is read the moment the turn starts, so a turn under
@@ -126,7 +126,7 @@ final class ConversationRuntime
         $this->response = null;
         $this->finishTurn();
 
-        $next = $this->turns->finishWorking();
+        $next = $this->turnQueue->finishWorking();
 
         if ($next === null) {
             return false;
@@ -169,7 +169,7 @@ final class ConversationRuntime
 
     private function showQueue(): void
     {
-        $this->view->showQueuedMessages($this->turns->queued());
+        $this->view->showQueuedMessages($this->turnQueue->queued());
     }
 
     public function stop(): void
