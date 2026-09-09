@@ -34,3 +34,26 @@ presentation value with a key, label and optional detail.
 It returns the chosen key unchanged, or null on cancellation. The Adapter resumes
 the target Command with that value as `CommandArguments`. The View does not
 depend on the shared Selection option type.
+
+## Historical presentation
+
+`HistoryProjection` builds a snapshot from the Agent's messages. Its `entries()`
+returns `ProjectedEntry` values containing text and a `ProjectedEntryKind`:
+`Person`, `Agent` or `Tool`. These are presentation categories; a tool entry
+may combine a call and a result from separate messages, or remain pending.
+View's `HistoryEntry` instead holds a mutable widget and its measured height.
+
+The projection defines historical presentation rules. It excludes system
+messages and reasoning, replaces attachments with placeholders, and prepares
+filenames and tool previews for display. Ordinary text is retained without
+projection-level sanitization. The Agent owns History, Session metadata remains
+independent, and View handles rendering.
+
+`ToolCallCorrelation::registerCall()` records an entry position.
+`matchResult()` returns the stored position for an explicit call ID without
+consuming that association. Without an ID, it consumes the first waiting
+position for the tool name; an unmatched result returns null. Both the
+projection and live `ToolActivity` create an entry for an unmatched result.
+They share `ToolActivityText` formatting. Historical timing uses
+`FALLBACK_DURATION_SECONDS`, still displayed as `<1s`, because measured timing
+is unavailable.

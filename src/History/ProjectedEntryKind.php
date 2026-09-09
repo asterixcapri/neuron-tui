@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace NeuronTui\History;
 
 /**
- * What an entry of the projected History reports.
+ * The presentation category of a ProjectedEntry, independent of message roles.
  *
  * @internal
  */
-enum EntryKind
+enum ProjectedEntryKind
 {
     /** Something the person wrote to the Agent. */
     case Person;

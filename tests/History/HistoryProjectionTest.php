@@ -18,9 +18,9 @@ use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Tools\Tool;
-use NeuronTui\History\Entry;
-use NeuronTui\History\EntryKind;
 use NeuronTui\History\HistoryProjection;
+use NeuronTui\History\ProjectedEntry;
+use NeuronTui\History\ProjectedEntryKind;
 use PHPUnit\Framework\TestCase;
 
 final class HistoryProjectionTest extends TestCase
@@ -35,9 +35,9 @@ final class HistoryProjectionTest extends TestCase
 
         self::assertSame(
             [
-                [EntryKind::Person, 'What is the answer?'],
-                [EntryKind::Agent, 'Forty-two.'],
-                [EntryKind::Person, 'Why?'],
+                [ProjectedEntryKind::Person, 'What is the answer?'],
+                [ProjectedEntryKind::Agent, 'Forty-two.'],
+                [ProjectedEntryKind::Person, 'Why?'],
             ],
             self::summarize($entries),
         );
@@ -53,7 +53,7 @@ final class HistoryProjectionTest extends TestCase
         ]);
 
         self::assertSame(
-            [[EntryKind::Agent, 'Visible.']],
+            [[ProjectedEntryKind::Agent, 'Visible.']],
             self::summarize($entries),
         );
     }
@@ -71,7 +71,7 @@ final class HistoryProjectionTest extends TestCase
         ]);
 
         self::assertSame(
-            [[EntryKind::Agent, 'The review is complete.']],
+            [[ProjectedEntryKind::Agent, 'The review is complete.']],
             self::summarize($entries),
         );
     }
@@ -92,7 +92,7 @@ final class HistoryProjectionTest extends TestCase
 
         self::assertSame(
             [[
-                EntryKind::Person,
+                ProjectedEntryKind::Person,
                 "Review these inputs.\n\n[Image]\n\n[Audio]\n\n[Video]",
             ]],
             self::summarize($entries),
@@ -112,7 +112,7 @@ final class HistoryProjectionTest extends TestCase
         ]);
 
         self::assertSame(
-            [[EntryKind::Person, '[File: report.pdf]']],
+            [[ProjectedEntryKind::Person, '[File: report.pdf]']],
             self::summarize($entries),
         );
     }
@@ -126,7 +126,7 @@ final class HistoryProjectionTest extends TestCase
         ]);
 
         self::assertSame(
-            [[EntryKind::Person, '[File]']],
+            [[ProjectedEntryKind::Person, '[File]']],
             self::summarize($entries),
         );
     }
@@ -145,7 +145,7 @@ final class HistoryProjectionTest extends TestCase
         ]);
 
         self::assertCount(1, $entries);
-        self::assertSame(EntryKind::Tool, $entries[0]->kind);
+        self::assertSame(ProjectedEntryKind::Tool, $entries[0]->kind);
         self::assertStringContainsString(
             '● read_file {"path":"first line\nsecond line"}',
             $entries[0]->text,
@@ -174,7 +174,7 @@ final class HistoryProjectionTest extends TestCase
         ]);
 
         self::assertSame(
-            [EntryKind::Person, EntryKind::Tool, EntryKind::Agent],
+            [ProjectedEntryKind::Person, ProjectedEntryKind::Tool, ProjectedEntryKind::Agent],
             self::kinds($entries),
         );
         self::assertSame('Look it up.', $entries[0]->text);
@@ -243,7 +243,7 @@ final class HistoryProjectionTest extends TestCase
         ]);
 
         self::assertSame(
-            [EntryKind::Tool, EntryKind::Agent],
+            [ProjectedEntryKind::Tool, ProjectedEntryKind::Agent],
             self::kinds($entries),
         );
         self::assertStringContainsString('⎿ Running…', $entries[0]->text);
@@ -261,7 +261,7 @@ final class HistoryProjectionTest extends TestCase
         ]);
 
         self::assertCount(1, $entries);
-        self::assertSame(EntryKind::Tool, $entries[0]->kind);
+        self::assertSame(ProjectedEntryKind::Tool, $entries[0]->kind);
         self::assertStringContainsString('⎿ orphan result', $entries[0]->text);
     }
 
@@ -276,7 +276,7 @@ final class HistoryProjectionTest extends TestCase
         ]);
 
         self::assertSame(
-            [EntryKind::Agent, EntryKind::Tool],
+            [ProjectedEntryKind::Agent, ProjectedEntryKind::Tool],
             self::kinds($entries),
         );
         self::assertSame('Let me look that up.', $entries[0]->text);
@@ -315,7 +315,7 @@ final class HistoryProjectionTest extends TestCase
             self::summarize($again),
         );
         self::assertSame(
-            [[EntryKind::Person, 'Another Session.']],
+            [[ProjectedEntryKind::Person, 'Another Session.']],
             self::summarize($other),
         );
     }
@@ -323,7 +323,7 @@ final class HistoryProjectionTest extends TestCase
     /**
      * @param array<Message> $messages
      *
-     * @return list<Entry>
+     * @return list<ProjectedEntry>
      */
     private function project(array $messages): array
     {
@@ -331,27 +331,27 @@ final class HistoryProjectionTest extends TestCase
     }
 
     /**
-     * @param list<Entry> $entries
+     * @param list<ProjectedEntry> $entries
      *
-     * @return list<array{EntryKind, string}>
+     * @return list<array{ProjectedEntryKind, string}>
      */
     private static function summarize(array $entries): array
     {
         return array_map(
-            static fn (Entry $entry): array => [$entry->kind, $entry->text],
+            static fn (ProjectedEntry $entry): array => [$entry->kind, $entry->text],
             $entries,
         );
     }
 
     /**
-     * @param list<Entry> $entries
+     * @param list<ProjectedEntry> $entries
      *
-     * @return list<EntryKind>
+     * @return list<ProjectedEntryKind>
      */
     private static function kinds(array $entries): array
     {
         return array_map(
-            static fn (Entry $entry): EntryKind => $entry->kind,
+            static fn (ProjectedEntry $entry): ProjectedEntryKind => $entry->kind,
             $entries,
         );
     }

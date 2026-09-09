@@ -20,11 +20,11 @@ use NeuronTui\View\DisplayableText;
 /**
  * The Agent's messages as the one ordered stream of entries a person sees.
  *
- * Every rule about what is shown of a conversation is here: which messages
- * never reach a person, what a payload is replaced with, and where a tool's
- * result belongs relative to the call that asked for it. Pairing a call with
- * its result is the History's business, not something callers arrange between
- * themselves — a result may arrive out of order, or never arrive at all.
+ * Defines historical presentation rules: which messages are excluded, what
+ * replaces attachment payloads, and where a tool's result belongs relative
+ * to its call. A result may arrive out of order, or never arrive at all.
+ * The Agent owns the History; Session metadata is independent of this
+ * terminal projection, and View owns the mutable widgets and rendering.
  *
  * The projection is a snapshot that can be built at any moment: opening the
  * TUI, starting a new Session, or returning to one.
@@ -36,38 +36,38 @@ final class HistoryProjection
     private const int FILENAME_WIDTH = 80;
 
     /**
-     * Stored messages carry no timings, so a call and the result already
-     * filed beside it are read in the same instant.
+     * Presentation fallback for unavailable historical timing, rather than
+     * a measured duration.
      */
-    private const float NOTHING_WAS_WAITED_FOR = 0.0;
+    private const float FALLBACK_DURATION_SECONDS = 0.0;
 
-    private readonly ToolCorrelation $correlation;
+    private readonly ToolCallCorrelation $correlation;
 
     /**
      * Entries in the order a person reads them, each one still reachable by
      * its position so that a result can complete the call it belongs to.
      *
-     * @var array<int, Entry>
+     * @var array<int, ProjectedEntry>
      */
     private array $entries = [];
 
     /** @param array<Message> $messages */
     public function __construct(array $messages)
     {
-        $this->correlation = new ToolCorrelation();
+        $this->correlation = new ToolCallCorrelation();
 
         foreach ($messages as $message) {
-            $this->read($message);
+            $this->projectMessage($message);
         }
     }
 
-    /** @return list<Entry> */
+    /** @return list<ProjectedEntry> */
     public function entries(): array
     {
         return array_values($this->entries);
     }
 
-    private function read(Message $message): void
+    private function projectMessage(Message $message): void
     {
         $role = $message->getRole();
 
@@ -79,10 +79,10 @@ final class HistoryProjection
         }
 
         if ($message instanceof ToolCallMessage) {
-            $this->say(EntryKind::Agent, $message);
+            $this->appendMessage(ProjectedEntryKind::Agent, $message);
 
             foreach ($message->getTools() as $tool) {
-                $this->callTool($tool);
+                $this->appendToolCall($tool);
             }
 
             return;
@@ -90,59 +90,59 @@ final class HistoryProjection
 
         if ($message instanceof ToolResultMessage) {
             foreach ($message->getTools() as $tool) {
-                $this->completeTool($tool);
+                $this->applyToolResult($tool);
             }
 
             return;
         }
 
-        $this->say(
+        $this->appendMessage(
             $role === MessageRole::USER->value
-                ? EntryKind::Person
-                : EntryKind::Agent,
+                ? ProjectedEntryKind::Person
+                : ProjectedEntryKind::Agent,
             $message,
         );
     }
 
-    private function say(EntryKind $kind, Message $message): void
+    private function appendMessage(ProjectedEntryKind $kind, Message $message): void
     {
-        $contents = $this->contents($message);
+        $text = $this->messageText($message);
 
-        if ($contents === '') {
+        if ($text === '') {
             return;
         }
 
-        $this->entries[] = new Entry($kind, $contents);
+        $this->entries[] = new ProjectedEntry($kind, $text);
     }
 
-    private function callTool(ToolInterface $tool): int
+    private function appendToolCall(ToolInterface $tool): int
     {
-        $this->entries[] = new Entry(
-            EntryKind::Tool,
+        $this->entries[] = new ProjectedEntry(
+            ProjectedEntryKind::Tool,
             ToolActivityText::pending($tool),
         );
         $position = count($this->entries) - 1;
-        $this->correlation->called($tool, $position);
+        $this->correlation->registerCall($tool, $position);
 
         return $position;
     }
 
-    private function completeTool(ToolInterface $tool): void
+    private function applyToolResult(ToolInterface $tool): void
     {
         // A result that finds no call of its own is still worth showing, so
         // it opens the call it should have answered and closes it at once.
-        $position = $this->correlation->calledAt($tool)
-            ?? $this->callTool($tool);
+        $position = $this->correlation->matchResult($tool)
+            ?? $this->appendToolCall($tool);
 
-        $this->entries[$position] = new Entry(
-            EntryKind::Tool,
-            ToolActivityText::completed($tool, self::NOTHING_WAS_WAITED_FOR),
+        $this->entries[$position] = new ProjectedEntry(
+            ProjectedEntryKind::Tool,
+            ToolActivityText::completed($tool, self::FALLBACK_DURATION_SECONDS),
         );
     }
 
-    private function contents(Message $message): string
+    private function messageText(Message $message): string
     {
-        $contents = [];
+        $parts = [];
 
         foreach ($message->getContentBlocks() as $block) {
             $content = match (true) {
@@ -156,11 +156,11 @@ final class HistoryProjection
             };
 
             if ($content !== null && $content !== '') {
-                $contents[] = $content;
+                $parts[] = $content;
             }
         }
 
-        return implode("\n\n", $contents);
+        return implode("\n\n", $parts);
     }
 
     private function filePlaceholder(FileContent $file): string

@@ -17,7 +17,7 @@ use NeuronAI\Tools\ToolInterface;
  *
  * @internal
  */
-final class ToolCorrelation
+final class ToolCallCorrelation
 {
     /** @var array<string, int> */
     private array $positionByCallId = [];
@@ -25,7 +25,7 @@ final class ToolCorrelation
     /** @var array<string, list<int>> */
     private array $positionsByName = [];
 
-    public function called(ToolInterface $tool, int $position): void
+    public function registerCall(ToolInterface $tool, int $position): void
     {
         $callId = $tool->getCallId();
 
@@ -40,8 +40,11 @@ final class ToolCorrelation
 
     /**
      * Where the call this result answers was shown, if it was shown at all.
+     * An explicit call ID returns its stored position without consuming the
+     * association. Without a call ID, matching consumes the first waiting
+     * position for the tool's name. An unmatched result returns null.
      */
-    public function calledAt(ToolInterface $tool): ?int
+    public function matchResult(ToolInterface $tool): ?int
     {
         $callId = $tool->getCallId();
 

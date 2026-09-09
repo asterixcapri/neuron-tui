@@ -10,8 +10,8 @@ use InvalidArgumentException;
 use LogicException;
 use NeuronAI\Chat\Messages\Message;
 use NeuronInteraction\Command\CommandInterface;
-use NeuronTui\History\EntryKind;
 use NeuronTui\History\HistoryProjection;
+use NeuronTui\History\ProjectedEntryKind;
 use Symfony\Component\Tui\Event\CancelEvent;
 use Symfony\Component\Tui\Event\ChangeEvent;
 use Symfony\Component\Tui\Event\InputEvent;
@@ -229,13 +229,13 @@ final class ConversationView
         $projection = new HistoryProjection($messages);
 
         foreach ($projection->entries() as $entry) {
-            if ($entry->kind === EntryKind::Tool) {
+            if ($entry->kind === ProjectedEntryKind::Tool) {
                 $this->history->addNote($entry->text, 'tool');
 
                 continue;
             }
 
-            $spokenByPerson = $entry->kind === EntryKind::Person;
+            $spokenByPerson = $entry->kind === ProjectedEntryKind::Person;
 
             $this->history->addMessage(
                 $spokenByPerson ? '❯' : '●',

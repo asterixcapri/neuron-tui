@@ -26,26 +26,27 @@ final class ToolActivityText
      */
     public static function pending(ToolInterface $tool): string
     {
-        return self::call($tool) . "\n  ⎿ Running…";
+        return self::callText($tool) . "\n  ⎿ Running…";
     }
 
     /**
-     * A call whose result came back after that long a wait.
+     * A completed call with elapsed seconds, or a presentation fallback when
+     * historical timing is unavailable.
      */
     public static function completed(
         ToolInterface $tool,
-        float $waitedSeconds,
+        float $elapsedSeconds,
     ): string {
-        return self::call($tool)
+        return self::callText($tool)
             . "\n  ⎿ "
             . DisplayableText::preview($tool->getResult(), self::DETAIL_WIDTH)
             . "\n  Done in "
-            . self::duration($waitedSeconds);
+            . self::duration($elapsedSeconds);
     }
 
-    private static function call(ToolInterface $tool): string
+    private static function callText(ToolInterface $tool): string
     {
-        $inputs = json_encode(
+        $encodedInputs = json_encode(
             $tool->getInputs(),
             JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
         );
@@ -54,7 +55,7 @@ final class ToolActivityText
             . DisplayableText::preview($tool->getName(), self::DETAIL_WIDTH)
             . ' '
             . DisplayableText::preview(
-                $inputs === false ? '{}' : $inputs,
+                $encodedInputs === false ? '{}' : $encodedInputs,
                 self::DETAIL_WIDTH,
             );
     }

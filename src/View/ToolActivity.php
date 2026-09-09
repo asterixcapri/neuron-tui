@@ -6,7 +6,7 @@ namespace NeuronTui\View;
 
 use NeuronAI\Tools\ToolInterface;
 use NeuronTui\History\ToolActivityText;
-use NeuronTui\History\ToolCorrelation;
+use NeuronTui\History\ToolCallCorrelation;
 
 /**
  * Paints one group of tool calls and results as they happen.
@@ -20,7 +20,7 @@ use NeuronTui\History\ToolCorrelation;
  */
 final class ToolActivity
 {
-    private readonly ToolCorrelation $correlation;
+    private readonly ToolCallCorrelation $correlation;
 
     /** @var list<HistoryEntry> */
     private array $activities = [];
@@ -30,7 +30,7 @@ final class ToolActivity
 
     public function __construct(private readonly HistoryPane $pane)
     {
-        $this->correlation = new ToolCorrelation();
+        $this->correlation = new ToolCallCorrelation();
     }
 
     /**
@@ -44,7 +44,7 @@ final class ToolActivity
         );
         $position = count($this->activities) - 1;
         $this->calledAt[$position] = microtime(true);
-        $this->correlation->called($tool, $position);
+        $this->correlation->registerCall($tool, $position);
 
         return $position;
     }
@@ -53,7 +53,7 @@ final class ToolActivity
     {
         // A result nothing asked for is still worth showing, so it opens the
         // call it should have answered and closes it at once.
-        $position = $this->correlation->calledAt($tool) ?? $this->start($tool);
+        $position = $this->correlation->matchResult($tool) ?? $this->start($tool);
 
         $this->activities[$position]->setText(ToolActivityText::completed(
             $tool,
