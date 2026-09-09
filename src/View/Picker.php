@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace NeuronTui\View;
 
 use Closure;
-use NeuronTui\Conversation\ChoiceOption;
 use Symfony\Component\Tui\Render\RenderContext;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 use Symfony\Component\Tui\Widget\TextWidget;

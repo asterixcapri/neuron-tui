@@ -14,7 +14,7 @@ use NeuronTui\View\DisplayableText;
 use NeuronTui\View\WorkingIndicator;
 
 /**
- * One turn of the Agent, read from its stream as it happens.
+ * Executes one Turn of the Agent and presents its stream as it arrives.
  *
  * Everything the Agent can say during a turn is understood here: text as it
  * arrives, a tool being called, a tool coming back, and the answer that
@@ -32,7 +32,7 @@ use NeuronTui\View\WorkingIndicator;
  *
  * @internal
  */
-final class AgentTurn
+final class TurnRunner
 {
     private readonly WorkingIndicator $workingIndicator;
 
@@ -45,10 +45,10 @@ final class AgentTurn
     /**
      * Sends the message and shows the answer as it comes back.
      */
-    public function respond(Agent $agent, string $message): void
+    public function run(Agent $agent, string $message): void
     {
-        $tools = $this->view->beginAgentResponse();
-        $contents = '';
+        $toolActivity = $this->view->beginAgentResponse();
+        $responseText = '';
 
         $events = $agent
             ->stream(new UserMessage($message))
@@ -56,7 +56,7 @@ final class AgentTurn
 
         foreach ($events as $event) {
             if ($event instanceof ToolCallChunk) {
-                $tools->start($event->tool);
+                $toolActivity->start($event->tool);
                 $this->view->paintPendingChanges();
 
                 continue;
@@ -65,8 +65,8 @@ final class AgentTurn
             if ($event instanceof ToolResultChunk) {
                 $this->workingIndicator->whilePaused(
                     microtime(true),
-                    static function () use ($tools, $event): void {
-                        $tools->finish($event->tool);
+                    static function () use ($toolActivity, $event): void {
+                        $toolActivity->finish($event->tool);
                     },
                 );
                 $this->view->paintPendingChanges();
@@ -79,14 +79,14 @@ final class AgentTurn
             }
 
             $this->workingIndicator->stop();
-            $contents .= $event->content;
+            $responseText .= $event->content;
             $this->view->appendAgentText($event->content);
             $this->view->paintPendingChanges();
         }
 
-        $visibleContents = DisplayableText::safe($contents);
+        $displayableText = DisplayableText::safe($responseText);
 
-        if (trim($visibleContents) === '' && !$tools->hasActivity()) {
+        if (trim($displayableText) === '' && !$toolActivity->hasActivity()) {
             $this->workingIndicator->stop();
             $this->view->showEmptyResponse();
         }

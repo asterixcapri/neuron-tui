@@ -263,6 +263,9 @@ composer stan
 composer --working-dir=examples install
 ```
 
+See [Conversation modules](docs/conversation.md) for input handling, Turn
+execution and choice presentation responsibilities.
+
 The automated suite uses Neuron AI's fake provider and Symfony TUI's virtual
 terminal. It requires no credentials and makes no network requests.
 

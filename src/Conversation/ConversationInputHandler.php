@@ -19,18 +19,18 @@ use Symfony\Component\Tui\Input\Keybindings;
  *
  * @internal
  */
-final class ConversationInput
+final class ConversationInputHandler
 {
     public function __construct(
         private readonly ConversationView $view,
         private readonly InputHistory $inputHistory,
         private readonly ConversationRuntime $runtime,
         private readonly Commands $commands,
-        private readonly SessionStore $sessions,
+        private readonly SessionStore $sessionStore,
     ) {
     }
 
-    public function submit(SubmitEvent $event): void
+    public function handleSubmit(SubmitEvent $event): void
     {
         if ($this->runtime->isStopped()) {
             return;
@@ -43,22 +43,22 @@ final class ConversationInput
         }
 
         $this->inputHistory->record($event->getValue());
-        $submission = Submission::interpret($event->getValue());
+        $submission = SubmissionParser::parse($event->getValue());
 
         if ($submission instanceof CommandInput) {
             $this->commands->run(
                 $submission->name,
                 $submission->arguments,
-                new TuiCommandAdapter($this->runtime, $this->view, $this->commands, $this->sessions),
+                new TuiCommandAdapter($this->runtime, $this->view, $this->commands, $this->sessionStore),
             );
 
             return;
         }
 
-        $this->runtime->send($submission);
+        $this->runtime->submitMessage($submission);
     }
 
-    public function draftChanged(): void
+    public function handleDraftChange(): void
     {
         $this->inputHistory->leave();
     }

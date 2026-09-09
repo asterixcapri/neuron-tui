@@ -12,14 +12,14 @@ use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
 use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Tools\Tool;
-use NeuronTui\Conversation\AgentTurn;
+use NeuronTui\Conversation\TurnRunner;
 use NeuronTui\View\ConversationView;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
-final class AgentTurnTest extends TestCase
+final class TurnRunnerTest extends TestCase
 {
     public function testTheAnsweredTextIsPaintedIntoTheConversation(): void
     {
@@ -36,7 +36,7 @@ final class AgentTurnTest extends TestCase
             }
         };
 
-        $display = $this->respond(
+        $display = $this->runTurn(
             $provider,
             'What is the answer?',
             $terminal,
@@ -50,7 +50,7 @@ final class AgentTurnTest extends TestCase
     {
         $terminal = new VirtualTerminal(rows: 24);
 
-        $display = $this->respond(
+        $display = $this->runTurn(
             new FakeAIProvider(new AssistantMessage()),
             'Anything?',
             $terminal,
@@ -72,7 +72,7 @@ final class AgentTurnTest extends TestCase
             }
         };
 
-        $display = $this->respond($provider, 'Anything?', $terminal);
+        $display = $this->runTurn($provider, 'Anything?', $terminal);
 
         self::assertStringContainsString('Empty response.', $display);
     }
@@ -89,7 +89,7 @@ final class AgentTurnTest extends TestCase
             new AssistantMessage(),
         );
 
-        $display = $this->respond($provider, 'Run the tool.', $terminal);
+        $display = $this->runTurn($provider, 'Run the tool.', $terminal);
 
         self::assertStringContainsString('● lookup {"q":"alpha"}', $display);
         self::assertStringContainsString('⎿ alpha result', $display);
@@ -102,14 +102,14 @@ final class AgentTurnTest extends TestCase
         $first = new FakeAIProvider(new AssistantMessage('The first one.'));
         $second = new FakeAIProvider(new AssistantMessage('The second one.'));
         $view = new ConversationView($terminal, 'Neuron AI', 'Conversation');
-        $turn = new AgentTurn($view);
+        $turn = new TurnRunner($view);
         $earlier = $this->agentOf($first);
         $later = $this->agentOf($second);
 
         EventLoop::queue(
             static function () use ($turn, $earlier, $later): void {
-                $turn->respond($earlier, 'Who answers?');
-                $turn->respond($later, 'And now?');
+                $turn->run($earlier, 'Who answers?');
+                $turn->run($later, 'And now?');
             },
         );
         EventLoop::run();
@@ -133,17 +133,17 @@ final class AgentTurnTest extends TestCase
      * Takes one turn against the given provider and reads back what the
      * terminal was told to show.
      */
-    private function respond(
+    private function runTurn(
         FakeAIProvider $provider,
         string $message,
         VirtualTerminal $terminal,
     ): string {
         $agent = $this->agentOf($provider);
         $view = new ConversationView($terminal, 'Neuron AI', 'Conversation');
-        $turn = new AgentTurn($view);
+        $turn = new TurnRunner($view);
 
         EventLoop::queue(
-            static fn () => $turn->respond($agent, $message),
+            static fn () => $turn->run($agent, $message),
         );
         EventLoop::run();
 

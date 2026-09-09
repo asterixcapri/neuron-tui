@@ -11,7 +11,7 @@ use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Storage\InMemoryStorage;
-use NeuronTui\Conversation\ConversationInput;
+use NeuronTui\Conversation\ConversationInputHandler;
 use NeuronTui\Conversation\ConversationRuntime;
 use NeuronTui\View\ConversationView;
 use Symfony\Component\Tui\Terminal\Terminal;
@@ -122,7 +122,7 @@ final class Tui
             $this->figletFont,
         );
         $runtime = new ConversationRuntime($this->agent, $view);
-        $input = new ConversationInput(
+        $input = new ConversationInputHandler(
             $view,
             $this->inputHistory,
             $runtime,
@@ -130,8 +130,8 @@ final class Tui
             $this->sessionStore,
         );
         $view->showHistory($this->agent->getChatHistory()->getMessages());
-        $view->onSubmit($input->submit(...));
-        $view->onDraftChange($input->draftChanged(...));
+        $view->onSubmit($input->handleSubmit(...));
+        $view->onDraftChange($input->handleDraftChange(...));
         $view->onInput($input->handleInput(...));
         $view->onTick($runtime->tick(...));
 

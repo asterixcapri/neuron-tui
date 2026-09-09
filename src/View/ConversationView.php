@@ -10,7 +10,6 @@ use InvalidArgumentException;
 use LogicException;
 use NeuronAI\Chat\Messages\Message;
 use NeuronInteraction\Command\CommandInterface;
-use NeuronTui\Conversation\ChoiceOption;
 use NeuronTui\History\EntryKind;
 use NeuronTui\History\HistoryProjection;
 use Symfony\Component\Tui\Event\CancelEvent;

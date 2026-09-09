@@ -18,7 +18,7 @@ use NeuronInteraction\Command\CommandArguments;
  *
  * @internal
  */
-final class Submission
+final class SubmissionParser
 {
     /**
      * What separates the name of a command from its arguments, and what is
@@ -30,11 +30,11 @@ final class Submission
     /**
      * Anything beginning with a slash is a command: the name is its first
      * word, the arguments are the rest with the whitespace around them
-     * dropped, so `/exit now` is `exit` with `now` and `/exit ` is `exit`
-     * with nothing. A message keeps every character the person typed, leading
-     * slash and spacing included.
+     * dropped, so `/exit now` is `/exit` with `now` and `/exit ` is `/exit`
+     * with nothing. Ordinary message text keeps every character the person
+     * typed, including spacing and slashes after the first character.
      */
-    public static function interpret(
+    public static function parse(
         string $input,
     ): CommandInput|MessageForAgent {
         if (!str_starts_with($input, '/')) {

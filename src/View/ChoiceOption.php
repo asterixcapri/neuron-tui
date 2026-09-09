@@ -2,13 +2,12 @@
 
 declare(strict_types=1);
 
-namespace NeuronTui\Conversation;
+namespace NeuronTui\View;
 
 use InvalidArgumentException;
-use NeuronTui\View\DisplayableText;
 
 /**
- * One value a Command offers through the Picker.
+ * One presentation value the View offers through the Picker.
  *
  * The key belongs to the command and comes back untouched when this option
  * is chosen. The label names it on screen; the optional detail explains it

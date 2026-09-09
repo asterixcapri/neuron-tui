@@ -8,7 +8,7 @@ use InvalidArgumentException;
 use LogicException;
 use NeuronAI\Chat\Messages\AssistantMessage;
 use NeuronAI\Chat\Messages\UserMessage;
-use NeuronTui\Conversation\ChoiceOption;
+use NeuronTui\View\ChoiceOption;
 use NeuronTui\View\ConversationView;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;

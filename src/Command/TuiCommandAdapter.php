@@ -15,7 +15,7 @@ use NeuronInteraction\Command\SelectionOption;
 use NeuronInteraction\Command\SelectionRequest;
 use NeuronInteraction\Session\Session;
 use NeuronInteraction\Session\SessionStore;
-use NeuronTui\Conversation\ChoiceOption;
+use NeuronTui\View\ChoiceOption;
 use NeuronTui\Conversation\ConversationRuntime;
 use NeuronTui\Conversation\MessageForAgent;
 use NeuronTui\View\ConversationView;
@@ -82,7 +82,7 @@ final class TuiCommandAdapter implements CommandAdapterInterface
 
     public function promptAgent(string $prompt): void
     {
-        $this->runtime->send(new MessageForAgent($prompt));
+        $this->runtime->submitMessage(new MessageForAgent($prompt));
     }
 
     public function requestSelection(SelectionRequest $request): void

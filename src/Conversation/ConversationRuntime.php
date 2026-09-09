@@ -14,7 +14,7 @@ use Throwable;
 use function Amp\async;
 
 /**
- * Owns the current answering Agent and the accepted and responding Turns.
+ * Coordinates the answering Agent, Turn preparation, execution and presentation.
  *
  * @internal
  */
@@ -24,10 +24,10 @@ final class ConversationRuntime
 
     private readonly TurnQueue $turnQueue;
 
-    private readonly AgentTurn $agentTurn;
+    private readonly TurnRunner $turnRunner;
 
     /** @var Future<mixed>|null */
-    private ?Future $response = null;
+    private ?Future $runningTurn = null;
 
     private bool $stopped = false;
 
@@ -37,20 +37,20 @@ final class ConversationRuntime
     ) {
         $this->workingIndicator = $this->view->workingIndicator();
         $this->turnQueue = new TurnQueue();
-        $this->agentTurn = new AgentTurn($this->view);
+        $this->turnRunner = new TurnRunner($this->view);
     }
 
-    public function send(MessageForAgent $message): void
+    public function submitMessage(MessageForAgent $message): void
     {
-        $accepted = $this->turnQueue->accept($message->contents);
+        $accepted = $this->turnQueue->accept($message->content);
 
         if ($accepted === null) {
-            $this->showQueue();
+            $this->showQueuedMessages();
 
             return;
         }
 
-        $this->beginTurn($accepted);
+        $this->showTurnStarted($accepted);
     }
 
     public function agent(): Agent
@@ -89,31 +89,31 @@ final class ConversationRuntime
             return false;
         }
 
-        $message = $this->turnQueue->beginWorking();
+        $message = $this->turnQueue->takeForExecution();
 
         if ($message !== null) {
-            // The Agent is read the moment the turn starts, so a turn under
-            // way ends with the one that took it.
+            // Capture the Agent when execution is scheduled, so this Turn
+            // finishes with that Agent even if another takes over.
             $agent = $this->agent;
-            $this->response = async(function () use ($agent, $message): void {
-                $this->agentTurn->respond($agent, $message);
+            $this->runningTurn = async(function () use ($agent, $message): void {
+                $this->turnRunner->run($agent, $message);
             });
 
             return true;
         }
 
-        if (!$this->response instanceof Future) {
+        if (!$this->runningTurn instanceof Future) {
             return false;
         }
 
-        if (!$this->response->isComplete()) {
+        if (!$this->runningTurn->isComplete()) {
             $this->workingIndicator->advance(microtime(true));
 
             return true;
         }
 
         try {
-            $this->response->await();
+            $this->runningTurn->await();
         } catch (WorkflowInterrupt $exception) {
             $this->view->showError(
                 'Human-in-the-loop interruptions are not supported. '
@@ -123,28 +123,28 @@ final class ConversationRuntime
             $this->showFailure($exception);
         }
 
-        $this->response = null;
-        $this->finishTurn();
+        $this->runningTurn = null;
+        $this->showTurnFinished();
 
-        $next = $this->turnQueue->finishWorking();
+        $next = $this->turnQueue->finishAndAdvance();
 
         if ($next === null) {
             return false;
         }
 
-        $this->showQueue();
-        $this->beginTurn($next);
+        $this->showQueuedMessages();
+        $this->showTurnStarted($next);
 
         return true;
     }
 
     /**
-     * Shows the message as the person's own and puts the TUI to work.
+     * Shows the current message and starts the visible Working indicator.
      *
-     * The one transition from an accepted message to a turn in flight, taken
-     * both by a message straight from the composer and by one that waited.
+     * The queue has already prepared the Turn. Execution is scheduled by
+     * tick(), both for a fresh submission and for a previously queued message.
      */
-    private function beginTurn(string $message): void
+    private function showTurnStarted(string $message): void
     {
         $this->view->acceptUserMessage($message);
         $this->view->working();
@@ -161,15 +161,15 @@ final class ConversationRuntime
         );
     }
 
-    private function finishTurn(): void
+    private function showTurnFinished(): void
     {
         $this->workingIndicator->stop();
         $this->view->ready();
     }
 
-    private function showQueue(): void
+    private function showQueuedMessages(): void
     {
-        $this->view->showQueuedMessages($this->turnQueue->queued());
+        $this->view->showQueuedMessages($this->turnQueue->queuedMessages());
     }
 
     public function stop(): void

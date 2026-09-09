@@ -6,33 +6,33 @@ namespace NeuronTui\Tests\Conversation;
 
 use NeuronTui\Conversation\MessageForAgent;
 use NeuronTui\Conversation\CommandInput;
-use NeuronTui\Conversation\Submission;
+use NeuronTui\Conversation\SubmissionParser;
 use PHPUnit\Framework\TestCase;
 
-final class SubmissionTest extends TestCase
+final class SubmissionParserTest extends TestCase
 {
     public function testOrdinaryTextIsAMessageForTheAgent(): void
     {
-        $submission = Submission::interpret("First line\nsecond line");
+        $submission = SubmissionParser::parse("First line\nsecond line");
 
         self::assertInstanceOf(MessageForAgent::class, $submission);
-        self::assertSame("First line\nsecond line", $submission->contents);
+        self::assertSame("First line\nsecond line", $submission->content);
     }
 
     public function testAMessageKeepsEveryCharacterIncludingItsSpacing(): void
     {
-        $submission = Submission::interpret("  Type /clear to start over \n");
+        $submission = SubmissionParser::parse("  Type /clear to start over \n");
 
         self::assertInstanceOf(MessageForAgent::class, $submission);
         self::assertSame(
             "  Type /clear to start over \n",
-            $submission->contents,
+            $submission->content,
         );
     }
 
     public function testACommandOnItsOwnHasNoArguments(): void
     {
-        $submission = Submission::interpret('/exit');
+        $submission = SubmissionParser::parse('/exit');
 
         self::assertInstanceOf(CommandInput::class, $submission);
         self::assertSame('/exit', $submission->name);
@@ -41,7 +41,7 @@ final class SubmissionTest extends TestCase
 
     public function testWhitespaceAroundACommandIsNotAnArgument(): void
     {
-        $submission = Submission::interpret("/clear \n");
+        $submission = SubmissionParser::parse("/clear \n");
 
         self::assertInstanceOf(CommandInput::class, $submission);
         self::assertSame('/clear', $submission->name);
@@ -50,7 +50,7 @@ final class SubmissionTest extends TestCase
 
     public function testWhatFollowsTheNameIsTheArguments(): void
     {
-        $submission = Submission::interpret('/exit now');
+        $submission = SubmissionParser::parse('/exit now');
 
         self::assertInstanceOf(CommandInput::class, $submission);
         self::assertSame('/exit', $submission->name);
@@ -59,7 +59,7 @@ final class SubmissionTest extends TestCase
 
     public function testTheArgumentsKeepTheirOwnSpacingButNotTheOuterOne(): void
     {
-        $submission = Submission::interpret("/review  the  diff \t");
+        $submission = SubmissionParser::parse("/review  the  diff \t");
 
         self::assertInstanceOf(CommandInput::class, $submission);
         self::assertSame('/review', $submission->name);
@@ -68,7 +68,7 @@ final class SubmissionTest extends TestCase
 
     public function testWhateverEndsTheNameIsNotThenPartOfTheArguments(): void
     {
-        $submission = Submission::interpret("/exit\x0Cnow");
+        $submission = SubmissionParser::parse("/exit\x0Cnow");
 
         self::assertInstanceOf(CommandInput::class, $submission);
         self::assertSame('/exit', $submission->name);
@@ -77,7 +77,7 @@ final class SubmissionTest extends TestCase
 
     public function testANameNoCommandAnswersToIsStillReadAsAName(): void
     {
-        $submission = Submission::interpret("/unknown with\targuments");
+        $submission = SubmissionParser::parse("/unknown with\targuments");
 
         self::assertInstanceOf(CommandInput::class, $submission);
         self::assertSame('/unknown', $submission->name);
@@ -86,9 +86,9 @@ final class SubmissionTest extends TestCase
 
     public function testTextMentioningACommandIsStillAMessage(): void
     {
-        $submission = Submission::interpret('Type /clear to start over');
+        $submission = SubmissionParser::parse('Type /clear to start over');
 
         self::assertInstanceOf(MessageForAgent::class, $submission);
-        self::assertSame('Type /clear to start over', $submission->contents);
+        self::assertSame('Type /clear to start over', $submission->content);
     }
 }

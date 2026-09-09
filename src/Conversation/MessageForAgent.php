@@ -11,7 +11,7 @@ namespace NeuronTui\Conversation;
  */
 final readonly class MessageForAgent
 {
-    public function __construct(public string $contents)
+    public function __construct(public string $content)
     {
     }
 }
