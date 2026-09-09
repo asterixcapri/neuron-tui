@@ -1,11 +1,11 @@
 {
   "version": 1,
   "skills": {
-    "architecture-brainstorming": {
+    "architecture-alternatives": {
       "source": "asterixcapri/skills",
       "sourceType": "github",
-      "skillPath": "skills/architecture-brainstorming/SKILL.md",
-      "computedHash": "908f50b0e2ac9fd3bf6eea24836d382e115505a7a358d53fe9a80d4baecdbf28"
+      "skillPath": "skills/architecture-alternatives/SKILL.md",
+      "computedHash": "0cae0e3f9bc99a2a9ed1190c41cfb09b384b0e332d8912226518b34ef22cbc35"
     },
     "ask-matt": {
       "source": "mattpocock/skills",
@@ -77,7 +77,7 @@
       "source": "asterixcapri/skills",
       "sourceType": "github",
       "skillPath": "skills/human-review/SKILL.md",
-      "computedHash": "c0e170e736204565e4e372d83075b5467a25761055a0c98d2d7341dcb52efc99"
+      "computedHash": "c05e0c463cc314c87bcdad7b04a20e1ede5b870c304e009baadbd010aedd3101"
     },
     "implement": {
       "source": "mattpocock/skills",
@@ -167,7 +167,7 @@
       "source": "asterixcapri/skills",
       "sourceType": "github",
       "skillPath": "skills/to-docs/SKILL.md",
-      "computedHash": "2d69dee70f2833ab40eb38ce35160142027c7ef4ce8d0963b5f94ca0209c83c8"
+      "computedHash": "e209e6af9b142ce8dbd194a582390f31f241d6793891f974bc2c5c507b438765"
     },
     "to-questionnaire": {
       "source": "mattpocock/skills",
