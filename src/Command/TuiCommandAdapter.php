@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace NeuronTui\Conversation;
+namespace NeuronTui\Command;
 
 use NeuronAI\Agent\Agent;
 use NeuronInteraction\Command\CommandAdapterInterface;
@@ -14,6 +14,9 @@ use NeuronInteraction\Command\SelectionOption;
 use NeuronInteraction\Command\SelectionRequest;
 use NeuronInteraction\Session\Session;
 use NeuronInteraction\Session\SessionStore;
+use NeuronTui\Conversation\ChoiceOption;
+use NeuronTui\Conversation\ConversationRuntime;
+use NeuronTui\Conversation\MessageForAgent;
 use NeuronTui\View\ConversationView;
 use Revolt\EventLoop;
 use Throwable;
@@ -24,7 +27,7 @@ use Throwable;
  * @implements CommandAdapterInterface<null>
  * @internal Commands depend on the shared interface, not this Adapter.
  */
-final class TuiAdapter implements CommandAdapterInterface
+final class TuiCommandAdapter implements CommandAdapterInterface
 {
     public function __construct(
         private readonly ConversationRuntime $runtime,

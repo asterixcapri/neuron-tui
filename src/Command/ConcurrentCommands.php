@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace NeuronTui\Conversation;
+namespace NeuronTui\Command;
 
 use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\HelpCommand;

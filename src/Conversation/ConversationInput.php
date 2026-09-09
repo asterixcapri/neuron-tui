@@ -7,6 +7,7 @@ namespace NeuronTui\Conversation;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Session\SessionStore;
+use NeuronTui\Command\TuiCommandAdapter;
 use NeuronTui\View\ConversationView;
 use Symfony\Component\Tui\Event\InputEvent;
 use Symfony\Component\Tui\Event\SubmitEvent;
@@ -48,7 +49,7 @@ final class ConversationInput
             $this->commands->run(
                 $submission->name,
                 $submission->arguments,
-                new TuiAdapter($this->runtime, $this->view, $this->commands, $this->sessions),
+                new TuiCommandAdapter($this->runtime, $this->view, $this->commands, $this->sessions),
             );
 
             return;
