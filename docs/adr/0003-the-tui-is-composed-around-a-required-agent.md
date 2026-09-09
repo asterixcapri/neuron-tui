@@ -30,7 +30,7 @@ rather than a second owner of the Agent.
 Configuration is accumulated before `run()`, and the terminal widgets and
 listeners are built once inside `run()`. The instance is frozen when that
 single run starts. `addCommand()` deliberately follows `Agent::addTool()`: it
-accepts one command, a `CommandKitInterface`, or an array containing either, validates
+accepts one command or an array of commands, validates
 each value as it is added, preserves order and does not reject duplicate names.
 The first command with a repeated name is the one reached; repeated entries may
 remain visible in command suggestions. This duplicate rule supersedes the

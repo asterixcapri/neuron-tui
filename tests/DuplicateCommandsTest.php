@@ -7,7 +7,6 @@ namespace NeuronTui\Tests;
 use Closure;
 use NeuronInteraction\Command\Commands;
 use NeuronAI\Agent\Agent;
-use NeuronInteraction\Command\AbstractCommandKit;
 use NeuronInteraction\Command\CommandArguments;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\HelpCommand;
@@ -36,19 +35,6 @@ final class DuplicateCommandsTest extends TestCase
                 CommandInterface $first,
                 CommandInterface $second,
             ): Commands => $commands->addCommand([$first, $second]),
-            'one kit' => static fn (
-                Commands $commands,
-                CommandInterface $first,
-                CommandInterface $second,
-            ): Commands => $commands->addCommand(self::kit([$first, $second])),
-            'array and kit' => static fn (
-                Commands $commands,
-                CommandInterface $first,
-                CommandInterface $second,
-            ): Commands => $commands->addCommand([
-                $first,
-                self::kit([$second]),
-            ]),
         ];
 
         foreach ($mount as $form => $add) {
@@ -92,10 +78,10 @@ final class DuplicateCommandsTest extends TestCase
             'Added alone first.',
             'First member of the array.',
             'Second member of the array.',
-            'First member of the kit.',
-            'Second member of the kit.',
-            'Direct member of the combination.',
-            'Kit member of the combination.',
+            'First member of the next array.',
+            'Second member of the next array.',
+            'First member of the final array.',
+            'Second member of the final array.',
         ];
         $commands = array_map(
             static fn (string $description): CommandInterface => self::command(
@@ -142,8 +128,8 @@ final class DuplicateCommandsTest extends TestCase
         $mounted = (new Commands())
             ->addCommand($commands[0])
             ->addCommand([$commands[1], $commands[2]])
-            ->addCommand(self::kit([$commands[3], $commands[4]]))
-            ->addCommand([$commands[5], self::kit([$commands[6]])])
+            ->addCommand([$commands[3], $commands[4]])
+            ->addCommand([$commands[5], $commands[6]])
             ->addCommand(new HelpCommand());
         (new Tui(new Agent(), $terminal, commands: $mounted))->run();
 
@@ -155,33 +141,6 @@ final class DuplicateCommandsTest extends TestCase
             'Lists what can be typed here.',
         ], $help);
         self::assertStringNotContainsString('Unknown Command', $help);
-    }
-
-    /**
-     * @param list<CommandInterface> $commands
-     * @return AbstractCommandKit<CommandInterface>
-     */
-    private static function kit(array $commands): AbstractCommandKit
-    {
-        return new
-        /** @extends AbstractCommandKit<CommandInterface> */
-        class($commands) extends AbstractCommandKit {
-            /**
-             * @param list<CommandInterface> $commands
-             */
-            public function __construct(
-                private readonly array $commands,
-            ) {
-            }
-
-            /**
-             * @return list<CommandInterface>
-             */
-            protected function provide(): array
-            {
-                return $this->commands;
-            }
-        };
     }
 
     /**

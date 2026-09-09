@@ -24,7 +24,8 @@ state is introduced. Normal Session trimming, title rules and the single-run TUI
 lifecycle remain unchanged._
 
 _The historical decision text follows; apply the scoped supersessions above.
-The shared kit is now named SessionCommandKit._
+Command kits have since been removed; the Host Application mounts ClearCommand
+and ResumeCommand directly._
 
 Sessions and Input history are concrete behaviour modules over one
 `StorageInterface`. Storage persists JSON documents by namespace and logical

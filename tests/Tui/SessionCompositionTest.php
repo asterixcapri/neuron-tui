@@ -17,7 +17,6 @@ use NeuronInteraction\Command\CommandArguments;
 use NeuronInteraction\Command\ClearCommand;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\ResumeCommand;
-use NeuronInteraction\Command\SessionCommandKit;
 use NeuronInteraction\Command\CommandAdapterInterface;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\InMemoryStorage;
@@ -72,7 +71,7 @@ final class SessionCompositionTest extends TestCase
             EventLoop::delay(0.23, static fn () => $terminal->simulateInput("\r"));
             EventLoop::delay(0.29, static fn () => $terminal->simulateInput("\x03"));
 
-            Tui::make($agent, $terminal, new Commands(new SessionCommandKit()), $sessionStore)->run();
+            Tui::make($agent, $terminal, new Commands([new ClearCommand(), new ResumeCommand()]), $sessionStore)->run();
 
             self::assertEquals($initialMessages, $startup);
             self::assertIsArray($beforeClear);
@@ -230,16 +229,6 @@ final class SessionCompositionTest extends TestCase
         self::assertSame('/wipe', (new ClearCommand('/wipe'))->name());
         self::assertSame('/resume', (new ResumeCommand())->name());
         self::assertSame('/return', (new ResumeCommand('/return'))->name());
-
-        self::assertSame(
-            [ClearCommand::class, ResumeCommand::class],
-            array_map(
-                static fn (
-                    CommandInterface $command,
-                ): string => $command::class,
-                (new SessionCommandKit())->commands(),
-            ),
-        );
     }
 
     public function testDefaultStoreUsesLocalOwner(): void
@@ -314,7 +303,7 @@ final class SessionCompositionTest extends TestCase
             });
             EventLoop::delay(0.29, static fn () => $terminal->simulateInput("\x03"));
 
-            Tui::make($agent, $terminal, new Commands(new SessionCommandKit()), $sessionStore)->run();
+            Tui::make($agent, $terminal, new Commands([new ClearCommand(), new ResumeCommand()]), $sessionStore)->run();
 
             self::assertInstanceOf(Session::class, $cleared);
             self::assertSame('alice', $cleared->getUserId());

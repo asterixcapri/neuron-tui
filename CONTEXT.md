@@ -50,7 +50,7 @@ each Adapter decides how a person submits it.
 _Avoid_: Message, prompt, action
 
 **Commands**:
-The ordered collection of mounted Commands, including those supplied by kits.
+The ordered collection of mounted Commands.
 It resolves an identifier to the first matching Command and coordinates its
 execution through a Command Adapter.
 _Avoid_: Command container, command list
@@ -97,13 +97,6 @@ It admits Commands, carries out their requested operations, and interprets
 their technical outcomes as terminal effects, backend responses, or other
 output appropriate to that environment.
 _Avoid_: Command runner, Command result
-
-**Command kit**:
-A group of Commands mounted in one go, carrying between them whatever
-they need to work. A Conversation TUI mounts nothing on its own, so a kit is
-the short way for a Host Application to say yes to several commands at once,
-and it can be taken with some of them left out.
-_Avoid_: Toolkit, bundle, plugin, pack
 
 **Session**:
 One conversation owned by a user, identified by a key and held as the Agent's

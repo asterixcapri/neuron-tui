@@ -28,7 +28,6 @@ use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Testing\RequestRecord;
 use NeuronAI\Tools\Tool;
-use NeuronInteraction\Command\AbstractCommandKit;
 use NeuronInteraction\Command\CommandArguments;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Command\ClearCommand;
@@ -39,7 +38,6 @@ use NeuronInteraction\Command\SelectionRequest;
 use NeuronInteraction\Command\HelpCommand;
 use NeuronInteraction\Command\LeaveCommand;
 use NeuronInteraction\Command\ResumeCommand;
-use NeuronInteraction\Command\SessionCommandKit;
 
 use NeuronInteraction\Command\CommandAdapterInterface;
 use NeuronTui\Tui;
@@ -2309,49 +2307,6 @@ MARKDOWN;
         self::assertFalse($forcedExit);
         self::assertSame(1, $provider->started);
         self::assertFalse($provider->completed);
-    }
-
-    /**
-     * A kit carries ordinary Commands, and what arrived in one is
-     * mounted like anything else — the mid-turn permission included.
-     */
-    public function testAKitCanCarrySharedCommands(): void
-    {
-        $agent = new Agent();
-        $agent->setAiProvider(new FakeAIProvider());
-        $terminal = new VirtualTerminal(rows: 24);
-        $kit = new
-        /** @extends AbstractCommandKit<CommandInterface> */
-        class() extends AbstractCommandKit {
-            protected function provide(): array
-            {
-                return [new HelpCommand(), new LeaveCommand()];
-            }
-        };
-        EventLoop::queue(
-            static fn () => $terminal->simulateInput("/help\r"),
-        );
-        EventLoop::delay(
-            0.06,
-            static fn () => $terminal->simulateInput("/exit\r"),
-        );
-
-        (new Tui(
-            $agent,
-            terminal: $terminal,
-            commands: new Commands([$kit]),
-        ))->run();
-
-        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
-
-        self::assertStringContainsString(
-            '/help — Lists what can be typed here.',
-            $display,
-        );
-        self::assertStringContainsString(
-            '/exit — Stops the interaction.',
-            $display,
-        );
     }
 
     /**
@@ -5784,10 +5739,10 @@ MARKDOWN;
     }
 
     /**
-     * A kit is mounted in one line and every command it offers answers, the
+     * Session Commands are mounted together and each answers, the
      * way each would have answered had it been named on its own.
      */
-    public function testMountingAKitMountsEveryCommandItOffers(): void
+    public function testMountingSessionCommandsMakesEachAvailable(): void
     {
         $agent = new Agent();
         $agent->setAiProvider(new FakeAIProvider());
@@ -5847,7 +5802,8 @@ MARKDOWN;
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands([
-                new SessionCommandKit(),
+                new ClearCommand(),
+                new ResumeCommand(),
                 new LeaveCommand(),
             ]),
         ))->run();
@@ -5880,7 +5836,7 @@ MARKDOWN;
         );
     }
 
-    public function testAKitCanBeMountedWithSomeOfItsCommandsLeftOut(): void
+    public function testResumeCanBeMountedWithoutClear(): void
     {
         $agent = new Agent();
         $agent->setAiProvider(new FakeAIProvider());
@@ -5927,7 +5883,7 @@ MARKDOWN;
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands([
-                (new SessionCommandKit())->exclude([ClearCommand::class]),
+                new ResumeCommand(),
                 new LeaveCommand(),
             ]),
         ))->run();
@@ -5948,7 +5904,7 @@ MARKDOWN;
         );
     }
 
-    public function testAKitCanBeMountedKeepingOnlySomeOfItsCommands(): void
+    public function testClearCanBeMountedWithoutResume(): void
     {
         $agent = new Agent();
         $agent->setAiProvider(new FakeAIProvider());
@@ -5999,7 +5955,7 @@ MARKDOWN;
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
             commands: new Commands([
-                (new SessionCommandKit())->only([ClearCommand::class]),
+                new ClearCommand(),
                 new LeaveCommand(),
             ]),
         ))->run();
