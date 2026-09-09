@@ -91,6 +91,7 @@ final class ConversationStyleSheet
             '.suggestions-empty' => new Style(color: 'gray', dim: true),
             '.notice' => new Style(color: 'cyan'),
             '.tool' => new Style(color: 'cyan', dim: true),
+            '.warning' => new Style(color: 'yellow', bold: true),
             '.error' => new Style(color: 'red', bold: true),
         ]);
     }

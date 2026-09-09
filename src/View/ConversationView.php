@@ -410,6 +410,11 @@ final class ConversationView
         $this->history->addMessage('·', $text, 'notice');
     }
 
+    public function showWarning(string $message): void
+    {
+        $this->history->addMessage('Warning', $message, 'warning');
+    }
+
     public function showError(string $message): void
     {
         $this->history->addMessage('Error', $message, 'error');

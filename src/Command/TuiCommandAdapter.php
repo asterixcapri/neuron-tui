@@ -34,7 +34,7 @@ final class TuiCommandAdapter implements CommandAdapterInterface
         private readonly ConversationRuntime $runtime,
         private readonly ConversationView $view,
         private readonly Commands $commands,
-        private readonly SessionStore $sessions,
+        private readonly SessionStore $sessionStore,
     ) {
     }
 
@@ -70,12 +70,17 @@ final class TuiCommandAdapter implements CommandAdapterInterface
         return null;
     }
 
-    public function say(string $text): void
+    public function notify(string $text): void
     {
         $this->view->showNotice($text);
     }
 
     public function warn(string $text): void
+    {
+        $this->view->showWarning($text);
+    }
+
+    public function error(string $text): void
     {
         $this->view->showError($text);
     }
@@ -112,7 +117,7 @@ final class TuiCommandAdapter implements CommandAdapterInterface
                     $this->commands->run(
                         $request->command,
                         new CommandArguments($chosen),
-                        new self($this->runtime, $this->view, $this->commands, $this->sessions),
+                        new self($this->runtime, $this->view, $this->commands, $this->sessionStore),
                     );
                 }
             } catch (Throwable $exception) {
@@ -144,7 +149,7 @@ final class TuiCommandAdapter implements CommandAdapterInterface
 
     public function sessionStore(): SessionStore
     {
-        return $this->sessions;
+        return $this->sessionStore;
     }
 
     public function stop(): void

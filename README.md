@@ -229,6 +229,11 @@ final class ReviewCommand implements CommandInterface
 Tui::make($agent, commands: new Commands(new ReviewCommand()))->run();
 ```
 
+Commands communicate through `notify()`, `warn()` and `error()`. Neuron TUI
+shows notices, yellow `Warning` labels and red `Error` labels respectively.
+These methods do not stop a Command or change its technical execution status;
+return explicitly when an expected failure prevents further work.
+
 ## Demo
 
 `examples/` is a standalone Composer project acting as a Host Application. It

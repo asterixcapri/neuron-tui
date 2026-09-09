@@ -1117,7 +1117,7 @@ MARKDOWN;
                 string $typed,
             ) use (&$arguments): void {
                 $arguments = $typed;
-                $adapter->say('The command ran.');
+                $adapter->notify('The command ran.');
             },
         );
         EventLoop::queue(
@@ -1141,7 +1141,7 @@ MARKDOWN;
         $provider->assertNothingSent();
     }
 
-    public function testWhatACommandSaysAndWarnsReachesTheConversation(): void
+    public function testCommandNoticesWarningsAndErrorsReachTheConversation(): void
     {
         $provider = new FakeAIProvider();
         $agent = new Agent();
@@ -1149,8 +1149,10 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
             static function (CommandAdapterInterface $adapter, string $arguments): void {
-                $adapter->say('Everything was in order.');
+                $adapter->notify('Everything was in order.');
                 $adapter->warn('Except for one thing.');
+                $adapter->error('The operation could not finish.');
+                $adapter->notify('The command continued.');
             },
         );
         EventLoop::queue(
@@ -1172,7 +1174,9 @@ MARKDOWN;
             'Everything was in order.',
             $display,
         );
-        self::assertStringContainsString('Except for one thing.', $display);
+        self::assertMatchesRegularExpression('/Warning\s+Except for one thing\./', $display);
+        self::assertMatchesRegularExpression('/Error\s+The operation could not finish\./', $display);
+        self::assertStringContainsString('The command continued.', $display);
         $provider->assertNothingSent();
     }
 
@@ -1235,7 +1239,7 @@ MARKDOWN;
                 $adapter->requestSelection(new SelectionRequest('/probe', 'Models', [
                     new SelectionOption('stable-value', 'Visible label', 'Optional detail'),
                 ]));
-                $adapter->say('Request submitted.');
+                $adapter->notify('Request submitted.');
                 $events[] = 'first invocation finished';
             },
         );
@@ -1965,7 +1969,7 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
             static function (CommandAdapterInterface $adapter, string $arguments): void {
-                $adapter->say('The command ran.');
+                $adapter->notify('The command ran.');
             },
         );
         EventLoop::queue(
@@ -2335,7 +2339,7 @@ MARKDOWN;
                 }
 
                 $chosen = $arguments;
-                $adapter->say('Chosen: ' . $chosen);
+                $adapter->notify('Chosen: ' . $chosen);
             },
         );
         EventLoop::delay(
@@ -2396,7 +2400,7 @@ MARKDOWN;
                 CommandAdapterInterface $adapter,
                 string $arguments,
             ) use (&$chosen): void {
-                $adapter->say('History remains visible.');
+                $adapter->notify('History remains visible.');
                 if ($arguments === '') {
                     $adapter->requestSelection(new SelectionRequest(
                         '/probe',
@@ -3068,7 +3072,7 @@ MARKDOWN;
                 }
 
                 $chosen = $arguments;
-                $adapter->say('Chosen: ' . $chosen);
+                $adapter->notify('Chosen: ' . $chosen);
             },
         );
         EventLoop::delay(
@@ -3876,7 +3880,7 @@ MARKDOWN;
                         string $written,
                     ) use (&$arguments): void {
                         $arguments = $written;
-                        $adapter->say('Alpha ran.');
+                        $adapter->notify('Alpha ran.');
                     },
                     '/alpha',
                 ),
@@ -3909,7 +3913,7 @@ MARKDOWN;
             ) use ($name, &$ran, &$arguments): void {
                 $ran = $name;
                 $arguments = $written;
-                $adapter->say($name . ' ran.');
+                $adapter->notify($name . ' ran.');
             };
         };
         $display = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
@@ -4825,7 +4829,7 @@ MARKDOWN;
             /** @param CommandAdapterInterface<mixed> $adapter */
             public function run(CommandAdapterInterface $adapter, CommandArguments $arguments): void
             {
-                $adapter->say('Custom concurrent command ran.');
+                $adapter->notify('Custom concurrent command ran.');
             }
         };
     }

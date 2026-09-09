@@ -27,7 +27,7 @@ final readonly class ModelCommand implements CommandInterface
     {
         if ($arguments->text !== '') {
             $adapter->useAgent(DemoAgent::make()->setModelId($arguments->text));
-            $adapter->say("Model changed to {$arguments->text}.");
+            $adapter->notify("Model changed to {$arguments->text}.");
 
             return;
         }
