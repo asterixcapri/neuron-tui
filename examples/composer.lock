@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "d602d0fed7ecb93db8a516868a25e30b",
+    "content-hash": "082e9d6848a98db07d90b2c72ca28c78",
     "packages": [
         {
             "name": "amphp/amp",
@@ -976,16 +976,16 @@
         },
         {
             "name": "asterixcapri/neuron-interaction",
-            "version": "0.8.2",
+            "version": "0.8.4",
             "source": {
                 "type": "git",
                 "url": "https://github.com/asterixcapri/neuron-interaction.git",
-                "reference": "38602fb73220e58e6fa3099df7e6d403789828e0"
+                "reference": "3bec6d25f0173391475630dd66fe571cf1524d70"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/asterixcapri/neuron-interaction/zipball/38602fb73220e58e6fa3099df7e6d403789828e0",
-                "reference": "38602fb73220e58e6fa3099df7e6d403789828e0",
+                "url": "https://api.github.com/repos/asterixcapri/neuron-interaction/zipball/3bec6d25f0173391475630dd66fe571cf1524d70",
+                "reference": "3bec6d25f0173391475630dd66fe571cf1524d70",
                 "shasum": ""
             },
             "require": {
@@ -1015,21 +1015,21 @@
             "description": "Presentation-independent interaction modules for Neuron AI Agents.",
             "support": {
                 "issues": "https://github.com/asterixcapri/neuron-interaction/issues",
-                "source": "https://github.com/asterixcapri/neuron-interaction/tree/0.8.2"
+                "source": "https://github.com/asterixcapri/neuron-interaction/tree/0.8.4"
             },
-            "time": "2026-09-08T13:41:21+00:00"
+            "time": "2026-09-09T23:14:18+00:00"
         },
         {
             "name": "asterixcapri/neuron-tui",
-            "version": "0.8.0",
+            "version": "0.8.4",
             "dist": {
                 "type": "path",
                 "url": "..",
-                "reference": "ed76558cc265472b44c0c985237f3b212976a741"
+                "reference": "984b766ff516a5cfb93e482f8fa8d37a01c9885f"
             },
             "require": {
                 "amphp/amp": "^3.0",
-                "asterixcapri/neuron-interaction": "~0.8.0",
+                "asterixcapri/neuron-interaction": "~0.8.4",
                 "league/commonmark": "^2.10",
                 "neuron-core/neuron-ai": "^3.0",
                 "php": ">=8.4.1",

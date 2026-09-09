@@ -19,6 +19,15 @@ Domain documentation uses the single-context layout. See `docs/agents/domain.md`
 
 When writing or reviewing code, follow [docs/coding-standards.md](docs/coding-standards.md).
 
+## Releases
+
+On a release branch `M.N.x`, publish the next patch tag in that same series,
+using the highest published `M.N.P` tag to determine the next patch number.
+For example, `0.8.x` with latest tag `0.8.3` releases `0.8.4`; `0.9.x` with
+latest tag `0.9.0` releases `0.9.1`. The branch determines the series even when
+changes break compatibility. A different series requires an explicit user
+request.
+
 ## Authorship
 
 Commits, pull requests and comments credit the human author alone. Write the
