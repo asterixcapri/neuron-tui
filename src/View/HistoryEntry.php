@@ -31,23 +31,23 @@ final class HistoryEntry
     public function __construct(
         private readonly TerminalInterface $terminal,
         private readonly AbstractWidget $widget,
-        private readonly MarkdownWidget|TextWidget $contents,
+        private readonly MarkdownWidget|TextWidget $textWidget,
         private readonly int $reservedColumns,
         private readonly Closure $changed,
     ) {
-        $this->measure();
+        $this->updateHeight();
     }
 
     public function setText(string $text): void
     {
-        $this->contents->setText($text);
-        $this->measure();
+        $this->textWidget->setText($text);
+        $this->updateHeight();
         ($this->changed)();
     }
 
     public function appendText(string $chunk): void
     {
-        $this->setText($this->contents->getText() . $chunk);
+        $this->setText($this->textWidget->getText() . $chunk);
     }
 
     /**
@@ -63,14 +63,14 @@ final class HistoryEntry
         return $this->height;
     }
 
-    private function measure(): void
+    private function updateHeight(): void
     {
         $columns = max(
             1,
             $this->terminal->getColumns() - $this->reservedColumns,
         );
 
-        $this->height = max(1, count($this->contents->render(
+        $this->height = max(1, count($this->textWidget->render(
             new RenderContext($columns, PHP_INT_MAX),
         )));
     }

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace NeuronTui\View;
+namespace NeuronTui\View\Widget;
 
 /**
  * One presentation-ready entry passed from Picker to PickerList.

@@ -70,7 +70,7 @@ final class CommandSuggestions
 
     private readonly SelectListWidget $list;
 
-    private readonly TextWidget $nothingMatches;
+    private readonly TextWidget $noMatchesMessage;
 
     /**
      * How the stretch of a name that matched is told apart from the rest of
@@ -114,7 +114,7 @@ final class CommandSuggestions
      *
      * @var list<array{value: string, label: string, description: string}>|null
      */
-    private ?array $shown = null;
+    private ?array $shownItems = null;
 
     /**
      * Which of the shown lines is chosen, as a place among them. Kept here
@@ -122,7 +122,7 @@ final class CommandSuggestions
      * answers about the one under the arrow, while what moves the arrow is
      * a key the list never sees.
      */
-    private int $chosen = 0;
+    private int $selectedIndex = 0;
 
     /**
      * Whether Escape has taken the band away from a draft that would still
@@ -142,7 +142,7 @@ final class CommandSuggestions
      */
     private bool $working = false;
 
-    private ?AbstractWidget $onScreen = null;
+    private ?AbstractWidget $visibleWidget = null;
 
     /**
      * @param list<CommandInterface> $commands
@@ -152,8 +152,8 @@ final class CommandSuggestions
     {
         $this->widget = new ContainerWidget();
         $this->widget->addStyleClass('suggestions');
-        $this->nothingMatches = new TextWidget('');
-        $this->nothingMatches->addStyleClass('suggestions-empty');
+        $this->noMatchesMessage = new TextWidget('');
+        $this->noMatchesMessage->addStyleClass('suggestions-empty');
         $this->emphasis = new Style(bold: true);
         $this->suggestible = self::suggestible($commands);
         $this->suggestibleWhileWorking = self::suggestible(array_values(
@@ -183,7 +183,7 @@ final class CommandSuggestions
         // A draft that changed is a name being written again, so what
         // Escape took away comes back with the writing that asks for it.
         $this->dismissed = false;
-        $this->show();
+        $this->refresh();
     }
 
     /**
@@ -196,13 +196,13 @@ final class CommandSuggestions
     public function working(): void
     {
         $this->working = true;
-        $this->show();
+        $this->refresh();
     }
 
     public function ready(): void
     {
         $this->working = false;
-        $this->show();
+        $this->refresh();
     }
 
     /**
@@ -214,7 +214,7 @@ final class CommandSuggestions
      */
     public function isOnScreen(): bool
     {
-        return $this->onScreen !== null;
+        return $this->visibleWidget !== null;
     }
 
     /**
@@ -228,27 +228,27 @@ final class CommandSuggestions
      */
     public function isListOpen(): bool
     {
-        return $this->onScreen === $this->list && $this->shown !== null;
+        return $this->visibleWidget === $this->list && $this->shownItems !== null;
     }
 
     /**
      * The selected full command name, or nothing where there is no list to
      * take from.
      */
-    public function chosenName(): ?string
+    public function selectedCommandName(): ?string
     {
         if (!$this->isListOpen()) {
             return null;
         }
 
-        return $this->shown[$this->chosen]['value'] ?? null;
+        return $this->shownItems[$this->selectedIndex]['value'] ?? null;
     }
 
     /**
      * Chooses the line above the one chosen now, the last one being above
      * the first. Answers whether there was a list to move through.
      */
-    public function choosePrevious(): bool
+    public function selectPrevious(): bool
     {
         return $this->moveBy(-1);
     }
@@ -257,7 +257,7 @@ final class CommandSuggestions
      * Chooses the line below the one chosen now, the first one being below
      * the last.
      */
-    public function chooseNext(): bool
+    public function selectNext(): bool
     {
         return $this->moveBy(1);
     }
@@ -283,14 +283,14 @@ final class CommandSuggestions
             return false;
         }
 
-        $lines = count($this->shown ?? []);
+        $lines = count($this->shownItems ?? []);
 
         if ($lines === 0) {
             return false;
         }
 
-        $this->chosen = ($this->chosen + $places + $lines) % $lines;
-        $this->list->setSelectedIndex($this->chosen);
+        $this->selectedIndex = ($this->selectedIndex + $places + $lines) % $lines;
+        $this->list->setSelectedIndex($this->selectedIndex);
 
         return true;
     }
@@ -298,7 +298,7 @@ final class CommandSuggestions
     /**
      * Puts on screen what the draft and the turn together ask for.
      */
-    private function show(): void
+    private function refresh(): void
     {
         if ($this->dismissed || !self::isNameBeingWritten($this->draft)) {
             $this->hide();
@@ -309,44 +309,44 @@ final class CommandSuggestions
         $lines = $this->linesMatching($this->draft);
 
         if ($lines === []) {
-            $this->nothingMatches->setText(
+            $this->noMatchesMessage->setText(
                 'No commands match "'
                     . DisplayableText::preview($this->draft, self::DRAFT_WIDTH)
                     . '"',
             );
-            $this->put($this->nothingMatches);
+            $this->showWidget($this->noMatchesMessage);
             // The list is given its lines again when one matches next, so
             // what was selected before this does not come back with them.
-            $this->shown = null;
-            $this->chosen = 0;
+            $this->shownItems = null;
+            $this->selectedIndex = 0;
 
             return;
         }
 
-        if ($lines !== $this->shown) {
+        if ($lines !== $this->shownItems) {
             // A different set of lines is a different list to read, so it is
             // handed over whole and the selection goes back to the top with
             // it: whoever is writing is narrowing, not scrolling.
             $this->list->setItems($lines);
-            $this->shown = $lines;
-            $this->chosen = 0;
+            $this->shownItems = $lines;
+            $this->selectedIndex = 0;
         }
 
-        $this->put($this->list);
+        $this->showWidget($this->list);
     }
 
     /**
      * Puts the given band on screen, in place of whatever was there.
      */
-    private function put(AbstractWidget $band): void
+    private function showWidget(AbstractWidget $band): void
     {
-        if ($this->onScreen === $band) {
+        if ($this->visibleWidget === $band) {
             return;
         }
 
         $this->widget->clear();
         $this->widget->add($band);
-        $this->onScreen = $band;
+        $this->visibleWidget = $band;
     }
 
     /**
@@ -354,16 +354,16 @@ final class CommandSuggestions
      */
     private function hide(): void
     {
-        if ($this->onScreen === null) {
+        if ($this->visibleWidget === null) {
             return;
         }
 
         $this->widget->clear();
-        $this->onScreen = null;
+        $this->visibleWidget = null;
         // The list is given its lines again next time it is shown, so what
         // was selected before does not outlive the writing that chose it.
-        $this->shown = null;
-        $this->chosen = 0;
+        $this->shownItems = null;
+        $this->selectedIndex = 0;
     }
 
     /**
@@ -389,10 +389,10 @@ final class CommandSuggestions
     {
         $draft = DisplayableText::safe($draft);
         $written = mb_strtolower($draft);
-        $after = mb_substr($draft, 1);
-        $exact = [];
-        $beginning = [];
-        $carrying = [];
+        $query = mb_substr($draft, 1);
+        $exactMatches = [];
+        $prefixMatches = [];
+        $substringMatches = [];
 
         $suggestible = $this->working
             ? $this->suggestibleWhileWorking
@@ -401,27 +401,27 @@ final class CommandSuggestions
         foreach ($suggestible as $suggestion) {
             $name = $suggestion['name'];
 
-            if ($after !== '' && mb_stripos($name, $after) === false) {
+            if ($query !== '' && mb_stripos($name, $query) === false) {
                 continue;
             }
 
             $line = [
                 'value' => $suggestion['answersTo'],
-                'label' => $this->emphasising($suggestion['label'], $after),
+                'label' => $this->highlightMatch($suggestion['label'], $query),
                 'description' => $suggestion['description'],
             ];
             $lowered = mb_strtolower($name);
 
             if ($lowered === $written) {
-                $exact[] = $line;
+                $exactMatches[] = $line;
             } elseif (str_starts_with($lowered, $written)) {
-                $beginning[] = $line;
+                $prefixMatches[] = $line;
             } else {
-                $carrying[] = $line;
+                $substringMatches[] = $line;
             }
         }
 
-        return [...$exact, ...$beginning, ...$carrying];
+        return [...$exactMatches, ...$prefixMatches, ...$substringMatches];
     }
 
     /**
@@ -433,15 +433,15 @@ final class CommandSuggestions
      * fell in the part that was cut has nowhere to be shown: the name is
      * then left as it is, still there for having matched.
      */
-    private function emphasising(string $label, string $written): string
+    private function highlightMatch(string $label, string $query): string
     {
-        $at = $written === '' ? false : mb_stripos($label, $written);
+        $at = $query === '' ? false : mb_stripos($label, $query);
 
         if ($at === false) {
             return $label;
         }
 
-        $length = mb_strlen($written);
+        $length = mb_strlen($query);
 
         return mb_substr($label, 0, $at)
             . $this->emphasis->apply(mb_substr($label, $at, $length))

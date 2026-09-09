@@ -22,13 +22,13 @@ final class WorkingIndicator
 {
     private const array FRAMES = ['✶', '✸', '✹', '✺', '✹', '✷'];
 
-    private const float REDRAW_SECONDS = 0.08;
+    private const float REDRAW_INTERVAL_SECONDS = 0.08;
 
-    private int $frame = 0;
+    private int $frameIndex = 0;
 
     private float $startedAt = 0.0;
 
-    private float $redrawnAt = 0.0;
+    private float $lastRedrawnAt = 0.0;
 
     private ?HistoryEntry $line = null;
 
@@ -39,9 +39,9 @@ final class WorkingIndicator
      */
     public function start(float $now): void
     {
-        $this->frame = 0;
+        $this->frameIndex = 0;
         $this->startedAt = $now;
-        $this->redrawnAt = $now;
+        $this->lastRedrawnAt = $now;
         $this->show($now);
     }
 
@@ -55,12 +55,12 @@ final class WorkingIndicator
             return;
         }
 
-        if ($now - $this->redrawnAt < self::REDRAW_SECONDS) {
+        if ($now - $this->lastRedrawnAt < self::REDRAW_INTERVAL_SECONDS) {
             return;
         }
 
-        $this->frame = ($this->frame + 1) % count(self::FRAMES);
-        $this->redrawnAt = $now;
+        $this->frameIndex = ($this->frameIndex + 1) % count(self::FRAMES);
+        $this->lastRedrawnAt = $now;
         $this->line->setText($this->text($now));
     }
 
@@ -113,7 +113,7 @@ final class WorkingIndicator
 
     private function text(float $now): string
     {
-        return self::FRAMES[$this->frame]
+        return self::FRAMES[$this->frameIndex]
             . ' Working ('
             . (int) floor($now - $this->startedAt)
             . 's)';

@@ -2,8 +2,9 @@
 
 declare(strict_types=1);
 
-namespace NeuronTui\View;
+namespace NeuronTui\View\Widget;
 
+use NeuronTui\View\DisplayableText;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Ansi\TextWrapper;
 use Symfony\Component\Tui\Render\RenderContext;

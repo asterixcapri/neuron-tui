@@ -12,6 +12,7 @@ use NeuronAI\Chat\Messages\Message;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronTui\History\HistoryProjection;
 use NeuronTui\History\ProjectedEntryKind;
+use NeuronTui\View\Widget\ComposerEditor;
 use Symfony\Component\Tui\Event\CancelEvent;
 use Symfony\Component\Tui\Event\ChangeEvent;
 use Symfony\Component\Tui\Event\InputEvent;
@@ -72,7 +73,7 @@ final class ConversationView
     /**
      * The keys the suggestions answer while they are on screen.
      */
-    private readonly Keybindings $keys;
+    private readonly Keybindings $suggestionKeybindings;
 
     private ?HistoryEntry $activeAgentMessage = null;
 
@@ -87,7 +88,7 @@ final class ConversationView
      *
      * @var DeferredFuture<string|null>|null
      */
-    private ?DeferredFuture $choice = null;
+    private ?DeferredFuture $pendingChoice = null;
 
     /**
      * Whether leaving the terminal is waiting on a choice to be let go.
@@ -134,10 +135,10 @@ final class ConversationView
         $this->lowerPanel = new ContainerWidget();
         $this->picker = new Picker(
             $this->closePicker(...),
-            $this->abandon(...),
+            $this->cancelChoice(...),
         );
         $this->suggestions = new CommandSuggestions($commands);
-        $this->keys = new Keybindings([
+        $this->suggestionKeybindings = new Keybindings([
             'suggestion-previous' => [Key::UP],
             'suggestion-next' => [Key::DOWN],
             'suggestion-complete' => [Key::TAB],
@@ -149,7 +150,7 @@ final class ConversationView
             self::SUGGESTION_KEYS_PRIORITY,
         );
 
-        $this->build($title, $subtitle, $figlet, $figletFont);
+        $this->buildLayout($title, $subtitle, $figlet, $figletFont);
     }
 
     /**
@@ -193,11 +194,11 @@ final class ConversationView
 
     public function stop(): void
     {
-        if ($this->choice instanceof DeferredFuture) {
+        if ($this->pendingChoice instanceof DeferredFuture) {
             // Let the deferred selection callback resume with no choice
             // before stopping the loop, so it is not left suspended.
             $this->leaving = true;
-            $this->abandon();
+            $this->cancelChoice();
 
             return;
         }
@@ -291,7 +292,7 @@ final class ConversationView
         ?string $description = null,
     ): ?string
     {
-        if ($this->choice instanceof DeferredFuture) {
+        if ($this->pendingChoice instanceof DeferredFuture) {
             // One list at a time: a second one would take the place of the
             // first and leave whoever asked for it waiting for good.
             throw new LogicException('A choice is already open.');
@@ -299,16 +300,16 @@ final class ConversationView
 
         $this->validateChoiceOptions($options);
 
-        /** @var DeferredFuture<string|null> $choice */
-        $choice = new DeferredFuture();
-        $this->choice = $choice;
+        /** @var DeferredFuture<string|null> $pendingChoice */
+        $pendingChoice = new DeferredFuture();
+        $this->pendingChoice = $pendingChoice;
         $this->emptyComposer();
         $this->picker->open($title, $options, $description);
         $this->showPicker();
         $this->tui->setFocus($this->picker->focusable());
         $this->tui->requestRender();
 
-        $chosen = $choice->getFuture()->await();
+        $chosen = $pendingChoice->getFuture()->await();
 
         if ($this->leaving) {
             $this->leaving = false;
@@ -490,7 +491,7 @@ final class ConversationView
         $this->history->scrollDown();
     }
 
-    private function build(
+    private function buildLayout(
         string $titleText,
         string $subtitleText,
         ?string $figletText,
@@ -552,30 +553,36 @@ final class ConversationView
 
         $data = $event->getData();
 
-        if ($this->keys->matches($data, 'suggestion-previous')) {
-            $this->move($event, $this->suggestions->choosePrevious(...));
+        if ($this->suggestionKeybindings->matches($data, 'suggestion-previous')) {
+            $this->moveSuggestionSelection(
+                $event,
+                $this->suggestions->selectPrevious(...),
+            );
 
             return;
         }
 
-        if ($this->keys->matches($data, 'suggestion-next')) {
-            $this->move($event, $this->suggestions->chooseNext(...));
+        if ($this->suggestionKeybindings->matches($data, 'suggestion-next')) {
+            $this->moveSuggestionSelection(
+                $event,
+                $this->suggestions->selectNext(...),
+            );
 
             return;
         }
 
-        if ($this->keys->matches($data, 'suggestion-complete')) {
+        if ($this->suggestionKeybindings->matches($data, 'suggestion-complete')) {
             // Tab is never the composer's: a tabulation in a draft is not
             // something anyone asked for, so where there is nothing to
             // complete it does nothing at all.
             $event->stopPropagation();
-            $this->complete();
+            $this->completeCommandName();
 
             return;
         }
 
-        if ($this->keys->matches($data, 'suggestion-run')) {
-            $chosen = $this->suggestions->chosenName();
+        if ($this->suggestionKeybindings->matches($data, 'suggestion-run')) {
+            $chosen = $this->suggestions->selectedCommandName();
 
             if ($chosen !== null) {
                 // Leave Enter to the composer after replacing the prefix:
@@ -588,7 +595,7 @@ final class ConversationView
         }
 
         if (
-            $this->keys->matches($data, 'suggestion-close')
+            $this->suggestionKeybindings->matches($data, 'suggestion-close')
             && $this->suggestions->isOnScreen()
         ) {
             // The first Escape takes the band away and leaves the draft; the
@@ -608,7 +615,7 @@ final class ConversationView
      *
      * @param Closure(): bool $moved
      */
-    private function move(InputEvent $event, Closure $moved): void
+    private function moveSuggestionSelection(InputEvent $event, Closure $moved): void
     {
         if (!$moved()) {
             return;
@@ -624,9 +631,9 @@ final class ConversationView
      * The name is followed by a space, which closes the list by the rule
      * that opens it and leaves the cursor where the arguments are written.
      */
-    private function complete(): void
+    private function completeCommandName(): void
     {
-        $chosen = $this->suggestions->chosenName();
+        $chosen = $this->suggestions->selectedCommandName();
 
         if ($chosen === null) {
             return;
@@ -678,7 +685,7 @@ final class ConversationView
      * Nothing is waiting once the picker is closed, so this is also what a
      * person leaving the terminal mid-choice ends up saying.
      */
-    private function abandon(): void
+    private function cancelChoice(): void
     {
         $this->closePicker(null);
     }
@@ -690,19 +697,19 @@ final class ConversationView
      */
     private function closePicker(?string $key): void
     {
-        if (!$this->choice instanceof DeferredFuture) {
+        if (!$this->pendingChoice instanceof DeferredFuture) {
             return;
         }
 
-        $choice = $this->choice;
+        $pendingChoice = $this->pendingChoice;
         // Let go of the choice before completing it: the command resumes
         // from there, and must not find the answer it has just been given
         // still standing open.
-        $this->choice = null;
+        $this->pendingChoice = null;
         $this->picker->close();
         $this->showConversationControls();
         $this->ready();
-        $choice->complete($key);
+        $pendingChoice->complete($key);
     }
 
     /**

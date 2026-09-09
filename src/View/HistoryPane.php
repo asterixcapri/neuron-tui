@@ -57,20 +57,20 @@ final class HistoryPane
      */
     public function addMessage(
         string $speaker,
-        string $contents,
-        string $style,
+        string $text,
+        string $styleClass,
     ): HistoryEntry {
         $message = new ContainerWidget();
         $message->addStyleClass('message');
 
-        if ($style === 'user') {
+        if ($styleClass === 'user') {
             $message->addStyleClass('user-message');
         }
 
         $label = new TextWidget($speaker);
         $label->addStyleClass('speaker');
-        $label->addStyleClass($style);
-        $markdown = new MarkdownWidget($contents);
+        $label->addStyleClass($styleClass);
+        $markdown = new MarkdownWidget($text);
         $markdown->addStyleClass('message-content');
         $message->add($label);
         $message->add($markdown);
@@ -89,10 +89,10 @@ final class HistoryPane
     /**
      * Adds an unspoken line of the History, such as tool activity.
      */
-    public function addNote(string $text, string $style): HistoryEntry
+    public function addNote(string $text, string $styleClass): HistoryEntry
     {
         $note = new TextWidget($text);
-        $note->addStyleClass($style);
+        $note->addStyleClass($styleClass);
 
         $entry = new HistoryEntry(
             $this->terminal,
@@ -129,7 +129,7 @@ final class HistoryPane
         $this->entries = [];
         $this->widget->clear();
         $this->paintedHeight = 0;
-        $this->readAt(0);
+        $this->setScrollOffset(0);
     }
 
     /**
@@ -143,17 +143,17 @@ final class HistoryPane
             return;
         }
 
-        $this->readAt(0);
+        $this->setScrollOffset(0);
     }
 
     public function scrollUp(): void
     {
-        $this->readAt($this->scrollOffset + self::SCROLL_LINES);
+        $this->setScrollOffset($this->scrollOffset + self::SCROLL_LINES);
     }
 
     public function scrollDown(): void
     {
-        $this->readAt($this->scrollOffset - self::SCROLL_LINES);
+        $this->setScrollOffset($this->scrollOffset - self::SCROLL_LINES);
     }
 
     private function add(HistoryEntry $entry): HistoryEntry
@@ -176,7 +176,7 @@ final class HistoryPane
         $difference = $this->paintedHeight - $previousHeight;
 
         if ($this->scrollOffset > 0 && $difference !== 0) {
-            $this->readAt($this->scrollOffset + $difference);
+            $this->setScrollOffset($this->scrollOffset + $difference);
 
             return;
         }
@@ -198,7 +198,7 @@ final class HistoryPane
     /**
      * Moves the reading position that many lines above the newest entry.
      */
-    private function readAt(int $offset): void
+    private function setScrollOffset(int $offset): void
     {
         $this->scrollOffset = max(0, $offset);
         $this->tui->setScrollOffset($this->scrollOffset);

@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace NeuronTui\View;
 
 use Closure;
+use NeuronTui\View\Widget\PickerDescription;
+use NeuronTui\View\Widget\PickerList;
+use NeuronTui\View\Widget\PickerListItem;
 use Symfony\Component\Tui\Render\RenderContext;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 use Symfony\Component\Tui\Widget\TextWidget;
@@ -51,7 +54,7 @@ final class Picker
      *
      * @var array<string, string>
      */
-    private array $offered = [];
+    private array $keysByHandle = [];
 
     /**
      * Every line of the open picker, filtered or not, in the order the caller
@@ -59,10 +62,10 @@ final class Picker
      *
      * @var list<PickerListItem>
      */
-    private array $lines = [];
+    private array $items = [];
 
     /** @var list<PickerListItem> */
-    private array $shown = [];
+    private array $filteredItems = [];
 
     private string $title = '';
 
@@ -73,12 +76,12 @@ final class Picker
     private bool $open = false;
 
     /**
-     * @param Closure(string): void $chosen
-     * @param Closure(): void $abandoned
+     * @param Closure(string): void $onChosen
+     * @param Closure(): void $onCancelled
      */
     public function __construct(
-        private readonly Closure $chosen,
-        private readonly Closure $abandoned,
+        private readonly Closure $onChosen,
+        private readonly Closure $onCancelled,
     ) {
         $this->widget = new ContainerWidget();
         $this->widget->addStyleClass('picker');
@@ -91,7 +94,7 @@ final class Picker
         $this->list = new PickerList(
             $this->choose(...),
             $this->abandon(...),
-            $this->type(...),
+            $this->handleFilterInput(...),
             $this->positionChanged(...),
             $this->rowsOutsideList(...),
         );
@@ -132,24 +135,24 @@ final class Picker
         $this->filter = '';
         $this->searchable = count($options) >= 6;
         $this->description = null;
-        $this->offered = [];
-        $this->lines = [];
+        $this->keysByHandle = [];
+        $this->items = [];
 
         $place = 0;
 
         foreach ($options as $option) {
             $handle = self::HANDLE_PREFIX . $place++;
-            $this->offered[$handle] = $option->key;
-            $this->lines[] = new PickerListItem(
+            $this->keysByHandle[$handle] = $option->key;
+            $this->items[] = new PickerListItem(
                 $handle,
                 $option->label,
                 $option->detail,
             );
         }
 
-        $this->shown = $this->lines;
+        $this->filteredItems = $this->items;
         $this->list->setQuery('');
-        $this->list->setItems($this->shown);
+        $this->list->setItems($this->filteredItems);
         $this->instructions->setText(self::INSTRUCTIONS);
         $this->widget->clear();
         $this->widget->add($this->heading);
@@ -177,9 +180,9 @@ final class Picker
     public function close(): void
     {
         $this->widget->clear();
-        $this->offered = [];
-        $this->lines = [];
-        $this->shown = [];
+        $this->keysByHandle = [];
+        $this->items = [];
+        $this->filteredItems = [];
         $this->filter = '';
         $this->searchable = false;
         $this->description = null;
@@ -193,7 +196,7 @@ final class Picker
      * Anything that is not text — an arrow, Enter, Escape — is left to the
      * list, which is the only thing that knows what to do with it.
      */
-    private function type(string $data): bool
+    private function handleFilterInput(string $data): bool
     {
         if (!$this->searchable) {
             return false;
@@ -224,7 +227,7 @@ final class Picker
     {
         $this->filter = $filter;
         $matching = array_values(array_filter(
-            $this->lines,
+            $this->items,
             static fn (PickerListItem $line): bool => self::contains(
                 $line->label,
                 $filter,
@@ -234,7 +237,7 @@ final class Picker
             ),
         ));
 
-        $this->shown = $matching;
+        $this->filteredItems = $matching;
         $this->list->setQuery($filter);
         $this->list->setItems($matching);
         $this->updateSearch();
@@ -306,19 +309,19 @@ final class Picker
 
     private function choose(string $handle): void
     {
-        $chosen = $this->offered[$handle] ?? null;
+        $chosenKey = $this->keysByHandle[$handle] ?? null;
 
-        if ($chosen === null) {
+        if ($chosenKey === null) {
             // A value the picker did not put in the list names no option, so
             // there is nothing to choose and the list stays where it is.
             return;
         }
 
-        ($this->chosen)($chosen);
+        ($this->onChosen)($chosenKey);
     }
 
     private function abandon(): void
     {
-        ($this->abandoned)();
+        ($this->onCancelled)();
     }
 }

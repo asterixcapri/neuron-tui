@@ -23,12 +23,12 @@ final class ToolActivity
     private readonly ToolCallCorrelation $correlation;
 
     /** @var list<HistoryEntry> */
-    private array $activities = [];
+    private array $entries = [];
 
     /** @var array<int, float> */
     private array $calledAt = [];
 
-    public function __construct(private readonly HistoryPane $pane)
+    public function __construct(private readonly HistoryPane $history)
     {
         $this->correlation = new ToolCallCorrelation();
     }
@@ -38,11 +38,11 @@ final class ToolActivity
      */
     public function start(ToolInterface $tool): int
     {
-        $this->activities[] = $this->pane->addNote(
+        $this->entries[] = $this->history->addNote(
             ToolActivityText::pending($tool),
             'tool',
         );
-        $position = count($this->activities) - 1;
+        $position = count($this->entries) - 1;
         $this->calledAt[$position] = microtime(true);
         $this->correlation->registerCall($tool, $position);
 
@@ -55,7 +55,7 @@ final class ToolActivity
         // call it should have answered and closes it at once.
         $position = $this->correlation->matchResult($tool) ?? $this->start($tool);
 
-        $this->activities[$position]->setText(ToolActivityText::completed(
+        $this->entries[$position]->setText(ToolActivityText::completed(
             $tool,
             microtime(true) - ($this->calledAt[$position] ?? microtime(true)),
         ));
@@ -63,6 +63,6 @@ final class ToolActivity
 
     public function hasActivity(): bool
     {
-        return $this->activities !== [];
+        return $this->entries !== [];
     }
 }
