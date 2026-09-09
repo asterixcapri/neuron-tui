@@ -10,6 +10,7 @@ use NeuronInteraction\Command\CommandArguments;
 use NeuronInteraction\Command\CommandExecution;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Command\ConcurrentCommandInterface;
 use NeuronInteraction\Command\SelectionOption;
 use NeuronInteraction\Command\SelectionRequest;
 use NeuronInteraction\Session\Session;
@@ -39,7 +40,7 @@ final class TuiCommandAdapter implements CommandAdapterInterface
 
     public function admit(CommandInterface $command): bool
     {
-        if ($this->runtime->isBusy() && !ConcurrentCommands::allows($command)) {
+        if ($this->runtime->isBusy() && !($command instanceof ConcurrentCommandInterface)) {
             $this->view->showError(
                 $command->name()
                     . ' is refused while the Agent is working. '

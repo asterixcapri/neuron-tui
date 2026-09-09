@@ -33,6 +33,7 @@ use NeuronInteraction\Command\CommandArguments;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Command\ClearCommand;
 use NeuronInteraction\Command\CommandInterface;
+use NeuronInteraction\Command\ConcurrentCommandInterface;
 use NeuronInteraction\Command\SelectionOption;
 use NeuronInteraction\Command\SelectionRequest;
 use NeuronInteraction\Command\HelpCommand;
@@ -2113,6 +2114,65 @@ MARKDOWN;
         self::assertStringContainsString('❯ A question', $display);
         self::assertStringContainsString('● A slow answer.', $display);
         self::assertStringContainsString('/probe — Lists what can be typed here.', $display);
+    }
+
+    public function testCustomConcurrentCommandIsCarriedOutMidTurn(): void
+    {
+        $midTurnDisplay = null;
+        $provider = new class(
+            new AssistantMessage('A slow answer.'),
+        ) extends FakeAIProvider {
+            protected function streamChunks(Message $response): Generator
+            {
+                \Amp\delay(0.5);
+                yield new TextChunk('slow-stream', 'A slow answer.');
+
+                return $response;
+            }
+        };
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        $terminal = new VirtualTerminal(rows: 24);
+        $command = $this->concurrentCommand();
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("A question\r"),
+        );
+        EventLoop::delay(
+            0.06,
+            static fn () => $terminal->simulateInput("/probe\r"),
+        );
+        EventLoop::delay(
+            0.12,
+            static function () use (&$midTurnDisplay, $terminal): void {
+                $midTurnDisplay = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+            },
+        );
+        EventLoop::delay(
+            0.9,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new Tui(
+            $agent,
+            terminal: $terminal,
+            commands: new Commands([$command]),
+        ))->run();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+
+        self::assertIsString($midTurnDisplay);
+        self::assertStringContainsString(
+            'Custom concurrent command ran.',
+            $midTurnDisplay,
+        );
+        self::assertStringNotContainsString('is refused', $midTurnDisplay);
+        // The answer under way arrives all the same, on the conversation the
+        // command ran in, and what the command said is still there under it.
+        self::assertStringContainsString('❯ A question', $display);
+        self::assertStringContainsString('● A slow answer.', $display);
+        self::assertStringContainsString('Custom concurrent command ran.', $display);
     }
 
     /**
@@ -4204,7 +4264,7 @@ MARKDOWN;
     }
 
     /**
-     * During a Turn the list carries the Help and Leave Commands: one the TUI
+     * During a Turn the list carries Concurrent commands: one the TUI
      * would turn away is never offered there, and the whole list is back
      * under the same name once the Turn has finished.
      */
@@ -4226,7 +4286,7 @@ MARKDOWN;
         $agent = new Agent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
-        $concurrent = new HelpCommand('/pulse');
+        $concurrent = $this->concurrentCommand('/pulse');
         $refused = $this->commandThat(
             static function (CommandAdapterInterface $adapter, string $arguments): void {
             },
@@ -4788,6 +4848,31 @@ MARKDOWN;
         self::assertStringContainsString('ready · Enter sends', $closed);
         self::assertStringNotContainsString('Tab completes', $closed);
         self::assertStringNotContainsString('Enter runs', $closed);
+    }
+
+    private function concurrentCommand(string $name = '/probe'): ConcurrentCommandInterface
+    {
+        return new class($name) implements ConcurrentCommandInterface {
+            public function __construct(private readonly string $identifier)
+            {
+            }
+
+            public function name(): string
+            {
+                return $this->identifier;
+            }
+
+            public function describe(): string
+            {
+                return 'Reports status while the Agent is working.';
+            }
+
+            /** @param CommandAdapterInterface<mixed> $adapter */
+            public function run(CommandAdapterInterface $adapter, CommandArguments $arguments): void
+            {
+                $adapter->say('Custom concurrent command ran.');
+            }
+        };
     }
 
     /**

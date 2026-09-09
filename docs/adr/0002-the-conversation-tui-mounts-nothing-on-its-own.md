@@ -3,14 +3,17 @@
 _ADR 0003 supersedes only this decision's duplicate-name rule. The TUI still
 mounts nothing on its own._
 
-_The Refine Interaction composition revision supersedes the concurrent marker
-and restricted controls policy below. HelpCommand and LeaveCommand now belong
-to Neuron Interaction and implement the ordinary CommandInterface with
-CommandAdapterInterface. The TUI admits only those implementations during a
-Turn, including aliases; unrelated Commands are refused regardless of name.
-There is no concurrent marker, wrapper or restricted controls contract. Leave
-stops the terminal, pending Picker and queued-input processing without cancelling
-or waiting for in-flight Agent work. No Commands are mounted automatically._
+_The shared concurrent marker revision supersedes the concurrent type and
+restricted controls policy below. HelpCommand and LeaveCommand belong to Neuron
+Interaction and implement ConcurrentCommandInterface, which extends the ordinary
+CommandInterface. The TUI admits Commands implementing this shared marker during
+a Turn, including custom Commands and aliases; ordinary Commands are refused
+regardless of name. The marker declares that execution does not interfere with
+active Agent work; the Adapter retains admission policy. All Commands receive
+CommandAdapterInterface, without a wrapper or restricted controls contract.
+Leave stops the terminal, pending Picker and queued-input processing without
+cancelling or waiting for in-flight Agent work. No Commands are mounted
+automatically._
 
 _ADR-0006 also supersedes the constructor-injected Session provider policy below:
 Session Commands use the shared Sessions exposed through CommandAdapterInterface.

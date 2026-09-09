@@ -269,3 +269,11 @@ terminal. It requires no credentials and makes no network requests.
 ## License
 
 Neuron TUI is released under the MIT License.
+
+### Commands during a Turn
+
+While the Agent is working, the TUI admits and suggests only Commands implementing
+`NeuronInteraction\Command\ConcurrentCommandInterface`. Help and Leave already
+implement it. Custom Commands may implement it too, provided they do not interfere
+with state used by the active Agent work. Ordinary Commands are refused until
+the Turn finishes, regardless of their names.

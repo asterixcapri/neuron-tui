@@ -79,8 +79,9 @@ arguments after the person selects it.
 _Avoid_: Choice option, Picker row, menu item
 
 **Concurrent command**:
-A Command the TUI permits to run while a Turn is active. This permission is
-reserved for Help and Leave and is a TUI policy, not a separate Command type.
+A Command declared safe to execute while an Agent is working, without
+interfering with the state used by that work. The interaction Adapter decides
+whether to admit it.
 _Avoid_: Async command, background command, command that runs while working
 
 **Command controls**:
