@@ -145,6 +145,10 @@ continuations. Commands write preferences directly, for example
 with `$store->read('model', 'default-model')`; `delete('model')` removes the
 preference and `entries()` returns all preference keys and values. Writes
 complete through Storage immediately, and fallback reads do not save data.
+The fallback selects the expected type: `read('retries', 3)` returns an integer;
+`read('model', 'default-model')` returns a non-empty string. Missing, null or
+incompatible values use the fallback. Without a fallback, reads return a
+non-empty string or null; `entries()` retains the original stored values.
 Old named Configuration documents remain untouched and are not imported.
 The demo restores the direct `model` preference at startup and changes the
 current Agent's provider while preserving its History.

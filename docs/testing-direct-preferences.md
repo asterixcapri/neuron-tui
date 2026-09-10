@@ -45,15 +45,17 @@ NeuronAI\Tools\Tool`) and eleven PHPStan errors in that same test file involving
 ToolCallMessage and ToolResultMessage APIs. Record these separately from
 preference regressions; this work does not change Session or Neuron's contract.
 
-## Verification of this revision
+## Verification of fallback-inferred reads
 
 - Neuron TUI: full suite passed (218 tests, 971 assertions); PHPStan passed.
 - Demo: all 5 tests passed (24 assertions); PHPStan passed for startup, source
   and tests using the demo autoloader.
-- Neuron Interaction: full suite ran 159 tests with 576 assertions and only the
+- Neuron Interaction: full suite ran 164 tests with 686 assertions and only the
   two pre-existing Session errors above. Full PHPStan retained the same eleven
   pre-existing errors. Analysis of `src`, `tests/Configuration` and `examples`
   passed.
-- Standards review found no issues. Spec review identified a Store lifetime
-  issue in the backend selection example; both requests now share its Store,
-  and follow-up review found no remaining issues. The example also ran successfully.
+- ConfigurationStore: all 21 tests passed (189 assertions), including typed
+  fallbacks through both Storage adapters, zero/false/empty-array preservation,
+  no coercion, invalid fallback rejection and unchanged raw entries.
+- Standards and Spec reviews found no issues. The demo retains the simpler
+  startup order and now relies on the Store's fallback-selected return type.
