@@ -62,8 +62,8 @@ Tui::make($agent)
 argument selects one of Symfony TUI's bundled fonts: `standard`, `big`,
 `small`, `slant`, or `mini`.
 
-The minimal and branding examples mount no Commands. Add them explicitly as
-shown below. Configure each TUI before calling `run()`; an instance runs once.
+Add commands as shown below. Configure each TUI before calling `run()`;
+an instance runs once.
 
 ## Commands
 
@@ -84,32 +84,17 @@ $commands = new Commands([
 Tui::make($agent, commands: $commands)->run();
 ```
 
-`HelpCommand` reads the mounted collection, including itself. Each standard
-command accepts a custom slash-prefixed name: `new LeaveCommand('/quit')`
+Each standard command accepts a custom slash-prefixed name: `new LeaveCommand('/quit')`
 replaces `/exit` with `/quit`.
 
 ## Sessions
 
-A Session is one conversation with the Agent. `ClearCommand` starts a fresh one
-without leaving the terminal: the screen and the composer empty. A conversation
-already managed by SessionStore remains stored. An external Agent History is not
-imported when clearing.
+Use `/clear` to start a new conversation and `/resume` to return to a saved one.
+In the session list, type to filter, use the arrow keys to move, Enter to select
+and Escape to cancel.
 
-`ResumeCommand` lists the current user's Sessions in the Picker, most recently
-used first, each labelled with the first thing the person wrote in it. While
-the list is open the composer takes no text: the arrow keys move through it,
-typing narrows it, Enter chooses one and resumes it, and Escape leaves the
-current one alone. Resuming displays that conversation; the Agent uses its
-context for subsequent messages. A Session nobody wrote in is not listed.
-
-The Conversation TUI reuses the supplied `SessionStore` instance. Default Stores
-store managed conversations in memory for the life of the process and create
-no directories or files. Startup keeps the Agent’s existing History; it does
-not automatically register it with SessionStore or resume an earlier conversation.
-
-To persist the initial conversation, create a `FileStorage`, pass it to
-`SessionStore` with the intended user identity, and install the new Session
-directly as the Agent's Chat History:
+To keep conversations between runs, configure a file-backed `SessionStore` and
+start the Agent with a Session from it:
 
 ```php
 use NeuronInteraction\Command\ClearCommand;
@@ -122,7 +107,7 @@ use NeuronTui\Tui;
 $storage = new FileStorage(__DIR__ . '/.storage');
 $sessionStore = new SessionStore($storage, 'local-user');
 
-$agent->setChatHistory($sessionStore->create()); // Or read and check an explicitly chosen key.
+$agent->setChatHistory($sessionStore->create());
 
 Tui::make(
     $agent,
@@ -131,82 +116,50 @@ Tui::make(
 )->run();
 ```
 
-`create()` immediately stores a new empty Session. `read($key)` returns a Session
-or `null`; check for absence before installing it as the Agent's History.
-No Session is resumed automatically. A missing Resume selection leaves the
-current History installed and displays a warning.
+Use a user identifier appropriate to your application in place of `local-user`.
+By default, Sessions last only for the current run.
 
-Commands can access application settings through `$adapter->configurationStore()`.
-Pass `configurationStore: new ConfigurationStore($storage, 'local-user')` to
-`Tui::make()` using `NeuronInteraction\Configuration\ConfigurationStore` to persist
-settings. The TUI shares that Store across command invocations and selection
-continuations. Commands write preferences directly, for example
-`$adapter->configurationStore()->write('model', $arguments->text)`. Hosts read
-with `$store->read('model', 'default-model')`; `delete('model')` removes the
-preference and `entries()` returns all preference keys and values. Writes
-complete through Storage immediately, and fallback reads do not save data.
-The fallback selects the expected type: `read('retries', 3)` returns an integer;
-`read('model', 'default-model')` returns a non-empty string. Missing, null or
-incompatible values use the fallback. Without a fallback, reads return a
-non-empty string or null; `entries()` retains the original stored values.
-Old named Configuration documents remain untouched and are not imported.
-The demo restores the direct `model` preference at startup and changes the
-current Agent's provider while preserving its History.
+## Configuration
 
-If omitted, each TUI has its own in-memory ConfigurationStore owned
-by `local`. The Host Application reads startup settings explicitly; the demo uses
-this Store to remember the model selected with `/model`.
-
-Without a supplied Store, the TUI uses an in-memory SessionStore owned by `local`.
-To choose another owner, supply a SessionStore configured by the Host Application.
-Input history keeps its independent existing ownership model.
-
-## Input history
-
-Submitted messages and Commands share one ordered Input history per configured
-Storage, across Sessions and Adapters. Blank submissions are ignored and only
-consecutive exact duplicates collapse. Generated Agent prompts are excluded.
-The InputHistory instance owns the navigation cursor and draft. In the TUI,
-from an empty composer, ↑ recalls
-older inputs, ↓ moves toward newer ones and restores the empty draft past the
-newest input. Editing a recalled input leaves navigation. A Picker or Command
-suggestions owns the arrow keys while its list is active.
-
-By default, Input history lasts for the current process. To keep it between
-runs, pass an `InputHistory` backed by `FileStorage`. Building on the Sessions
-example, this complete configuration shares one storage root for conversations
-and submitted inputs, and adds `/help` and `/exit`:
+Use `ConfigurationStore` to remember application preferences, such as the
+selected model:
 
 ```php
-use NeuronInteraction\Command\Commands;
-use NeuronInteraction\Command\HelpCommand;
-use NeuronInteraction\Command\LeaveCommand;
-use NeuronInteraction\Command\ClearCommand;
-use NeuronInteraction\Command\ResumeCommand;
-use NeuronInteraction\InputHistory\InputHistory;
-use NeuronInteraction\Session\SessionStore;
+use NeuronInteraction\Configuration\ConfigurationStore;
 use NeuronInteraction\Storage\FileStorage;
 use NeuronTui\Tui;
 
-$storage = new FileStorage(__DIR__ . '/.storage');
-$sessionStore = new SessionStore($storage, 'local-user');
+$settings = new ConfigurationStore(new FileStorage(__DIR__ . '/.storage'), 'local-user');
+$model = $settings->read('model', 'openai:gpt-5.4-nano');
+$settings->write('model', 'openai:gpt-5.4-mini');
 
-$agent->setChatHistory($sessionStore->create());
-
-$commands = new Commands([
-    new ClearCommand(),
-    new ResumeCommand(),
-    new HelpCommand(),
-    new LeaveCommand(),
-]);
-
-Tui::make(
-    $agent,
-    commands: $commands,
-    sessionStore: $sessionStore,
-    inputHistory: new InputHistory($storage),
-)->run();
+Tui::make($agent, configurationStore: $settings)->run();
 ```
+
+The fallback determines the expected type: use `read('retries', 3)` for an
+integer, for example. Missing or incompatible values return the fallback;
+string preferences must be non-empty. Writes save immediately.
+
+Custom commands access these preferences through `$adapter->configurationStore()`.
+The [demo](examples/demo.php) uses this to remember the model chosen with `/model`.
+
+## Input history
+
+From an empty input, use ↑ and ↓ to recall earlier messages and commands.
+By default, input history lasts for the current run. To keep it between runs:
+
+```php
+use NeuronInteraction\InputHistory\InputHistory;
+use NeuronInteraction\Storage\FileStorage;
+use NeuronTui\Tui;
+
+$inputHistory = new InputHistory(new FileStorage(__DIR__ . '/.storage'));
+
+Tui::make($agent, inputHistory: $inputHistory)->run();
+```
+
+You can pass `inputHistory`, `sessionStore`, `configurationStore` and `commands`
+together in the same `Tui::make()` call.
 
 ## Custom commands
 
@@ -252,16 +205,16 @@ Tui::make($agent, commands: new Commands(new ReviewCommand()))->run();
 
 Commands communicate through `notify()`, `warn()` and `error()`. Neuron TUI
 shows notices, yellow `Warning` labels and red `Error` labels respectively.
-These methods do not stop a Command or change its technical execution status;
-return explicitly when an expected failure prevents further work.
+Return from your command after reporting an error if it cannot continue.
+
+While the Agent is responding, ordinary commands are unavailable. Commands that
+can safely run during a response may implement
+`NeuronInteraction\Command\ConcurrentCommandInterface`; Help and Leave already do.
 
 ## Demo
 
-`examples/` is a standalone Composer project acting as a Host Application. It
-connects the Conversation TUI to OpenAI or Anthropic and consumes this library
-through a local path repository. Install its dependencies, create the local
-environment file, add the credentials for the providers you want to use, then
-start it:
+The demo connects the TUI to OpenAI or Anthropic. Install its dependencies,
+create the environment file, add your provider credentials, then start it:
 
 ```bash
 cd examples
@@ -298,11 +251,3 @@ terminal. It requires no credentials and makes no network requests.
 ## License
 
 Neuron TUI is released under the MIT License.
-
-### Commands during a Turn
-
-While the Agent is working, the TUI admits and suggests only Commands implementing
-`NeuronInteraction\Command\ConcurrentCommandInterface`. Help and Leave already
-implement it. Custom Commands may implement it too, provided they do not interfere
-with state used by the active Agent work. Ordinary Commands are refused until
-the Turn finishes, regardless of their names.
