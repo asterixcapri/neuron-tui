@@ -7,7 +7,6 @@ namespace NeuronTui\Tests;
 use Closure;
 use NeuronInteraction\Command\Commands;
 use NeuronAI\Agent\Agent;
-use NeuronInteraction\Command\CommandArguments;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\HelpCommand;
 use NeuronInteraction\Command\CommandAdapterInterface;
@@ -44,7 +43,7 @@ final class DuplicateCommandsTest extends TestCase
                 'The first duplicate.',
                 static function (
                     CommandAdapterInterface $adapter,
-                    string $arguments,
+                    string $value,
                 ) use (&$ran): void {
                     $ran[] = 'first';
                     $adapter->stop();
@@ -55,7 +54,7 @@ final class DuplicateCommandsTest extends TestCase
                 'The second duplicate.',
                 static function (
                     CommandAdapterInterface $adapter,
-                    string $arguments,
+                    string $value,
                 ) use (&$ran): void {
                     $ran[] = 'second';
                     $adapter->stop();
@@ -173,10 +172,10 @@ final class DuplicateCommandsTest extends TestCase
             }
 
             /** @param CommandAdapterInterface<mixed> $adapter */
-            public function run(CommandAdapterInterface $adapter, CommandArguments $arguments): void
+            public function run(CommandAdapterInterface $adapter, string $value): void
             {
                 if ($this->run instanceof Closure) {
-                    ($this->run)($adapter, $arguments->text);
+                    ($this->run)($adapter, $value);
                 }
             }
         };

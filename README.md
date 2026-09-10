@@ -167,7 +167,6 @@ Implement `CommandInterface` to add your own behavior. This command sends the
 staged Git diff to the Agent for review:
 
 ```php
-use NeuronInteraction\Command\CommandArguments;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Command\CommandAdapterInterface;
 use NeuronInteraction\Command\CommandInterface;
@@ -186,7 +185,7 @@ final class ReviewCommand implements CommandInterface
     }
 
     /** @param CommandAdapterInterface<mixed> $adapter */
-    public function run(CommandAdapterInterface $adapter, CommandArguments $arguments): void
+    public function run(CommandAdapterInterface $adapter, string $value): void
     {
         $diff = shell_exec('git diff --staged') ?: '';
 

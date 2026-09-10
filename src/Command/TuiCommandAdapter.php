@@ -6,14 +6,13 @@ namespace NeuronTui\Command;
 
 use NeuronAI\Agent\Agent;
 use NeuronInteraction\Command\CommandAdapterInterface;
-use NeuronInteraction\Command\CommandArguments;
 use NeuronInteraction\Command\CommandExecution;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Configuration\ConfigurationStore;
 use NeuronInteraction\Command\ConcurrentCommandInterface;
 use NeuronInteraction\Command\SelectionOption;
-use NeuronInteraction\Command\SelectionRequest;
+use NeuronInteraction\Command\Selection;
 use NeuronInteraction\Session\Session;
 use NeuronInteraction\Session\SessionStore;
 use NeuronTui\View\ChoiceOption;
@@ -92,7 +91,7 @@ final class TuiCommandAdapter implements CommandAdapterInterface
         $this->runtime->submitMessage(new MessageForAgent($prompt));
     }
 
-    public function requestSelection(SelectionRequest $request): void
+    public function requestSelection(Selection $request): void
     {
         // Presentation happens after this invocation has returned. Its
         // continuation reads the live runtime through a fresh Adapter.
@@ -118,7 +117,7 @@ final class TuiCommandAdapter implements CommandAdapterInterface
                 if ($chosen !== null) {
                     $this->commands->run(
                         $request->command,
-                        new CommandArguments($chosen),
+                        $chosen,
                         new self($this->runtime, $this->view, $this->commands, $this->sessionStore, $this->configurationStore),
                     );
                 }

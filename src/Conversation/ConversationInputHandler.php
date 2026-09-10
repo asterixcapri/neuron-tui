@@ -50,7 +50,7 @@ final class ConversationInputHandler
         if ($submission instanceof CommandInput) {
             $this->commands->run(
                 $submission->name,
-                $submission->arguments,
+                $submission->value,
                 new TuiCommandAdapter($this->runtime, $this->view, $this->commands, $this->sessionStore, $this->configurationStore),
             );
 

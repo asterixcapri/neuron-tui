@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace NeuronTui\Conversation;
 
-use NeuronInteraction\Command\CommandArguments;
-
 /**
  * Reads what a person typed and says what it is.
  *
@@ -47,7 +45,7 @@ final class SubmissionParser
 
         return new CommandInput(
             substr($input, 0, $endOfName),
-            new CommandArguments(trim(substr($input, $endOfName), self::WHITESPACE)),
+            trim(substr($input, $endOfName), self::WHITESPACE),
         );
     }
 }

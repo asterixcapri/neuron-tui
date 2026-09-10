@@ -13,12 +13,11 @@ use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Testing\FakeAIProvider;
-use NeuronInteraction\Command\CommandArguments;
 use NeuronInteraction\Command\ClearCommand;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\ResumeCommand;
 use NeuronInteraction\Command\SelectionOption;
-use NeuronInteraction\Command\SelectionRequest;
+use NeuronInteraction\Command\Selection;
 use NeuronInteraction\Command\CommandAdapterInterface;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\FileStorage;
@@ -63,9 +62,9 @@ final class InputHistoryTest extends TestCase
             }
 
             /** @param CommandAdapterInterface<mixed> $adapter */
-            public function run(CommandAdapterInterface $adapter, CommandArguments $arguments): void
+            public function run(CommandAdapterInterface $adapter, string $value): void
             {
-                $this->arguments[] = $arguments->text;
+                $this->arguments[] = $value;
             }
         };
 
@@ -683,15 +682,15 @@ final class InputHistoryTest extends TestCase
             }
 
             /** @param CommandAdapterInterface<mixed> $adapter */
-            public function run(CommandAdapterInterface $adapter, CommandArguments $arguments): void
+            public function run(CommandAdapterInterface $adapter, string $value): void
             {
-                if ($arguments->text !== '') {
-                    $this->chosen = $arguments->text;
+                if ($value !== '') {
+                    $this->chosen = $value;
 
                     return;
                 }
 
-                $adapter->requestSelection(new SelectionRequest($this->name(), 'Options', [
+                $adapter->requestSelection(new Selection($this->name(), 'Options', [
                     new SelectionOption('first', 'First option'),
                     new SelectionOption('last', 'Last option'),
                 ]));
@@ -866,7 +865,7 @@ final class InputHistoryTest extends TestCase
             }
 
             /** @param CommandAdapterInterface<mixed> $adapter */
-            public function run(CommandAdapterInterface $adapter, CommandArguments $arguments): void
+            public function run(CommandAdapterInterface $adapter, string $value): void
             {
             }
         };

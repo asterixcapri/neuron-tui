@@ -11,12 +11,11 @@ use NeuronAI\Testing\FakeAIProvider;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Command\SelectionOption;
-use NeuronInteraction\Command\SelectionRequest;
+use NeuronInteraction\Command\Selection;
 use NeuronInteraction\Configuration\ConfigurationStore;
 use NeuronInteraction\InputHistory\InputHistory;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\History\InMemoryChatHistory;
-use NeuronInteraction\Command\CommandArguments;
 use NeuronInteraction\Command\ClearCommand;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\ResumeCommand;
@@ -193,7 +192,7 @@ final class SessionCompositionTest extends TestCase
                     if (count($received) === 1) {
                         self::assertNull($configurationStore->read('model'));
                         $configurationStore->write('model', 'saved-model');
-                        $adapter->requestSelection(new SelectionRequest('/inspect', 'Choose', [
+                        $adapter->requestSelection(new Selection('/inspect', 'Choose', [
                             new SelectionOption('selected-model', 'Selected model'),
                         ]));
 
@@ -435,7 +434,7 @@ final class SessionCompositionTest extends TestCase
             }
 
             /** @param CommandAdapterInterface<mixed> $adapter */
-            public function run(CommandAdapterInterface $adapter, CommandArguments $arguments): void
+            public function run(CommandAdapterInterface $adapter, string $value): void
             {
                 ($this->run)($adapter);
             }

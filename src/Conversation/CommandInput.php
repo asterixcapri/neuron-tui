@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace NeuronTui\Conversation;
 
-use NeuronInteraction\Command\CommandArguments;
-
 /**
  * Input a person meant as a Command, read as a name and its arguments.
  *
@@ -19,7 +17,7 @@ final readonly class CommandInput
 {
     public function __construct(
         public string $name,
-        public CommandArguments $arguments,
+        public string $value,
     ) {
     }
 }

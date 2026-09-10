@@ -32,7 +32,7 @@ Neuron Interaction's `SelectionOption` remains the shared Selection option.
 presentation value with a key, label and optional detail.
 `ConversationView::choose()` validates the options and delegates to `Picker`.
 It returns the chosen key unchanged, or null on cancellation. The Adapter resumes
-the target Command with that value as `CommandArguments`. The View does not
+the target Command with that value as a string. The View does not
 depend on the shared Selection option type.
 
 ## Historical presentation

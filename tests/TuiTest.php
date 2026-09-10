@@ -28,13 +28,12 @@ use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Testing\RequestRecord;
 use NeuronAI\Tools\Tool;
-use NeuronInteraction\Command\CommandArguments;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Command\ClearCommand;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\ConcurrentCommandInterface;
 use NeuronInteraction\Command\SelectionOption;
-use NeuronInteraction\Command\SelectionRequest;
+use NeuronInteraction\Command\Selection;
 use NeuronInteraction\Command\HelpCommand;
 use NeuronInteraction\Command\LeaveCommand;
 use NeuronInteraction\Command\ResumeCommand;
@@ -1106,7 +1105,7 @@ MARKDOWN;
      */
     public function testAMountedCommandRunsWithWhatWasTypedAfterItsName(): void
     {
-        $arguments = null;
+        $value = null;
         $provider = new FakeAIProvider();
         $agent = new Agent();
         $agent->setAiProvider($provider);
@@ -1115,8 +1114,8 @@ MARKDOWN;
             static function (
                 CommandAdapterInterface $adapter,
                 string $typed,
-            ) use (&$arguments): void {
-                $arguments = $typed;
+            ) use (&$value): void {
+                $value = $typed;
                 $adapter->notify('The command ran.');
             },
         );
@@ -1135,7 +1134,7 @@ MARKDOWN;
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
-        self::assertSame('two words', $arguments);
+        self::assertSame('two words', $value);
         self::assertStringContainsString('The command ran.', $display);
         self::assertStringNotContainsString('Unknown Command', $display);
         $provider->assertNothingSent();
@@ -1148,7 +1147,7 @@ MARKDOWN;
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
-            static function (CommandAdapterInterface $adapter, string $arguments): void {
+            static function (CommandAdapterInterface $adapter, string $value): void {
                 $adapter->notify('Everything was in order.');
                 $adapter->warn('Except for one thing.');
                 $adapter->error('The operation could not finish.');
@@ -1188,8 +1187,8 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 30);
         $storage = new \NeuronInteraction\Storage\InMemoryStorage();
         $command = $this->commandThat(
-            static function (CommandAdapterInterface $adapter, string $arguments): void {
-                $adapter->promptAgent('Review ' . $arguments . '.');
+            static function (CommandAdapterInterface $adapter, string $value): void {
+                $adapter->promptAgent('Review ' . $value . '.');
             },
         );
         EventLoop::queue(
@@ -1222,21 +1221,21 @@ MARKDOWN;
         );
     }
 
-    public function testSelectionRequestReturnsBeforeThePersonChoosesAndResumesTheCommand(): void
+    public function testSelectionReturnsBeforeThePersonChoosesAndResumesTheCommand(): void
     {
         $terminal = new VirtualTerminal(rows: 30);
         $storage = new \NeuronInteraction\Storage\InMemoryStorage();
         $events = [];
         $beforeChoice = null;
         $command = $this->commandThat(
-            static function (CommandAdapterInterface $adapter, string $arguments) use (&$events): void {
-                if ($arguments !== '') {
-                    $events[] = $arguments;
+            static function (CommandAdapterInterface $adapter, string $value) use (&$events): void {
+                if ($value !== '') {
+                    $events[] = $value;
 
                     return;
                 }
 
-                $adapter->requestSelection(new SelectionRequest('/probe', 'Models', [
+                $adapter->requestSelection(new Selection('/probe', 'Models', [
                     new SelectionOption('stable-value', 'Visible label', 'Optional detail'),
                 ]));
                 $adapter->notify('Request submitted.');
@@ -1271,7 +1270,7 @@ MARKDOWN;
         $selected = false;
         $requester = $this->commandThat(
             static function (CommandAdapterInterface $adapter): void {
-                $adapter->requestSelection(new SelectionRequest('/apply', 'Abandoned selection', [
+                $adapter->requestSelection(new Selection('/apply', 'Abandoned selection', [
                     new SelectionOption('unused', 'Must not appear'),
                 ]));
                 $adapter->stop();
@@ -1322,7 +1321,7 @@ MARKDOWN;
         $observedArguments = null;
         $requester = $this->commandThat(
             static function (CommandAdapterInterface $adapter): void {
-                $adapter->requestSelection(new SelectionRequest('/apply', 'Choose an action', [
+                $adapter->requestSelection(new Selection('/apply', 'Choose an action', [
                     new SelectionOption('  /chosen value  ', 'Apply to the current Agent'),
                 ]));
             },
@@ -1336,13 +1335,13 @@ MARKDOWN;
             '/replace',
         );
         $target = $this->commandThat(
-            static function (CommandAdapterInterface $adapter, string $arguments) use (
+            static function (CommandAdapterInterface $adapter, string $value) use (
                 &$observedAgent,
                 &$observedArguments,
                 $resultingHistory,
             ): void {
                 $observedAgent = $adapter->agent();
-                $observedArguments = $arguments;
+                $observedArguments = $value;
                 $adapter->useSession($resultingHistory);
 
                 throw new \RuntimeException('Selected command failed.');
@@ -1402,7 +1401,7 @@ MARKDOWN;
         $agent->setAiProvider($provider);
         $requester = $this->commandThat(
             static function (CommandAdapterInterface $adapter): void {
-                $adapter->requestSelection(new SelectionRequest('/apply', 'Choose an action', [
+                $adapter->requestSelection(new Selection('/apply', 'Choose an action', [
                     new SelectionOption('selected-value', 'An action'),
                 ]));
                 $adapter->promptAgent('Generated request.');
@@ -1446,7 +1445,7 @@ MARKDOWN;
         $command = $this->commandThat(
             static function (
                 CommandAdapterInterface $adapter,
-                string $arguments,
+                string $value,
             ) use ($chosen): void {
                 $adapter->agent()
                     ->setAiProvider($chosen)
@@ -1493,7 +1492,7 @@ MARKDOWN;
         $command = $this->commandThat(
             static function (
                 CommandAdapterInterface $adapter,
-                string $arguments,
+                string $value,
             ) use ($successor): void {
                 $adapter->useAgent($successor);
             },
@@ -1550,7 +1549,7 @@ MARKDOWN;
         $command = $this->commandThat(
             static function (
                 CommandAdapterInterface $adapter,
-                string $arguments,
+                string $value,
             ) use ($successor, $replacementSession): void {
                 $adapter->useAgent($successor);
                 $adapter->useSession($replacementSession);
@@ -1598,7 +1597,7 @@ MARKDOWN;
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
-            static function (CommandAdapterInterface $adapter, string $arguments): void {
+            static function (CommandAdapterInterface $adapter, string $value): void {
                 $adapter->stop();
             },
             '/quit',
@@ -1630,7 +1629,7 @@ MARKDOWN;
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
-            static function (CommandAdapterInterface $adapter, string $arguments): void {
+            static function (CommandAdapterInterface $adapter, string $value): void {
                 throw new \RuntimeException('The command broke.');
             },
         );
@@ -1672,7 +1671,7 @@ MARKDOWN;
         $replacementSession = (new SessionStore(new InMemoryStorage(), 'test-user'))->create();
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
-            static function (CommandAdapterInterface $adapter, string $arguments) use ($replacementSession): void {
+            static function (CommandAdapterInterface $adapter, string $value) use ($replacementSession): void {
                 $adapter->useSession($replacementSession);
 
                 throw new \RuntimeException('The command broke.');
@@ -1846,7 +1845,7 @@ MARKDOWN;
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
-            static function (CommandAdapterInterface $adapter, string $arguments): void {
+            static function (CommandAdapterInterface $adapter, string $value): void {
             },
         );
         EventLoop::queue(
@@ -1926,7 +1925,7 @@ MARKDOWN;
         ]);
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
-            static function (CommandAdapterInterface $adapter, string $arguments) use ($restored): void {
+            static function (CommandAdapterInterface $adapter, string $value) use ($restored): void {
                 $adapter->useSession($restored);
             },
         );
@@ -1968,7 +1967,7 @@ MARKDOWN;
         ));
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
-            static function (CommandAdapterInterface $adapter, string $arguments): void {
+            static function (CommandAdapterInterface $adapter, string $value): void {
                 $adapter->notify('The command ran.');
             },
         );
@@ -2018,7 +2017,7 @@ MARKDOWN;
         $command = $this->commandThat(
             static function (
                 CommandAdapterInterface $adapter,
-                string $arguments,
+                string $value,
             ) use (&$ran): void {
                 $ran = true;
             },
@@ -2327,10 +2326,10 @@ MARKDOWN;
         $command = $this->commandThat(
             static function (
                 CommandAdapterInterface $adapter,
-                string $arguments,
+                string $value,
             ) use (&$chosen): void {
-                if ($arguments === '') {
-                    $adapter->requestSelection(new SelectionRequest('/probe', 'Models', [
+                if ($value === '') {
+                    $adapter->requestSelection(new Selection('/probe', 'Models', [
                         new SelectionOption('haiku', 'Claude Haiku'),
                         new SelectionOption('007', 'Claude Opus'),
                     ]));
@@ -2338,7 +2337,7 @@ MARKDOWN;
                     return;
                 }
 
-                $chosen = $arguments;
+                $chosen = $value;
                 $adapter->notify('Chosen: ' . $chosen);
             },
         );
@@ -2398,11 +2397,11 @@ MARKDOWN;
         $command = $this->commandThat(
             static function (
                 CommandAdapterInterface $adapter,
-                string $arguments,
+                string $value,
             ) use (&$chosen): void {
                 $adapter->notify('History remains visible.');
-                if ($arguments === '') {
-                    $adapter->requestSelection(new SelectionRequest(
+                if ($value === '') {
+                    $adapter->requestSelection(new Selection(
                         '/probe',
                         'Models',
                         [
@@ -2415,7 +2414,7 @@ MARKDOWN;
                     return;
                 }
 
-                $chosen = $arguments;
+                $chosen = $value;
             },
         );
         EventLoop::delay(
@@ -2497,20 +2496,20 @@ MARKDOWN;
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(columns: 32, rows: 30);
         $command = $this->commandThat(
-            static function (CommandAdapterInterface $adapter, string $arguments): void {
-                if ($arguments === '') {
-                    $adapter->requestSelection(new SelectionRequest('/probe', 'First choice', [
+            static function (CommandAdapterInterface $adapter, string $value): void {
+                if ($value === '') {
+                    $adapter->requestSelection(new Selection('/probe', 'First choice', [
                         new SelectionOption('first', 'First option'),
                     ]));
 
                     return;
                 }
 
-                if ($arguments !== 'first') {
+                if ($value !== 'first') {
                     return;
                 }
 
-                $adapter->requestSelection(new SelectionRequest(
+                $adapter->requestSelection(new Selection(
                     '/probe',
                     'Second choice',
                     [new SelectionOption('second', 'Second option')],
@@ -2595,10 +2594,10 @@ MARKDOWN;
         $command = $this->commandThat(
             static function (
                 CommandAdapterInterface $adapter,
-                string $arguments,
+                string $value,
             ) use (&$chosen): void {
-                if ($arguments === '') {
-                    $adapter->requestSelection(new SelectionRequest('/probe', 'Models', [
+                if ($value === '') {
+                    $adapter->requestSelection(new Selection('/probe', 'Models', [
                         new SelectionOption(
                             'detailed',
                             "A selected label with a supplied\nline break and enough text to need more than two visual lines",
@@ -2610,7 +2609,7 @@ MARKDOWN;
                     return;
                 }
 
-                $chosen = $arguments;
+                $chosen = $value;
             },
         );
         EventLoop::delay(
@@ -2719,7 +2718,7 @@ MARKDOWN;
         $command = $this->commandThat(
             static function (
                 CommandAdapterInterface $adapter,
-                string $arguments,
+                string $value,
             ) use (&$chosen): void {
                 $options = [];
 
@@ -2731,13 +2730,13 @@ MARKDOWN;
                     );
                 }
 
-                if ($arguments === '') {
-                    $adapter->requestSelection(new SelectionRequest('/probe', 'Models', $options));
+                if ($value === '') {
+                    $adapter->requestSelection(new Selection('/probe', 'Models', $options));
 
                     return;
                 }
 
-                $chosen = $arguments;
+                $chosen = $value;
             },
         );
         EventLoop::delay(
@@ -2793,10 +2792,10 @@ MARKDOWN;
         $command = $this->commandThat(
             static function (
                 CommandAdapterInterface $adapter,
-                string $arguments,
+                string $value,
             ) use (&$chosen): void {
-                if ($arguments === '') {
-                    $adapter->requestSelection(new SelectionRequest('/probe', 'Viewport', [
+                if ($value === '') {
+                    $adapter->requestSelection(new Selection('/probe', 'Viewport', [
                         new SelectionOption('one', 'Option one', 'Detail one'),
                         new SelectionOption('two', 'Option two'),
                         new SelectionOption(
@@ -2812,7 +2811,7 @@ MARKDOWN;
                     return;
                 }
 
-                $chosen = $arguments;
+                $chosen = $value;
             },
         );
         EventLoop::delay(
@@ -2902,7 +2901,7 @@ MARKDOWN;
         $command = $this->commandThat(
             static function (
                 CommandAdapterInterface $adapter,
-                string $arguments,
+                string $value,
             ) use (&$chosen): void {
                 $options = [
                     new SelectionOption('one', 'Match first choice'),
@@ -2920,18 +2919,18 @@ MARKDOWN;
                     new SelectionOption('five', 'Match fifth choice', 'Fifth supporting detail'),
                     new SelectionOption('six', 'Match sixth choice'),
                 ];
-                if ($arguments === '') {
-                    $adapter->requestSelection(new SelectionRequest('/probe', 'Resizable', $options));
+                if ($value === '') {
+                    $adapter->requestSelection(new Selection('/probe', 'Resizable', $options));
 
                     return;
                 }
 
-                if (str_starts_with($arguments, 'done:')) {
+                if (str_starts_with($value, 'done:')) {
                     return;
                 }
 
-                $chosen = $arguments;
-                $adapter->requestSelection(new SelectionRequest('/probe', 'Reopened', array_map(
+                $chosen = $value;
+                $adapter->requestSelection(new Selection('/probe', 'Reopened', array_map(
                     static fn (SelectionOption $option): SelectionOption => new SelectionOption(
                         'done:' . $option->value,
                         $option->label,
@@ -3061,17 +3060,17 @@ MARKDOWN;
         $command = $this->commandThat(
             static function (
                 CommandAdapterInterface $adapter,
-                string $arguments,
+                string $value,
             ) use (&$chosen): void {
-                if ($arguments === '') {
-                    $adapter->requestSelection(new SelectionRequest('/probe', 'Models', [
+                if ($value === '') {
+                    $adapter->requestSelection(new Selection('/probe', 'Models', [
                         new SelectionOption('haiku', 'Claude Haiku'),
                     ]));
 
                     return;
                 }
 
-                $chosen = $arguments;
+                $chosen = $value;
                 $adapter->notify('Chosen: ' . $chosen);
             },
         );
@@ -3126,17 +3125,17 @@ MARKDOWN;
         $command = $this->commandThat(
             static function (
                 CommandAdapterInterface $adapter,
-                string $arguments,
+                string $value,
             ) use (&$chosen, &$completions): void {
-                if ($arguments === '') {
-                    $adapter->requestSelection(new SelectionRequest('/probe', 'Models', [
+                if ($value === '') {
+                    $adapter->requestSelection(new Selection('/probe', 'Models', [
                         new SelectionOption('haiku', 'Claude Haiku'),
                     ]));
 
                     return;
                 }
 
-                $chosen = $arguments;
+                $chosen = $value;
                 ++$completions;
             },
         );
@@ -3169,10 +3168,10 @@ MARKDOWN;
         $command = $this->commandThat(
             static function (
                 CommandAdapterInterface $adapter,
-                string $arguments,
+                string $value,
             ) use (&$chosen): void {
-                if ($arguments === '') {
-                    $adapter->requestSelection(new SelectionRequest('/probe', 'Models', [
+                if ($value === '') {
+                    $adapter->requestSelection(new Selection('/probe', 'Models', [
                         new SelectionOption('haiku', 'Claude Haiku'),
                         new SelectionOption('opus', 'Claude Opus'),
                         new SelectionOption('sonnet', 'Claude Sonnet'),
@@ -3184,7 +3183,7 @@ MARKDOWN;
                     return;
                 }
 
-                $chosen = $arguments;
+                $chosen = $value;
             },
         );
         EventLoop::delay(
@@ -3237,10 +3236,10 @@ MARKDOWN;
         $command = $this->commandThat(
             static function (
                 CommandAdapterInterface $adapter,
-                string $arguments,
+                string $value,
             ) use (&$shortChoice, &$longChoice): void {
-                if ($arguments === '') {
-                    $adapter->requestSelection(new SelectionRequest('/probe', 'Short choice', [
+                if ($value === '') {
+                    $adapter->requestSelection(new Selection('/probe', 'Short choice', [
                         new SelectionOption('short-1', 'Short one'),
                         new SelectionOption('short-2', 'Short two'),
                         new SelectionOption('short-3', 'Short three'),
@@ -3251,14 +3250,14 @@ MARKDOWN;
                     return;
                 }
 
-                if (!str_starts_with($arguments, 'short-')) {
-                    $longChoice = $arguments;
+                if (!str_starts_with($value, 'short-')) {
+                    $longChoice = $value;
 
                     return;
                 }
 
-                $shortChoice = $arguments;
-                $adapter->requestSelection(new SelectionRequest('/probe', 'Long choice', [
+                $shortChoice = $value;
+                $adapter->requestSelection(new Selection('/probe', 'Long choice', [
                     new SelectionOption('long-1', 'Long one'),
                     new SelectionOption('long-2', 'Long two'),
                     new SelectionOption('long-3', 'Long three'),
@@ -3334,10 +3333,10 @@ MARKDOWN;
         $command = $this->commandThat(
             static function (
                 CommandAdapterInterface $adapter,
-                string $arguments,
+                string $value,
             ) use (&$chosen): void {
-                if ($arguments === '') {
-                    $adapter->requestSelection(new SelectionRequest('/probe', 'Models', [
+                if ($value === '') {
+                    $adapter->requestSelection(new Selection('/probe', 'Models', [
                         new SelectionOption('alpha', 'Alpha'),
                         new SelectionOption(
                             'detail',
@@ -3353,7 +3352,7 @@ MARKDOWN;
                     return;
                 }
 
-                $chosen = $arguments;
+                $chosen = $value;
             },
         );
         EventLoop::delay(
@@ -3420,7 +3419,7 @@ MARKDOWN;
         $command = $this->commandThat(
             static function (
                 CommandAdapterInterface $adapter,
-                string $arguments,
+                string $value,
             ) use (&$first, &$second): void {
                 $options = [
                     new SelectionOption('one', 'Option one'),
@@ -3430,18 +3429,18 @@ MARKDOWN;
                     new SelectionOption('five', 'Option five'),
                     new SelectionOption('six', 'Option six'),
                 ];
-                if ($arguments === '' || $arguments === 'reopen') {
-                    $adapter->requestSelection(new SelectionRequest(
+                if ($value === '' || $value === 'reopen') {
+                    $adapter->requestSelection(new Selection(
                         '/probe',
-                        $arguments === '' ? 'First opening' : 'Second opening',
+                        $value === '' ? 'First opening' : 'Second opening',
                         $options,
                     ));
 
                     return;
                 }
 
-                $first = $arguments;
-                $second = $arguments;
+                $first = $value;
+                $second = $value;
             },
         );
         EventLoop::delay(
@@ -3665,7 +3664,7 @@ MARKDOWN;
 
         for ($place = 0; $place < 10; ++$place) {
             $commands[] = $this->commandThat(
-                static function (CommandAdapterInterface $adapter, string $arguments): void {
+                static function (CommandAdapterInterface $adapter, string $value): void {
                 },
                 '/cmd' . $place,
             );
@@ -3871,15 +3870,15 @@ MARKDOWN;
      */
     public function testEnterRunsTheAutomaticallySelectedSuggestion(): void
     {
-        $arguments = null;
+        $value = null;
         $display = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
             [
                 $this->commandThat(
                     static function (
                         CommandAdapterInterface $adapter,
                         string $written,
-                    ) use (&$arguments): void {
-                        $arguments = $written;
+                    ) use (&$value): void {
+                        $value = $written;
                         $adapter->notify('Alpha ran.');
                     },
                     '/alpha',
@@ -3892,7 +3891,7 @@ MARKDOWN;
 
         self::assertStringContainsString('Alpha ran.', $display);
         self::assertStringNotContainsString('Unknown Command', $display);
-        self::assertSame('', $arguments);
+        self::assertSame('', $value);
     }
 
     /**
@@ -3902,17 +3901,17 @@ MARKDOWN;
     public function testEnterRunsTheArrowSelectedSuggestion(): void
     {
         $ran = null;
-        $arguments = null;
+        $value = null;
         $handlerForCommandNamed = static function (string $name) use (
             &$ran,
-            &$arguments,
+            &$value,
         ): Closure {
             return static function (
                 CommandAdapterInterface $adapter,
                 string $written,
-            ) use ($name, &$ran, &$arguments): void {
+            ) use ($name, &$ran, &$value): void {
                 $ran = $name;
-                $arguments = $written;
+                $value = $written;
                 $adapter->notify($name . ' ran.');
             };
         };
@@ -3935,7 +3934,7 @@ MARKDOWN;
         self::assertStringContainsString('/album ran.', $display);
         self::assertStringNotContainsString('Unknown Command', $display);
         self::assertSame('/album', $ran);
-        self::assertSame('', $arguments);
+        self::assertSame('', $value);
     }
 
     /**
@@ -4216,7 +4215,7 @@ MARKDOWN;
 
             public function run(
                 CommandAdapterInterface $adapter,
-                CommandArguments $arguments,
+                string $value,
             ): void {
             }
         };
@@ -4247,7 +4246,7 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 30);
         $concurrent = $this->concurrentCommand('/pulse');
         $refused = $this->commandThat(
-            static function (CommandAdapterInterface $adapter, string $arguments): void {
+            static function (CommandAdapterInterface $adapter, string $value): void {
             },
             '/probe',
         );
@@ -4322,7 +4321,7 @@ MARKDOWN;
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $refused = $this->commandThat(
-            static function (CommandAdapterInterface $adapter, string $arguments): void {
+            static function (CommandAdapterInterface $adapter, string $value): void {
             },
             '/probe',
         );
@@ -4376,12 +4375,12 @@ MARKDOWN;
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
-            static function (CommandAdapterInterface $adapter, string $arguments): void {
-                if ($arguments !== '') {
+            static function (CommandAdapterInterface $adapter, string $value): void {
+                if ($value !== '') {
                     return;
                 }
 
-                $adapter->requestSelection(new SelectionRequest('/probe', 'Models', [
+                $adapter->requestSelection(new Selection('/probe', 'Models', [
                     new SelectionOption('haiku', 'Claude Haiku'),
                 ]));
             },
@@ -4499,14 +4498,14 @@ MARKDOWN;
         $agent = new Agent();
         $terminal = new VirtualTerminal(rows: 30);
         $ran = null;
-        $arguments = null;
-        $note = static function (string $name) use (&$ran, &$arguments) {
+        $value = null;
+        $note = static function (string $name) use (&$ran, &$value) {
             return static function (
                 CommandAdapterInterface $adapter,
                 string $written,
-            ) use ($name, &$ran, &$arguments): void {
+            ) use ($name, &$ran, &$value): void {
                 $ran = $name;
-                $arguments = $written;
+                $value = $written;
             };
         };
         $completed = null;
@@ -4555,7 +4554,7 @@ MARKDOWN;
             $completed,
         );
         self::assertSame('/album', $ran);
-        self::assertSame('now', $arguments);
+        self::assertSame('now', $value);
     }
 
     /**
@@ -4827,7 +4826,7 @@ MARKDOWN;
             }
 
             /** @param CommandAdapterInterface<mixed> $adapter */
-            public function run(CommandAdapterInterface $adapter, CommandArguments $arguments): void
+            public function run(CommandAdapterInterface $adapter, string $value): void
             {
                 $adapter->notify('Custom concurrent command ran.');
             }
@@ -4865,9 +4864,9 @@ MARKDOWN;
             }
 
             /** @param CommandAdapterInterface<mixed> $adapter */
-            public function run(CommandAdapterInterface $adapter, CommandArguments $arguments): void
+            public function run(CommandAdapterInterface $adapter, string $value): void
             {
-                ($this->run)($adapter, $arguments->text);
+                ($this->run)($adapter, $value);
             }
         };
     }
