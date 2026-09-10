@@ -26,7 +26,7 @@ Tui::make(
     $agent,
     commands: new Commands([
         new ClearCommand(),
-         new ResumeCommand()
+        new ResumeCommand()
     ]),
     sessionStore: $sessionStore,
 )->run();
