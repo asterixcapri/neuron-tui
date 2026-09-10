@@ -23,7 +23,7 @@ From the Neuron TUI root:
 vendor/bin/phpunit tests/Tui/SessionCompositionTest.php
 vendor/bin/phpunit -c examples/phpunit.xml.dist
 vendor/bin/phpstan analyse --no-progress --memory-limit=512M
-vendor/bin/phpstan analyse --no-progress --memory-limit=512M --autoload-file=examples/vendor/autoload.php examples/src examples/demo.php examples/tests
+vendor/bin/phpstan analyse --no-progress --memory-limit=512M --autoload-file=examples/vendor/autoload.php examples/src examples/bin/basic.php examples/bin/sessions.php examples/bin/model.php examples/bin/full.php examples/tests
 vendor/bin/phpunit
 ```
 

@@ -29,7 +29,10 @@
         }
     },
     "scripts": {
-        "demo": "php demo.php"
+        "basic": "php bin/basic.php",
+        "sessions": "php bin/sessions.php",
+        "model": "php bin/model.php",
+        "full": "php bin/full.php"
     },
     "config": {
         "sort-packages": true

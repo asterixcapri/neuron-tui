@@ -141,7 +141,7 @@ integer, for example. Missing or incompatible values return the fallback;
 string preferences must be non-empty. Writes save immediately.
 
 Custom commands access these preferences through `$adapter->configurationStore()`.
-The [demo](examples/demo.php) uses this to remember the model chosen with `/model`.
+The [model example](examples/bin/model.php) remembers the model chosen with `/model`.
 
 ## Input history
 
@@ -211,18 +211,26 @@ While the Agent is responding, ordinary commands are unavailable. Commands that
 can safely run during a response may implement
 `NeuronInteraction\Command\ConcurrentCommandInterface`; Help and Leave already do.
 
-## Demo
+## Examples
 
-The demo connects the TUI to OpenAI or Anthropic. Install its dependencies,
-create the environment file, add your provider credentials, then start it:
+Install the example dependencies and set `OPENAI_API_KEY` in `.env`:
 
 ```bash
 cd examples
 composer install
 cp .env.example .env
 # Edit .env
-php demo.php
 ```
+
+| Example | What it shows | Run from `examples/` |
+| --- | --- | --- |
+| [basic.php](examples/bin/basic.php) | An Agent and the TUI. | `php bin/basic.php` |
+| [sessions.php](examples/bin/sessions.php) | Saved conversations with `/clear` and `/resume`. | `php bin/sessions.php` |
+| [model.php](examples/bin/model.php) | Model selection with `/model`, remembering the choice between runs. Conversation stays in memory. | `php bin/model.php` |
+| [full.php](examples/bin/full.php) | Sessions, model selection, input history, tools and a custom header. | `php bin/full.php` |
+
+Each example runs on its own. Model and Full also offer Anthropic through
+`/model` when `ANTHROPIC_API_KEY` is configured. Use `Ctrl+C` to exit.
 
 ## Development
 

@@ -17,11 +17,11 @@ use NeuronTuiDemo\DemoAgent;
 use NeuronTuiDemo\ModelCommand;
 use Symfony\Component\Dotenv\Dotenv;
 
-require_once __DIR__ . '/vendor/autoload.php';
+require_once __DIR__ . '/../vendor/autoload.php';
 
-(new Dotenv())->bootEnv(__DIR__ . '/.env');
+(new Dotenv())->bootEnv(__DIR__ . '/../.env');
 
-$storage = new FileStorage(__DIR__ . '/.storage');
+$storage = new FileStorage(__DIR__ . '/../.storage');
 $sessionStore = new SessionStore($storage, 'local');
 $inputHistory = new InputHistory($storage);
 
@@ -30,7 +30,7 @@ $modelId = $configurationStore->read('model', 'openai:gpt-5.4-nano');
 
 $agent = DemoAgent::make();
 $agent->setAiProvider(AIProviderFactory::create($modelId));
-$agent->setChatHistory($sessionStore->create()); // Or resume an explicitly chosen key.
+$agent->setChatHistory($sessionStore->create());
 
 $commands = (new Commands())->addCommand([
     new ClearCommand(),
@@ -40,8 +40,6 @@ $commands = (new Commands())->addCommand([
     new HelpCommand(),
 ]);
 
-// Startup keeps this explicitly selected History. This SessionStore owns its
-// persistence, so /resume can recover it after /clear.
 Tui::make(
     $agent,
     commands: $commands,
