@@ -17,3 +17,4 @@
 
 # Consumers resolve their own dependencies
 /composer.lock export-ignore
+/.php-cs-fixer.dist.php export-ignore

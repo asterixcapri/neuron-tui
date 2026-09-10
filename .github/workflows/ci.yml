@@ -39,6 +39,9 @@ jobs:
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
 
+      - name: Check formatting
+        run: composer cs
+
       - name: Run tests
         run: composer test
 

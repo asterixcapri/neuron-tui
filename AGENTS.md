@@ -19,6 +19,32 @@ Domain documentation uses the single-context layout. See `docs/agents/domain.md`
 
 When writing or reviewing code, follow [docs/coding-standards.md](docs/coding-standards.md).
 
+## Validation
+
+After changing PHP code:
+
+- Run `composer cs:fix` to apply formatting.
+- Run `composer stan` and fix any errors.
+- Run the relevant tests with `vendor/bin/phpunit`.
+- Before pushing or releasing, also run `composer test` and `composer cs`.
+
+## Static analysis
+
+Use `phpstan.neon` as the source of truth for analysis settings.
+
+- Fix the cause of errors; do not hide them with ignore comments or baseline entries.
+- Do not add casts, assertions or inline `@var` annotations solely to silence PHPStan.
+- Keep types precise; do not widen them to `mixed` to eliminate errors.
+- Validate external data before using it.
+- Use PHPDoc for information PHP cannot express natively, such as generics
+  and collection element types.
+
+## Formatting
+
+Use `.php-cs-fixer.dist.php` as the source of truth for formatting rules.
+Apply fixes with `composer cs:fix`.
+Keep broad formatting changes separate from functional changes.
+
 ## Releases
 
 On a release branch `M.N.x`, publish the next patch tag in that same series,
