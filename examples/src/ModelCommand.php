@@ -26,7 +26,8 @@ final readonly class ModelCommand implements CommandInterface
     public function run(CommandAdapterInterface $adapter, CommandArguments $arguments): void
     {
         if ($arguments->text !== '') {
-            $adapter->useAgent(DemoAgent::make()->setModelId($arguments->text));
+            $adapter->agent()->setAiProvider(AIProviderFactory::create($arguments->text));
+            $adapter->configurationStore()->write('model', $arguments->text);
             $adapter->notify("Model changed to {$arguments->text}.");
 
             return;

@@ -136,6 +136,23 @@ or `null`; check for absence before installing it as the Agent's History.
 No Session is resumed automatically. A missing Resume selection leaves the
 current History installed and displays a warning.
 
+Commands can access application settings through `$adapter->configurationStore()`.
+Pass `configurationStore: new ConfigurationStore($storage, 'local-user')` to
+`Tui::make()` using `NeuronInteraction\Configuration\ConfigurationStore` to persist
+settings. The TUI shares that Store across command invocations and selection
+continuations. Commands write preferences directly, for example
+`$adapter->configurationStore()->write('model', $arguments->text)`. Hosts read
+with `$store->read('model', 'default-model')`; `delete('model')` removes the
+preference and `entries()` returns all preference keys and values. Writes
+complete through Storage immediately, and fallback reads do not save data.
+Old named Configuration documents remain untouched and are not imported.
+The demo restores the direct `model` preference at startup and changes the
+current Agent's provider while preserving its History.
+
+If omitted, each TUI has its own in-memory ConfigurationStore owned
+by `local`. The Host Application reads startup settings explicitly; the demo uses
+this Store to remember the model selected with `/model`.
+
 Without a supplied Store, the TUI uses an in-memory SessionStore owned by `local`.
 To choose another owner, supply a SessionStore configured by the Host Application.
 Input history keeps its independent existing ownership model.

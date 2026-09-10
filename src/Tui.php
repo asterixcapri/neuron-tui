@@ -8,6 +8,7 @@ use InvalidArgumentException;
 use LogicException;
 use NeuronAI\Agent\Agent;
 use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Configuration\ConfigurationStore;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Storage\InMemoryStorage;
@@ -42,6 +43,8 @@ final class Tui
 
     private readonly SessionStore $sessionStore;
 
+    private readonly ConfigurationStore $configurationStore;
+
     private readonly InputHistory $inputHistory;
 
     private bool $started = false;
@@ -51,6 +54,7 @@ final class Tui
         private readonly ?TerminalInterface $terminal = null,
         ?Commands $commands = null,
         ?SessionStore $sessionStore = null,
+        ?ConfigurationStore $configurationStore = null,
         ?InputHistory $inputHistory = null,
     ) {
         $this->commands = $commands ?? new Commands();
@@ -58,6 +62,7 @@ final class Tui
             new InMemoryStorage(),
             'local',
         );
+        $this->configurationStore = $configurationStore ?? new ConfigurationStore(new InMemoryStorage(), 'local');
         $this->inputHistory = $inputHistory ?? new InputHistory(new InMemoryStorage());
     }
 
@@ -66,9 +71,10 @@ final class Tui
         ?TerminalInterface $terminal = null,
         ?Commands $commands = null,
         ?SessionStore $sessionStore = null,
+        ?ConfigurationStore $configurationStore = null,
         ?InputHistory $inputHistory = null,
     ): self {
-        return new self($agent, $terminal, $commands, $sessionStore, $inputHistory);
+        return new self($agent, $terminal, $commands, $sessionStore, $configurationStore, $inputHistory);
     }
 
     public function setTitle(string $title): self
@@ -128,6 +134,7 @@ final class Tui
             $runtime,
             $this->commands,
             $this->sessionStore,
+            $this->configurationStore,
         );
         $view->showHistory($this->agent->getChatHistory()->getMessages());
         $view->onSubmit($input->handleSubmit(...));

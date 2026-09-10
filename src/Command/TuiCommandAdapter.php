@@ -10,6 +10,7 @@ use NeuronInteraction\Command\CommandArguments;
 use NeuronInteraction\Command\CommandExecution;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Configuration\ConfigurationStore;
 use NeuronInteraction\Command\ConcurrentCommandInterface;
 use NeuronInteraction\Command\SelectionOption;
 use NeuronInteraction\Command\SelectionRequest;
@@ -35,6 +36,7 @@ final class TuiCommandAdapter implements CommandAdapterInterface
         private readonly ConversationView $view,
         private readonly Commands $commands,
         private readonly SessionStore $sessionStore,
+        private readonly ConfigurationStore $configurationStore,
     ) {
     }
 
@@ -117,7 +119,7 @@ final class TuiCommandAdapter implements CommandAdapterInterface
                     $this->commands->run(
                         $request->command,
                         new CommandArguments($chosen),
-                        new self($this->runtime, $this->view, $this->commands, $this->sessionStore),
+                        new self($this->runtime, $this->view, $this->commands, $this->sessionStore, $this->configurationStore),
                     );
                 }
             } catch (Throwable $exception) {
@@ -150,6 +152,11 @@ final class TuiCommandAdapter implements CommandAdapterInterface
     public function sessionStore(): SessionStore
     {
         return $this->sessionStore;
+    }
+
+    public function configurationStore(): ConfigurationStore
+    {
+        return $this->configurationStore;
     }
 
     public function stop(): void

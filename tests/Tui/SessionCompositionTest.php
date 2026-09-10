@@ -10,6 +10,9 @@ use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Testing\FakeAIProvider;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
 use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Command\SelectionOption;
+use NeuronInteraction\Command\SelectionRequest;
+use NeuronInteraction\Configuration\ConfigurationStore;
 use NeuronInteraction\InputHistory\InputHistory;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\History\InMemoryChatHistory;
@@ -153,7 +156,7 @@ final class SessionCompositionTest extends TestCase
                 );
                 $commands = new Commands();
                 $terminal = new VirtualTerminal();
-                $tui = Tui::make(new Agent(), $terminal, $commands, $sessionStore, $inputs);
+                $tui = Tui::make(new Agent(), $terminal, $commands, $sessionStore, inputHistory: $inputs);
                 $commands->addCommand($command);
                 EventLoop::queue(static fn () => $terminal->simulateInput("/inspect\r"));
                 EventLoop::delay(0.04, static fn () => $terminal->simulateInput("\x1b[A\r"));
@@ -174,6 +177,56 @@ final class SessionCompositionTest extends TestCase
                 }
             }
         }
+    }
+
+    public function testConfigurationStoreSurvivesSelectionAndIsScopedToTheTui(): void
+    {
+        $defaults = [];
+        foreach ([false, true, false] as $supplyStore) {
+            $storage = new InMemoryStorage();
+            $store = $supplyStore ? new ConfigurationStore($storage, 'test-user') : null;
+            $received = [];
+            $command = $this->commandThat(
+                static function (CommandAdapterInterface $adapter) use (&$received): void {
+                    $configurationStore = $adapter->configurationStore();
+                    $received[] = $configurationStore;
+                    if (count($received) === 1) {
+                        self::assertNull($configurationStore->read('model'));
+                        $configurationStore->write('model', 'saved-model');
+                        $adapter->requestSelection(new SelectionRequest('/inspect', 'Choose', [
+                            new SelectionOption('selected-model', 'Selected model'),
+                        ]));
+
+                        return;
+                    }
+
+                    self::assertSame('saved-model', $configurationStore->read('model'));
+                    $configurationStore->write('model', 'selected-model');
+                    $adapter->stop();
+                },
+            );
+            $terminal = new VirtualTerminal();
+            EventLoop::queue(static fn () => $terminal->simulateInput("/inspect\r"));
+            EventLoop::delay(0.04, static fn () => $terminal->simulateInput("\r"));
+            $timeout = EventLoop::delay(0.15, static fn () => $terminal->simulateInput("\x03"));
+
+            Tui::make(new Agent(), $terminal, new Commands($command), configurationStore: $store)->run();
+            EventLoop::cancel($timeout);
+
+            self::assertCount(2, $received);
+            self::assertSame($received[0], $received[1]);
+            if ($store !== null) {
+                self::assertSame($store, $received[0]);
+                self::assertSame('selected-model', (new ConfigurationStore($storage, 'test-user'))->read('model'));
+                self::assertSame([], (new ConfigurationStore($storage, 'other-user'))->entries());
+            } else {
+                self::assertSame('selected-model', $received[0]->read('model'));
+                $defaults[] = $received[0];
+            }
+        }
+        self::assertNotSame($defaults[0], $defaults[1]);
+        $defaults[0]->write('model', 'changed');
+        self::assertSame('selected-model', $defaults[1]->read('model'));
     }
 
     public function testRuntimePreservesExternalHistoryWithoutRegisteringItInSessionStore(): void

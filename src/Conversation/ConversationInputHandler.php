@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace NeuronTui\Conversation;
 
 use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Configuration\ConfigurationStore;
 use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Session\SessionStore;
 use NeuronTui\Command\TuiCommandAdapter;
@@ -27,6 +28,7 @@ final class ConversationInputHandler
         private readonly ConversationRuntime $runtime,
         private readonly Commands $commands,
         private readonly SessionStore $sessionStore,
+        private readonly ConfigurationStore $configurationStore,
     ) {
     }
 
@@ -49,7 +51,7 @@ final class ConversationInputHandler
             $this->commands->run(
                 $submission->name,
                 $submission->arguments,
-                new TuiCommandAdapter($this->runtime, $this->view, $this->commands, $this->sessionStore),
+                new TuiCommandAdapter($this->runtime, $this->view, $this->commands, $this->sessionStore, $this->configurationStore),
             );
 
             return;
