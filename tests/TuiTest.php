@@ -1330,7 +1330,7 @@ MARKDOWN;
         $replacement = $this->commandThat(
             static function (CommandAdapterInterface $adapter) use ($successor, $replacementHistory): void {
                 $adapter->useAgent($successor);
-                $adapter->useSession($replacementHistory);
+                $adapter->agent()->setChatHistory($replacementHistory);
             },
             '/replace',
         );
@@ -1342,7 +1342,7 @@ MARKDOWN;
             ): void {
                 $observedAgent = $adapter->agent();
                 $observedArguments = $value;
-                $adapter->useSession($resultingHistory);
+                $adapter->agent()->setChatHistory($resultingHistory);
 
                 throw new \RuntimeException('Selected command failed.');
             },
@@ -1552,7 +1552,7 @@ MARKDOWN;
                 string $value,
             ) use ($successor, $replacementSession): void {
                 $adapter->useAgent($successor);
-                $adapter->useSession($replacementSession);
+                $adapter->agent()->setChatHistory($replacementSession);
             },
         );
         EventLoop::queue(
@@ -1672,7 +1672,7 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
             static function (CommandAdapterInterface $adapter, string $value) use ($replacementSession): void {
-                $adapter->useSession($replacementSession);
+                $adapter->agent()->setChatHistory($replacementSession);
 
                 throw new \RuntimeException('The command broke.');
             },
@@ -1693,7 +1693,7 @@ MARKDOWN;
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
-        // useSession() paints the new conversation before the failure is
+        // Completion paints the new conversation before the failure is
         // reported, so the error remains visible on that conversation.
         self::assertStringContainsString(
             'RuntimeException: The command broke.',
@@ -1926,7 +1926,7 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
             static function (CommandAdapterInterface $adapter, string $value) use ($restored): void {
-                $adapter->useSession($restored);
+                $adapter->agent()->setChatHistory($restored);
             },
         );
         EventLoop::queue(
@@ -5994,7 +5994,7 @@ MARKDOWN;
         $history = $this->sessionWith($messages);
         $restore = $this->commandThat(
             static function (CommandAdapterInterface $adapter) use ($history): void {
-                $adapter->useSession($history);
+                $adapter->agent()->setChatHistory($history);
             },
         );
         $terminal = new VirtualTerminal(rows: 16);

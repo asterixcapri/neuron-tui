@@ -136,7 +136,7 @@ final class Tui
             $this->sessionStore,
             $this->configurationStore,
         );
-        $view->showHistory($this->agent->getChatHistory()->getMessages());
+        $runtime->synchronizeHistory();
         $view->onSubmit($input->handleSubmit(...));
         $view->onDraftChange($input->handleDraftChange(...));
         $view->onInput($input->handleInput(...));

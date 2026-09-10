@@ -13,7 +13,6 @@ use NeuronInteraction\Configuration\ConfigurationStore;
 use NeuronInteraction\Command\ConcurrentCommandInterface;
 use NeuronInteraction\Command\SelectionOption;
 use NeuronInteraction\Command\Selection;
-use NeuronInteraction\Session\Session;
 use NeuronInteraction\Session\SessionStore;
 use NeuronTui\View\ChoiceOption;
 use NeuronTui\Conversation\ConversationRuntime;
@@ -58,6 +57,8 @@ final class TuiCommandAdapter implements CommandAdapterInterface
 
     public function afterExecution(CommandExecution $execution): null
     {
+        $this->runtime->synchronizeHistory();
+
         if ($execution->status === 'unknown') {
             $this->view->showUnknownCommand($execution->identifier);
 
@@ -73,21 +74,29 @@ final class TuiCommandAdapter implements CommandAdapterInterface
 
     public function notify(string $text): void
     {
+        $this->runtime->synchronizeHistory();
+
         $this->view->showNotice($text);
     }
 
     public function warn(string $text): void
     {
+        $this->runtime->synchronizeHistory();
+
         $this->view->showWarning($text);
     }
 
     public function error(string $text): void
     {
+        $this->runtime->synchronizeHistory();
+
         $this->view->showError($text);
     }
 
     public function promptAgent(string $prompt): void
     {
+        $this->runtime->synchronizeHistory();
+
         $this->runtime->submitMessage(new MessageForAgent($prompt));
     }
 
@@ -135,12 +144,6 @@ final class TuiCommandAdapter implements CommandAdapterInterface
     public function useAgent(Agent $agent): void
     {
         $this->runtime->useAgent($agent);
-    }
-
-    public function useSession(Session $session): void
-    {
-        $this->agent()->setChatHistory($session);
-        $this->view->showHistory($session->getMessages());
     }
 
     public function commands(): Commands

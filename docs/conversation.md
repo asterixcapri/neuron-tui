@@ -37,6 +37,15 @@ depend on the shared Selection option type.
 
 ## Historical presentation
 
+Commands replace History directly through `adapter->agent()->setChatHistory()`.
+`ConversationRuntime::synchronizeHistory()` remembers the History currently
+shown and replaces the display only when the Agent holds a different History
+object. Startup and Command completion synchronize it; Command notices,
+warnings, errors and prompts synchronize before their presentation effects so
+those effects belong to the new conversation. Admission does not track History.
+An unchanged History keeps its scroll position, transient lines and streaming
+state. This comparison detects replacement, not edits inside the same object.
+
 `HistoryProjection` builds a snapshot from the Agent's messages. Its `entries()`
 returns `ProjectedEntry` values containing text and a `ProjectedEntryKind`:
 `Person`, `Agent` or `Tool`. These are presentation categories; a tool entry

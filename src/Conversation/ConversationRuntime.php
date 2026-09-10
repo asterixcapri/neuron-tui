@@ -6,6 +6,7 @@ namespace NeuronTui\Conversation;
 
 use Amp\Future;
 use NeuronAI\Agent\Agent;
+use NeuronAI\Chat\History\ChatHistoryInterface;
 use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
 use NeuronTui\View\ConversationView;
 use NeuronTui\View\WorkingIndicator;
@@ -31,6 +32,8 @@ final class ConversationRuntime
 
     private bool $stopped = false;
 
+    private ?ChatHistoryInterface $displayedHistory = null;
+
     public function __construct(
         private Agent $agent,
         private readonly ConversationView $view,
@@ -51,6 +54,19 @@ final class ConversationRuntime
         }
 
         $this->showTurnStarted($accepted);
+    }
+
+    /** Synchronize a replaced History without repainting an unchanged conversation. */
+    public function synchronizeHistory(): void
+    {
+        $history = $this->agent->getChatHistory();
+
+        if ($history === $this->displayedHistory) {
+            return;
+        }
+
+        $this->view->showHistory($history->getMessages());
+        $this->displayedHistory = $history;
     }
 
     public function agent(): Agent
