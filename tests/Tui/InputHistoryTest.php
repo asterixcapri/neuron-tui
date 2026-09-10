@@ -6,19 +6,19 @@ namespace NeuronTui\Tests\Tui;
 
 use Generator;
 use NeuronAI\Agent\Agent;
-use NeuronInteraction\Command\Commands;
-use NeuronInteraction\InputHistory\InputHistory;
 use NeuronAI\Chat\Messages\AssistantMessage;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronInteraction\Command\ClearCommand;
-use NeuronInteraction\Command\CommandInterface;
-use NeuronInteraction\Command\ResumeCommand;
-use NeuronInteraction\Command\SelectionOption;
-use NeuronInteraction\Command\Selection;
 use NeuronInteraction\Command\CommandAdapterInterface;
+use NeuronInteraction\Command\CommandInterface;
+use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Command\ResumeCommand;
+use NeuronInteraction\Command\Selection;
+use NeuronInteraction\Command\SelectionOption;
+use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\FileStorage;
 use NeuronInteraction\Storage\InMemoryStorage;
@@ -649,9 +649,9 @@ final class InputHistoryTest extends TestCase
         );
 
         (new Tui($fixture->agent, $fixture->terminal, sessionStore: new SessionStore($fixture->storage, 'test-user'), inputHistory: new InputHistory($fixture->storage), commands: new Commands([
-                self::commandNamed('/alpha', 'The first suggestion.'),
-                self::commandNamed('/album', 'The second suggestion.'),
-            ])))
+            self::commandNamed('/alpha', 'The first suggestion.'),
+            self::commandNamed('/album', 'The second suggestion.'),
+        ])))
             ->run();
 
         self::assertIsString($display);

@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace NeuronTui\Tests;
 
 use Closure;
-use NeuronInteraction\Command\Commands;
 use NeuronAI\Agent\Agent;
-use NeuronInteraction\Command\CommandInterface;
-use NeuronInteraction\Command\HelpCommand;
 use NeuronInteraction\Command\CommandAdapterInterface;
+use NeuronInteraction\Command\CommandInterface;
+use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Command\HelpCommand;
 use NeuronTui\Tui;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;

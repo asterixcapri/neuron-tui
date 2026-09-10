@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace NeuronTuiDemo;
 
-use NeuronInteraction\Command\CommandInterface;
-use NeuronInteraction\Command\SelectionOption;
-use NeuronInteraction\Command\Selection;
 use NeuronInteraction\Command\CommandAdapterInterface;
+use NeuronInteraction\Command\CommandInterface;
+use NeuronInteraction\Command\Selection;
+use NeuronInteraction\Command\SelectionOption;
 
 final readonly class ModelCommand implements CommandInterface
 {

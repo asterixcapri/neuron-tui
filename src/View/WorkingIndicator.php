@@ -32,7 +32,9 @@ final class WorkingIndicator
 
     private ?HistoryEntry $line = null;
 
-    public function __construct(private readonly HistoryPane $history) {}
+    public function __construct(private readonly HistoryPane $history)
+    {
+    }
 
     /**
      * Shows the indicator, counting from the moment given.

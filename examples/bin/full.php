@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 use NeuronInteraction\Command\ClearCommand;
 use NeuronInteraction\Command\Commands;
-use NeuronInteraction\Configuration\ConfigurationStore;
-use NeuronInteraction\Session\SessionStore;
-use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Command\HelpCommand;
 use NeuronInteraction\Command\LeaveCommand;
 use NeuronInteraction\Command\ResumeCommand;
+use NeuronInteraction\Configuration\ConfigurationStore;
+use NeuronInteraction\InputHistory\InputHistory;
+use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\FileStorage;
 use NeuronTui\Tui;
 use NeuronTuiDemo\AIProviderFactory;

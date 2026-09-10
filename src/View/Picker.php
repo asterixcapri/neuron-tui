@@ -129,8 +129,7 @@ final class Picker
         string $title,
         array $options,
         ?string $description = null,
-    ): void
-    {
+    ): void {
         $this->title = DisplayableText::singleLine($title);
         $this->filter = '';
         $this->searchable = count($options) >= 6;

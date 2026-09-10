@@ -290,8 +290,7 @@ final class ConversationView
         string $title,
         array $options,
         ?string $description = null,
-    ): ?string
-    {
+    ): ?string {
         if ($this->pendingChoice instanceof DeferredFuture) {
             // One list at a time: a second one would take the place of the
             // first and leave whoever asked for it waiting for good.

@@ -5,28 +5,28 @@ declare(strict_types=1);
 namespace NeuronTui\Tests\Tui;
 
 use Closure;
+use NeuronAI\Agent\Agent;
+use NeuronAI\Chat\History\InMemoryChatHistory;
 use NeuronAI\Chat\Messages\AssistantMessage;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Testing\FakeAIProvider;
-use Symfony\Component\Tui\Ansi\AnsiUtils;
+use NeuronInteraction\Command\ClearCommand;
+use NeuronInteraction\Command\CommandAdapterInterface;
+use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\Commands;
-use NeuronInteraction\Command\SelectionOption;
+use NeuronInteraction\Command\ResumeCommand;
 use NeuronInteraction\Command\Selection;
+use NeuronInteraction\Command\SelectionOption;
 use NeuronInteraction\Configuration\ConfigurationStore;
 use NeuronInteraction\InputHistory\InputHistory;
-use NeuronAI\Agent\Agent;
-use NeuronAI\Chat\History\InMemoryChatHistory;
-use NeuronInteraction\Command\ClearCommand;
-use NeuronInteraction\Command\CommandInterface;
-use NeuronInteraction\Command\ResumeCommand;
-use NeuronInteraction\Command\CommandAdapterInterface;
-use NeuronInteraction\Session\SessionStore;
-use NeuronInteraction\Storage\InMemoryStorage;
-use NeuronInteraction\Storage\FileStorage;
 use NeuronInteraction\Session\Session;
+use NeuronInteraction\Session\SessionStore;
+use NeuronInteraction\Storage\FileStorage;
+use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Tui;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
+use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
 final class SessionCompositionTest extends TestCase
@@ -421,7 +421,9 @@ final class SessionCompositionTest extends TestCase
     {
         return new class($run) implements CommandInterface {
             /** @param Closure(CommandAdapterInterface<mixed>): void $run */
-            public function __construct(private readonly Closure $run) {}
+            public function __construct(private readonly Closure $run)
+            {
+            }
 
             public function name(): string
             {

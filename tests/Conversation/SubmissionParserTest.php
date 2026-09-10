@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace NeuronTui\Tests\Conversation;
 
-use NeuronTui\Conversation\MessageForAgent;
 use NeuronTui\Conversation\CommandInput;
+use NeuronTui\Conversation\MessageForAgent;
 use NeuronTui\Conversation\SubmissionParser;
 use PHPUnit\Framework\TestCase;
 

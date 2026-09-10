@@ -13,12 +13,12 @@ use NeuronInteraction\Configuration\ConfigurationStore;
 use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronInteraction\Storage\StorageInterface;
 use NeuronInteraction\Storage\StoredDocument;
-use RuntimeException;
-use PHPUnit\Framework\Attributes\DataProvider;
 use NeuronTui\Tui;
 use NeuronTuiDemo\ModelCommand;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
+use RuntimeException;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
