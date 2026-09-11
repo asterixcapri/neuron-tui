@@ -390,6 +390,14 @@ final class ConversationView
         $this->activeAgentMessage->appendText($chunk);
     }
 
+    /**
+     * Keeps text arriving after tool activity in a new History entry.
+     */
+    public function endAgentMessage(): void
+    {
+        $this->activeAgentMessage = null;
+    }
+
     public function showEmptyResponse(): void
     {
         if (!$this->activeAgentMessage instanceof HistoryEntry) {

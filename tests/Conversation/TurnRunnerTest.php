@@ -59,6 +59,32 @@ final class TurnRunnerTest extends TestCase
         self::assertStringContainsString('Empty response.', $display);
     }
 
+    public function testProgressAfterToolsAppearsAsANewMessageInStreamOrder(): void
+    {
+        $terminal = new VirtualTerminal(columns: 120, rows: 40);
+        $lookup = (new Tool('lookup'))
+            ->setCallId('lookup-call')
+            ->setInputs([])
+            ->setCallable(static fn (): string => 'Found the record.');
+        $check = (new Tool('check'))
+            ->setCallId('check-call')
+            ->setInputs([])
+            ->setCallable(static fn (): string => 'Record verified.');
+        $provider = new FakeAIProvider(
+            new ToolCallMessage('Finding the record.', [$lookup]),
+            new ToolCallMessage('Found it; checking the record.', [$check]),
+            new AssistantMessage('The record is verified.'),
+        );
+
+        $display = $this->runTurn($provider, 'Find and verify the record.', $terminal);
+
+        self::assertMatchesRegularExpression(
+            '/● Finding the record\..*● lookup.*● Found it; checking the record\..*● check.*● The record is verified\./s',
+            $display,
+        );
+        $provider->assertCallCount(3);
+    }
+
     public function testAnAnswerOfWhitespaceAloneIsStillEmpty(): void
     {
         $terminal = new VirtualTerminal(rows: 24);

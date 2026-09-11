@@ -56,6 +56,7 @@ final class TurnRunner
 
         foreach ($events as $event) {
             if ($event instanceof ToolCallChunk) {
+                $this->view->endAgentMessage();
                 $toolActivity->start($event->tool);
                 $this->view->paintPendingChanges();
 
