@@ -249,12 +249,13 @@ final class SkillInvocationPresentationTest extends TestCase
         self::assertStringNotContainsString('Structurally valid instructions stay hidden.', $display);
     }
 
-    public function testAnEnvelopeAccompaniedByAnotherContentBlockRemainsFullyVisible(): void
+    public function testASkillInvocationWithAnAttachmentRemainsCompact(): void
     {
         $expanded = self::invocation(
             'vision',
             '/skills/vision',
-            'These instructions stay visible.',
+            'These instructions stay hidden.',
+            'Describe this image.',
         );
         $agent = new Agent();
         $agent->setChatHistory(new LoadedSkillHistory([
@@ -274,7 +275,9 @@ final class SkillInvocationPresentationTest extends TestCase
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
-        self::assertStringContainsString('These instructions stay visible.', $display);
+        self::assertStringContainsString('❯ /vision', $display);
+        self::assertStringContainsString('Describe this image.', $display);
+        self::assertStringNotContainsString('These instructions stay hidden.', $display);
         self::assertStringContainsString('[Image]', $display);
     }
 

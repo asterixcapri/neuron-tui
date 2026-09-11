@@ -19,6 +19,28 @@ use Symfony\Component\Tui\Widget\Util\StringUtils;
 final class DisplayableText
 {
     /**
+     * The Agent-facing user text in the form a person is meant to see.
+     */
+    public static function compactSkillInvocation(string $text): string
+    {
+        $matches = [];
+
+        if (preg_match(
+            '~\A<skill name="([^"<>\r\n]+)" location="[^"<>\r\n]+">\n.+?\n</skill>(?:\n\n(.+))?\z~sD',
+            $text,
+            $matches,
+        ) !== 1) {
+            return $text;
+        }
+
+        $request = $matches[2] ?? '';
+
+        return $request === ''
+            ? '/' . $matches[1]
+            : '/' . $matches[1] . "\n\n" . $request;
+    }
+
+    /**
      * The text, safe to display, with its own line structure preserved.
      */
     public static function safe(string $text): string
