@@ -5182,11 +5182,9 @@ MARKDOWN;
                 $refusedDisplay = AnsiUtils::stripAnsiCodes(
                     $terminal->getOutput(),
                 );
-                // A refused command stays in the composer, the way an
-                // unknown one does, so the first Escape takes away the band
-                // that says nothing matches and the second the name.
-                $terminal->simulateInput("\x1b");
-                $terminal->simulateInput("\x1b");
+                // A refused command stays in the composer. Remove its name
+                // explicitly: Escape now preserves the draft during a Turn.
+                $terminal->simulateInput(str_repeat("\x7f", 6));
                 $terminal->simulateInput("/exit\r");
             },
         );

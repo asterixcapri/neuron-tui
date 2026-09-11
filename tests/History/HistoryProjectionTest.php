@@ -25,6 +25,27 @@ use PHPUnit\Framework\TestCase;
 
 final class HistoryProjectionTest extends TestCase
 {
+    public function testAnInterruptedResponseKeepsItsWordsSeparateFromTheOutcome(): void
+    {
+        $message = (new AssistantMessage('Partial answer.'))->setStopReason('interrupted');
+
+        self::assertSame([
+            [ProjectedEntryKind::Agent, 'Partial answer.'],
+            [ProjectedEntryKind::Notice, 'Turn interrupted.'],
+        ], self::summarize($this->project([$message])));
+        self::assertSame('Partial answer.', $message->getContent());
+    }
+
+    public function testAnUnansweredInterruptedUserHasAnOutcomeWithoutAnAgentEntry(): void
+    {
+        $message = (new UserMessage('Question.'))->addMetadata('stop_reason', 'interrupted');
+
+        self::assertSame([
+            [ProjectedEntryKind::Person, 'Question.'],
+            [ProjectedEntryKind::Notice, 'Turn interrupted.'],
+        ], self::summarize($this->project([$message])));
+    }
+
     public function testAConversationBecomesOneOrderedStreamOfEntries(): void
     {
         $entries = $this->project([

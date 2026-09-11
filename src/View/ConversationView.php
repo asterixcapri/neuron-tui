@@ -36,7 +36,7 @@ final class ConversationView
         'ready · Enter sends · Shift+Enter adds a line · Ctrl+C exits';
 
     private const string WORKING_STATUS =
-        'Enter queues · Shift+Enter adds a line';
+        'Enter queues · Esc interrupts · Shift+Enter adds a line';
 
     private const string SUGGESTING_STATUS =
         'suggesting · ↑↓ moves · Tab completes · Enter runs';
@@ -82,6 +82,8 @@ final class ConversationView
      * to saying once the suggestions are no longer on screen.
      */
     private bool $working = false;
+
+    private bool $interrupting = false;
 
     /**
      * The choice an Adapter's deferred selection callback is waiting on.
@@ -230,6 +232,12 @@ final class ConversationView
         $projection = new HistoryProjection($messages);
 
         foreach ($projection->entries() as $entry) {
+            if ($entry->kind === ProjectedEntryKind::Notice) {
+                $this->history->addNote($entry->text, 'notice');
+
+                continue;
+            }
+
             if ($entry->kind === ProjectedEntryKind::Tool) {
                 $this->history->addNote($entry->text, 'tool');
 
@@ -364,9 +372,13 @@ final class ConversationView
         return $this->picker->isOpen();
     }
 
+    public function hasCommandSuggestions(): bool
+    {
+        return $this->suggestions->isOnScreen();
+    }
+
     public function acceptUserMessage(string $contents): void
     {
-        $this->emptyComposer();
         $this->history->addMessage(
             '❯',
             DisplayableText::compactSkillInvocation($contents),
@@ -413,6 +425,12 @@ final class ConversationView
         $this->activeAgentMessage->setText('_Empty response._');
     }
 
+    public function showTurnInterrupted(): void
+    {
+        $this->history->addNote('Turn interrupted.', 'notice');
+        $this->activeAgentMessage = null;
+    }
+
     /**
      * Shows a line a Command said.
      */
@@ -453,9 +471,17 @@ final class ConversationView
     public function working(): void
     {
         $this->working = true;
+        $this->interrupting = false;
         // A command the TUI would turn away mid-turn is not offered mid-turn.
         $this->suggestions->working();
         $this->showStatus();
+    }
+
+    public function interrupting(): void
+    {
+        $this->interrupting = true;
+        $this->showStatus();
+        $this->tui->requestRender();
     }
 
     /**
@@ -463,7 +489,6 @@ final class ConversationView
      */
     public function showQueuedMessages(array $messages): void
     {
-        $this->emptyComposer();
         $this->queuedMessages->clear();
 
         if ($messages !== []) {
@@ -491,6 +516,7 @@ final class ConversationView
     public function ready(): void
     {
         $this->working = false;
+        $this->interrupting = false;
         $this->suggestions->ready();
         $this->showStatus();
         $this->tui->setFocus($this->editor);
@@ -615,7 +641,7 @@ final class ConversationView
             && $this->suggestions->isOnScreen()
         ) {
             // The first Escape takes the band away and leaves the draft; the
-            // next one reaches the composer and empties it, as it always has.
+            // next one belongs to the Turn or, when idle, to the composer.
             // The line that says nothing matches is taken away too: it
             // covers the conversation like the list, whatever the other keys
             // have to say about it.
@@ -685,6 +711,7 @@ final class ConversationView
     {
         $this->status->setText(match (true) {
             $this->suggestions->isListOpen() => self::SUGGESTING_STATUS,
+            $this->interrupting => 'Interruption requested · waiting for the current response',
             $this->working => self::WORKING_STATUS,
             default => self::READY_STATUS,
         });
@@ -724,7 +751,9 @@ final class ConversationView
         $this->pendingChoice = null;
         $this->picker->close();
         $this->showConversationControls();
-        $this->ready();
+        $this->showStatus();
+        $this->tui->setFocus($this->editor);
+        $this->tui->requestRender();
         $pendingChoice->complete($key);
     }
 

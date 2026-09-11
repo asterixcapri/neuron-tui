@@ -113,6 +113,10 @@ final class HistoryProjection
         }
 
         $this->entries[] = new ProjectedEntry($kind, $text);
+
+        if ($message->getMetadata('stop_reason') === 'interrupted') {
+            $this->entries[] = new ProjectedEntry(ProjectedEntryKind::Notice, 'Turn interrupted.');
+        }
     }
 
     private function appendToolCall(ToolInterface $tool): int
