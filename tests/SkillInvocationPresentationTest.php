@@ -25,6 +25,42 @@ use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
 final class SkillInvocationPresentationTest extends TestCase
 {
+    public function testAManuallyEnteredExactEnvelopeIsCompactButReachesTheAgentUnchanged(): void
+    {
+        $expanded = self::invocation(
+            'manual',
+            '/skills/manual',
+            'Keep these manual instructions private.',
+            'Apply this workflow.',
+        );
+        $provider = new FakeAIProvider(new AssistantMessage('Done.'));
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        $terminal = new VirtualTerminal(rows: 30);
+
+        EventLoop::queue(static function () use ($expanded, $terminal): void {
+            $terminal->simulateInput(str_replace("\n", "\x1b[13;2u", $expanded));
+            $terminal->simulateInput("\r");
+        });
+        EventLoop::delay(
+            0.15,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new Tui($agent, terminal: $terminal))->run();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+
+        self::assertStringContainsString('❯ /manual', $display);
+        self::assertStringContainsString('Apply this workflow.', $display);
+        self::assertStringNotContainsString('Keep these manual instructions private.', $display);
+        self::assertStringNotContainsString('/skills/manual', $display);
+        self::assertSame(
+            $expanded,
+            $provider->getRecorded()[0]->messages[0]->getContent(),
+        );
+    }
+
     public function testALiveSkillInvocationIsCompactButReachesTheAgentUnchanged(): void
     {
         $expanded = self::invocation(
@@ -185,6 +221,45 @@ final class SkillInvocationPresentationTest extends TestCase
         self::assertStringContainsString('Keep this visible.', $display);
         self::assertStringContainsString('Embedded instructions stay visible.', $display);
         self::assertStringContainsString('Malformed instructions stay visible.', $display);
+    }
+
+    public function testSkillNamesOutsideNeuronSkillsGrammarRemainFullyVisible(): void
+    {
+        $space = self::invocation(
+            'not invokable',
+            '/skills/not-invokable',
+            'Space-name instructions stay visible.',
+        );
+        $uppercase = self::invocation(
+            'Not-Invokable',
+            '/skills/not-invokable',
+            'Uppercase-name instructions stay visible.',
+        );
+        $tooLong = self::invocation(
+            str_repeat('a', 65),
+            '/skills/not-invokable',
+            'Long-name instructions stay visible.',
+        );
+        $agent = new Agent();
+        $agent->setChatHistory(new LoadedSkillHistory([
+            new UserMessage($space),
+            new UserMessage($uppercase),
+            new UserMessage($tooLong),
+        ]));
+        $terminal = new VirtualTerminal(columns: 120, rows: 40);
+
+        EventLoop::delay(
+            0.1,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new Tui($agent, terminal: $terminal))->run();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+
+        self::assertStringContainsString('Space-name instructions stay visible.', $display);
+        self::assertStringContainsString('Uppercase-name instructions stay visible.', $display);
+        self::assertStringContainsString('Long-name instructions stay visible.', $display);
     }
 
     public function testAnEnvelopeAccompaniedByAnotherContentBlockRemainsFullyVisible(): void
