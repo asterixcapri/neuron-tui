@@ -28,11 +28,7 @@ final class ConversationViewport extends AbstractWidget implements ParentInterfa
 
     private ?int $paintedColumns = null;
 
-    private ?string $paintedText = null;
-
-    private ?int $paintedAnchorOffset = null;
-
-    private ?int $paintedAnchorRow = null;
+    private ?PaintedAnchor $paintedAnchor = null;
 
     public function __construct(private readonly ContainerWidget $content)
     {
@@ -67,9 +63,7 @@ final class ConversationViewport extends AbstractWidget implements ParentInterfa
         $this->paintedContentHeight = null;
         $this->paintedViewportHeight = null;
         $this->paintedColumns = null;
-        $this->paintedText = null;
-        $this->paintedAnchorOffset = null;
-        $this->paintedAnchorRow = null;
+        $this->paintedAnchor = null;
         $this->invalidate();
     }
 
@@ -160,11 +154,7 @@ final class ConversationViewport extends AbstractWidget implements ParentInterfa
      */
     private function offsetForPaintedAnchor(array $lines, int $rows): ?int
     {
-        if (
-            $this->paintedText === null
-            || $this->paintedAnchorOffset === null
-            || $this->paintedAnchorRow === null
-        ) {
+        if ($this->paintedAnchor === null) {
             return null;
         }
 
@@ -180,7 +170,7 @@ final class ConversationViewport extends AbstractWidget implements ParentInterfa
         }
 
         $position = self::lineAtOffset($lineLengths, $anchorOffset);
-        $start = $position - $this->paintedAnchorRow;
+        $start = $position - $this->paintedAnchor->row;
 
         if ($start < 0 || $start > max(0, count($lines) - $rows)) {
             return null;
@@ -196,21 +186,25 @@ final class ConversationViewport extends AbstractWidget implements ParentInterfa
      */
     private function findAnchorOffset(string $text): ?int
     {
-        $paintedLength = strlen($this->paintedText ?? '');
+        if ($this->paintedAnchor === null) {
+            return null;
+        }
+
+        $paintedLength = strlen($this->paintedAnchor->text);
 
         foreach ([32, 64, 128, 256, 512, $paintedLength] as $contextLength) {
-            $start = max(0, $this->paintedAnchorOffset - intdiv($contextLength, 2));
+            $start = max(0, $this->paintedAnchor->offset - intdiv($contextLength, 2));
             $start = min($start, max(0, $paintedLength - $contextLength));
-            $needle = substr($this->paintedText ?? '', $start, $contextLength);
+            $needle = substr($this->paintedAnchor->text, $start, $contextLength);
 
-            if ($needle === '' || self::occurrences($this->paintedText ?? '', $needle) !== 1) {
+            if ($needle === '' || self::occurrences($this->paintedAnchor->text, $needle) !== 1) {
                 continue;
             }
 
             $position = strpos($text, $needle);
 
             if ($position !== false && strpos($text, $needle, $position + 1) === false) {
-                return $position + $this->paintedAnchorOffset - $start;
+                return $position + $this->paintedAnchor->offset - $start;
             }
         }
 
@@ -221,20 +215,18 @@ final class ConversationViewport extends AbstractWidget implements ParentInterfa
     private function rememberAnchor(array $lines, int $start, int $rows): void
     {
         $normalized = array_map(self::normalizedText(...), $lines);
-        $this->paintedText = implode('', $normalized);
-        $this->paintedAnchorOffset = null;
-        $this->paintedAnchorRow = null;
+        $text = implode('', $normalized);
+        $this->paintedAnchor = null;
         $offset = array_sum(array_map('strlen', array_slice($normalized, 0, $start)));
 
-        foreach (array_slice($normalized, $start, $rows) as $row => $text) {
-            if ($text !== '') {
-                $this->paintedAnchorOffset = $offset;
-                $this->paintedAnchorRow = $row;
+        foreach (array_slice($normalized, $start, $rows) as $row => $line) {
+            if ($line !== '') {
+                $this->paintedAnchor = new PaintedAnchor($text, $offset, $row);
 
                 return;
             }
 
-            $offset += strlen($text);
+            $offset += strlen($line);
         }
     }
 
