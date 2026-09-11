@@ -115,7 +115,7 @@ final class WorkingIndicatorTest extends TestCase
     private function indicator(VirtualTerminal $terminal): WorkingIndicator
     {
         $this->tui = new Tui(ConversationStyleSheet::create(), $terminal);
-        $this->pane = new HistoryPane($this->tui, $terminal);
+        $this->pane = new HistoryPane($this->tui);
         $this->tui->add($this->pane->widget());
 
         return new WorkingIndicator($this->pane);

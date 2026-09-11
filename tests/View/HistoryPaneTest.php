@@ -152,7 +152,7 @@ final class HistoryPaneTest extends TestCase
         );
         $content = new ContainerWidget();
         $viewport = new ConversationViewport($content);
-        $pane = new HistoryPane($this->tui, $terminal, $viewport);
+        $pane = new HistoryPane($this->tui, $viewport);
         $content->add($pane->widget());
         $this->tui->add($viewport);
 

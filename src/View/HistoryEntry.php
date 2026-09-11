@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace NeuronTui\View;
 
 use Closure;
-use Symfony\Component\Tui\Render\RenderContext;
-use Symfony\Component\Tui\Terminal\TerminalInterface;
 use Symfony\Component\Tui\Widget\AbstractWidget;
 use Symfony\Component\Tui\Widget\MarkdownWidget;
 use Symfony\Component\Tui\Widget\TextWidget;
@@ -22,26 +20,19 @@ use Symfony\Component\Tui\Widget\TextWidget;
  */
 final class HistoryEntry
 {
-    private int $height = 1;
-
     /**
-     * @param int $reservedColumns terminal columns the entry cannot paint in
      * @param Closure(): void $changed
      */
     public function __construct(
-        private readonly TerminalInterface $terminal,
         private readonly AbstractWidget $widget,
         private readonly MarkdownWidget|TextWidget $textWidget,
-        private readonly int $reservedColumns,
         private readonly Closure $changed,
     ) {
-        $this->updateHeight();
     }
 
     public function setText(string $text): void
     {
         $this->textWidget->setText($text);
-        $this->updateHeight();
         ($this->changed)();
     }
 
@@ -58,20 +49,4 @@ final class HistoryEntry
         return $this->widget;
     }
 
-    public function height(): int
-    {
-        return $this->height;
-    }
-
-    private function updateHeight(): void
-    {
-        $columns = max(
-            1,
-            $this->terminal->getColumns() - $this->reservedColumns,
-        );
-
-        $this->height = max(1, count($this->textWidget->render(
-            new RenderContext($columns, PHP_INT_MAX),
-        )));
-    }
 }

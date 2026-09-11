@@ -124,7 +124,6 @@ final class ConversationView
         );
         $this->history = new HistoryPane(
             $this->tui,
-            $this->terminal,
             $this->conversationViewport,
         );
         $this->workingIndicator = new WorkingIndicator($this->history);
