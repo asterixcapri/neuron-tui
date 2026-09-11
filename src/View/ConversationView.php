@@ -367,7 +367,11 @@ final class ConversationView
     public function acceptUserMessage(string $contents): void
     {
         $this->emptyComposer();
-        $this->history->addMessage('❯', $contents, 'user');
+        $this->history->addMessage(
+            '❯',
+            UserMessageProjection::project($contents),
+            'user',
+        );
     }
 
     public function beginAgentResponse(): ToolActivity
