@@ -124,6 +124,18 @@ completed for further writing or taken immediately; nothing is suspended, so
 this is not the Picker, whatever the two look like.
 _Avoid_: Picker, menu, autocomplete, palette, command palette
 
+**Composer**:
+The lower part of the Conversation TUI where a person writes the next message.
+It includes the prompt and editable text, but not the status line beneath it.
+
+**Status line**:
+The line beneath the Composer that describes the current interaction state and
+the keys available in that state.
+
+**Lower controls**:
+The Composer and Status line, treated as one stable region of the Conversation
+TUI.
+
 **Turn**:
 One stretch of the conversation, from the moment a person's message is taken
 for the Agent to the moment the Agent has finished answering it. A message
