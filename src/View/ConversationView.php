@@ -369,7 +369,7 @@ final class ConversationView
         $this->emptyComposer();
         $this->history->addMessage(
             '❯',
-            UserMessageProjection::project($contents),
+            DisplayableText::compactSkillInvocation($contents),
             'user',
         );
     }

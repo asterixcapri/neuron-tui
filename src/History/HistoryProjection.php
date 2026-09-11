@@ -16,7 +16,6 @@ use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Tools\ToolInterface;
 use NeuronTui\View\DisplayableText;
-use NeuronTui\View\UserMessageProjection;
 
 /**
  * The Agent's messages as the one ordered stream of entries a person sees.
@@ -107,27 +106,13 @@ final class HistoryProjection
 
     private function appendMessage(ProjectedEntryKind $kind, Message $message): void
     {
-        $text = $this->messageText($message);
+        $text = $this->messageText($message, $kind);
 
         if ($text === '') {
             return;
         }
 
-        if (
-            $kind === ProjectedEntryKind::Person
-            && $this->containsOnlyText($message)
-        ) {
-            $text = UserMessageProjection::project($text);
-        }
-
         $this->entries[] = new ProjectedEntry($kind, $text);
-    }
-
-    private function containsOnlyText(Message $message): bool
-    {
-        $blocks = $message->getContentBlocks();
-
-        return count($blocks) === 1 && $blocks[0] instanceof TextContent;
     }
 
     private function appendToolCall(ToolInterface $tool): int
@@ -155,14 +140,16 @@ final class HistoryProjection
         );
     }
 
-    private function messageText(Message $message): string
+    private function messageText(Message $message, ProjectedEntryKind $kind): string
     {
         $parts = [];
 
         foreach ($message->getContentBlocks() as $block) {
             $content = match (true) {
                 $block instanceof ReasoningContent => null,
-                $block instanceof TextContent => $block->getContent(),
+                $block instanceof TextContent => $kind === ProjectedEntryKind::Person
+                    ? DisplayableText::compactSkillInvocation($block->getContent())
+                    : $block->getContent(),
                 $block instanceof ImageContent => '[Image]',
                 $block instanceof FileContent => $this->filePlaceholder($block),
                 $block instanceof AudioContent => '[Audio]',
