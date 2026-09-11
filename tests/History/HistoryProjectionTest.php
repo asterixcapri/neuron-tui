@@ -46,6 +46,29 @@ final class HistoryProjectionTest extends TestCase
         ], self::summarize($this->project([$message])));
     }
 
+    public function testAToolGroupAndPartialAnswerShareOneInterruptionAfterTheirContent(): void
+    {
+        $tool = (new Tool('lookup'))->setCallId('lookup-id')->setResult('Actual result.');
+        $call = (new ToolCallMessage('Planning prose.', [$tool]))->setStopReason('interrupted');
+        $entries = $this->project([
+            new UserMessage('Question.'),
+            $call,
+            new ToolResultMessage([$tool]),
+            (new AssistantMessage('Partial answer.'))->setStopReason('interrupted'),
+            new UserMessage('Next question.'),
+            new AssistantMessage('Next answer.'),
+        ]);
+
+        self::assertSame([
+            ProjectedEntryKind::Person, ProjectedEntryKind::Agent, ProjectedEntryKind::Tool,
+            ProjectedEntryKind::Agent, ProjectedEntryKind::Notice, ProjectedEntryKind::Person,
+            ProjectedEntryKind::Agent,
+        ], self::kinds($entries));
+        self::assertSame('Partial answer.', $entries[3]->text);
+        self::assertSame('Turn interrupted.', $entries[4]->text);
+        self::assertSame('Next question.', $entries[5]->text);
+    }
+
     public function testAConversationBecomesOneOrderedStreamOfEntries(): void
     {
         $entries = $this->project([

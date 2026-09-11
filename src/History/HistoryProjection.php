@@ -51,14 +51,22 @@ final class HistoryProjection
      */
     private array $entries = [];
 
+    private bool $interrupted = false;
+
     /** @param array<Message> $messages */
     public function __construct(array $messages)
     {
         $this->correlation = new ToolCallCorrelation();
 
         foreach ($messages as $message) {
+            if ($message->getRole() === MessageRole::USER->value && !$message instanceof ToolResultMessage) {
+                $this->appendInterruption();
+            }
+
             $this->projectMessage($message);
         }
+
+        $this->appendInterruption();
     }
 
     /** @return list<ProjectedEntry> */
@@ -77,6 +85,8 @@ final class HistoryProjection
         ) {
             return;
         }
+
+        $this->interrupted = $this->interrupted || $message->getMetadata('stop_reason') === 'interrupted';
 
         if ($message instanceof ToolCallMessage) {
             $this->appendMessage(ProjectedEntryKind::Agent, $message);
@@ -113,9 +123,13 @@ final class HistoryProjection
         }
 
         $this->entries[] = new ProjectedEntry($kind, $text);
+    }
 
-        if ($message->getMetadata('stop_reason') === 'interrupted') {
+    private function appendInterruption(): void
+    {
+        if ($this->interrupted) {
             $this->entries[] = new ProjectedEntry(ProjectedEntryKind::Notice, 'Turn interrupted.');
+            $this->interrupted = false;
         }
     }
 
