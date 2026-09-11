@@ -19,4 +19,7 @@ enum ProjectedEntryKind
 
     /** A tool the Agent called, with its result if one came back. */
     case Tool;
+
+    /** A Turn outcome shown separately from the Agent's words. */
+    case Notice;
 }

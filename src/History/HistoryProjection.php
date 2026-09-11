@@ -51,14 +51,22 @@ final class HistoryProjection
      */
     private array $entries = [];
 
+    private bool $interrupted = false;
+
     /** @param array<Message> $messages */
     public function __construct(array $messages)
     {
         $this->correlation = new ToolCallCorrelation();
 
         foreach ($messages as $message) {
+            if ($message->getRole() === MessageRole::USER->value && !$message instanceof ToolResultMessage) {
+                $this->appendInterruption();
+            }
+
             $this->projectMessage($message);
         }
+
+        $this->appendInterruption();
     }
 
     /** @return list<ProjectedEntry> */
@@ -77,6 +85,8 @@ final class HistoryProjection
         ) {
             return;
         }
+
+        $this->interrupted = $this->interrupted || $message->getMetadata('stop_reason') === 'interrupted';
 
         if ($message instanceof ToolCallMessage) {
             $this->appendMessage(ProjectedEntryKind::Agent, $message);
@@ -115,6 +125,14 @@ final class HistoryProjection
         $this->entries[] = new ProjectedEntry($kind, $text);
     }
 
+    private function appendInterruption(): void
+    {
+        if ($this->interrupted) {
+            $this->entries[] = new ProjectedEntry(ProjectedEntryKind::Notice, 'Turn interrupted.');
+            $this->interrupted = false;
+        }
+    }
+
     private function appendToolCall(ToolInterface $tool): int
     {
         $this->entries[] = new ProjectedEntry(
@@ -131,8 +149,12 @@ final class HistoryProjection
     {
         // A result that finds no call of its own is still worth showing, so
         // it opens the call it should have answered and closes it at once.
-        $position = $this->correlation->matchResult($tool)
-            ?? $this->appendToolCall($tool);
+        $position = $this->correlation->matchResult($tool);
+
+        if ($position === null) {
+            $position = $this->appendToolCall($tool);
+            $this->correlation->matchResult($tool);
+        }
 
         $this->entries[$position] = new ProjectedEntry(
             ProjectedEntryKind::Tool,
