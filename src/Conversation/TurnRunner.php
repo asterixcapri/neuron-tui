@@ -59,7 +59,12 @@ final class TurnRunner
             if ($event instanceof ToolCallChunk) {
                 $this->view->endAgentMessage();
                 $pendingAgentText = '';
-                $toolActivity->start($event->tool);
+                $this->workingIndicator->whilePaused(
+                    microtime(true),
+                    static function () use ($toolActivity, $event): void {
+                        $toolActivity->start($event->tool);
+                    },
+                );
                 $this->view->paintPendingChanges();
 
                 continue;
@@ -81,7 +86,6 @@ final class TurnRunner
                 continue;
             }
 
-            $this->workingIndicator->stop();
             $responseText .= $event->content;
             $pendingAgentText .= $event->content;
 
@@ -89,8 +93,14 @@ final class TurnRunner
                 continue;
             }
 
-            $this->view->appendAgentText($pendingAgentText);
+            $text = $pendingAgentText;
             $pendingAgentText = '';
+            $this->workingIndicator->whilePaused(
+                microtime(true),
+                function () use ($text): void {
+                    $this->view->appendAgentText($text);
+                },
+            );
             $this->view->paintPendingChanges();
         }
 

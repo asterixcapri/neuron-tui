@@ -587,6 +587,53 @@ MARKDOWN;
         );
     }
 
+    public function testWorkingIndicatorRemainsVisibleBetweenTextChunks(): void
+    {
+        $provider = new class(
+            new AssistantMessage('First. Second.'),
+        ) extends FakeAIProvider {
+            protected function streamChunks(Message $response): Generator
+            {
+                yield new TextChunk('paused-stream', 'First.');
+                \Amp\delay(0.3);
+                yield new TextChunk('paused-stream', ' Second.');
+
+                return $response;
+            }
+        };
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        $terminal = new VirtualTerminal();
+        $displayDuringPause = null;
+        EventLoop::queue(
+            static fn () => $terminal->simulateInput("Keep working\r"),
+        );
+        EventLoop::delay(
+            0.06,
+            static fn () => $terminal->clearOutput(),
+        );
+        EventLoop::delay(
+            0.2,
+            static function () use (
+                &$displayDuringPause,
+                $terminal,
+            ): void {
+                $displayDuringPause = AnsiUtils::stripAnsiCodes(
+                    $terminal->getOutput(),
+                );
+            },
+        );
+        EventLoop::delay(
+            0.45,
+            static fn () => $terminal->simulateInput("\x03"),
+        );
+
+        (new Tui($agent, terminal: $terminal))->run();
+
+        self::assertIsString($displayDuringPause);
+        self::assertStringContainsString('Working', $displayDuringPause);
+    }
+
     public function testEmptyStreamHasAnExplicitIndicator(): void
     {
         $provider = new FakeAIProvider(new AssistantMessage());
