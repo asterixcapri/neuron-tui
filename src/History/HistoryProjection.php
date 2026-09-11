@@ -16,6 +16,7 @@ use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Tools\ToolInterface;
 use NeuronTui\View\DisplayableText;
+use NeuronTui\View\UserMessageProjection;
 
 /**
  * The Agent's messages as the one ordered stream of entries a person sees.
@@ -112,7 +113,21 @@ final class HistoryProjection
             return;
         }
 
+        if (
+            $kind === ProjectedEntryKind::Person
+            && $this->containsOnlyText($message)
+        ) {
+            $text = UserMessageProjection::project($text);
+        }
+
         $this->entries[] = new ProjectedEntry($kind, $text);
+    }
+
+    private function containsOnlyText(Message $message): bool
+    {
+        $blocks = $message->getContentBlocks();
+
+        return count($blocks) === 1 && $blocks[0] instanceof TextContent;
     }
 
     private function appendToolCall(ToolInterface $tool): int
