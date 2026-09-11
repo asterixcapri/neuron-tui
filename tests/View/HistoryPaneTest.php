@@ -6,14 +6,18 @@ namespace NeuronTui\Tests\View;
 
 use NeuronTui\View\ConversationStyleSheet;
 use NeuronTui\View\HistoryPane;
+use NeuronTui\View\Widget\ConversationViewport;
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\Tui\Ansi\AnsiUtils;
+use Symfony\Component\Tui\Terminal\ScreenBuffer;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 use Symfony\Component\Tui\Tui;
+use Symfony\Component\Tui\Widget\ContainerWidget;
 
 final class HistoryPaneTest extends TestCase
 {
     private ?Tui $tui = null;
+
+    private ?ScreenBuffer $screen = null;
 
     public function testAnEntryIsUpdatedThroughItsHandle(): void
     {
@@ -142,8 +146,15 @@ final class HistoryPaneTest extends TestCase
     private function pane(VirtualTerminal $terminal): HistoryPane
     {
         $this->tui = new Tui(ConversationStyleSheet::create(), $terminal);
-        $pane = new HistoryPane($this->tui, $terminal);
-        $this->tui->add($pane->widget());
+        $this->screen = new ScreenBuffer(
+            $terminal->getColumns(),
+            $terminal->getRows(),
+        );
+        $content = new ContainerWidget();
+        $viewport = new ConversationViewport($content);
+        $pane = new HistoryPane($this->tui, $viewport);
+        $content->add($pane->widget());
+        $this->tui->add($viewport);
 
         return $pane;
     }
@@ -151,8 +162,10 @@ final class HistoryPaneTest extends TestCase
     private function paint(VirtualTerminal $terminal): string
     {
         self::assertInstanceOf(Tui::class, $this->tui);
+        self::assertInstanceOf(ScreenBuffer::class, $this->screen);
         $this->tui->processRender();
+        $this->screen->write($terminal->consumeOutput());
 
-        return AnsiUtils::stripAnsiCodes($terminal->getOutput());
+        return $this->screen->getScreen();
     }
 }

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronTui\View;
 
-use Symfony\Component\Tui\Terminal\TerminalInterface;
+use NeuronTui\View\Widget\ConversationViewport;
 use Symfony\Component\Tui\Tui;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 use Symfony\Component\Tui\Widget\MarkdownWidget;
@@ -23,28 +23,17 @@ use Symfony\Component\Tui\Widget\TextWidget;
  */
 final class HistoryPane
 {
-    private const int SCROLL_LINES = 5;
-
-    private const int NOTE_RESERVED_COLUMNS = 2;
-
-    private const int MESSAGE_RESERVED_COLUMNS = 3;
-
     private readonly ContainerWidget $widget;
 
     /** @var list<HistoryEntry> */
     private array $entries = [];
 
-    private int $paintedHeight = 0;
-
-    private int $scrollOffset = 0;
-
     public function __construct(
         private readonly Tui $tui,
-        private readonly TerminalInterface $terminal,
+        private readonly ConversationViewport $viewport,
     ) {
         $this->widget = new ContainerWidget();
         $this->widget->addStyleClass('history');
-        $this->widget->expandVertically(true);
     }
 
     public function widget(): ContainerWidget
@@ -76,11 +65,9 @@ final class HistoryPane
         $message->add($markdown);
 
         $entry = new HistoryEntry(
-            $this->terminal,
             $message,
             $markdown,
-            self::MESSAGE_RESERVED_COLUMNS + mb_strwidth($speaker, 'UTF-8'),
-            $this->paintedHeightChanged(...),
+            $this->historyChanged(...),
         );
 
         return $this->add($entry);
@@ -95,11 +82,9 @@ final class HistoryPane
         $note->addStyleClass($styleClass);
 
         $entry = new HistoryEntry(
-            $this->terminal,
             $note,
             $note,
-            self::NOTE_RESERVED_COLUMNS,
-            $this->paintedHeightChanged(...),
+            $this->historyChanged(...),
         );
 
         return $this->add($entry);
@@ -118,7 +103,7 @@ final class HistoryPane
 
         $this->entries = $remaining;
         $this->widget->remove($entry->widget());
-        $this->paintedHeightChanged();
+        $this->historyChanged();
     }
 
     /**
@@ -128,8 +113,8 @@ final class HistoryPane
     {
         $this->entries = [];
         $this->widget->clear();
-        $this->paintedHeight = 0;
-        $this->setScrollOffset(0);
+        $this->viewport->reset();
+        $this->tui->requestRender();
     }
 
     /**
@@ -137,71 +122,41 @@ final class HistoryPane
      */
     public function followLatest(): void
     {
-        if ($this->scrollOffset !== 0) {
-            $this->tui->requestRender();
-
-            return;
-        }
-
-        $this->setScrollOffset(0);
+        $this->viewport->followLatest();
+        $this->tui->requestRender();
     }
 
     public function scrollUp(): void
     {
-        $this->setScrollOffset($this->scrollOffset + self::SCROLL_LINES);
+        $this->viewport->scrollUp();
+        $this->tui->requestRender();
     }
 
     public function scrollDown(): void
     {
-        $this->setScrollOffset($this->scrollOffset - self::SCROLL_LINES);
+        $this->viewport->scrollDown();
+        $this->tui->requestRender();
     }
 
     private function add(HistoryEntry $entry): HistoryEntry
     {
         $this->entries[] = $entry;
         $this->widget->add($entry->widget());
-        $this->paintedHeightChanged();
+        $this->historyChanged();
 
         return $entry;
     }
 
     /**
-     * Moves the reading position by however much the painted History grew or
-     * shrank, so that what is being read stays where it is.
+     * Invalidates the viewport whenever painted History changes.
+     *
+     * The viewport measures the complete rendered upper region and owns the
+     * reading position. History entries deliberately do not estimate that
+     * movement: their measurements do not include the header or queue and
+     * become stale when terminal width changes.
      */
-    private function paintedHeightChanged(): void
+    private function historyChanged(): void
     {
-        $previousHeight = $this->paintedHeight;
-        $this->paintedHeight = $this->measure();
-        $difference = $this->paintedHeight - $previousHeight;
-
-        if ($this->scrollOffset > 0 && $difference !== 0) {
-            $this->setScrollOffset($this->scrollOffset + $difference);
-
-            return;
-        }
-
-        $this->tui->requestRender();
-    }
-
-    private function measure(): int
-    {
-        $height = 0;
-
-        foreach ($this->entries as $entry) {
-            $height += $entry->height();
-        }
-
-        return $height + max(0, count($this->entries) - 1);
-    }
-
-    /**
-     * Moves the reading position that many lines above the newest entry.
-     */
-    private function setScrollOffset(int $offset): void
-    {
-        $this->scrollOffset = max(0, $offset);
-        $this->tui->setScrollOffset($this->scrollOffset);
         $this->tui->requestRender();
     }
 }

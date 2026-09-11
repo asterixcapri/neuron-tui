@@ -6,11 +6,13 @@ namespace NeuronTui\Tests\View;
 
 use NeuronTui\View\ConversationStyleSheet;
 use NeuronTui\View\HistoryPane;
+use NeuronTui\View\Widget\ConversationViewport;
 use NeuronTui\View\WorkingIndicator;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 use Symfony\Component\Tui\Tui;
+use Symfony\Component\Tui\Widget\ContainerWidget;
 
 final class WorkingIndicatorTest extends TestCase
 {
@@ -115,8 +117,11 @@ final class WorkingIndicatorTest extends TestCase
     private function indicator(VirtualTerminal $terminal): WorkingIndicator
     {
         $this->tui = new Tui(ConversationStyleSheet::create(), $terminal);
-        $this->pane = new HistoryPane($this->tui, $terminal);
-        $this->tui->add($this->pane->widget());
+        $content = new ContainerWidget();
+        $viewport = new ConversationViewport($content);
+        $this->pane = new HistoryPane($this->tui, $viewport);
+        $content->add($this->pane->widget());
+        $this->tui->add($viewport);
 
         return new WorkingIndicator($this->pane);
     }
