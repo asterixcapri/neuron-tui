@@ -12,6 +12,7 @@ use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
 use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Tools\Tool;
+use NeuronTui\Conversation\TurnInterruption;
 use NeuronTui\Conversation\TurnRunner;
 use NeuronTui\View\ConversationView;
 use PHPUnit\Framework\TestCase;
@@ -21,6 +22,58 @@ use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
 final class TurnRunnerTest extends TestCase
 {
+    public function testAnAcceptedInterruptionDuringProviderCompletionReconcilesOnce(): void
+    {
+        $interruption = new TurnInterruption();
+        $provider = new class($interruption) extends FakeAIProvider {
+            public function __construct(private readonly TurnInterruption $interruption)
+            {
+                parent::__construct(new AssistantMessage('Answer.'));
+            }
+
+            protected function streamChunks(Message $response): Generator
+            {
+                yield new TextChunk('race', 'Answer.');
+                $this->interruption->request();
+                $this->interruption->request();
+
+                return $response;
+            }
+        };
+        $agent = $this->agentOf($provider);
+        $view = new ConversationView(new VirtualTerminal(), 'Neuron AI', 'Conversation');
+        $runner = new TurnRunner($view);
+        EventLoop::queue(static fn () => $runner->run($agent, 'Question.', $interruption));
+        EventLoop::run();
+
+        $messages = $agent->getChatHistory()->getMessages();
+        self::assertCount(2, $messages);
+        self::assertSame('Answer.', $messages[1]->getContent());
+        self::assertSame('interrupted', $messages[1]->getMetadata('stop_reason'));
+    }
+
+    public function testAnUnansweredInterruptedUserCanBeFollowedByAnotherTurn(): void
+    {
+        $interruption = new TurnInterruption();
+        $interruption->request();
+        $agent = $this->agentOf(new FakeAIProvider(new AssistantMessage('Next answer.')));
+        $history = $agent->getChatHistory();
+        $view = new ConversationView(new VirtualTerminal(), 'Neuron AI', 'Conversation');
+        $runner = new TurnRunner($view);
+        EventLoop::queue(static function () use ($runner, $agent, $interruption): void {
+            $runner->run($agent, 'First question.', $interruption);
+            $runner->run($agent, 'Next question.');
+        });
+        EventLoop::run();
+
+        self::assertSame($history, $agent->getChatHistory());
+        self::assertSame(['First question.', 'Next question.', 'Next answer.'], array_map(
+            static fn (Message $message): ?string => $message->getContent(),
+            $history->getMessages(),
+        ));
+        self::assertSame('interrupted', $history->getMessages()[0]->getMetadata('stop_reason'));
+    }
+
     public function testTheAnsweredTextIsPaintedIntoTheConversation(): void
     {
         $terminal = new VirtualTerminal(rows: 24);
