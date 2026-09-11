@@ -49,6 +49,7 @@ final class TurnRunner
     {
         $toolActivity = $this->view->beginAgentResponse();
         $responseText = '';
+        $pendingAgentText = '';
 
         $events = $agent
             ->stream(new UserMessage($message))
@@ -57,6 +58,7 @@ final class TurnRunner
         foreach ($events as $event) {
             if ($event instanceof ToolCallChunk) {
                 $this->view->endAgentMessage();
+                $pendingAgentText = '';
                 $toolActivity->start($event->tool);
                 $this->view->paintPendingChanges();
 
@@ -81,7 +83,14 @@ final class TurnRunner
 
             $this->workingIndicator->stop();
             $responseText .= $event->content;
-            $this->view->appendAgentText($event->content);
+            $pendingAgentText .= $event->content;
+
+            if (trim(DisplayableText::safe($pendingAgentText)) === '') {
+                continue;
+            }
+
+            $this->view->appendAgentText($pendingAgentText);
+            $pendingAgentText = '';
             $this->view->paintPendingChanges();
         }
 

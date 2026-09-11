@@ -122,6 +122,38 @@ final class TurnRunnerTest extends TestCase
         self::assertStringNotContainsString('Empty response.', $display);
     }
 
+    public function testAnEmptyTextChunkBeforeAToolDoesNotCreateAnEmptyMessage(): void
+    {
+        $terminal = new VirtualTerminal(columns: 100, rows: 24);
+        $tool = (new Tool('lookup'))
+            ->setCallId('lookup-call')
+            ->setInputs(['q' => 'alpha'])
+            ->setCallable(static fn (): string => 'alpha result');
+        $provider = new class(
+            new ToolCallMessage(tools: [$tool]),
+            new AssistantMessage('Found it.'),
+        ) extends FakeAIProvider {
+            protected function streamChunks(Message $response): Generator
+            {
+                if ($response instanceof ToolCallMessage) {
+                    yield new TextChunk('empty-before-tool', '');
+
+                    return $response;
+                }
+
+                yield from parent::streamChunks($response);
+
+                return $response;
+            }
+        };
+
+        $display = $this->runTurn($provider, 'Run the tool.', $terminal);
+
+        self::assertDoesNotMatchRegularExpression('/\R ●\h+\R/', $display);
+        self::assertStringContainsString('● lookup {"q":"alpha"}', $display);
+        self::assertStringContainsString('● Found it.', $display);
+    }
+
     public function testEachTurnIsAnsweredByTheAgentHandedToItThen(): void
     {
         $terminal = new VirtualTerminal(rows: 24);
