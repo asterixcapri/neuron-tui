@@ -223,30 +223,18 @@ final class SkillInvocationPresentationTest extends TestCase
         self::assertStringContainsString('Malformed instructions stay visible.', $display);
     }
 
-    public function testSkillNamesOutsideNeuronSkillsGrammarRemainFullyVisible(): void
+    public function testAnExactEnvelopeIsProjectedWithoutRevalidatingTheSkillName(): void
     {
-        $space = self::invocation(
-            'not invokable',
-            '/skills/not-invokable',
-            'Space-name instructions stay visible.',
-        );
-        $uppercase = self::invocation(
-            'Not-Invokable',
-            '/skills/not-invokable',
-            'Uppercase-name instructions stay visible.',
-        );
-        $tooLong = self::invocation(
-            str_repeat('a', 65),
-            '/skills/not-invokable',
-            'Long-name instructions stay visible.',
+        $expanded = self::invocation(
+            'Manually-authored',
+            '/skills/manual',
+            'Structurally valid instructions stay hidden.',
         );
         $agent = new Agent();
         $agent->setChatHistory(new LoadedSkillHistory([
-            new UserMessage($space),
-            new UserMessage($uppercase),
-            new UserMessage($tooLong),
+            new UserMessage($expanded),
         ]));
-        $terminal = new VirtualTerminal(columns: 120, rows: 40);
+        $terminal = new VirtualTerminal(rows: 24);
 
         EventLoop::delay(
             0.1,
@@ -257,9 +245,8 @@ final class SkillInvocationPresentationTest extends TestCase
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
-        self::assertStringContainsString('Space-name instructions stay visible.', $display);
-        self::assertStringContainsString('Uppercase-name instructions stay visible.', $display);
-        self::assertStringContainsString('Long-name instructions stay visible.', $display);
+        self::assertStringContainsString('❯ /Manually-authored', $display);
+        self::assertStringNotContainsString('Structurally valid instructions stay hidden.', $display);
     }
 
     public function testAnEnvelopeAccompaniedByAnotherContentBlockRemainsFullyVisible(): void
