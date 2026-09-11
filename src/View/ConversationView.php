@@ -122,7 +122,7 @@ final class ConversationView
         $this->editor->setMaxVisibleLines(5);
         $this->editor->onCancel($this->clearDraft(...));
         $this->editor->onChange($this->draftChanged(...));
-        $this->status = new TextWidget(self::READY_STATUS);
+        $this->status = new TextWidget(self::READY_STATUS, truncate: true);
         $this->status->addStyleClass('status');
         $this->composerRow = new ContainerWidget();
         $this->composerRow->addStyleClass('composer-row');

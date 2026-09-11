@@ -46,7 +46,7 @@ final class ConversationStyleSheet
                 border: new Border(1, 0, 1, 0, 'normal', 'gray'),
                 direction: Direction::Horizontal,
                 gap: 1,
-                verticalAlign: VerticalAlign::Center,
+                verticalAlign: VerticalAlign::Top,
             ),
             '.composer-label' => new Style(
                 color: 'magenta',
