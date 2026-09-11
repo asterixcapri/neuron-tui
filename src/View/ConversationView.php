@@ -85,6 +85,8 @@ final class ConversationView
 
     private bool $interrupting = false;
 
+    private bool $toolRunning = false;
+
     /**
      * The choice an Adapter's deferred selection callback is waiting on.
      *
@@ -484,6 +486,12 @@ final class ConversationView
         $this->tui->requestRender();
     }
 
+    public function toolRunning(bool $running): void
+    {
+        $this->toolRunning = $running;
+        $this->showStatus();
+    }
+
     /**
      * @param list<string> $messages
      */
@@ -518,6 +526,7 @@ final class ConversationView
         $this->working = false;
         $this->interrupting = false;
         $this->suggestions->ready();
+        $this->toolRunning = false;
         $this->showStatus();
         $this->tui->setFocus($this->editor);
         $this->history->followLatest();
@@ -711,6 +720,7 @@ final class ConversationView
     {
         $this->status->setText(match (true) {
             $this->suggestions->isListOpen() => self::SUGGESTING_STATUS,
+            $this->interrupting && $this->toolRunning => 'Interruption requested · waiting for the current tool',
             $this->interrupting => 'Interruption requested · waiting for the current response',
             $this->working => self::WORKING_STATUS,
             default => self::READY_STATUS,

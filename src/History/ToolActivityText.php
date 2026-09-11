@@ -37,10 +37,16 @@ final class ToolActivityText
         ToolInterface $tool,
         float $elapsedSeconds,
     ): string {
+        $status = ToolOutcome::status($tool);
+
+        if ($status === 'not_executed') {
+            return self::callText($tool) . "\n  ⎿ Not executed · Turn interrupted";
+        }
+
         return self::callText($tool)
             . "\n  ⎿ "
-            . DisplayableText::preview($tool->getResult(), self::DETAIL_WIDTH)
-            . "\n  Done in "
+            . DisplayableText::preview(ToolOutcome::text($tool), self::DETAIL_WIDTH)
+            . ($status === 'failed' ? "\n  Failed in " : "\n  Done in ")
             . self::duration($elapsedSeconds);
     }
 

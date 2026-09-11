@@ -10,6 +10,7 @@ use NeuronAI\Chat\Messages\AssistantMessage;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
 use NeuronAI\Chat\Messages\ToolCallMessage;
+use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Tools\Tool;
 use NeuronTui\Conversation\TurnInterruption;
@@ -22,6 +23,95 @@ use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
 final class TurnRunnerTest extends TestCase
 {
+    public function testAnInterruptionAtTheFirstAnnouncementDoesNotStartAnyTool(): void
+    {
+        $interruption = new TurnInterruption();
+        $runs = 0;
+        $tool = (new Tool('unstarted'))->setCallId('unstarted-id')->setCallable(static function () use (&$runs): string {
+            ++$runs;
+
+            return 'Should never run.';
+        });
+        $call = new ToolCallMessage('Planned operation.', [$tool]);
+        $provider = new class($interruption, $call) extends FakeAIProvider {
+            public function __construct(private readonly TurnInterruption $interruption, ToolCallMessage $call)
+            {
+                parent::__construct($call, new AssistantMessage('Next answer.'));
+            }
+
+            protected function streamChunks(Message $response): Generator
+            {
+                yield from parent::streamChunks($response);
+
+                if ($response instanceof ToolCallMessage) {
+                    $this->interruption->request();
+                }
+
+                return $response;
+            }
+        };
+        $agent = $this->agentOf($provider);
+        $runner = new TurnRunner(new ConversationView(new VirtualTerminal(), 'Neuron AI', 'Conversation'));
+        EventLoop::queue(static function () use ($runner, $agent, $interruption): void {
+            $runner->run($agent, 'First question.', $interruption);
+            $runner->run($agent, 'Next question.');
+        });
+        EventLoop::run();
+
+        self::assertSame(0, $runs);
+        $messages = $agent->getChatHistory()->getMessages();
+        self::assertCount(5, $messages);
+        self::assertSame($call, $messages[1]);
+        self::assertInstanceOf(ToolResultMessage::class, $messages[2]);
+        self::assertStringContainsString('"status":"not_executed"', $messages[2]->getTools()[0]->getResult());
+        $provider->assertCallCount(2);
+    }
+
+    public function testInterruptionDuringTheFollowingInferenceRetainsToolResultsAndOnlyItsOwnPartialText(): void
+    {
+        $interruption = new TurnInterruption();
+        $tool = (new Tool('finished'))->setCallId('finished-id')->setCallable(static fn (): string => 'Actual outcome.');
+        $call = new ToolCallMessage('Planning prose.', [$tool]);
+        $provider = new class($interruption, $call) extends FakeAIProvider {
+            public function __construct(private readonly TurnInterruption $interruption, ToolCallMessage $call)
+            {
+                parent::__construct($call, new AssistantMessage('Partial. Unseen.'), new AssistantMessage('Next answer.'));
+            }
+
+            protected function streamChunks(Message $response): Generator
+            {
+                if ($response->getContent() === 'Partial. Unseen.') {
+                    yield new TextChunk('partial', 'Partial.');
+                    $this->interruption->request();
+                    yield new TextChunk('partial', ' Unseen.');
+
+                    return $response;
+                }
+
+                yield from parent::streamChunks($response);
+
+                return $response;
+            }
+        };
+        $agent = $this->agentOf($provider);
+        $runner = new TurnRunner(new ConversationView(new VirtualTerminal(), 'Neuron AI', 'Conversation'));
+        EventLoop::queue(static function () use ($runner, $agent, $interruption): void {
+            $runner->run($agent, 'First question.', $interruption);
+            $runner->run($agent, 'Next question.');
+        });
+        EventLoop::run();
+
+        $messages = $agent->getChatHistory()->getMessages();
+        self::assertCount(6, $messages);
+        self::assertSame($call, $messages[1]);
+        self::assertInstanceOf(ToolResultMessage::class, $messages[2]);
+        self::assertSame('Actual outcome.', $messages[2]->getTools()[0]->getResult());
+        self::assertSame('Partial.', $messages[3]->getContent());
+        self::assertSame('interrupted', $messages[3]->getMetadata('stop_reason'));
+        self::assertSame(array_slice($messages, 0, 5), $provider->getRecorded()[2]->messages);
+        $provider->assertCallCount(3);
+    }
+
     public function testAnAcceptedInterruptionDuringProviderCompletionReconcilesOnce(): void
     {
         $interruption = new TurnInterruption();
