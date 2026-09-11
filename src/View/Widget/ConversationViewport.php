@@ -28,8 +28,11 @@ final class ConversationViewport extends AbstractWidget implements ParentInterfa
 
     private ?int $paintedColumns = null;
 
-    /** @var list<array{row: int, text: string}> */
-    private array $paintedAnchors = [];
+    private ?string $paintedText = null;
+
+    private ?int $paintedAnchorOffset = null;
+
+    private ?int $paintedAnchorRow = null;
 
     public function __construct(private readonly ContainerWidget $content)
     {
@@ -64,7 +67,9 @@ final class ConversationViewport extends AbstractWidget implements ParentInterfa
         $this->paintedContentHeight = null;
         $this->paintedViewportHeight = null;
         $this->paintedColumns = null;
-        $this->paintedAnchors = [];
+        $this->paintedText = null;
+        $this->paintedAnchorOffset = null;
+        $this->paintedAnchorRow = null;
         $this->invalidate();
     }
 
@@ -130,7 +135,7 @@ final class ConversationViewport extends AbstractWidget implements ParentInterfa
             $start,
             $rows,
         );
-        $this->rememberAnchors($visibleLines);
+        $this->rememberAnchor($lines, $start, $rows);
 
         return $visibleLines;
     }
@@ -148,30 +153,64 @@ final class ConversationViewport extends AbstractWidget implements ParentInterfa
     }
 
     /**
-     * Keeps a rendered line at the same physical row when changed terminal
-     * width reflows content above the reading position.
+     * Keeps the same place in the content at the same physical row when a
+     * changed terminal width reflows the rendered lines.
      *
      * @param string[] $lines
      */
     private function offsetForPaintedAnchor(array $lines, int $rows): ?int
     {
-        $positions = [];
-
-        foreach ($lines as $index => $line) {
-            $text = self::plainText($line);
-
-            if ($text !== '') {
-                $positions[$text][] = $index;
-            }
+        if (
+            $this->paintedText === null
+            || $this->paintedAnchorOffset === null
+            || $this->paintedAnchorRow === null
+        ) {
+            return null;
         }
 
-        foreach ($this->paintedAnchors as $anchor) {
-            foreach ($positions[$anchor['text']] ?? [] as $position) {
-                $start = $position - $anchor['row'];
+        $lineLengths = array_values(array_map(
+            self::normalizedLength(...),
+            $lines,
+        ));
+        $text = implode('', array_map(self::normalizedText(...), $lines));
+        $anchorOffset = $this->findAnchorOffset($text);
 
-                if ($start >= 0 && $start <= max(0, count($lines) - $rows)) {
-                    return count($lines) - $rows - $start;
-                }
+        if ($anchorOffset === null) {
+            return null;
+        }
+
+        $position = self::lineAtOffset($lineLengths, $anchorOffset);
+        $start = $position - $this->paintedAnchorRow;
+
+        if ($start < 0 || $start > max(0, count($lines) - $rows)) {
+            return null;
+        }
+
+        return count($lines) - $rows - $start;
+    }
+
+    /**
+     * Finds the previous anchor in reflowed text. Increasing the amount of
+     * surrounding content makes repeated rendered rows unambiguous while the
+     * whitespace-free comparison survives complete line reflow.
+     */
+    private function findAnchorOffset(string $text): ?int
+    {
+        $paintedLength = strlen($this->paintedText ?? '');
+
+        foreach ([32, 64, 128, 256, 512, $paintedLength] as $contextLength) {
+            $start = max(0, $this->paintedAnchorOffset - intdiv($contextLength, 2));
+            $start = min($start, max(0, $paintedLength - $contextLength));
+            $needle = substr($this->paintedText ?? '', $start, $contextLength);
+
+            if ($needle === '' || self::occurrences($this->paintedText ?? '', $needle) !== 1) {
+                continue;
+            }
+
+            $position = strpos($text, $needle);
+
+            if ($position !== false && strpos($text, $needle, $position + 1) === false) {
+                return $position + $this->paintedAnchorOffset - $start;
             }
         }
 
@@ -179,24 +218,66 @@ final class ConversationViewport extends AbstractWidget implements ParentInterfa
     }
 
     /** @param string[] $lines */
-    private function rememberAnchors(array $lines): void
+    private function rememberAnchor(array $lines, int $start, int $rows): void
     {
-        $this->paintedAnchors = [];
+        $normalized = array_map(self::normalizedText(...), $lines);
+        $this->paintedText = implode('', $normalized);
+        $this->paintedAnchorOffset = null;
+        $this->paintedAnchorRow = null;
+        $offset = array_sum(array_map('strlen', array_slice($normalized, 0, $start)));
 
-        foreach ($lines as $row => $line) {
-            $text = self::plainText($line);
-
+        foreach (array_slice($normalized, $start, $rows) as $row => $text) {
             if ($text !== '') {
-                $this->paintedAnchors[] = [
-                    'row' => $row,
-                    'text' => $text,
-                ];
+                $this->paintedAnchorOffset = $offset;
+                $this->paintedAnchorRow = $row;
+
+                return;
             }
+
+            $offset += strlen($text);
         }
     }
 
-    private static function plainText(string $line): string
+    private static function normalizedText(string $line): string
     {
-        return rtrim(AnsiUtils::stripAnsiCodes($line));
+        return (string) preg_replace(
+            '/\s+/u',
+            '',
+            AnsiUtils::stripAnsiCodes($line),
+        );
+    }
+
+    private static function normalizedLength(string $line): int
+    {
+        return strlen(self::normalizedText($line));
+    }
+
+    /** @param list<int> $lineLengths */
+    private static function lineAtOffset(array $lineLengths, int $offset): int
+    {
+        $position = 0;
+
+        foreach ($lineLengths as $line => $length) {
+            if ($length > 0 && $offset < $position + $length) {
+                return $line;
+            }
+
+            $position += $length;
+        }
+
+        return max(0, count($lineLengths) - 1);
+    }
+
+    private static function occurrences(string $haystack, string $needle): int
+    {
+        $count = 0;
+        $offset = 0;
+
+        while (($position = strpos($haystack, $needle, $offset)) !== false) {
+            ++$count;
+            $offset = $position + 1;
+        }
+
+        return $count;
     }
 }

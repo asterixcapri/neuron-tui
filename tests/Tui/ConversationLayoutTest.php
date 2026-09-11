@@ -36,7 +36,7 @@ final class ConversationLayoutTest extends TestCase
         };
         $agent = new Agent();
         $agent->setAiProvider($provider);
-        $agent->setChatHistory(self::longHistory());
+        $agent->setChatHistory(ConversationTestHelper::longHistory());
         $terminal = new VirtualTerminal(columns: 80, rows: 24);
         $screen = new ScreenBuffer(80, 24);
         $before = null;
@@ -50,20 +50,20 @@ final class ConversationLayoutTest extends TestCase
         EventLoop::delay(
             0.08,
             static function () use (&$before, $screen, $terminal): void {
-                $before = self::visibleRows($screen, $terminal);
+                $before = ConversationTestHelper::visibleRows($screen, $terminal);
                 $terminal->simulateInput("Another question\r");
             },
         );
         EventLoop::delay(
             0.14,
             static function () use (&$working, $screen, $terminal): void {
-                $working = self::visibleRows($screen, $terminal);
+                $working = ConversationTestHelper::visibleRows($screen, $terminal);
             },
         );
         EventLoop::delay(
             0.36,
             static function () use (&$ready, $screen, $terminal): void {
-                $ready = self::visibleRows($screen, $terminal);
+                $ready = ConversationTestHelper::visibleRows($screen, $terminal);
                 $terminal->simulateInput("\x03");
             },
         );
@@ -76,15 +76,15 @@ final class ConversationLayoutTest extends TestCase
         self::assertControlsAtBottom($before, 24, 'ready');
         self::assertControlsAtBottom($working, 24, 'Enter queues');
         self::assertControlsAtBottom($ready, 24, 'ready');
-        self::assertTrue(self::contains($working, 'Working'));
-        self::assertFalse(self::contains($ready, 'Working'));
-        self::assertTrue(self::contains($ready, 'The final answer.'));
+        self::assertTrue(ConversationTestHelper::contains($working, 'Working'));
+        self::assertFalse(ConversationTestHelper::contains($ready, 'Working'));
+        self::assertTrue(ConversationTestHelper::contains($ready, 'The final answer.'));
     }
 
     public function testSuggestionsAndResizeOnlyChangeTheConversationViewport(): void
     {
         $agent = new Agent();
-        $agent->setChatHistory(self::longHistory());
+        $agent->setChatHistory(ConversationTestHelper::longHistory());
         $terminal = new VirtualTerminal(columns: 80, rows: 24);
         $screen = new ScreenBuffer(80, 24);
         $open = null;
@@ -94,21 +94,21 @@ final class ConversationLayoutTest extends TestCase
         EventLoop::delay(
             0.04,
             static function () use ($screen, $terminal): void {
-                self::visibleRows($screen, $terminal);
+                ConversationTestHelper::visibleRows($screen, $terminal);
                 $terminal->simulateInput('/');
             },
         );
         EventLoop::delay(
             0.1,
             static function () use (&$open, $screen, $terminal): void {
-                $open = self::visibleRows($screen, $terminal);
+                $open = ConversationTestHelper::visibleRows($screen, $terminal);
                 $terminal->simulateInput("\x1b");
             },
         );
         EventLoop::delay(
             0.16,
             static function () use (&$closed, $screen, $terminal): void {
-                $closed = self::visibleRows($screen, $terminal);
+                $closed = ConversationTestHelper::visibleRows($screen, $terminal);
                 $terminal->simulateResize(80, 18);
             },
         );
@@ -116,7 +116,7 @@ final class ConversationLayoutTest extends TestCase
             0.22,
             static function () use (&$resized, $terminal): void {
                 $resizedScreen = new ScreenBuffer(80, 18);
-                $resized = self::visibleRows($resizedScreen, $terminal);
+                $resized = ConversationTestHelper::visibleRows($resizedScreen, $terminal);
                 $terminal->simulateInput("\x03");
             },
         );
@@ -133,8 +133,8 @@ final class ConversationLayoutTest extends TestCase
         self::assertControlsAtBottom($open, 24, 'suggesting');
         self::assertControlsAtBottom($closed, 24, 'ready');
         self::assertControlsAtBottom($resized, 18, 'ready');
-        self::assertTrue(self::contains($open, 'Lists what can be typed here.'));
-        self::assertFalse(self::contains($closed, 'Lists what can be typed here.'));
+        self::assertTrue(ConversationTestHelper::contains($open, 'Lists what can be typed here.'));
+        self::assertFalse(ConversationTestHelper::contains($closed, 'Lists what can be typed here.'));
     }
 
     public function testQueuedMessagesCannotDisplaceControlsOnASmallScreen(): void
@@ -150,7 +150,7 @@ final class ConversationLayoutTest extends TestCase
         };
         $agent = new Agent();
         $agent->setAiProvider($provider);
-        $agent->setChatHistory(self::longHistory());
+        $agent->setChatHistory(ConversationTestHelper::longHistory());
         $terminal = new VirtualTerminal(columns: 80, rows: 12);
         $screen = new ScreenBuffer(80, 12);
         $queued = null;
@@ -170,7 +170,7 @@ final class ConversationLayoutTest extends TestCase
         EventLoop::delay(
             0.16,
             static function () use (&$queued, $screen, $terminal): void {
-                $queued = self::visibleRows($screen, $terminal);
+                $queued = ConversationTestHelper::visibleRows($screen, $terminal);
                 $terminal->simulateInput("\x03");
             },
         );
@@ -179,7 +179,7 @@ final class ConversationLayoutTest extends TestCase
 
         self::assertIsArray($queued);
         self::assertControlsAtBottom($queued, 12, 'Enter queues');
-        self::assertTrue(self::contains($queued, 'Queued message 8'));
+        self::assertTrue(ConversationTestHelper::contains($queued, 'Queued message 8'));
     }
 
     public function testShortHistoryStaysAtTheTopAndPagingStillReachesOlderContent(): void
@@ -195,7 +195,7 @@ final class ConversationLayoutTest extends TestCase
         EventLoop::delay(
             0.05,
             static function () use (&$short, $shortScreen, $shortTerminal): void {
-                $short = self::visibleRows($shortScreen, $shortTerminal);
+                $short = ConversationTestHelper::visibleRows($shortScreen, $shortTerminal);
                 $shortTerminal->simulateInput("\x03");
             },
         );
@@ -208,7 +208,7 @@ final class ConversationLayoutTest extends TestCase
         self::assertControlsAtBottom($short, 24, 'ready');
 
         $longAgent = new Agent();
-        $longAgent->setChatHistory(self::longHistory());
+        $longAgent->setChatHistory(ConversationTestHelper::longHistory());
         $longTerminal = new VirtualTerminal(columns: 80, rows: 24);
         $longScreen = new ScreenBuffer(80, 24);
         $latest = null;
@@ -218,21 +218,21 @@ final class ConversationLayoutTest extends TestCase
         EventLoop::delay(
             0.04,
             static function () use (&$latest, $longScreen, $longTerminal): void {
-                $latest = self::visibleRows($longScreen, $longTerminal);
+                $latest = ConversationTestHelper::visibleRows($longScreen, $longTerminal);
                 $longTerminal->simulateInput("\x1b[5~");
             },
         );
         EventLoop::delay(
             0.1,
             static function () use (&$older, $longScreen, $longTerminal): void {
-                $older = self::visibleRows($longScreen, $longTerminal);
+                $older = ConversationTestHelper::visibleRows($longScreen, $longTerminal);
                 $longTerminal->simulateInput("\x1b[6~");
             },
         );
         EventLoop::delay(
             0.16,
             static function () use (&$latestAgain, $longScreen, $longTerminal): void {
-                $latestAgain = self::visibleRows($longScreen, $longTerminal);
+                $latestAgain = ConversationTestHelper::visibleRows($longScreen, $longTerminal);
                 $longTerminal->simulateInput("\x03");
             },
         );
@@ -241,35 +241,11 @@ final class ConversationLayoutTest extends TestCase
         self::assertIsArray($latest);
         self::assertIsArray($older);
         self::assertIsArray($latestAgain);
-        self::assertTrue(self::contains($latest, 'Answer 20'));
-        self::assertFalse(self::contains($older, 'Answer 20'));
-        self::assertTrue(self::contains($older, 'Answer 18'));
-        self::assertTrue(self::contains($latestAgain, 'Answer 20'));
+        self::assertTrue(ConversationTestHelper::contains($latest, 'Answer 20'));
+        self::assertFalse(ConversationTestHelper::contains($older, 'Answer 20'));
+        self::assertTrue(ConversationTestHelper::contains($older, 'Answer 18'));
+        self::assertTrue(ConversationTestHelper::contains($latestAgain, 'Answer 20'));
         self::assertControlsAtBottom($older, 24, 'ready');
-    }
-
-    private static function longHistory(): InMemoryChatHistory
-    {
-        $history = new InMemoryChatHistory();
-
-        foreach (range(1, 20) as $turn) {
-            $history->addMessage(new UserMessage("Question {$turn}"));
-            $history->addMessage(new AssistantMessage("Answer {$turn}"));
-        }
-
-        return $history;
-    }
-
-    /**
-     * @return list<string>
-     */
-    private static function visibleRows(
-        ScreenBuffer $screen,
-        VirtualTerminal $terminal,
-    ): array {
-        $screen->write($terminal->consumeOutput());
-
-        return array_values(array_map(rtrim(...), $screen->getLines()));
     }
 
     /**
@@ -284,17 +260,4 @@ final class ConversationLayoutTest extends TestCase
         self::assertStringContainsString($status, $rows[$height - 1]);
     }
 
-    /**
-     * @param list<string> $rows
-     */
-    private static function contains(array $rows, string $text): bool
-    {
-        foreach ($rows as $row) {
-            if (str_contains($row, $text)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
 }

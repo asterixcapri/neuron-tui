@@ -41,7 +41,8 @@ final class ConversationReadingPositionTest extends TestCase
                 return $response;
             }
         };
-        $agent = self::agentWithLongHistory();
+        $agent = new Agent();
+        $agent->setChatHistory(ConversationTestHelper::longHistory());
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(columns: 80, rows: 24);
         $screen = new ScreenBuffer(80, 24);
@@ -59,7 +60,7 @@ final class ConversationReadingPositionTest extends TestCase
         EventLoop::delay(
             0.08,
             static function () use (&$following, $screen, $terminal): void {
-                $following = self::visibleRows($screen, $terminal);
+                $following = ConversationTestHelper::visibleRows($screen, $terminal);
                 $terminal->simulateInput("\x1b[5~");
             },
         );
@@ -88,13 +89,13 @@ final class ConversationReadingPositionTest extends TestCase
         EventLoop::delay(
             0.38,
             static function () use (&$followingAgain, $screen, $terminal): void {
-                $followingAgain = self::visibleRows($screen, $terminal);
+                $followingAgain = ConversationTestHelper::visibleRows($screen, $terminal);
             },
         );
         EventLoop::delay(
             0.55,
             static function () use (&$afterLatest, $screen, $terminal): void {
-                $afterLatest = self::visibleRows($screen, $terminal);
+                $afterLatest = ConversationTestHelper::visibleRows($screen, $terminal);
                 $terminal->simulateInput("\x03");
             },
         );
@@ -107,13 +108,13 @@ final class ConversationReadingPositionTest extends TestCase
         self::assertIsArray($afterGrowth);
         self::assertIsArray($followingAgain);
         self::assertIsArray($afterLatest);
-        self::assertTrue(self::contains($following, 'Continue'));
-        self::assertTrue(self::contains($following, 'Working'));
+        self::assertTrue(ConversationTestHelper::contains($following, 'Continue'));
+        self::assertTrue(ConversationTestHelper::contains($following, 'Working'));
         self::assertSame($beforeGrowth, $afterWorkingUpdate);
         self::assertSame($beforeGrowth, $afterGrowth);
-        self::assertTrue(self::contains($followingAgain, 'second new line'));
-        self::assertTrue(self::contains($afterLatest, 'latest streamed line'));
-        self::assertFalse(self::contains($afterLatest, 'Working'));
+        self::assertTrue(ConversationTestHelper::contains($followingAgain, 'second new line'));
+        self::assertTrue(ConversationTestHelper::contains($afterLatest, 'latest streamed line'));
+        self::assertFalse(ConversationTestHelper::contains($afterLatest, 'Working'));
     }
 
     public function testToolResultsAndResizePreserveTheVisibleConversationWhileReading(): void
@@ -158,7 +159,7 @@ final class ConversationReadingPositionTest extends TestCase
         EventLoop::delay(
             0.08,
             static function () use ($screen, $terminal): void {
-                self::visibleRows($screen, $terminal);
+                ConversationTestHelper::visibleRows($screen, $terminal);
                 $terminal->simulateInput("\x1b[5~");
             },
         );
@@ -213,23 +214,89 @@ final class ConversationReadingPositionTest extends TestCase
             $afterResize[$anchorRow],
         );
         self::assertSame($afterResize, $afterCompletion);
-        self::assertFalse(self::contains($afterResize, 'expanded-result'));
-        self::assertFalse(self::contains($afterResize, 'latest answer after tool'));
+        self::assertFalse(ConversationTestHelper::contains($afterResize, 'expanded-result'));
+        self::assertFalse(ConversationTestHelper::contains($afterResize, 'latest answer after tool'));
     }
 
-    private static function agentWithLongHistory(): Agent
+    public function testResizePreservesTheCorrectOccurrenceOfDuplicateRows(): void
+    {
+        [$beforeResize, $afterResize] = self::resizeRepeatedHistory(
+            ' conclusion',
+        );
+
+        self::assertSame('marker-20', self::visibleMarkers($beforeResize)[0]);
+        self::assertSame(
+            self::visibleMarkers($beforeResize)[0],
+            self::visibleMarkers($afterResize)[0],
+        );
+    }
+
+    public function testResizePreservesReadingWhenNoRenderedTextRowSurvivesReflow(): void
+    {
+        [$beforeResize, $afterResize] = self::resizeRepeatedHistory('');
+
+        self::assertSame(
+            self::visibleMarkers($beforeResize)[0],
+            self::visibleMarkers($afterResize)[0],
+        );
+        self::assertSame([], array_intersect(
+            self::meaningfulRows($beforeResize),
+            self::meaningfulRows($afterResize),
+        ));
+    }
+
+    /**
+     * @return array{list<string>, list<string>}
+     */
+    private static function resizeRepeatedHistory(string $answerSuffix): array
     {
         $history = new InMemoryChatHistory();
 
-        foreach (range(1, 20) as $turn) {
-            $history->addMessage(new UserMessage("Question {$turn}"));
-            $history->addMessage(new AssistantMessage("Answer {$turn}"));
+        foreach (range(1, 24) as $turn) {
+            $history->addMessage(new UserMessage(
+                'Repeated question alpha beta gamma delta epsilon zeta eta theta',
+            ));
+            $history->addMessage(new AssistantMessage(
+                "Repeated answer alpha beta gamma delta epsilon zeta eta theta marker-{$turn}{$answerSuffix}",
+            ));
         }
 
         $agent = new Agent();
         $agent->setChatHistory($history);
+        $terminal = new VirtualTerminal(columns: 80, rows: 24);
+        $screen = new ScreenBuffer(80, 24);
+        $beforeResize = null;
+        $afterResize = null;
 
-        return $agent;
+        EventLoop::delay(
+            0.04,
+            static function () use ($screen, $terminal): void {
+                ConversationTestHelper::visibleRows($screen, $terminal);
+                $terminal->simulateInput("\x1b[5~");
+            },
+        );
+        EventLoop::delay(
+            0.1,
+            static function () use (&$beforeResize, $screen, $terminal): void {
+                $beforeResize = self::conversationRows($screen, $terminal);
+                $terminal->simulateResize(43, 24);
+            },
+        );
+        EventLoop::delay(
+            0.16,
+            static function () use (&$afterResize, $terminal): void {
+                $resizedScreen = new ScreenBuffer(43, 24);
+                $afterResize = self::conversationRows($resizedScreen, $terminal);
+                $terminal->simulateInput("\x03");
+            },
+        );
+
+        (new Tui($agent, terminal: $terminal))->run();
+
+        self::assertIsArray($beforeResize);
+        self::assertIsArray($afterResize);
+
+        return [$beforeResize, $afterResize];
     }
 
     private static function agentWithReflowingHistory(): Agent
@@ -267,38 +334,41 @@ final class ConversationReadingPositionTest extends TestCase
     }
 
     /**
+     * @param list<string> $rows
+     *
+     * @return list<string>
+     */
+    private static function visibleMarkers(array $rows): array
+    {
+        preg_match_all('/marker-\d+/', implode("\n", $rows), $matches);
+
+        return $matches[0];
+    }
+
+    /**
+     * @param list<string> $rows
+     *
+     * @return list<string>
+     */
+    private static function meaningfulRows(array $rows): array
+    {
+        return array_values(array_filter(
+            array_map(trim(...), $rows),
+            static fn (string $row): bool => $row !== '',
+        ));
+    }
+
+    /**
      * @return list<string>
      */
     private static function conversationRows(
         ScreenBuffer $screen,
         VirtualTerminal $terminal,
     ): array {
-        return array_slice(self::visibleRows($screen, $terminal), 0, -4);
-    }
-
-    /**
-     * @return list<string>
-     */
-    private static function visibleRows(
-        ScreenBuffer $screen,
-        VirtualTerminal $terminal,
-    ): array {
-        $screen->write($terminal->consumeOutput());
-
-        return array_values(array_map(rtrim(...), $screen->getLines()));
-    }
-
-    /**
-     * @param list<string> $rows
-     */
-    private static function contains(array $rows, string $text): bool
-    {
-        foreach ($rows as $row) {
-            if (str_contains($row, $text)) {
-                return true;
-            }
-        }
-
-        return false;
+        return array_slice(
+            ConversationTestHelper::visibleRows($screen, $terminal),
+            0,
+            -4,
+        );
     }
 }

@@ -30,7 +30,7 @@ final class HistoryPane
 
     public function __construct(
         private readonly Tui $tui,
-        private readonly ?ConversationViewport $viewport = null,
+        private readonly ConversationViewport $viewport,
     ) {
         $this->widget = new ContainerWidget();
         $this->widget->addStyleClass('history');
@@ -113,7 +113,7 @@ final class HistoryPane
     {
         $this->entries = [];
         $this->widget->clear();
-        $this->viewport?->reset();
+        $this->viewport->reset();
         $this->tui->requestRender();
     }
 
@@ -122,19 +122,19 @@ final class HistoryPane
      */
     public function followLatest(): void
     {
-        $this->viewport?->followLatest();
+        $this->viewport->followLatest();
         $this->tui->requestRender();
     }
 
     public function scrollUp(): void
     {
-        $this->viewport?->scrollUp();
+        $this->viewport->scrollUp();
         $this->tui->requestRender();
     }
 
     public function scrollDown(): void
     {
-        $this->viewport?->scrollDown();
+        $this->viewport->scrollDown();
         $this->tui->requestRender();
     }
 
