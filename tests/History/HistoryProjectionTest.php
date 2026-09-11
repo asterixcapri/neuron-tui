@@ -25,6 +25,19 @@ use PHPUnit\Framework\TestCase;
 
 final class HistoryProjectionTest extends TestCase
 {
+    public function testRepeatedResultsWithoutAnnouncementsRemainDistinct(): void
+    {
+        $first = (new Tool('lookup'))->setCallId('lookup')->setInputs(['value' => 1])->setResult('First result.');
+        $second = (new Tool('lookup'))->setCallId('lookup')->setInputs(['value' => 2])->setResult('Second result.');
+        $entries = $this->project([new ToolResultMessage([$first, $second])]);
+
+        self::assertCount(2, $entries);
+        self::assertStringContainsString('lookup {"value":1}', $entries[0]->text);
+        self::assertStringContainsString('First result.', $entries[0]->text);
+        self::assertStringContainsString('lookup {"value":2}', $entries[1]->text);
+        self::assertStringContainsString('Second result.', $entries[1]->text);
+    }
+
     public function testAnInterruptedResponseKeepsItsWordsSeparateFromTheOutcome(): void
     {
         $message = (new AssistantMessage('Partial answer.'))->setStopReason('interrupted');

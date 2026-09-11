@@ -15,14 +15,80 @@ use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Tools\Tool;
 use NeuronTui\Conversation\TurnInterruption;
 use NeuronTui\Conversation\TurnRunner;
+use NeuronTui\History\ToolOutcome;
 use NeuronTui\View\ConversationView;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
+use RuntimeException;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
 final class TurnRunnerTest extends TestCase
 {
+    /** @return iterable<string, array{?string, bool}> */
+    public static function repeatedSequentialCalls(): iterable
+    {
+        yield 'repeated ids and success' => ['lookup', false];
+        yield 'repeated ids and failure' => ['lookup', true];
+        yield 'absent ids and success' => [null, false];
+        yield 'absent ids and failure' => [null, true];
+    }
+
+    #[DataProvider('repeatedSequentialCalls')]
+    public function testAnExecutedCallNeverSuppliesTheResultOfALaterSkippedOccurrence(?string $callId, bool $fails): void
+    {
+        $interruption = new TurnInterruption();
+        $runs = [];
+        $tools = [];
+
+        foreach ([1, 2, 3] as $value) {
+            $tools[] = (new Tool('lookup'))->setCallId($callId)->setInputs(['value' => $value])->setCallable(
+                static function () use ($value, $interruption, $fails, &$runs): string {
+                    $runs[] = $value;
+                    $interruption->request();
+
+                    if ($fails) {
+                        throw new RuntimeException('First lookup failed.');
+                    }
+
+                    return 'First lookup completed.';
+                },
+            );
+        }
+
+        $provider = new FakeAIProvider(new ToolCallMessage(tools: $tools), new AssistantMessage('Next answer.'));
+        $agent = $this->agentOf($provider);
+        $terminal = new VirtualTerminal(columns: 120, rows: 35);
+        $runner = new TurnRunner(new ConversationView($terminal, 'Neuron AI', 'Conversation'));
+        EventLoop::queue(static function () use ($runner, $agent, $interruption): void {
+            $runner->run($agent, 'First question.', $interruption);
+            $runner->run($agent, 'Next question.');
+        });
+        EventLoop::run();
+
+        self::assertSame([1], $runs);
+        $messages = $agent->getChatHistory()->getMessages();
+        self::assertCount(5, $messages);
+        self::assertInstanceOf(ToolResultMessage::class, $messages[2]);
+        $results = $messages[2]->getTools();
+        self::assertCount(3, $results);
+
+        foreach ($results as $index => $result) {
+            self::assertSame($callId, $result->getCallId());
+            self::assertSame('lookup', $result->getName());
+            self::assertSame(['value' => $index + 1], $result->getInputs());
+            self::assertSame($index === 0 ? ($fails ? 'failed' : null) : 'not_executed', ToolOutcome::status($result));
+        }
+
+        self::assertSame($fails ? 'First lookup failed.' : 'First lookup completed.', ToolOutcome::text($results[0]));
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+        self::assertStringContainsString('lookup {"value":2}', $display);
+        self::assertStringContainsString('lookup {"value":3}', $display);
+        $provider->assertCallCount(2);
+        self::assertSame(array_slice($messages, 0, 4), $provider->getRecorded()[1]->messages);
+    }
+
     public function testAnInterruptionAtTheFirstAnnouncementDoesNotStartAnyTool(): void
     {
         $interruption = new TurnInterruption();

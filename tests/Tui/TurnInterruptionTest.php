@@ -17,8 +17,10 @@ use NeuronInteraction\Command\HelpCommand;
 use NeuronInteraction\Command\Selection;
 use NeuronInteraction\Command\SelectionOption;
 use NeuronTui\Tui;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
+use RuntimeException;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
@@ -26,6 +28,72 @@ use function Amp\delay;
 
 final class TurnInterruptionTest extends TestCase
 {
+    /** @return iterable<string, array{bool, bool}> */
+    public static function providerFailures(): iterable
+    {
+        yield 'before text with waiting input' => [false, true];
+        yield 'after text with waiting input' => [true, true];
+        yield 'before text without waiting input' => [false, false];
+        yield 'after text without waiting input' => [true, false];
+    }
+
+    #[DataProvider('providerFailures')]
+    public function testProviderFailureAfterEscapeRetainsTheInterruptedTurnAndAdvancesOnce(bool $partial, bool $queued): void
+    {
+        $terminal = new VirtualTerminal(columns: 140, rows: 40);
+        $provider = new class($terminal, $partial, $queued) extends FakeAIProvider {
+            public function __construct(
+                private readonly VirtualTerminal $terminal,
+                private readonly bool $partial,
+                private readonly bool $queued,
+            ) {
+                parent::__construct(new AssistantMessage('First answer.'), new AssistantMessage('Second answer.'), new AssistantMessage('Third answer.'));
+            }
+
+            protected function streamChunks(Message $response): Generator
+            {
+                if ($response->getContent() !== 'First answer.') {
+                    return yield from parent::streamChunks($response);
+                }
+
+                if ($this->partial) {
+                    yield new TextChunk('failure', 'Partial.');
+                }
+
+                $this->terminal->simulateInput(($this->queued ? "Second question\rThird question\r" : '') . "\x1b\x1b\x1b");
+                delay(0.04);
+
+                throw new RuntimeException('Provider connection dropped after Escape.');
+            }
+        };
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        EventLoop::queue(static fn () => $terminal->simulateInput("First question\r"));
+        EventLoop::delay(0.3, static fn () => $terminal->simulateInput("\x03"));
+
+        (new Tui($agent, terminal: $terminal))->run();
+
+        $messages = $agent->getChatHistory()->getMessages();
+        $expected = $partial ? ['First question', 'Partial.'] : ['First question'];
+
+        if ($queued) {
+            array_push($expected, 'Second question', 'Second answer.', 'Third question', 'Third answer.');
+        }
+
+        self::assertSame($expected, array_map(static fn (Message $message): ?string => $message->getContent(), $messages));
+        self::assertSame('interrupted', $messages[$partial ? 1 : 0]->getMetadata('stop_reason'));
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+        self::assertStringContainsString('Turn interrupted.', $display);
+        self::assertStringContainsString('RuntimeException: Provider connection dropped after Escape.', $display);
+        self::assertStringContainsString('ready · Enter sends', $display);
+        $provider->assertCallCount($queued ? 3 : 1);
+
+        if ($queued) {
+            self::assertSame(array_slice($messages, 0, $partial ? 3 : 2), $provider->getRecorded()[1]->messages);
+            self::assertSame(array_slice($messages, 0, $partial ? 5 : 4), $provider->getRecorded()[2]->messages);
+        }
+    }
+
     public function testPickerConsumesFirstEscapeBeforeTurnInterruption(): void
     {
         $terminal = new VirtualTerminal(columns: 120, rows: 30);

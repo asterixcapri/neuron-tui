@@ -12,7 +12,11 @@ use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Observability\ObserverInterface;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Tools\ToolInterface;
+use NeuronTui\History\HistoryProjection;
+use NeuronTui\History\ProjectedEntry;
+use NeuronTui\History\ProjectedEntryKind;
 use NeuronTui\Tests\Fixtures\ParallelBatchTool;
+use NeuronTui\Tests\Fixtures\RepeatedCallTool;
 use NeuronTui\Tui;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -42,6 +46,106 @@ final class ParallelToolInterruptionTest extends TestCase
     {
         if (isset($this->directory)) {
             (new Filesystem())->remove($this->directory);
+        }
+    }
+
+    /** @return iterable<string, array{?string, bool}> */
+    public static function ambiguousCallIds(): iterable
+    {
+        yield 'repeated ids with success' => ['lookup', false];
+        yield 'repeated ids with failure' => ['lookup', true];
+        yield 'absent ids with success' => [null, false];
+        yield 'absent ids with failure' => [null, true];
+    }
+
+    #[DataProvider('ambiguousCallIds')]
+    public function testRepeatedCallsRetainDistinctChildOutcomesAndStopBeforeFurtherInference(?string $callId, bool $fails): void
+    {
+        $terminal = new VirtualTerminal(columns: 140, rows: 45);
+        $tools = [
+            (new RepeatedCallTool(1, $this->directory, $fails))->setCallId($callId),
+            (new RepeatedCallTool(2, $this->directory))->setCallId($callId),
+            (new RepeatedCallTool(3, $this->directory))->setCallId($callId),
+        ];
+        $call = new ToolCallMessage(tools: $tools);
+        $provider = new FakeAIProvider($call, new AssistantMessage('Second answer.'), new AssistantMessage('Third answer.'));
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        $agent->parallelToolCalls(true);
+        $agent->observe(new class($terminal) implements ObserverInterface {
+            private bool $requested = false;
+
+            public function __construct(private readonly VirtualTerminal $terminal)
+            {
+            }
+
+            public function onEvent(string $event, object $source, mixed $data = null, ?string $branchId = null): void
+            {
+                if ($event === 'tool-called' && !$this->requested) {
+                    $this->requested = true;
+                    $this->terminal->simulateInput("Second question\rThird question\r\x1b\x1b\x1b");
+                }
+            }
+        });
+        EventLoop::queue(static fn () => $terminal->simulateInput("First question\r"));
+        EventLoop::delay(0.3, static fn () => $terminal->simulateInput("\x03"));
+
+        (new Tui($agent, terminal: $terminal))->run();
+
+        $messages = $agent->getChatHistory()->getMessages();
+        self::assertCount(7, $messages);
+        self::assertSame($call, $messages[1]);
+        self::assertSame('interrupted', $call->getMetadata('stop_reason'));
+        self::assertInstanceOf(ToolResultMessage::class, $messages[2]);
+        $results = $messages[2]->getTools();
+        self::assertCount(3, $results);
+        $pids = [];
+
+        foreach ($results as $index => $result) {
+            self::assertSame($callId, $result->getCallId());
+            self::assertSame('lookup', $result->getName());
+            self::assertSame(['value' => $index + 1], $result->getInputs());
+            $pid = file_get_contents($this->directory . '/' . ($index + 1) . '.settled');
+            self::assertNotFalse($pid);
+            self::assertTrue(ctype_digit($pid));
+            self::assertNotSame((string) getmypid(), $pid);
+            $pids[] = $pid;
+
+            if ($index === 0 && $fails) {
+                self::assertSame([
+                    'neuron_tui' => 'tool_outcome',
+                    'status' => 'failed',
+                    'error_type' => \RuntimeException::class,
+                    'message' => 'Lookup 1 failed.',
+                ], json_decode($result->getResult(), true, flags: JSON_THROW_ON_ERROR));
+            } else {
+                self::assertSame('Lookup ' . ($index + 1) . ' completed.', $result->getResult());
+            }
+        }
+
+        self::assertCount(3, array_unique($pids));
+        self::assertSame(['Second question', 'Second answer.', 'Third question', 'Third answer.'], array_map(
+            static fn (Message $message): ?string => $message->getContent(),
+            array_slice($messages, 3),
+        ));
+        $provider->assertCallCount(3);
+        self::assertSame(array_slice($messages, 0, 4), $provider->getRecorded()[1]->messages);
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+        self::assertStringContainsString('Turn interrupted.', $display);
+        self::assertStringContainsString($fails ? 'Lookup 1 failed.' : 'Lookup 1 completed.', $display);
+        self::assertStringContainsString('Lookup 2 completed.', $display);
+        self::assertStringContainsString('Lookup 3 completed.', $display);
+        self::assertStringNotContainsString('Not executed', $display);
+        $projectedTools = array_values(array_filter(
+            (new HistoryProjection($messages))->entries(),
+            static fn (ProjectedEntry $entry): bool => $entry->kind === ProjectedEntryKind::Tool,
+        ));
+        self::assertCount(3, $projectedTools);
+
+        foreach ($projectedTools as $index => $entry) {
+            self::assertStringContainsString('lookup {"value":' . ($index + 1) . '}', $entry->text);
+            self::assertStringContainsString('Lookup ' . ($index + 1) . ($index === 0 && $fails ? ' failed.' : ' completed.'), $entry->text);
+            self::assertStringNotContainsString('Running', $entry->text);
         }
     }
 

@@ -141,3 +141,11 @@ when Escape requests a Turn interruption.
 - Message stop reasons and ordinary message metadata survive History persistence but are not generically forwarded by provider mappers. This permits the TUI to label a partial response without changing the Agent's words.
 - Tool-result message metadata does not reliably survive every Neuron 3 deserialization path, which is why not-executed status belongs in the tool result body.
 - The intended experience follows the confirmed interaction model: Escape redirects at the next safe boundary, already-started indivisible work settles, and waiting input continues automatically.
+
+## Code Review Follow-up
+
+- Provider failures after an accepted interruption retain the original User and any presented response text, including failures before the first streamed event. The runtime still shows the actual error and advances waiting input once in FIFO order; Workflow interruptions retain their separate exception path.
+- Tool outcomes correlate to individual requested occurrences even when providers repeat or omit call IDs. Name and inputs distinguish out-of-order parallel results; batch settlement counts actual outcomes independently. Skipped sequential calls cannot inherit an earlier occurrence's result, and live and historical presentation retain separate entries.
+- The runner now settles every interrupted stream exit through one common finalization block while preserving input checkpoints, completed-response persistence, and restoration of host tool error handlers.
+- Regression coverage includes actual parallel child processes finishing out of request order, successful and failed repeated calls, provider failures with and without partial text or waiting input, and repeated sequential calls with unstarted successors.
+- Validation passed: `composer cs:fix`, `composer stan`, the focused interruption/Conversation/History tests, `composer test` (281 tests, 2211 assertions), and `composer cs`.
