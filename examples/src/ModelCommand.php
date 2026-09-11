@@ -66,6 +66,26 @@ final readonly class ModelCommand implements CommandInterface
                     'Anthropic · Claude Haiku 4.5',
                     'Fast and affordable for simple tasks.',
                 ),
+                new SelectionOption(
+                    'zen:deepseek-v4-flash',
+                    'OpenCode Zen · DeepSeek V4 Flash',
+                    'Fast, efficient reasoning for everyday agent tasks.',
+                ),
+                new SelectionOption(
+                    'zen:deepseek-v4-pro',
+                    'OpenCode Zen · DeepSeek V4 Pro',
+                    'Advanced reasoning and coding for demanding agent tasks.',
+                ),
+                new SelectionOption(
+                    'zen:glm-5.3-flash',
+                    'OpenCode Zen · GLM 5.3 Flash',
+                    'Efficient coding and visual understanding for agent workflows.',
+                ),
+                new SelectionOption(
+                    'zen:glm-5.3',
+                    'OpenCode Zen · GLM 5.3',
+                    'Flagship for complex codebases and long-running agent tasks.',
+                ),
             ]));
 
             return;
