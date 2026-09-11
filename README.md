@@ -45,6 +45,17 @@ Tui::make($agent)->run();
 The minimal configuration displays the Agent’s existing conversation and accepts
 new messages. Use `Ctrl+C` to exit.
 
+Press `Escape` while the Agent is working to request a stop at a streamed text
+boundary. The partial response is retained and marked as interrupted, and the
+first waiting message starts automatically. If no response text has arrived,
+the request waits for the first displayable text. Tools continue normally while
+the request is pending, including later tools and follow-up inference. Natural
+completion or failure can occur before the request takes effect.
+
+Escape preserves your draft while working. An open Picker or Command suggestions
+handles Escape first. This behavior uses Neuron's public message and streaming
+interfaces without replacing its History, trimmer, executor or tool-error handler.
+
 The default header uses generic Neuron AI branding. A title and subtitle can
 be supplied when the terminal should identify a particular Agent or product:
 

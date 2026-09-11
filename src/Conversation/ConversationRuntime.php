@@ -30,6 +30,8 @@ final class ConversationRuntime
     /** @var Future<mixed>|null */
     private ?Future $runningTurn = null;
 
+    private ?TurnInterruption $interruption = null;
+
     private bool $stopped = false;
 
     private ?ChatHistoryInterface $displayedHistory = null;
@@ -45,6 +47,7 @@ final class ConversationRuntime
 
     public function submitMessage(MessageForAgent $message): void
     {
+        $this->view->emptyComposer();
         $accepted = $this->turnQueue->accept($message->content);
 
         if ($accepted === null) {
@@ -79,6 +82,20 @@ final class ConversationRuntime
         return $this->turnQueue->isBusy();
     }
 
+    public function requestInterruption(): void
+    {
+        if (
+            $this->interruption === null
+            || ($this->runningTurn !== null && $this->runningTurn->isComplete())
+            || !$this->interruption->request()
+        ) {
+            return;
+        }
+
+        $this->view->interrupting();
+        $this->view->paintPendingChanges();
+    }
+
     public function isStopped(): bool
     {
         return $this->stopped;
@@ -111,8 +128,9 @@ final class ConversationRuntime
             // Capture the Agent when execution is scheduled, so this Turn
             // finishes with that Agent even if another takes over.
             $agent = $this->agent;
-            $this->runningTurn = async(function () use ($agent, $message): void {
-                $this->turnRunner->run($agent, $message);
+            $interruption = $this->interruption;
+            $this->runningTurn = async(function () use ($agent, $message, $interruption): void {
+                $this->turnRunner->run($agent, $message, $interruption);
             });
 
             return true;
@@ -140,6 +158,7 @@ final class ConversationRuntime
         }
 
         $this->runningTurn = null;
+        $this->interruption = null;
         $this->showTurnFinished();
 
         $next = $this->turnQueue->finishAndAdvance();
@@ -162,6 +181,7 @@ final class ConversationRuntime
      */
     private function showTurnStarted(string $message): void
     {
+        $this->interruption = new TurnInterruption();
         $this->view->acceptUserMessage($message);
         $this->view->working();
         $this->workingIndicator->start(microtime(true));
