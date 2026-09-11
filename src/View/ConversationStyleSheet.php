@@ -20,6 +20,7 @@ final class ConversationStyleSheet
     {
         return new StyleSheet([
             ':root' => new Style(gap: 1),
+            '.conversation' => new Style(gap: 1),
             '.header' => new Style(
                 border: new Border(0, 0, 1, 0, 'normal', 'gray'),
                 padding: new Padding(0, 1, 1, 1),

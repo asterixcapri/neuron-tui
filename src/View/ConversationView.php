@@ -13,6 +13,7 @@ use NeuronInteraction\Command\CommandInterface;
 use NeuronTui\History\HistoryProjection;
 use NeuronTui\History\ProjectedEntryKind;
 use NeuronTui\View\Widget\ComposerEditor;
+use NeuronTui\View\Widget\ConversationViewport;
 use Symfony\Component\Tui\Event\CancelEvent;
 use Symfony\Component\Tui\Event\ChangeEvent;
 use Symfony\Component\Tui\Event\InputEvent;
@@ -51,6 +52,10 @@ final class ConversationView
     private readonly Tui $tui;
 
     private readonly HistoryPane $history;
+
+    private readonly ContainerWidget $conversation;
+
+    private readonly ConversationViewport $conversationViewport;
 
     private readonly ContainerWidget $queuedMessages;
 
@@ -112,7 +117,16 @@ final class ConversationView
             ConversationStyleSheet::create(),
             $this->terminal,
         );
-        $this->history = new HistoryPane($this->tui, $this->terminal);
+        $this->conversation = new ContainerWidget();
+        $this->conversation->addStyleClass('conversation');
+        $this->conversationViewport = new ConversationViewport(
+            $this->conversation,
+        );
+        $this->history = new HistoryPane(
+            $this->tui,
+            $this->terminal,
+            $this->conversationViewport,
+        );
         $this->workingIndicator = new WorkingIndicator($this->history);
         $this->queuedMessages = new ContainerWidget();
         $this->queuedMessages->addStyleClass('queued-messages');
@@ -530,9 +544,10 @@ final class ConversationView
 
         $this->showConversationControls();
 
-        $this->tui->add($header);
-        $this->tui->add($this->history->widget());
-        $this->tui->add($this->queuedMessages);
+        $this->conversation->add($header);
+        $this->conversation->add($this->history->widget());
+        $this->conversation->add($this->queuedMessages);
+        $this->tui->add($this->conversationViewport);
         $this->tui->add($this->lowerPanel);
         $this->tui->setFocus($this->editor);
     }

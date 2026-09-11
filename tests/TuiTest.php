@@ -48,6 +48,7 @@ use NeuronTui\Tui;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
+use Symfony\Component\Tui\Terminal\ScreenBuffer;
 use Symfony\Component\Tui\Terminal\TerminalInterface;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
@@ -6140,6 +6141,7 @@ MARKDOWN;
         $agent = new Agent();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 16);
+        $screen = new ScreenBuffer(80, 16);
         $followingDisplay = null;
         $beforeGrowth = null;
         $afterGrowth = null;
@@ -6148,29 +6150,24 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.07,
-            static function () use (&$followingDisplay, $terminal): void {
-                $followingDisplay = AnsiUtils::stripAnsiCodes(
-                    $terminal->getOutput(),
-                );
-                $terminal->clearOutput();
+            static function () use (&$followingDisplay, $screen, $terminal): void {
+                $screen->write($terminal->consumeOutput());
+                $followingDisplay = $screen->getScreen();
                 $terminal->simulateInput("\x1b[5~");
             },
         );
         EventLoop::delay(
             0.11,
-            static function () use (&$beforeGrowth, $terminal): void {
-                $beforeGrowth = AnsiUtils::stripAnsiCodes(
-                    $terminal->getOutput(),
-                );
-                $terminal->clearOutput();
+            static function () use (&$beforeGrowth, $screen, $terminal): void {
+                $screen->write($terminal->consumeOutput());
+                $beforeGrowth = $screen->getScreen();
             },
         );
         EventLoop::delay(
             0.22,
-            static function () use (&$afterGrowth, $terminal): void {
-                $afterGrowth = AnsiUtils::stripAnsiCodes(
-                    $terminal->getOutput(),
-                );
+            static function () use (&$afterGrowth, $screen, $terminal): void {
+                $screen->write($terminal->consumeOutput());
+                $afterGrowth = $screen->getScreen();
             },
         );
         EventLoop::delay(

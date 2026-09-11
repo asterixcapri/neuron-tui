@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronTui\View;
 
+use NeuronTui\View\Widget\ConversationViewport;
 use Symfony\Component\Tui\Terminal\TerminalInterface;
 use Symfony\Component\Tui\Tui;
 use Symfony\Component\Tui\Widget\ContainerWidget;
@@ -41,10 +42,10 @@ final class HistoryPane
     public function __construct(
         private readonly Tui $tui,
         private readonly TerminalInterface $terminal,
+        private readonly ?ConversationViewport $viewport = null,
     ) {
         $this->widget = new ContainerWidget();
         $this->widget->addStyleClass('history');
-        $this->widget->expandVertically(true);
     }
 
     public function widget(): ContainerWidget
@@ -201,7 +202,7 @@ final class HistoryPane
     private function setScrollOffset(int $offset): void
     {
         $this->scrollOffset = max(0, $offset);
-        $this->tui->setScrollOffset($this->scrollOffset);
+        $this->viewport?->setScrollOffset($this->scrollOffset);
         $this->tui->requestRender();
     }
 }
