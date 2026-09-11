@@ -149,8 +149,12 @@ final class HistoryProjection
     {
         // A result that finds no call of its own is still worth showing, so
         // it opens the call it should have answered and closes it at once.
-        $position = $this->correlation->matchResult($tool)
-            ?? $this->appendToolCall($tool);
+        $position = $this->correlation->matchResult($tool);
+
+        if ($position === null) {
+            $position = $this->appendToolCall($tool);
+            $this->correlation->matchResult($tool);
+        }
 
         $this->entries[$position] = new ProjectedEntry(
             ProjectedEntryKind::Tool,

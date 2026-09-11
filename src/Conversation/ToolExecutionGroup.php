@@ -9,6 +9,7 @@ use NeuronAI\Chat\History\ChatHistoryInterface;
 use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Tools\ToolInterface;
+use NeuronTui\History\ToolCallCorrelation;
 use NeuronTui\History\ToolOutcome;
 use Spatie\Fork\Fork;
 use Throwable;
@@ -16,8 +17,12 @@ use Throwable;
 /** Tracks actual outcomes separately from Neuron's tool announcements. @internal */
 final class ToolExecutionGroup
 {
-    /** @var array<string, ToolInterface> */
+    /** @var array<int, ToolInterface> */
     private array $results = [];
+
+    private readonly ToolCallCorrelation $correlation;
+
+    private int $settled = 0;
 
     /** @var list<ToolInterface> */
     private array $unpresented = [];
@@ -30,6 +35,12 @@ final class ToolExecutionGroup
 
     public function __construct(private readonly ToolCallMessage $message, ?ParallelToolNode $parallelNode = null)
     {
+        $this->correlation = new ToolCallCorrelation();
+
+        foreach ($message->getTools() as $position => $tool) {
+            $this->correlation->registerCall($tool, $position);
+        }
+
         $this->parallelFailures = $parallelNode !== null
             && extension_loaded('pcntl') && class_exists(Fork::class) && count($message->getTools()) > 1
             ? new ParallelToolFailures($parallelNode) : null;
@@ -55,7 +66,7 @@ final class ToolExecutionGroup
     {
         return $this->parallelFailures !== null
             && $this->announced === count($this->message->getTools())
-            && count($this->results) < count($this->message->getTools());
+            && $this->settled < count($this->message->getTools());
     }
 
     public function throwIfFailed(): void
@@ -73,7 +84,13 @@ final class ToolExecutionGroup
     public function record(ToolInterface $tool): ToolInterface
     {
         $tool = $this->parallelFailures?->result($tool) ?? $tool;
-        $this->results[self::key($tool)] = $tool;
+        $position = $this->correlation->matchResult($tool);
+
+        if ($position !== null) {
+            $this->results[$position] = $tool;
+        }
+
+        ++$this->settled;
         $this->started = null;
 
         return $tool;
@@ -86,8 +103,7 @@ final class ToolExecutionGroup
         }
 
         $result = ToolOutcome::failed($this->started, $failure);
-        $this->results[self::key($this->started)] = $result;
-        $this->started = null;
+        $this->record($result);
         $this->unpresented[] = $result;
 
         return true;
@@ -109,8 +125,8 @@ final class ToolExecutionGroup
 
         $results = [];
 
-        foreach ($this->message->getTools() as $tool) {
-            $result = $this->results[self::key($tool)] ?? null;
+        foreach ($this->message->getTools() as $position => $tool) {
+            $result = $this->results[$position] ?? null;
 
             if ($result === null) {
                 $result = ToolOutcome::notExecuted($tool);
@@ -125,10 +141,5 @@ final class ToolExecutionGroup
         $history->addMessage(new ToolResultMessage($results));
 
         return $this->unpresented;
-    }
-
-    private static function key(ToolInterface $tool): string
-    {
-        return $tool->getCallId() ?? 'object:' . spl_object_id($tool);
     }
 }
