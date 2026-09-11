@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace NeuronTui\Conversation;
 
+use NeuronAI\Agent\Nodes\ParallelToolNode;
 use NeuronAI\Chat\History\ChatHistoryInterface;
 use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Tools\ToolInterface;
 use NeuronTui\History\ToolOutcome;
+use Spatie\Fork\Fork;
 use Throwable;
 
 /** Tracks actual outcomes separately from Neuron's tool announcements. @internal */
@@ -22,8 +24,15 @@ final class ToolExecutionGroup
 
     private ?ToolInterface $started = null;
 
-    public function __construct(private readonly ToolCallMessage $message)
+    private int $announced = 0;
+
+    private readonly ?ParallelToolFailures $parallelFailures;
+
+    public function __construct(private readonly ToolCallMessage $message, ?ParallelToolNode $parallelNode = null)
     {
+        $this->parallelFailures = $parallelNode !== null
+            && extension_loaded('pcntl') && class_exists(Fork::class) && count($message->getTools()) > 1
+            ? new ParallelToolFailures($parallelNode) : null;
     }
 
     public function belongsTo(ToolCallMessage $message): bool
@@ -33,13 +42,41 @@ final class ToolExecutionGroup
 
     public function start(ToolInterface $tool): void
     {
+        ++$this->announced;
+
+        if ($this->parallelFailures !== null) {
+            return;
+        }
+
         $this->started = $tool;
     }
 
-    public function record(ToolInterface $tool): void
+    public function isSettling(): bool
     {
+        return $this->parallelFailures !== null
+            && $this->announced === count($this->message->getTools())
+            && count($this->results) < count($this->message->getTools());
+    }
+
+    public function throwIfFailed(): void
+    {
+        if (!$this->isSettling()) {
+            $this->parallelFailures?->throwIfFailed();
+        }
+    }
+
+    public function restore(): void
+    {
+        $this->parallelFailures?->restore();
+    }
+
+    public function record(ToolInterface $tool): ToolInterface
+    {
+        $tool = $this->parallelFailures?->result($tool) ?? $tool;
         $this->results[self::key($tool)] = $tool;
         $this->started = null;
+
+        return $tool;
     }
 
     public function fail(Throwable $failure): bool

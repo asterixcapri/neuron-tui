@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace NeuronTui\Conversation;
 
 use NeuronAI\Agent\Agent;
+use NeuronAI\Agent\Events\ToolCallEvent;
+use NeuronAI\Agent\Nodes\ParallelToolNode;
 use NeuronAI\Chat\Messages\AssistantMessage;
 use NeuronAI\Chat\Messages\Stream\Chunks\StreamChunk;
 use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
@@ -73,93 +75,104 @@ final class TurnRunner
             ->stream($userMessage)
             ->events();
 
-        // Advancing the generator can start provider or tool work. Yield to
-        // terminal input before asking Neuron for the next event.
-        while ($events->valid()) {
-            $event = $events->current();
+        try {
+            // Advancing the generator can start provider or tool work. Yield to
+            // terminal input before asking Neuron for the next event.
+            while ($events->valid()) {
+                $event = $events->current();
 
-            if ($event instanceof ToolCallChunk) {
-                $messages = $agent->getChatHistory()->getMessages();
-                $last = end($messages);
+                if ($event instanceof ToolCallChunk) {
+                    $messages = $agent->getChatHistory()->getMessages();
+                    $last = end($messages);
 
-                if ($last instanceof ToolCallMessage && ($tools === null || !$tools->belongsTo($last))) {
-                    $tools = new ToolExecutionGroup($last);
+                    if ($last instanceof ToolCallMessage && ($tools === null || !$tools->belongsTo($last))) {
+                        $tools?->restore();
+                        $node = $agent->getNodeForEvent(ToolCallEvent::class);
+                        $tools = new ToolExecutionGroup($last, $node instanceof ParallelToolNode ? $node : null);
+                    }
+
+                    // This inference's prose is already retained by ToolCallMessage.
+                    $responseText = '';
+                    $pendingAgentText = '';
                 }
 
-                // This inference's prose is already retained by ToolCallMessage.
-                $responseText = '';
-                $pendingAgentText = '';
-            }
+                if ($event instanceof ToolResultChunk) {
+                    $event = new ToolResultChunk($tools?->record($event->tool) ?? $event->tool);
+                    $this->view->toolRunning($tools?->isSettling() ?? false);
+                    // Started work keeps its real outcome even when Escape was
+                    // received during execution, before this boundary is reached.
+                    $this->presentEvent($event, $responseText, $pendingAgentText, $toolActivity);
+                }
 
-            if ($event instanceof ToolResultChunk) {
-                $tools?->record($event->tool);
-                $this->view->toolRunning(false);
-                // Started work keeps its real outcome even when Escape was
-                // received during execution, before this boundary is reached.
-                $this->presentEvent($event, $responseText, $pendingAgentText, $toolActivity);
-            }
+                if ($interruption->checkpoint() && !($tools?->isSettling() ?? false)) {
+                    $interruption->finish();
+                    $this->reconcileTools($agent, $tools, $toolActivity);
+                    $this->finishInterrupted($agent, $userMessage, $responseText);
 
-            if ($interruption->checkpoint()) {
-                $interruption->finish();
-                $this->reconcileTools($agent, $tools, $toolActivity);
-                $this->finishInterrupted($agent, $userMessage, $responseText);
+                    return;
+                }
 
-                return;
-            }
+                // Leave the current event suspended until its presentation has
+                // completed, and until buffered input has had a chance to run.
+                if ($event instanceof StreamChunk && !$event instanceof ToolResultChunk) {
+                    $this->presentEvent($event, $responseText, $pendingAgentText, $toolActivity);
+                }
 
-            // Leave the current event suspended until its presentation has
-            // completed, and until buffered input has had a chance to run.
-            if ($event instanceof StreamChunk && !$event instanceof ToolResultChunk) {
-                $this->presentEvent($event, $responseText, $pendingAgentText, $toolActivity);
-            }
+                if ($interruption->checkpoint() && !($tools?->isSettling() ?? false)) {
+                    $interruption->finish();
+                    $this->reconcileTools($agent, $tools, $toolActivity);
+                    $this->finishInterrupted($agent, $userMessage, $responseText);
 
-            if ($interruption->checkpoint()) {
-                $interruption->finish();
-                $this->reconcileTools($agent, $tools, $toolActivity);
-                $this->finishInterrupted($agent, $userMessage, $responseText);
+                    return;
+                }
 
-                return;
-            }
+                if ($event instanceof ToolCallChunk) {
+                    $tools?->start($event->tool);
+                    $this->view->toolRunning(true);
+                }
 
-            if ($event instanceof ToolCallChunk) {
-                $tools?->start($event->tool);
-                $this->view->toolRunning(true);
-            }
+                $tools?->throwIfFailed();
 
-            try {
-                $events->next();
-            } catch (WorkflowInterrupt $exception) {
-                throw $exception;
-            } catch (Throwable $exception) {
-                // A synchronous tool can throw before buffered Escape has
-                // been dispatched. Observe input before deciding its outcome.
-                if (!$interruption->checkpoint() || $tools === null || !$tools->fail($exception)) {
+                try {
+                    $events->next();
+                } catch (WorkflowInterrupt $exception) {
                     throw $exception;
-                }
+                } catch (Throwable $exception) {
+                    // A synchronous tool can throw before buffered Escape has
+                    // been dispatched. Observe input before deciding its outcome.
+                    if (!$interruption->checkpoint() || $tools === null || !$tools->fail($exception)) {
+                        throw $exception;
+                    }
 
-                $interruption->finish();
+                    $interruption->finish();
+                    $this->reconcileTools($agent, $tools, $toolActivity);
+                    $this->finishInterrupted($agent, $userMessage, $responseText);
+
+                    return;
+                }
+            }
+
+            // A provider can suspend after its final chunk, then commit its
+            // response without yielding another event. An accepted request still
+            // owns that outcome, even when generator completion follows it.
+            if ($interruption->finish()) {
                 $this->reconcileTools($agent, $tools, $toolActivity);
-                $this->finishInterrupted($agent, $userMessage, $responseText);
+                $this->finishInterrupted($agent, $userMessage, $responseText, true);
 
                 return;
             }
-        }
 
-        // A provider can suspend after its final chunk, then commit its
-        // response without yielding another event. An accepted request still
-        // owns that outcome, even when generator completion follows it.
-        if ($interruption->finish()) {
-            $this->reconcileTools($agent, $tools, $toolActivity);
-            $this->finishInterrupted($agent, $userMessage, $responseText, true);
+            $displayableText = DisplayableText::safe($responseText);
 
-            return;
-        }
-
-        $displayableText = DisplayableText::safe($responseText);
-
-        if (trim($displayableText) === '' && !$toolActivity->hasActivity()) {
-            $this->workingIndicator->stop();
-            $this->view->showEmptyResponse();
+            if (trim($displayableText) === '' && !$toolActivity->hasActivity()) {
+                $this->workingIndicator->stop();
+                $this->view->showEmptyResponse();
+            }
+        } finally {
+            // Abandon the suspended workflow before restoring the handler on
+            // the reusable Agent; it must never resume with a stale adapter.
+            unset($events);
+            $tools?->restore();
         }
     }
 
