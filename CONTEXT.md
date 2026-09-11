@@ -130,6 +130,12 @@ for the Agent to the moment the Agent has finished answering it. A message
 written while a turn is under way waits behind it.
 _Avoid_: Round, exchange, request
 
+**Turn interruption**:
+A person's request to end the current Turn. The Agent's response may remain
+partial, work that cannot stop safely may finish, and the Agent starts no new
+work for that Turn; the first waiting message then begins the next Turn.
+_Avoid_: Cancellation, abort, stopping a tool
+
 **Working indicator**:
 The animated line in the History that tells a person the Agent is still busy,
 counting the seconds the turn has taken so far.
