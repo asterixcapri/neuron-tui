@@ -237,35 +237,41 @@ final class TurnRunner
     {
         $history = $agent->getChatHistory();
         $hasText = trim(DisplayableText::safe($responseText)) !== '';
+        $response = $hasText ? (new AssistantMessage($responseText))->setStopReason('interrupted') : null;
+
+        if (!$hasText && ($completed || !in_array($userMessage, $history->getMessages(), true))) {
+            $userMessage->addMetadata('stop_reason', 'interrupted');
+        }
 
         if ($completed) {
             $messages = $history->getMessages();
             $last = end($messages);
 
             if ($last instanceof AssistantMessage && !$last instanceof ToolCallMessage) {
+                if (InterruptionHistory::replaceCompletedResponse($history, $response)) {
+                    $this->workingIndicator->stop();
+                    $this->view->showTurnInterrupted();
+
+                    return;
+                }
+
+                // Histories without snapshot persistence have no update
+                // operation; retain their existing public-API fallback.
                 array_pop($messages);
                 $history->flushAll();
 
                 foreach ($messages as $retained) {
-                    if ($retained === $userMessage && !$hasText) {
-                        $retained->addMetadata('stop_reason', 'interrupted');
-                    }
-
                     $history->addMessage($retained);
                 }
             }
         }
 
         if (!in_array($userMessage, $history->getMessages(), true)) {
-            if (!$hasText) {
-                $userMessage->addMetadata('stop_reason', 'interrupted');
-            }
-
             $history->addMessage($userMessage);
         }
 
-        if ($hasText) {
-            $history->addMessage((new AssistantMessage($responseText))->setStopReason('interrupted'));
+        if ($response !== null) {
+            $history->addMessage($response);
         }
 
         $this->workingIndicator->stop();
