@@ -63,6 +63,7 @@ final class SkillInvocationPresentationTest extends TestCase
 
     public function testALiveSkillInvocationIsCompactButReachesTheAgentUnchanged(): void
     {
+        $input = '/writing Write a short introduction.';
         $expanded = self::invocation(
             'writing',
             '/skills/writing',
@@ -75,7 +76,7 @@ final class SkillInvocationPresentationTest extends TestCase
         $terminal = new VirtualTerminal(rows: 30);
 
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("/writing Write a short introduction.\r"),
+            static fn () => $terminal->simulateInput($input . "\r"),
         );
         EventLoop::delay(
             0.15,
@@ -90,12 +91,7 @@ final class SkillInvocationPresentationTest extends TestCase
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
-        self::assertStringContainsString("❯ /writing", $display);
-        self::assertMatchesRegularExpression(
-            '/❯ \/writing[^\r\n]*\r\n[^\r\n]*\r\n[^\r\n]*Write a short introduction\./',
-            $display,
-        );
-        self::assertStringContainsString('Write a short introduction.', $display);
+        self::assertStringContainsString("❯ {$input}", $display);
         self::assertStringNotContainsString('Prefer direct sentences.', $display);
         self::assertStringNotContainsString('/skills/writing', $display);
         self::assertSame(

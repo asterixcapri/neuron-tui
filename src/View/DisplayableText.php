@@ -37,7 +37,7 @@ final class DisplayableText
 
         return $request === ''
             ? '/' . $matches[1]
-            : '/' . $matches[1] . "\n\n" . $request;
+            : '/' . $matches[1] . ' ' . $request;
     }
 
     /**
