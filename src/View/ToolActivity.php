@@ -53,7 +53,12 @@ final class ToolActivity
     {
         // A result nothing asked for is still worth showing, so it opens the
         // call it should have answered and closes it at once.
-        $position = $this->correlation->matchResult($tool) ?? $this->start($tool);
+        $position = $this->correlation->matchResult($tool);
+
+        if ($position === null) {
+            $position = $this->start($tool);
+            $this->correlation->matchResult($tool);
+        }
 
         $this->entries[$position]->setText(ToolActivityText::completed(
             $tool,

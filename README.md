@@ -45,6 +45,13 @@ Tui::make($agent)->run();
 The minimal configuration displays the Agent’s existing conversation and accepts
 new messages. Use `Ctrl+C` to exit.
 
+While the Agent is working, press `Escape` to request a Turn interruption.
+The response stops at a stream boundary; an already-started tool or parallel
+tool batch finishes first. Partial responses and actual tool outcomes remain in
+History, and the first waiting message starts automatically. Escape preserves
+your composer draft during interruption. An open Picker or Command suggestions
+handles Escape first.
+
 The default header uses generic Neuron AI branding. A title and subtitle can
 be supplied when the terminal should identify a particular Agent or product:
 

@@ -25,6 +25,63 @@ use PHPUnit\Framework\TestCase;
 
 final class HistoryProjectionTest extends TestCase
 {
+    public function testRepeatedResultsWithoutAnnouncementsRemainDistinct(): void
+    {
+        $first = (new Tool('lookup'))->setCallId('lookup')->setInputs(['value' => 1])->setResult('First result.');
+        $second = (new Tool('lookup'))->setCallId('lookup')->setInputs(['value' => 2])->setResult('Second result.');
+        $entries = $this->project([new ToolResultMessage([$first, $second])]);
+
+        self::assertCount(2, $entries);
+        self::assertStringContainsString('lookup {"value":1}', $entries[0]->text);
+        self::assertStringContainsString('First result.', $entries[0]->text);
+        self::assertStringContainsString('lookup {"value":2}', $entries[1]->text);
+        self::assertStringContainsString('Second result.', $entries[1]->text);
+    }
+
+    public function testAnInterruptedResponseKeepsItsWordsSeparateFromTheOutcome(): void
+    {
+        $message = (new AssistantMessage('Partial answer.'))->setStopReason('interrupted');
+
+        self::assertSame([
+            [ProjectedEntryKind::Agent, 'Partial answer.'],
+            [ProjectedEntryKind::Notice, 'Turn interrupted.'],
+        ], self::summarize($this->project([$message])));
+        self::assertSame('Partial answer.', $message->getContent());
+    }
+
+    public function testAnUnansweredInterruptedUserHasAnOutcomeWithoutAnAgentEntry(): void
+    {
+        $message = (new UserMessage('Question.'))->addMetadata('stop_reason', 'interrupted');
+
+        self::assertSame([
+            [ProjectedEntryKind::Person, 'Question.'],
+            [ProjectedEntryKind::Notice, 'Turn interrupted.'],
+        ], self::summarize($this->project([$message])));
+    }
+
+    public function testAToolGroupAndPartialAnswerShareOneInterruptionAfterTheirContent(): void
+    {
+        $tool = (new Tool('lookup'))->setCallId('lookup-id')->setResult('Actual result.');
+        $call = (new ToolCallMessage('Planning prose.', [$tool]))->setStopReason('interrupted');
+        $entries = $this->project([
+            new UserMessage('Question.'),
+            $call,
+            new ToolResultMessage([$tool]),
+            (new AssistantMessage('Partial answer.'))->setStopReason('interrupted'),
+            new UserMessage('Next question.'),
+            new AssistantMessage('Next answer.'),
+        ]);
+
+        self::assertSame([
+            ProjectedEntryKind::Person, ProjectedEntryKind::Agent, ProjectedEntryKind::Tool,
+            ProjectedEntryKind::Agent, ProjectedEntryKind::Notice, ProjectedEntryKind::Person,
+            ProjectedEntryKind::Agent,
+        ], self::kinds($entries));
+        self::assertSame('Partial answer.', $entries[3]->text);
+        self::assertSame('Turn interrupted.', $entries[4]->text);
+        self::assertSame('Next question.', $entries[5]->text);
+    }
+
     public function testAConversationBecomesOneOrderedStreamOfEntries(): void
     {
         $entries = $this->project([

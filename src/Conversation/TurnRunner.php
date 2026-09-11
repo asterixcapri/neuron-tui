@@ -5,13 +5,22 @@ declare(strict_types=1);
 namespace NeuronTui\Conversation;
 
 use NeuronAI\Agent\Agent;
+use NeuronAI\Agent\Events\ToolCallEvent;
+use NeuronAI\Agent\Nodes\ParallelToolNode;
+use NeuronAI\Chat\Messages\AssistantMessage;
+use NeuronAI\Chat\Messages\Stream\Chunks\StreamChunk;
 use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
 use NeuronAI\Chat\Messages\Stream\Chunks\ToolCallChunk;
 use NeuronAI\Chat\Messages\Stream\Chunks\ToolResultChunk;
+use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\UserMessage;
+use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
+use NeuronTui\History\InterruptionHistory;
 use NeuronTui\View\ConversationView;
 use NeuronTui\View\DisplayableText;
+use NeuronTui\View\ToolActivity;
 use NeuronTui\View\WorkingIndicator;
+use Throwable;
 
 /**
  * Executes one Turn of the Agent and presents its stream as it arrives.
@@ -45,70 +54,241 @@ final class TurnRunner
     /**
      * Sends the message and shows the answer as it comes back.
      */
-    public function run(Agent $agent, string $message): void
+    public function run(Agent $agent, string $message, ?TurnInterruption $interruption = null): void
     {
+        $interruption ??= new TurnInterruption();
+        InterruptionHistory::prepare($agent->getChatHistory());
         $toolActivity = $this->view->beginAgentResponse();
         $responseText = '';
         $pendingAgentText = '';
+        $userMessage = new UserMessage($message);
+        $tools = null;
+
+        if ($interruption->isRequested()) {
+            $interruption->finish();
+            $this->finishInterrupted($agent, $userMessage, '');
+
+            return;
+        }
 
         $events = $agent
-            ->stream(new UserMessage($message))
+            ->stream($userMessage)
             ->events();
+        $completed = false;
+        $failure = null;
 
-        foreach ($events as $event) {
-            if ($event instanceof ToolCallChunk) {
-                $this->view->endAgentMessage();
-                $pendingAgentText = '';
-                $this->workingIndicator->whilePaused(
-                    microtime(true),
-                    static function () use ($toolActivity, $event): void {
-                        $toolActivity->start($event->tool);
-                    },
-                );
-                $this->view->paintPendingChanges();
+        try {
+            try {
+                // Advancing the generator can start provider or tool work. Yield to
+                // terminal input before asking Neuron for the next event.
+                while ($events->valid()) {
+                    $event = $events->current();
 
-                continue;
+                    if ($event instanceof ToolCallChunk) {
+                        $messages = $agent->getChatHistory()->getMessages();
+                        $last = end($messages);
+
+                        if ($last instanceof ToolCallMessage && ($tools === null || !$tools->belongsTo($last))) {
+                            $tools?->restore();
+                            $node = $agent->getNodeForEvent(ToolCallEvent::class);
+                            $tools = new ToolExecutionGroup($last, $node instanceof ParallelToolNode ? $node : null);
+                        }
+
+                        // This inference's prose is already retained by ToolCallMessage.
+                        $responseText = '';
+                        $pendingAgentText = '';
+                    }
+
+                    if ($event instanceof ToolResultChunk) {
+                        $event = new ToolResultChunk($tools?->record($event->tool) ?? $event->tool);
+                        $this->view->toolRunning($tools?->isSettling() ?? false);
+                        // Started work keeps its real outcome even when Escape was
+                        // received during execution, before this boundary is reached.
+                        $this->presentEvent($event, $responseText, $pendingAgentText, $toolActivity);
+                    }
+
+                    if ($interruption->checkpoint() && !($tools?->isSettling() ?? false)) {
+                        break;
+                    }
+
+                    // Leave the current event suspended until its presentation has
+                    // completed, and until buffered input has had a chance to run.
+                    if ($event instanceof StreamChunk && !$event instanceof ToolResultChunk) {
+                        $this->presentEvent($event, $responseText, $pendingAgentText, $toolActivity);
+                    }
+
+                    if ($interruption->checkpoint() && !($tools?->isSettling() ?? false)) {
+                        break;
+                    }
+
+                    if ($event instanceof ToolCallChunk) {
+                        $tools?->start($event->tool);
+                        $this->view->toolRunning(true);
+                    }
+
+                    $tools?->throwIfFailed();
+
+                    $events->next();
+                }
+
+                $completed = !$events->valid();
+            } catch (WorkflowInterrupt $exception) {
+                throw $exception;
+            } catch (Throwable $exception) {
+                // Provider startup and synchronous tools can throw before
+                // buffered Escape is dispatched. Observe it before settling.
+                if (!$interruption->checkpoint()) {
+                    throw $exception;
+                }
+
+                if (!($tools?->fail($exception) ?? false)) {
+                    $failure = $exception;
+                }
             }
 
-            if ($event instanceof ToolResultChunk) {
-                $this->workingIndicator->whilePaused(
-                    microtime(true),
-                    static function () use ($toolActivity, $event): void {
-                        $toolActivity->finish($event->tool);
-                    },
-                );
-                $this->view->paintPendingChanges();
+            // A provider can suspend after its final chunk, then commit its
+            // response without yielding another event. An accepted request still
+            // owns that outcome, even when generator completion follows it.
+            if ($interruption->finish()) {
+                $this->reconcileTools($agent, $tools, $toolActivity);
+                $this->finishInterrupted($agent, $userMessage, $responseText, $completed);
 
-                continue;
+                // Tool failures are already visible in their real results.
+                // Other failures still reach the runtime's ordinary error view
+                // after the interrupted History has been retained.
+                if ($failure !== null) {
+                    throw $failure;
+                }
+
+                return;
             }
 
-            if (!$event instanceof TextChunk) {
-                continue;
+            $displayableText = DisplayableText::safe($responseText);
+
+            if (trim($displayableText) === '' && !$toolActivity->hasActivity()) {
+                $this->workingIndicator->stop();
+                $this->view->showEmptyResponse();
             }
+        } finally {
+            // Abandon the suspended workflow before restoring the handler on
+            // the reusable Agent; it must never resume with a stale adapter.
+            unset($events);
+            $tools?->restore();
+        }
+    }
 
-            $responseText .= $event->content;
-            $pendingAgentText .= $event->content;
+    private function reconcileTools(Agent $agent, ?ToolExecutionGroup $tools, ToolActivity $activity): void
+    {
+        if ($tools === null) {
+            return;
+        }
 
-            if (trim(DisplayableText::safe($pendingAgentText)) === '') {
-                continue;
+        $this->workingIndicator->whilePaused(microtime(true), static function () use ($agent, $tools, $activity): void {
+            foreach ($tools->reconcile($agent->getChatHistory()) as $result) {
+                $activity->finish($result);
             }
+        });
+        $this->view->toolRunning(false);
+        $this->view->paintPendingChanges();
+    }
 
-            $text = $pendingAgentText;
+    private function presentEvent(
+        StreamChunk $event,
+        string &$responseText,
+        string &$pendingAgentText,
+        ToolActivity $toolActivity,
+    ): void {
+        if ($event instanceof ToolCallChunk) {
+            $this->view->endAgentMessage();
+            $responseText = '';
             $pendingAgentText = '';
             $this->workingIndicator->whilePaused(
                 microtime(true),
-                function () use ($text): void {
-                    $this->view->appendAgentText($text);
+                static function () use ($toolActivity, $event): void {
+                    $toolActivity->start($event->tool);
                 },
             );
             $this->view->paintPendingChanges();
+
+            return;
         }
 
-        $displayableText = DisplayableText::safe($responseText);
+        if ($event instanceof ToolResultChunk) {
+            $this->workingIndicator->whilePaused(
+                microtime(true),
+                static function () use ($toolActivity, $event): void {
+                    $toolActivity->finish($event->tool);
+                },
+            );
+            $this->view->paintPendingChanges();
 
-        if (trim($displayableText) === '' && !$toolActivity->hasActivity()) {
-            $this->workingIndicator->stop();
-            $this->view->showEmptyResponse();
+            return;
         }
+
+        if (!$event instanceof TextChunk) {
+            return;
+        }
+
+        $responseText .= $event->content;
+        $pendingAgentText .= $event->content;
+
+        if (trim(DisplayableText::safe($pendingAgentText)) === '') {
+            return;
+        }
+
+        $text = $pendingAgentText;
+        $pendingAgentText = '';
+        $this->workingIndicator->whilePaused(
+            microtime(true),
+            function () use ($text): void {
+                $this->view->appendAgentText($text);
+            },
+        );
+        $this->view->paintPendingChanges();
+    }
+
+    private function finishInterrupted(Agent $agent, UserMessage $userMessage, string $responseText, bool $completed = false): void
+    {
+        $history = $agent->getChatHistory();
+        $hasText = trim(DisplayableText::safe($responseText)) !== '';
+        $response = $hasText ? (new AssistantMessage($responseText))->setStopReason('interrupted') : null;
+
+        if (!$hasText && ($completed || !in_array($userMessage, $history->getMessages(), true))) {
+            $userMessage->addMetadata('stop_reason', 'interrupted');
+        }
+
+        if ($completed) {
+            $messages = $history->getMessages();
+            $last = end($messages);
+
+            if ($last instanceof AssistantMessage && !$last instanceof ToolCallMessage) {
+                if (InterruptionHistory::replaceCompletedResponse($history, $response)) {
+                    $this->workingIndicator->stop();
+                    $this->view->showTurnInterrupted();
+
+                    return;
+                }
+
+                // Histories without snapshot persistence have no update
+                // operation; retain their existing public-API fallback.
+                array_pop($messages);
+                $history->flushAll();
+
+                foreach ($messages as $retained) {
+                    $history->addMessage($retained);
+                }
+            }
+        }
+
+        if (!in_array($userMessage, $history->getMessages(), true)) {
+            $history->addMessage($userMessage);
+        }
+
+        if ($response !== null) {
+            $history->addMessage($response);
+        }
+
+        $this->workingIndicator->stop();
+        $this->view->showTurnInterrupted();
     }
 }

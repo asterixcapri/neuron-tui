@@ -69,6 +69,7 @@ final class ConversationInputHandler
     {
         $keys = new Keybindings([
             'quit' => [Key::ctrl('c')],
+            'interrupt-turn' => [Key::ESCAPE],
             'recall-older-input' => [Key::UP],
             'recall-newer-input' => [Key::DOWN],
             'scroll-up' => [Key::PAGE_UP],
@@ -85,6 +86,17 @@ final class ConversationInputHandler
         // While a person is choosing from a list, the list owns the keys
         // that move through it, page keys included.
         if ($this->view->isChoosing()) {
+            return;
+        }
+
+        if (
+            $keys->matches($event->getData(), 'interrupt-turn')
+            && !$this->view->hasCommandSuggestions()
+            && $this->runtime->isBusy()
+        ) {
+            $event->stopPropagation();
+            $this->runtime->requestInterruption();
+
             return;
         }
 
