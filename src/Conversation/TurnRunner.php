@@ -12,11 +12,13 @@ use NeuronAI\Chat\Messages\Stream\Chunks\ToolCallChunk;
 use NeuronAI\Chat\Messages\Stream\Chunks\ToolResultChunk;
 use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\UserMessage;
+use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
 use NeuronTui\History\InterruptionHistory;
 use NeuronTui\View\ConversationView;
 use NeuronTui\View\DisplayableText;
 use NeuronTui\View\ToolActivity;
 use NeuronTui\View\WorkingIndicator;
+use Throwable;
 
 /**
  * Executes one Turn of the Agent and presents its stream as it arrives.
@@ -58,6 +60,7 @@ final class TurnRunner
         $responseText = '';
         $pendingAgentText = '';
         $userMessage = new UserMessage($message);
+        $tools = null;
 
         if ($interruption->isRequested()) {
             $interruption->finish();
@@ -75,8 +78,30 @@ final class TurnRunner
         while ($events->valid()) {
             $event = $events->current();
 
+            if ($event instanceof ToolCallChunk) {
+                $messages = $agent->getChatHistory()->getMessages();
+                $last = end($messages);
+
+                if ($last instanceof ToolCallMessage && ($tools === null || !$tools->belongsTo($last))) {
+                    $tools = new ToolExecutionGroup($last);
+                }
+
+                // This inference's prose is already retained by ToolCallMessage.
+                $responseText = '';
+                $pendingAgentText = '';
+            }
+
+            if ($event instanceof ToolResultChunk) {
+                $tools?->record($event->tool);
+                $this->view->toolRunning(false);
+                // Started work keeps its real outcome even when Escape was
+                // received during execution, before this boundary is reached.
+                $this->presentEvent($event, $responseText, $pendingAgentText, $toolActivity);
+            }
+
             if ($interruption->checkpoint()) {
                 $interruption->finish();
+                $this->reconcileTools($agent, $tools, $toolActivity);
                 $this->finishInterrupted($agent, $userMessage, $responseText);
 
                 return;
@@ -84,24 +109,47 @@ final class TurnRunner
 
             // Leave the current event suspended until its presentation has
             // completed, and until buffered input has had a chance to run.
-            if ($event instanceof StreamChunk) {
+            if ($event instanceof StreamChunk && !$event instanceof ToolResultChunk) {
                 $this->presentEvent($event, $responseText, $pendingAgentText, $toolActivity);
             }
 
             if ($interruption->checkpoint()) {
                 $interruption->finish();
+                $this->reconcileTools($agent, $tools, $toolActivity);
                 $this->finishInterrupted($agent, $userMessage, $responseText);
 
                 return;
             }
 
-            $events->next();
+            if ($event instanceof ToolCallChunk) {
+                $tools?->start($event->tool);
+                $this->view->toolRunning(true);
+            }
+
+            try {
+                $events->next();
+            } catch (WorkflowInterrupt $exception) {
+                throw $exception;
+            } catch (Throwable $exception) {
+                // A synchronous tool can throw before buffered Escape has
+                // been dispatched. Observe input before deciding its outcome.
+                if (!$interruption->checkpoint() || $tools === null || !$tools->fail($exception)) {
+                    throw $exception;
+                }
+
+                $interruption->finish();
+                $this->reconcileTools($agent, $tools, $toolActivity);
+                $this->finishInterrupted($agent, $userMessage, $responseText);
+
+                return;
+            }
         }
 
         // A provider can suspend after its final chunk, then commit its
         // response without yielding another event. An accepted request still
         // owns that outcome, even when generator completion follows it.
         if ($interruption->finish()) {
+            $this->reconcileTools($agent, $tools, $toolActivity);
             $this->finishInterrupted($agent, $userMessage, $responseText, true);
 
             return;
@@ -113,6 +161,21 @@ final class TurnRunner
             $this->workingIndicator->stop();
             $this->view->showEmptyResponse();
         }
+    }
+
+    private function reconcileTools(Agent $agent, ?ToolExecutionGroup $tools, ToolActivity $activity): void
+    {
+        if ($tools === null) {
+            return;
+        }
+
+        $this->workingIndicator->whilePaused(microtime(true), static function () use ($agent, $tools, $activity): void {
+            foreach ($tools->reconcile($agent->getChatHistory()) as $result) {
+                $activity->finish($result);
+            }
+        });
+        $this->view->toolRunning(false);
+        $this->view->paintPendingChanges();
     }
 
     private function presentEvent(
