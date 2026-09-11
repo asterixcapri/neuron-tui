@@ -32,6 +32,8 @@ final class ParallelToolFailures extends ParallelToolNode
     {
         $this->errorHandler = $node->errorHandler;
         $node->errorHandler = function (Throwable $failure, ToolInterface $tool): ?string {
+            $unhandledFailure = $failure;
+
             if ($this->errorHandler !== null) {
                 try {
                     $result = ($this->errorHandler)($failure, $tool);
@@ -42,11 +44,13 @@ final class ParallelToolFailures extends ParallelToolNode
 
                     return $result;
                 } catch (Throwable $handlerFailure) {
-                    $failure = $handlerFailure;
+                    $unhandledFailure = $handlerFailure;
                 }
             }
 
-            $this->failure ??= $failure;
+            // A throwing host handler owns the propagated exception, but must
+            // not replace the actual tool failure in an interrupted History.
+            $this->failure ??= $unhandledFailure;
             $result = ToolOutcome::failed($tool, $failure);
             $this->failedResults[spl_object_id($tool)] = $result;
 

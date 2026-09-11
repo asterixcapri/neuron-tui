@@ -121,8 +121,8 @@ final class ParallelToolFailureTest extends TestCase
             self::assertSame([
                 'neuron_tui' => 'tool_outcome',
                 'status' => 'failed',
-                'error_type' => $expectedType,
-                'message' => $expectedMessage,
+                'error_type' => RuntimeException::class,
+                'message' => 'first really failed.',
             ], json_decode($messages[2]->getTools()[0]->getResult(), true, flags: JSON_THROW_ON_ERROR));
             self::assertSame('second really completed.', $messages[2]->getTools()[1]->getResult());
             self::assertSame('third really completed.', $messages[2]->getTools()[2]->getResult());
