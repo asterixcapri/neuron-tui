@@ -93,6 +93,7 @@ final class ConversationInputHandler
             $keys->matches($event->getData(), 'interrupt-turn')
             && !$this->view->hasCommandSuggestions()
             && $this->runtime->isBusy()
+            && $this->runtime->supportsResponseStop()
         ) {
             $event->stopPropagation();
             $this->runtime->requestInterruption();

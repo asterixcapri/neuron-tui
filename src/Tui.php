@@ -14,6 +14,7 @@ use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Conversation\ConversationInputHandler;
 use NeuronTui\Conversation\ConversationRuntime;
+use NeuronTui\Http\ResponseStop;
 use NeuronTui\View\ConversationView;
 use Symfony\Component\Tui\Terminal\Terminal;
 use Symfony\Component\Tui\Terminal\TerminalInterface;
@@ -49,6 +50,8 @@ final class Tui
 
     private bool $started = false;
 
+    private ?ResponseStop $responseStop = null;
+
     public function __construct(
         private readonly Agent $agent,
         private readonly ?TerminalInterface $terminal = null,
@@ -81,6 +84,15 @@ final class Tui
     {
         $this->ensureNotStarted();
         $this->title = $title;
+
+        return $this;
+    }
+
+    /** Experimental: share this controller with the Host provider's HTTP client. */
+    public function setResponseStop(ResponseStop $responseStop): self
+    {
+        $this->ensureNotStarted();
+        $this->responseStop = $responseStop;
 
         return $this;
     }
@@ -127,7 +139,7 @@ final class Tui
             $this->figlet,
             $this->figletFont,
         );
-        $runtime = new ConversationRuntime($this->agent, $view);
+        $runtime = new ConversationRuntime($this->agent, $view, $this->responseStop);
         $input = new ConversationInputHandler(
             $view,
             $this->inputHistory,

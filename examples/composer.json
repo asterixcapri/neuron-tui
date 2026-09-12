@@ -30,6 +30,7 @@
     },
     "scripts": {
         "basic": "php bin/basic.php",
+        "http-stop": "php bin/http-stop.php",
         "sessions": "php bin/sessions.php",
         "model": "php bin/model.php",
         "full": "php bin/full.php"

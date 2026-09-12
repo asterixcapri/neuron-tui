@@ -5,19 +5,14 @@ declare(strict_types=1);
 namespace NeuronTui\Conversation;
 
 use NeuronAI\Agent\Agent;
-use NeuronAI\Chat\Messages\AssistantMessage;
 use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
 use NeuronAI\Chat\Messages\Stream\Chunks\ToolCallChunk;
 use NeuronAI\Chat\Messages\Stream\Chunks\ToolResultChunk;
-use NeuronAI\Chat\Messages\ToolCallMessage;
-use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Chat\Messages\UserMessage;
-use NeuronAI\Tools\ToolInterface;
-use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
+use NeuronTui\Http\ResponseStop;
 use NeuronTui\View\ConversationView;
 use NeuronTui\View\DisplayableText;
 use NeuronTui\View\WorkingIndicator;
-use Throwable;
 
 /**
  * Executes one Turn of the Agent and presents its stream as it arrives.
@@ -51,37 +46,20 @@ final class TurnRunner
     /**
      * Sends the message and shows the answer as it comes back.
      */
-    public function run(Agent $agent, string $message, ?TurnInterruption $interruption = null): void
+    public function run(Agent $agent, string $message, ?ResponseStop $responseStop = null): void
     {
-        $interruption ??= new TurnInterruption();
         $toolActivity = $this->view->beginAgentResponse();
         $responseText = '';
         $pendingAgentText = '';
-        $userMessage = new UserMessage($message);
-        $toolCall = null;
-        $toolResults = [];
-        $interrupted = false;
-        $failure = null;
-
-        $events = $agent
-            ->stream($userMessage)
-            ->events();
 
         try {
+            $events = $agent
+                ->stream(new UserMessage($message))
+                ->events();
+
             foreach ($events as $event) {
                 if ($event instanceof ToolCallChunk) {
-                    // Neuron has committed the User and the complete call group.
-                    // Its tools keep running normally while interruption is pending.
-                    $messages = $agent->getChatHistory()->getMessages();
-                    $last = end($messages);
-
-                    if ($last instanceof ToolCallMessage && $last !== $toolCall) {
-                        $toolCall = $last;
-                        $toolResults = [];
-                    }
-
                     $this->view->endAgentMessage();
-                    $responseText = '';
                     $pendingAgentText = '';
                     $this->workingIndicator->whilePaused(
                         microtime(true),
@@ -95,7 +73,6 @@ final class TurnRunner
                 }
 
                 if ($event instanceof ToolResultChunk) {
-                    $toolResults[] = $event->tool;
                     $this->workingIndicator->whilePaused(
                         microtime(true),
                         static function () use ($toolActivity, $event): void {
@@ -109,14 +86,6 @@ final class TurnRunner
 
                 if (!$event instanceof TextChunk) {
                     continue;
-                }
-
-                // A partial Assistant keeps Neuron's ordinary History valid.
-                // Before any displayable text, wait for the first such chunk.
-                if ($interruption->checkpoint() && trim(DisplayableText::safe($responseText)) !== '') {
-                    $interrupted = true;
-
-                    break;
                 }
 
                 $responseText .= $event->content;
@@ -135,62 +104,21 @@ final class TurnRunner
                     },
                 );
                 $this->view->paintPendingChanges();
-
-                if ($interruption->checkpoint()) {
-                    $interrupted = true;
-
-                    break;
-                }
             }
-        } catch (WorkflowInterrupt $exception) {
-            throw $exception;
-        } catch (Throwable $exception) {
-            $failure = $exception;
-            $interrupted = $interruption->checkpoint() && trim(DisplayableText::safe($responseText)) !== '';
         } finally {
-            // A request overtaken by completion never rewrites committed History.
-            $interruption->finish();
-        }
-
-        if ($interrupted) {
-            $this->finishInterrupted($agent, $userMessage, $responseText, $toolCall, $toolResults);
-        }
-
-        if ($failure !== null) {
-            throw $failure;
+            // EOF leaves Neuron's normal message/state persistence in charge.
+            $stopped = $responseStop?->finish() ?? false;
+            if ($stopped) {
+                $this->workingIndicator->stop();
+                $this->view->showResponseStopped();
+            }
         }
 
         $displayableText = DisplayableText::safe($responseText);
 
-        if (trim($displayableText) === '' && !$toolActivity->hasActivity()) {
+        if (!$stopped && trim($displayableText) === '' && !$toolActivity->hasActivity()) {
             $this->workingIndicator->stop();
             $this->view->showEmptyResponse();
         }
-    }
-
-    /** @param list<ToolInterface> $toolResults */
-    private function finishInterrupted(
-        Agent $agent,
-        UserMessage $userMessage,
-        string $responseText,
-        ?ToolCallMessage $toolCall,
-        array $toolResults,
-    ): void {
-        $history = $agent->getChatHistory();
-
-        if ($toolCall === null) {
-            $history->addMessage($userMessage);
-        } else {
-            $messages = $history->getMessages();
-
-            // These outcomes would normally commit after the next inference.
-            if (end($messages) === $toolCall) {
-                $history->addMessage(new ToolResultMessage($toolResults));
-            }
-        }
-
-        $history->addMessage((new AssistantMessage($responseText))->setStopReason('interrupted'));
-        $this->workingIndicator->stop();
-        $this->view->showTurnInterrupted();
     }
 }

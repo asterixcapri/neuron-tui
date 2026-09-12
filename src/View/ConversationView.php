@@ -36,7 +36,7 @@ final class ConversationView
         'ready · Enter sends · Shift+Enter adds a line · Ctrl+C exits';
 
     private const string WORKING_STATUS =
-        'Enter queues · Esc stops response · Shift+Enter adds a line';
+        'Enter queues · Shift+Enter adds a line';
 
     private const string SUGGESTING_STATUS =
         'suggesting · ↑↓ moves · Tab completes · Enter runs';
@@ -84,6 +84,8 @@ final class ConversationView
     private bool $working = false;
 
     private bool $interrupting = false;
+
+    private bool $responseStoppable = false;
 
     /**
      * The choice an Adapter's deferred selection callback is waiting on.
@@ -232,12 +234,6 @@ final class ConversationView
         $projection = new HistoryProjection($messages);
 
         foreach ($projection->entries() as $entry) {
-            if ($entry->kind === ProjectedEntryKind::Notice) {
-                $this->history->addNote($entry->text, 'notice');
-
-                continue;
-            }
-
             if ($entry->kind === ProjectedEntryKind::Tool) {
                 $this->history->addNote($entry->text, 'tool');
 
@@ -425,9 +421,9 @@ final class ConversationView
         $this->activeAgentMessage->setText('_Empty response._');
     }
 
-    public function showTurnInterrupted(): void
+    public function showResponseStopped(): void
     {
-        $this->history->addNote('Turn interrupted.', 'notice');
+        $this->history->addNote('HTTP response stopped.', 'notice');
         $this->activeAgentMessage = null;
     }
 
@@ -468,10 +464,11 @@ final class ConversationView
     /**
      * Tells the composer a turn is in flight. `ready()` is the counterpart.
      */
-    public function working(): void
+    public function working(bool $responseStoppable = false): void
     {
         $this->working = true;
         $this->interrupting = false;
+        $this->responseStoppable = $responseStoppable;
         // A command the TUI would turn away mid-turn is not offered mid-turn.
         $this->suggestions->working();
         $this->showStatus();
@@ -711,7 +708,8 @@ final class ConversationView
     {
         $this->status->setText(match (true) {
             $this->suggestions->isListOpen() => self::SUGGESTING_STATUS,
-            $this->interrupting => 'Stop requested · waiting for response text · tools continue',
+            $this->interrupting => 'Stop requested · HTTP only · tools continue',
+            $this->working && $this->responseStoppable => 'Enter queues · Esc stops HTTP response · Shift+Enter adds a line',
             $this->working => self::WORKING_STATUS,
             default => self::READY_STATUS,
         });
