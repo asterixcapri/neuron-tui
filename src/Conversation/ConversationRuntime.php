@@ -8,6 +8,7 @@ use Amp\Future;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\History\ChatHistoryInterface;
 use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
+use NeuronTui\Http\ResponseStop;
 use NeuronTui\View\ConversationView;
 use NeuronTui\View\WorkingIndicator;
 use Throwable;
@@ -37,6 +38,7 @@ final class ConversationRuntime
     public function __construct(
         private Agent $agent,
         private readonly ConversationView $view,
+        private readonly ?ResponseStop $responseStop = null,
     ) {
         $this->workingIndicator = $this->view->workingIndicator();
         $this->turnQueue = new TurnQueue();
@@ -45,6 +47,7 @@ final class ConversationRuntime
 
     public function submitMessage(MessageForAgent $message): void
     {
+        $this->view->emptyComposer();
         $accepted = $this->turnQueue->accept($message->content);
 
         if ($accepted === null) {
@@ -77,6 +80,25 @@ final class ConversationRuntime
     public function isBusy(): bool
     {
         return $this->turnQueue->isBusy();
+    }
+
+    public function requestInterruption(): void
+    {
+        if (
+            $this->responseStop === null
+            || ($this->runningTurn !== null && $this->runningTurn->isComplete())
+            || !$this->responseStop->request()
+        ) {
+            return;
+        }
+
+        $this->view->interrupting();
+        $this->view->paintPendingChanges();
+    }
+
+    public function supportsResponseStop(): bool
+    {
+        return $this->responseStop !== null;
     }
 
     public function isStopped(): bool
@@ -112,7 +134,7 @@ final class ConversationRuntime
             // finishes with that Agent even if another takes over.
             $agent = $this->agent;
             $this->runningTurn = async(function () use ($agent, $message): void {
-                $this->turnRunner->run($agent, $message);
+                $this->turnRunner->run($agent, $message, $this->responseStop);
             });
 
             return true;
@@ -162,8 +184,9 @@ final class ConversationRuntime
      */
     private function showTurnStarted(string $message): void
     {
+        $this->responseStop?->begin();
         $this->view->acceptUserMessage($message);
-        $this->view->working();
+        $this->view->working($this->responseStop !== null);
         $this->workingIndicator->start(microtime(true));
     }
 

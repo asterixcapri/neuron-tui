@@ -9,6 +9,7 @@ use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
 use NeuronAI\Chat\Messages\Stream\Chunks\ToolCallChunk;
 use NeuronAI\Chat\Messages\Stream\Chunks\ToolResultChunk;
 use NeuronAI\Chat\Messages\UserMessage;
+use NeuronTui\Http\ResponseStop;
 use NeuronTui\View\ConversationView;
 use NeuronTui\View\DisplayableText;
 use NeuronTui\View\WorkingIndicator;
@@ -45,68 +46,77 @@ final class TurnRunner
     /**
      * Sends the message and shows the answer as it comes back.
      */
-    public function run(Agent $agent, string $message): void
+    public function run(Agent $agent, string $message, ?ResponseStop $responseStop = null): void
     {
         $toolActivity = $this->view->beginAgentResponse();
         $responseText = '';
         $pendingAgentText = '';
 
-        $events = $agent
-            ->stream(new UserMessage($message))
-            ->events();
+        try {
+            $events = $agent
+                ->stream(new UserMessage($message))
+                ->events();
 
-        foreach ($events as $event) {
-            if ($event instanceof ToolCallChunk) {
-                $this->view->endAgentMessage();
+            foreach ($events as $event) {
+                if ($event instanceof ToolCallChunk) {
+                    $this->view->endAgentMessage();
+                    $pendingAgentText = '';
+                    $this->workingIndicator->whilePaused(
+                        microtime(true),
+                        static function () use ($toolActivity, $event): void {
+                            $toolActivity->start($event->tool);
+                        },
+                    );
+                    $this->view->paintPendingChanges();
+
+                    continue;
+                }
+
+                if ($event instanceof ToolResultChunk) {
+                    $this->workingIndicator->whilePaused(
+                        microtime(true),
+                        static function () use ($toolActivity, $event): void {
+                            $toolActivity->finish($event->tool);
+                        },
+                    );
+                    $this->view->paintPendingChanges();
+
+                    continue;
+                }
+
+                if (!$event instanceof TextChunk) {
+                    continue;
+                }
+
+                $responseText .= $event->content;
+                $pendingAgentText .= $event->content;
+
+                if (trim(DisplayableText::safe($pendingAgentText)) === '') {
+                    continue;
+                }
+
+                $text = $pendingAgentText;
                 $pendingAgentText = '';
                 $this->workingIndicator->whilePaused(
                     microtime(true),
-                    static function () use ($toolActivity, $event): void {
-                        $toolActivity->start($event->tool);
+                    function () use ($text): void {
+                        $this->view->appendAgentText($text);
                     },
                 );
                 $this->view->paintPendingChanges();
-
-                continue;
             }
-
-            if ($event instanceof ToolResultChunk) {
-                $this->workingIndicator->whilePaused(
-                    microtime(true),
-                    static function () use ($toolActivity, $event): void {
-                        $toolActivity->finish($event->tool);
-                    },
-                );
-                $this->view->paintPendingChanges();
-
-                continue;
+        } finally {
+            // EOF leaves Neuron's normal message/state persistence in charge.
+            $stopped = $responseStop?->finish() ?? false;
+            if ($stopped) {
+                $this->workingIndicator->stop();
+                $this->view->showResponseStopped();
             }
-
-            if (!$event instanceof TextChunk) {
-                continue;
-            }
-
-            $responseText .= $event->content;
-            $pendingAgentText .= $event->content;
-
-            if (trim(DisplayableText::safe($pendingAgentText)) === '') {
-                continue;
-            }
-
-            $text = $pendingAgentText;
-            $pendingAgentText = '';
-            $this->workingIndicator->whilePaused(
-                microtime(true),
-                function () use ($text): void {
-                    $this->view->appendAgentText($text);
-                },
-            );
-            $this->view->paintPendingChanges();
         }
 
         $displayableText = DisplayableText::safe($responseText);
 
-        if (trim($displayableText) === '' && !$toolActivity->hasActivity()) {
+        if (!$stopped && trim($displayableText) === '' && !$toolActivity->hasActivity()) {
             $this->workingIndicator->stop();
             $this->view->showEmptyResponse();
         }

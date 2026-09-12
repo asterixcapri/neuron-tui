@@ -45,6 +45,61 @@ Tui::make($agent)->run();
 The minimal configuration displays the Agent’s existing conversation and accepts
 new messages. Use `Ctrl+C` to exit.
 
+### Experimental HTTP response stop
+
+This branch experiments with the [HTTP EOF approach described by Neuron's
+maintainer](https://inspector.dev/how-to-stop-a-streamed-ai-response-mid-flight-in-neuron-ai-v3/).
+It is opt-in: share one `ResponseStop` between the provider's HTTP client and
+the TUI. For an event-loop-compatible transport, install `amphp/http-client`
+in the Host application and configure:
+
+```php
+use NeuronAI\Agent\Agent;
+use NeuronAI\HttpClient\AmpHttpClient;
+use NeuronAI\Providers\OpenAI\Responses\OpenAIResponses;
+use NeuronTui\Http\ResponseStop;
+use NeuronTui\Tui;
+
+$stop = new ResponseStop();
+$provider = new OpenAIResponses(
+    key: $apiKey,
+    model: $model,
+    httpClient: $stop->httpClient(new AmpHttpClient()),
+);
+$agent = new Agent();
+$agent->setAiProvider($provider);
+
+Tui::make($agent)->setResponseStop($stop)->run();
+```
+
+Escape requests EOF at the next HTTP-stream polling point. The Agent event
+generator is consumed to completion, so **Neuron saves the partial response and
+Agent steps itself**. The TUI never appends, replaces, or repairs history for a
+stop. Picker/suggestions handle Escape first; draft/cursor and FIFO are retained.
+Without this opt-in, Escape keeps its ordinary local editor behavior.
+
+Limitations of this experiment:
+
+- This stops an HTTP response, not the entire tool-using Turn. Local tools keep
+  running, and follow-up inference may start. EOF while tool calls are being
+  assembled is provider-specific and is not a guaranteed safe tool cancellation.
+- The notice `HTTP response stopped.` is transient. Neuron's ordinary partial
+  message survives reload, but no `interrupted` marker is written. Before any
+  text, Neuron may save an empty Assistant. Errors retain Neuron's normal behavior.
+- A pending stop does not abort an in-progress blocking read or an HTTP request
+  that has not returned its stream yet. Actual connection closure depends on
+  the inner transport: Neuron 3.16.13's `AmpStream::close()` marks local EOF but
+  does not explicitly close its underlying readable stream. No remote billing
+  or network-cancellation guarantee is made.
+- Use a separate controller per conversation. It must wrap every provider used
+  by that conversation, including providers selected later by Host commands.
+  Fake/custom providers that bypass HTTP are not stoppable through this mechanism.
+
+Run the [HTTP stop example](examples/bin/http-stop.php) with
+`composer --working-dir=examples http-stop` after setting up the examples below.
+
+### Branding
+
 The default header uses generic Neuron AI branding. A title and subtitle can
 be supplied when the terminal should identify a particular Agent or product:
 
@@ -224,6 +279,7 @@ cp .env.example .env
 | Example | What it shows | Run from `examples/` |
 | --- | --- | --- |
 | [basic.php](examples/bin/basic.php) | An Agent and the TUI. | `php bin/basic.php` |
+| [http-stop.php](examples/bin/http-stop.php) | Experimental opt-in HTTP EOF with automatic Neuron history persistence. | `php bin/http-stop.php` |
 | [sessions.php](examples/bin/sessions.php) | Saved conversations with `/clear` and `/resume`. | `php bin/sessions.php` |
 | [model.php](examples/bin/model.php) | Model selection with `/model`, remembering the choice between runs. Conversation stays in memory. | `php bin/model.php` |
 | [full.php](examples/bin/full.php) | Sessions, model selection, input history, tools and a custom header. | `php bin/full.php` |
@@ -252,8 +308,9 @@ composer --working-dir=examples install
 See [Conversation modules](docs/conversation.md) for input handling, Turn
 execution and choice presentation responsibilities.
 
-The automated suite uses Neuron AI's fake provider and Symfony TUI's virtual
-terminal. It requires no credentials and makes no network requests.
+The automated suite uses Neuron AI's fake provider, real provider parsers with
+HTTP fixtures, and Symfony TUI's virtual terminal. It requires no credentials
+and makes no network requests.
 
 ## License
 
