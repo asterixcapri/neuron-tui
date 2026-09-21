@@ -117,7 +117,23 @@ final class WorkingIndicator
     {
         return self::FRAMES[$this->frameIndex]
             . ' Working ('
-            . (int) floor($now - $this->startedAt)
-            . 's)';
+            . $this->duration((int) floor($now - $this->startedAt))
+            . ')';
+    }
+
+    private function duration(int $seconds): string
+    {
+        $parts = [];
+
+        foreach (['d' => 86_400, 'h' => 3_600, 'm' => 60] as $unit => $size) {
+            if ($seconds >= $size || $parts !== []) {
+                $parts[] = intdiv($seconds, $size) . $unit;
+                $seconds %= $size;
+            }
+        }
+
+        $parts[] = $seconds . 's';
+
+        return implode(' ', $parts);
     }
 }
