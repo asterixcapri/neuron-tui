@@ -82,7 +82,7 @@ final class ConversationView
      */
     private bool $working = false;
 
-    private bool $interrupting = false;
+    private bool $stopping = false;
 
     private bool $responseStoppable = false;
 
@@ -452,16 +452,16 @@ final class ConversationView
     public function working(bool $responseStoppable = false): void
     {
         $this->working = true;
-        $this->interrupting = false;
+        $this->stopping = false;
         $this->responseStoppable = $responseStoppable;
         // A command the TUI would turn away mid-turn is not offered mid-turn.
         $this->suggestions->working();
         $this->showStatus();
     }
 
-    public function interrupting(): void
+    public function stopping(): void
     {
-        $this->interrupting = true;
+        $this->stopping = true;
         $this->showStatus();
         $this->tui->requestRender();
     }
@@ -498,7 +498,7 @@ final class ConversationView
     public function ready(): void
     {
         $this->working = false;
-        $this->interrupting = false;
+        $this->stopping = false;
         $this->suggestions->ready();
         $this->showStatus();
         $this->tui->setFocus($this->editor);
@@ -693,7 +693,7 @@ final class ConversationView
     {
         $this->status->setText(match (true) {
             $this->suggestions->isListOpen() => self::SUGGESTING_STATUS,
-            $this->interrupting => 'Stop requested · HTTP only · tools continue',
+            $this->stopping => 'Stop requested · HTTP only · tools continue',
             $this->working && $this->responseStoppable => 'Enter queues · Esc stops HTTP response · Shift+Enter adds a line',
             $this->working => self::WORKING_STATUS,
             default => self::READY_STATUS,

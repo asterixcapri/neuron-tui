@@ -97,7 +97,7 @@ final class ConversationRuntime
 
         $this->stopSignal->request();
         $this->responseStopRequested = true;
-        $this->view->interrupting();
+        $this->view->stopping();
         $this->view->paintPendingChanges();
     }
 
