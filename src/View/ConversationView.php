@@ -694,7 +694,7 @@ final class ConversationView
         $this->status->setText(match (true) {
             $this->suggestions->isListOpen() => self::SUGGESTING_STATUS,
             $this->stopping => 'Stop requested · HTTP only · tools continue',
-            $this->working && $this->responseStoppable => 'Enter queues · Esc stops HTTP response · Shift+Enter adds a line',
+            $this->working && $this->responseStoppable => 'Enter queues · Esc stops response · Shift+Enter adds a line',
             $this->working => self::WORKING_STATUS,
             default => self::READY_STATUS,
         });
