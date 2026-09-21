@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace NeuronTuiDemo;
 
 use NeuronAI\HttpClient\AmpHttpClient;
+use NeuronAI\HttpClient\HttpClientInterface;
 use NeuronAI\Providers\AIProviderInterface;
 use NeuronAI\Providers\Anthropic\Anthropic;
 use NeuronAI\Providers\OpenAI\Responses\OpenAIResponses;
@@ -13,9 +14,10 @@ use RuntimeException;
 
 final class AIProviderFactory
 {
-    public static function create(string $modelId): AIProviderInterface
+    public static function create(string $modelId, ?HttpClientInterface $httpClient = null): AIProviderInterface
     {
         $parts = explode(':', $modelId, 2);
+        $httpClient ??= new AmpHttpClient();
 
         if (count($parts) !== 2 || $parts[0] === '' || $parts[1] === '') {
             throw new \InvalidArgumentException('Model ID must use the provider:model format.');
@@ -33,7 +35,7 @@ final class AIProviderFactory
             return new OpenAIResponses(
                 key: $key,
                 model: $model,
-                httpClient: new AmpHttpClient(),
+                httpClient: $httpClient,
             );
         } elseif ($provider === 'anthropic') {
             $key = $_ENV['ANTHROPIC_API_KEY'] ?? null;
@@ -45,7 +47,7 @@ final class AIProviderFactory
             return new Anthropic(
                 key: $key,
                 model: $model,
-                httpClient: new AmpHttpClient(),
+                httpClient: $httpClient,
             );
         } elseif ($provider === 'zen') {
             $key = $_ENV['OPENCODE_ZEN_API_KEY'] ?? null;
@@ -58,7 +60,7 @@ final class AIProviderFactory
                 baseUri: 'https://opencode.ai/zen/v1',
                 key: $key,
                 model: $model,
-                httpClient: new AmpHttpClient(),
+                httpClient: $httpClient,
             );
         } else {
             throw new RuntimeException("Unknown provider: {$provider}.");

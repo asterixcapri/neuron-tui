@@ -9,6 +9,7 @@ use LogicException;
 use NeuronAI\Agent\Agent;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Configuration\ConfigurationStore;
+use NeuronInteraction\Http\StopSignal;
 use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\InMemoryStorage;
@@ -49,6 +50,8 @@ final class Tui
 
     private bool $started = false;
 
+    private ?StopSignal $stopSignal = null;
+
     public function __construct(
         private readonly Agent $agent,
         private readonly ?TerminalInterface $terminal = null,
@@ -81,6 +84,15 @@ final class Tui
     {
         $this->ensureNotStarted();
         $this->title = $title;
+
+        return $this;
+    }
+
+    /** Share the signal configured on the provider's StoppableHttpClient. */
+    public function setStopSignal(StopSignal $stopSignal): self
+    {
+        $this->ensureNotStarted();
+        $this->stopSignal = $stopSignal;
 
         return $this;
     }
@@ -127,7 +139,7 @@ final class Tui
             $this->figlet,
             $this->figletFont,
         );
-        $runtime = new ConversationRuntime($this->agent, $view);
+        $runtime = new ConversationRuntime($this->agent, $view, $this->stopSignal);
         $input = new ConversationInputHandler(
             $view,
             $this->inputHistory,

@@ -45,6 +45,8 @@ Tui::make($agent)->run();
 The minimal configuration displays the Agent’s existing conversation and accepts
 new messages. Use `Ctrl+C` to exit.
 
+### Branding
+
 The default header uses generic Neuron AI branding. A title and subtitle can
 be supplied when the terminal should identify a particular Agent or product:
 
@@ -109,9 +111,14 @@ $sessionStore = new SessionStore($storage, 'local-user');
 
 $agent->setChatHistory($sessionStore->create());
 
+$commands = new Commands([
+    new ClearCommand(),
+    new ResumeCommand()
+]);
+
 Tui::make(
     $agent,
-    commands: new Commands([new ClearCommand(), new ResumeCommand()]),
+    commands: $commands,
     sessionStore: $sessionStore,
 )->run();
 ```
@@ -160,6 +167,52 @@ Tui::make($agent, inputHistory: $inputHistory)->run();
 
 You can pass `inputHistory`, `sessionStore`, `configurationStore` and `commands`
 together in the same `Tui::make()` call.
+
+## Stop a response
+
+Share a `StopSignal` between the provider's HTTP client and the TUI to stop
+streaming with Escape. Install `amphp/http-client` in your application, then
+configure the provider with this client:
+
+```php
+use NeuronAI\HttpClient\AmpHttpClient;
+use NeuronAI\Providers\OpenAI\Responses\OpenAIResponses;
+use NeuronInteraction\Http\StoppableHttpClient;
+use NeuronInteraction\Http\StopSignal;
+use NeuronInteraction\Storage\InMemoryStorage;
+use NeuronTui\Tui;
+
+use function Amp\delay;
+
+$stopSignal = new StopSignal(new InMemoryStorage(), 'chatKey');
+
+$client = new StoppableHttpClient(
+    inner: new AmpHttpClient(),
+    stopSignal: $stopSignal,
+    onPoll: function (): void {
+        delay(0);
+    },
+);
+
+$agent->setAiProvider(new OpenAIResponses(
+    key: $apiKey,
+    model: $model,
+    httpClient: $client,
+));
+
+Tui::make($agent)
+    ->setStopSignal($stopSignal)
+    ->run();
+```
+
+`onPoll` lets the TUI process keyboard input while streaming. The TUI clears
+the signal before each turn; Escape requests a stop, and Neuron finalizes the
+partial response. This does not cancel local tools or guarantee remote generation
+has stopped. Use a distinct signal key for concurrent responses.
+
+See [stop.php](examples/bin/stop.php) for the complete example. This feature
+requires the updated Neuron Interaction checkout; see the
+[development notes](docs/testing-direct-preferences.md).
 
 ## Custom commands
 
@@ -224,9 +277,10 @@ cp .env.example .env
 | Example | What it shows | Run from `examples/` |
 | --- | --- | --- |
 | [basic.php](examples/bin/basic.php) | An Agent and the TUI. | `php bin/basic.php` |
+| [stop.php](examples/bin/stop.php) | Experimental opt-in HTTP EOF with automatic Neuron history persistence. | `php bin/stop.php` |
 | [sessions.php](examples/bin/sessions.php) | Saved conversations with `/clear` and `/resume`. | `php bin/sessions.php` |
 | [model.php](examples/bin/model.php) | Model selection with `/model`, remembering the choice between runs. Conversation stays in memory. | `php bin/model.php` |
-| [full.php](examples/bin/full.php) | Sessions, model selection, input history, tools and a custom header. | `php bin/full.php` |
+| [full.php](examples/bin/full.php) | Sessions, model selection, input history, response stop, tools and a custom header. | `php bin/full.php` |
 
 Each example runs on its own. Model and Full also offer Anthropic through
 `/model` when `ANTHROPIC_API_KEY` is configured. Use `Ctrl+C` to exit.
@@ -252,8 +306,9 @@ composer --working-dir=examples install
 See [Conversation modules](docs/conversation.md) for input handling, Turn
 execution and choice presentation responsibilities.
 
-The automated suite uses Neuron AI's fake provider and Symfony TUI's virtual
-terminal. It requires no credentials and makes no network requests.
+The automated suite uses Neuron AI's fake provider, real provider parsers with
+HTTP fixtures, and Symfony TUI's virtual terminal. It requires no credentials
+and makes no network requests.
 
 ## License
 
