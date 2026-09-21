@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "082e9d6848a98db07d90b2c72ca28c78",
+    "content-hash": "365a0944d7fa7db00adc965b5cca4727",
     "packages": [
         {
             "name": "amphp/amp",
@@ -976,16 +976,16 @@
         },
         {
             "name": "asterixcapri/neuron-interaction",
-            "version": "0.8.4",
+            "version": "0.8.6",
             "source": {
                 "type": "git",
                 "url": "https://github.com/asterixcapri/neuron-interaction.git",
-                "reference": "3bec6d25f0173391475630dd66fe571cf1524d70"
+                "reference": "1a4721b96980833c5ebcc2b0fe48a4a3a89dd256"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/asterixcapri/neuron-interaction/zipball/3bec6d25f0173391475630dd66fe571cf1524d70",
-                "reference": "3bec6d25f0173391475630dd66fe571cf1524d70",
+                "url": "https://api.github.com/repos/asterixcapri/neuron-interaction/zipball/1a4721b96980833c5ebcc2b0fe48a4a3a89dd256",
+                "reference": "1a4721b96980833c5ebcc2b0fe48a4a3a89dd256",
                 "shasum": ""
             },
             "require": {
@@ -993,6 +993,7 @@
                 "php": ">=8.4.1"
             },
             "require-dev": {
+                "friendsofphp/php-cs-fixer": "^3.95",
                 "phpstan/phpstan": "^2.1",
                 "phpunit/phpunit": "^13.0"
             },
@@ -1012,12 +1013,12 @@
                     "email": "aleast@caprionline.it"
                 }
             ],
-            "description": "Presentation-independent interaction modules for Neuron AI Agents.",
+            "description": "Sessions, commands, selections and user preferences for applications built with Neuron AI.",
             "support": {
                 "issues": "https://github.com/asterixcapri/neuron-interaction/issues",
-                "source": "https://github.com/asterixcapri/neuron-interaction/tree/0.8.4"
+                "source": "https://github.com/asterixcapri/neuron-interaction/tree/0.8.6"
             },
-            "time": "2026-09-09T23:14:18+00:00"
+            "time": "2026-09-21T21:36:12+00:00"
         },
         {
             "name": "asterixcapri/neuron-tui",
@@ -1025,11 +1026,11 @@
             "dist": {
                 "type": "path",
                 "url": "..",
-                "reference": "984b766ff516a5cfb93e482f8fa8d37a01c9885f"
+                "reference": "db9d1899754737c287a201309e34a39adf6391e7"
             },
             "require": {
                 "amphp/amp": "^3.0",
-                "asterixcapri/neuron-interaction": "~0.8.4",
+                "asterixcapri/neuron-interaction": "~0.8.6",
                 "league/commonmark": "^2.10",
                 "neuron-core/neuron-ai": "^3.0",
                 "php": ">=8.4.1",
@@ -1037,6 +1038,7 @@
                 "tempest/highlight": "^2.16"
             },
             "require-dev": {
+                "friendsofphp/php-cs-fixer": "^3.95",
                 "phpstan/phpstan": "^2.1",
                 "phpunit/phpunit": "^13.0"
             },
@@ -1057,6 +1059,12 @@
                 ],
                 "test": [
                     "phpunit"
+                ],
+                "cs": [
+                    "php-cs-fixer fix --config=.php-cs-fixer.dist.php --dry-run --diff"
+                ],
+                "cs:fix": [
+                    "php-cs-fixer fix --config=.php-cs-fixer.dist.php"
                 ]
             },
             "license": [

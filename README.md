@@ -210,9 +210,7 @@ the signal before each turn; Escape requests a stop, and Neuron finalizes the
 partial response. This does not cancel local tools or guarantee remote generation
 has stopped. Use a distinct signal key for concurrent responses.
 
-See [stop.php](examples/bin/stop.php) for the complete example. This feature
-requires the updated Neuron Interaction checkout; see the
-[development notes](docs/testing-direct-preferences.md).
+See [stop.php](examples/bin/stop.php) for the complete example.
 
 ## Custom commands
 
