@@ -8,7 +8,7 @@ use Amp\Future;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\History\ChatHistoryInterface;
 use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
-use NeuronTui\Http\ResponseStop;
+use NeuronInteraction\Http\StopSignal;
 use NeuronTui\View\ConversationView;
 use NeuronTui\View\WorkingIndicator;
 use Throwable;
@@ -33,12 +33,14 @@ final class ConversationRuntime
 
     private bool $stopped = false;
 
+    private bool $responseStopRequested = false;
+
     private ?ChatHistoryInterface $displayedHistory = null;
 
     public function __construct(
         private Agent $agent,
         private readonly ConversationView $view,
-        private readonly ?ResponseStop $responseStop = null,
+        private readonly ?StopSignal $stopSignal = null,
     ) {
         $this->workingIndicator = $this->view->workingIndicator();
         $this->turnQueue = new TurnQueue();
@@ -85,20 +87,30 @@ final class ConversationRuntime
     public function requestInterruption(): void
     {
         if (
-            $this->responseStop === null
+            $this->stopSignal === null
+            || !$this->isBusy()
             || ($this->runningTurn !== null && $this->runningTurn->isComplete())
-            || !$this->responseStop->request()
+            || $this->responseStopRequested
         ) {
             return;
         }
 
+        $this->stopSignal->request();
+        $this->responseStopRequested = true;
         $this->view->interrupting();
         $this->view->paintPendingChanges();
     }
 
     public function supportsResponseStop(): bool
     {
-        return $this->responseStop !== null;
+        return $this->stopSignal !== null;
+    }
+
+    /** A requested flag disappears when StoppableStream consumes it. */
+    private function responseWasStopped(): bool
+    {
+        return $this->responseStopRequested
+            && $this->stopSignal?->isRequested() === false;
     }
 
     public function isStopped(): bool
@@ -134,7 +146,7 @@ final class ConversationRuntime
             // finishes with that Agent even if another takes over.
             $agent = $this->agent;
             $this->runningTurn = async(function () use ($agent, $message): void {
-                $this->turnRunner->run($agent, $message, $this->responseStop);
+                $this->turnRunner->run($agent, $message, $this->responseWasStopped(...));
             });
 
             return true;
@@ -184,9 +196,10 @@ final class ConversationRuntime
      */
     private function showTurnStarted(string $message): void
     {
-        $this->responseStop?->begin();
+        $this->responseStopRequested = false;
+        $this->stopSignal?->clear();
         $this->view->acceptUserMessage($message);
-        $this->view->working($this->responseStop !== null);
+        $this->view->working($this->stopSignal !== null);
         $this->workingIndicator->start(microtime(true));
     }
 

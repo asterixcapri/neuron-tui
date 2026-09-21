@@ -9,12 +9,12 @@ use LogicException;
 use NeuronAI\Agent\Agent;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Configuration\ConfigurationStore;
+use NeuronInteraction\Http\StopSignal;
 use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Conversation\ConversationInputHandler;
 use NeuronTui\Conversation\ConversationRuntime;
-use NeuronTui\Http\ResponseStop;
 use NeuronTui\View\ConversationView;
 use Symfony\Component\Tui\Terminal\Terminal;
 use Symfony\Component\Tui\Terminal\TerminalInterface;
@@ -50,7 +50,7 @@ final class Tui
 
     private bool $started = false;
 
-    private ?ResponseStop $responseStop = null;
+    private ?StopSignal $stopSignal = null;
 
     public function __construct(
         private readonly Agent $agent,
@@ -88,11 +88,11 @@ final class Tui
         return $this;
     }
 
-    /** Experimental: share this controller with the Host provider's HTTP client. */
-    public function setResponseStop(ResponseStop $responseStop): self
+    /** Share the signal configured on the provider's StoppableHttpClient. */
+    public function setStopSignal(StopSignal $stopSignal): self
     {
         $this->ensureNotStarted();
-        $this->responseStop = $responseStop;
+        $this->stopSignal = $stopSignal;
 
         return $this;
     }
@@ -139,7 +139,7 @@ final class Tui
             $this->figlet,
             $this->figletFont,
         );
-        $runtime = new ConversationRuntime($this->agent, $view, $this->responseStop);
+        $runtime = new ConversationRuntime($this->agent, $view, $this->stopSignal);
         $input = new ConversationInputHandler(
             $view,
             $this->inputHistory,

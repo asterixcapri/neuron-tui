@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace NeuronTui\Conversation;
 
+use Closure;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
 use NeuronAI\Chat\Messages\Stream\Chunks\ToolCallChunk;
 use NeuronAI\Chat\Messages\Stream\Chunks\ToolResultChunk;
 use NeuronAI\Chat\Messages\UserMessage;
-use NeuronTui\Http\ResponseStop;
 use NeuronTui\View\ConversationView;
 use NeuronTui\View\DisplayableText;
 use NeuronTui\View\WorkingIndicator;
@@ -45,8 +45,10 @@ final class TurnRunner
 
     /**
      * Sends the message and shows the answer as it comes back.
+     *
+     * @param (Closure(): bool)|null $responseWasStopped
      */
-    public function run(Agent $agent, string $message, ?ResponseStop $responseStop = null): void
+    public function run(Agent $agent, string $message, ?Closure $responseWasStopped = null): void
     {
         $toolActivity = $this->view->beginAgentResponse();
         $responseText = '';
@@ -107,7 +109,7 @@ final class TurnRunner
             }
         } finally {
             // EOF leaves Neuron's normal message/state persistence in charge.
-            $stopped = $responseStop?->finish() ?? false;
+            $stopped = $responseWasStopped?->__invoke() ?? false;
             if ($stopped) {
                 $this->workingIndicator->stop();
                 $this->view->showResponseStopped();

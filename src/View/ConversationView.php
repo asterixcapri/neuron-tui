@@ -423,7 +423,7 @@ final class ConversationView
 
     public function showResponseStopped(): void
     {
-        $this->history->addNote('HTTP response stopped.', 'notice');
+        $this->history->addNote('Stopped', 'notice');
         $this->activeAgentMessage = null;
     }
 

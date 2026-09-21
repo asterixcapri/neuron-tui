@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronTuiDemo;
 
+use NeuronAI\HttpClient\HttpClientInterface;
 use NeuronInteraction\Command\CommandAdapterInterface;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\Selection;
@@ -11,6 +12,10 @@ use NeuronInteraction\Command\SelectionOption;
 
 final readonly class ModelCommand implements CommandInterface
 {
+    public function __construct(private ?HttpClientInterface $httpClient = null)
+    {
+    }
+
     public function name(): string
     {
         return '/model';
@@ -91,7 +96,7 @@ final readonly class ModelCommand implements CommandInterface
             return;
         }
 
-        $adapter->agent()->setAiProvider(AIProviderFactory::create($value));
+        $adapter->agent()->setAiProvider(AIProviderFactory::create($value, $this->httpClient));
         $adapter->configurationStore()->write('model', $value);
         $adapter->notify("Model changed to {$value}.");
     }
