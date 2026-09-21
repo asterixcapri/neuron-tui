@@ -16,6 +16,7 @@ use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Tools\ToolInterface;
 use NeuronTui\View\DisplayableText;
+use NeuronTui\View\HistoryEntryKind;
 
 /**
  * The Agent's messages as the one ordered stream of entries a person sees.
@@ -79,7 +80,7 @@ final class HistoryProjection
         }
 
         if ($message instanceof ToolCallMessage) {
-            $this->appendMessage(ProjectedEntryKind::Agent, $message);
+            $this->appendMessage(HistoryEntryKind::AssistantMessage, $message);
 
             foreach ($message->getTools() as $tool) {
                 $this->appendToolCall($tool);
@@ -98,13 +99,13 @@ final class HistoryProjection
 
         $this->appendMessage(
             $role === MessageRole::USER->value
-                ? ProjectedEntryKind::Person
-                : ProjectedEntryKind::Agent,
+                ? HistoryEntryKind::UserMessage
+                : HistoryEntryKind::AssistantMessage,
             $message,
         );
     }
 
-    private function appendMessage(ProjectedEntryKind $kind, Message $message): void
+    private function appendMessage(HistoryEntryKind $kind, Message $message): void
     {
         $text = $this->messageText($message, $kind);
 
@@ -118,7 +119,7 @@ final class HistoryProjection
     private function appendToolCall(ToolInterface $tool): int
     {
         $this->entries[] = new ProjectedEntry(
-            ProjectedEntryKind::Tool,
+            HistoryEntryKind::ToolActivity,
             ToolActivityText::pending($tool),
         );
         $position = count($this->entries) - 1;
@@ -135,19 +136,19 @@ final class HistoryProjection
             ?? $this->appendToolCall($tool);
 
         $this->entries[$position] = new ProjectedEntry(
-            ProjectedEntryKind::Tool,
+            HistoryEntryKind::ToolActivity,
             ToolActivityText::completed($tool, self::FALLBACK_DURATION_SECONDS),
         );
     }
 
-    private function messageText(Message $message, ProjectedEntryKind $kind): string
+    private function messageText(Message $message, HistoryEntryKind $kind): string
     {
         $parts = [];
 
         foreach ($message->getContentBlocks() as $block) {
             $content = match (true) {
                 $block instanceof ReasoningContent => null,
-                $block instanceof TextContent => $kind === ProjectedEntryKind::Person
+                $block instanceof TextContent => $kind === HistoryEntryKind::UserMessage
                     ? DisplayableText::compactSkillInvocation($block->getContent())
                     : $block->getContent(),
                 $block instanceof ImageContent => '[Image]',

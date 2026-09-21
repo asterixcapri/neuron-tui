@@ -38,9 +38,9 @@ final class ToolActivity
      */
     public function start(ToolInterface $tool): int
     {
-        $this->entries[] = $this->history->addNote(
+        $this->entries[] = $this->history->addEntry(
+            HistoryEntryKind::ToolActivity,
             ToolActivityText::pending($tool),
-            'tool',
         );
         $position = count($this->entries) - 1;
         $this->calledAt[$position] = microtime(true);

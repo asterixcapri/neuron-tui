@@ -18,6 +18,32 @@ use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
 final class ConversationViewTest extends TestCase
 {
+    public function testInterfaceEventsHaveConsistentPrefixesAndStopSeparatesResponses(): void
+    {
+        $terminal = new VirtualTerminal(columns: 80, rows: 40);
+        $view = new ConversationView($terminal, 'Neuron AI', 'Conversation');
+        $view->appendAgentText('First response');
+        $view->showNotice('Configuration updated');
+        $view->showWarning('Connection unstable');
+        $view->showError('Request failed');
+        $view->showResponseStopped();
+        $view->appendAgentText('Next response');
+        $view->paintPendingChanges();
+
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+
+        foreach ([
+            '● First response',
+            '· Configuration updated',
+            '! Connection unstable',
+            '× Request failed',
+            '■ Stopped',
+            '● Next response',
+        ] as $line) {
+            self::assertStringContainsString($line, $display);
+        }
+    }
+
     public function testAChoiceMustOfferAtLeastOneOption(): void
     {
         $view = new ConversationView(

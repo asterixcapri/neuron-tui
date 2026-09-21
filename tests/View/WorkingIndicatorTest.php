@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace NeuronTui\Tests\View;
 
 use NeuronTui\View\ConversationStyleSheet;
+use NeuronTui\View\HistoryEntryKind;
 use NeuronTui\View\HistoryPane;
 use NeuronTui\View\WorkingIndicator;
 use PHPUnit\Framework\TestCase;
@@ -67,7 +68,7 @@ final class WorkingIndicatorTest extends TestCase
         $indicator->whilePaused(
             1_002.0,
             static function () use ($pane): void {
-                $pane->addNote('⎿ tool result', 'tool');
+                $pane->addEntry(HistoryEntryKind::ToolActivity, '⎿ tool result');
             },
         );
 

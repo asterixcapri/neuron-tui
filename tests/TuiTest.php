@@ -1219,8 +1219,8 @@ MARKDOWN;
             'Everything was in order.',
             $display,
         );
-        self::assertMatchesRegularExpression('/Warning\s+Except for one thing\./', $display);
-        self::assertMatchesRegularExpression('/Error\s+The operation could not finish\./', $display);
+        self::assertMatchesRegularExpression('/!\s+Except for one thing\./', $display);
+        self::assertMatchesRegularExpression('/×\s+The operation could not finish\./', $display);
         self::assertStringContainsString('The command continued.', $display);
         $provider->assertNothingSent();
     }

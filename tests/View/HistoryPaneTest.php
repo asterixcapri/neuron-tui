@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace NeuronTui\Tests\View;
 
 use NeuronTui\View\ConversationStyleSheet;
+use NeuronTui\View\HistoryEntryKind;
 use NeuronTui\View\HistoryPane;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
@@ -15,12 +16,46 @@ final class HistoryPaneTest extends TestCase
 {
     private ?Tui $tui = null;
 
+    public function testEventsWrapUnderTheirContentAndMeasureTheirRenderedHeight(): void
+    {
+        $terminal = new VirtualTerminal(columns: 20, rows: 24);
+        $pane = $this->pane($terminal);
+        $entry = $pane->addEntry(
+            HistoryEntryKind::Warning,
+            "Alpha beta gamma delta  \nNext line",
+        );
+
+        $display = $this->paint($terminal);
+
+        self::assertMatchesRegularExpression('/ ! Alpha beta gamma *\r?\n/', $display);
+        self::assertMatchesRegularExpression('/   delta *\r?\n/', $display);
+        self::assertMatchesRegularExpression('/   Next line *\r?\n/', $display);
+        self::assertSame(3, $entry->height());
+    }
+
+    public function testEventGrowthPreservesTheReadingPosition(): void
+    {
+        $terminal = new VirtualTerminal(columns: 20, rows: 10);
+        $pane = $this->pane($terminal);
+
+        for ($line = 1; $line <= 20; $line++) {
+            $pane->addEntry(HistoryEntryKind::Notice, "line {$line}");
+        }
+
+        $pane->scrollUp();
+        $before = $this->paint($terminal);
+        $pane->addEntry(HistoryEntryKind::Error, 'Alpha beta gamma delta epsilon zeta');
+        $terminal->clearOutput();
+
+        self::assertSame($before, $this->paint($terminal));
+    }
+
     public function testAnEntryIsUpdatedThroughItsHandle(): void
     {
         $terminal = new VirtualTerminal(rows: 24);
         $pane = $this->pane($terminal);
 
-        $answer = $pane->addMessage('●', 'The answer', 'agent');
+        $answer = $pane->addEntry(HistoryEntryKind::AssistantMessage, 'The answer');
         $answer->appendText(' is forty-two.');
 
         $display = $this->paint($terminal);
@@ -35,10 +70,10 @@ final class HistoryPaneTest extends TestCase
     {
         $terminal = new VirtualTerminal(rows: 24);
         $pane = $this->pane($terminal);
-        $pane->addMessage('❯', 'What we discussed before', 'user');
+        $pane->addEntry(HistoryEntryKind::UserMessage, 'What we discussed before');
 
         $pane->clear();
-        $pane->addMessage('❯', 'What we discuss now', 'user');
+        $pane->addEntry(HistoryEntryKind::UserMessage, 'What we discuss now');
 
         $display = $this->paint($terminal);
 
@@ -55,14 +90,14 @@ final class HistoryPaneTest extends TestCase
         $pane = $this->pane($terminal);
 
         for ($line = 1; $line <= 20; $line++) {
-            $pane->addMessage('●', "old {$line}", 'agent');
+            $pane->addEntry(HistoryEntryKind::AssistantMessage, "old {$line}");
         }
 
         $pane->scrollUp();
         $pane->clear();
 
         for ($line = 1; $line <= 3; $line++) {
-            $pane->addMessage('●', "fresh {$line}", 'agent');
+            $pane->addEntry(HistoryEntryKind::AssistantMessage, "fresh {$line}");
         }
 
         $display = $this->paint($terminal);
@@ -76,7 +111,7 @@ final class HistoryPaneTest extends TestCase
         $pane = $this->pane($terminal);
 
         for ($line = 1; $line <= 20; $line++) {
-            $pane->addMessage('●', "line {$line}", 'agent');
+            $pane->addEntry(HistoryEntryKind::AssistantMessage, "line {$line}");
         }
 
         $pane->scrollUp();
@@ -84,7 +119,7 @@ final class HistoryPaneTest extends TestCase
         self::assertStringContainsString('line 13', $anchored);
         self::assertStringNotContainsString('line 18', $anchored);
 
-        $growing = $pane->addNote('', 'tool');
+        $growing = $pane->addEntry(HistoryEntryKind::ToolActivity, '');
         $growing->setText("grown 1\ngrown 2\ngrown 3");
 
         $terminal->clearOutput();
@@ -101,12 +136,12 @@ final class HistoryPaneTest extends TestCase
         $pane = $this->pane($terminal);
 
         for ($line = 1; $line <= 20; $line++) {
-            $pane->addMessage('●', "line {$line}", 'agent');
+            $pane->addEntry(HistoryEntryKind::AssistantMessage, "line {$line}");
         }
 
         $pane->scrollUp();
         $pane->scrollDown();
-        $pane->addMessage('●', 'line 21', 'agent');
+        $pane->addEntry(HistoryEntryKind::AssistantMessage, 'line 21');
 
         $terminal->clearOutput();
         $display = $this->paint($terminal);
@@ -120,10 +155,10 @@ final class HistoryPaneTest extends TestCase
         $pane = $this->pane($terminal);
 
         for ($line = 1; $line <= 20; $line++) {
-            $pane->addMessage('●', "line {$line}", 'agent');
+            $pane->addEntry(HistoryEntryKind::AssistantMessage, "line {$line}");
         }
 
-        $working = $pane->addNote('✶ Working (0s)', 'loading');
+        $working = $pane->addEntry(HistoryEntryKind::WorkingIndicator, '✶ Working (0s)');
         $pane->scrollUp();
         $anchored = $this->paint($terminal);
         self::assertStringContainsString('line 14', $anchored);

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace NeuronTui\History;
 
+use NeuronTui\View\HistoryEntryKind;
+
 /**
  * One item of the History as a person is meant to see it.
  *
@@ -20,7 +22,7 @@ namespace NeuronTui\History;
 final class ProjectedEntry
 {
     public function __construct(
-        public readonly ProjectedEntryKind $kind,
+        public readonly HistoryEntryKind $kind,
         public readonly string $text,
     ) {
     }

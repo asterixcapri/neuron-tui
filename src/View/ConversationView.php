@@ -11,7 +11,6 @@ use LogicException;
 use NeuronAI\Chat\Messages\Message;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronTui\History\HistoryProjection;
-use NeuronTui\History\ProjectedEntryKind;
 use NeuronTui\View\Widget\ComposerEditor;
 use Symfony\Component\Tui\Event\CancelEvent;
 use Symfony\Component\Tui\Event\ChangeEvent;
@@ -234,19 +233,7 @@ final class ConversationView
         $projection = new HistoryProjection($messages);
 
         foreach ($projection->entries() as $entry) {
-            if ($entry->kind === ProjectedEntryKind::Tool) {
-                $this->history->addNote($entry->text, 'tool');
-
-                continue;
-            }
-
-            $spokenByPerson = $entry->kind === ProjectedEntryKind::Person;
-
-            $this->history->addMessage(
-                $spokenByPerson ? '❯' : '●',
-                $entry->text,
-                $spokenByPerson ? 'user' : 'agent',
-            );
+            $this->history->addEntry($entry->kind, $entry->text);
         }
     }
 
@@ -375,10 +362,9 @@ final class ConversationView
 
     public function acceptUserMessage(string $contents): void
     {
-        $this->history->addMessage(
-            '❯',
+        $this->history->addEntry(
+            HistoryEntryKind::UserMessage,
             DisplayableText::compactSkillInvocation($contents),
-            'user',
         );
     }
 
@@ -392,10 +378,9 @@ final class ConversationView
     public function appendAgentText(string $chunk): void
     {
         if (!$this->activeAgentMessage instanceof HistoryEntry) {
-            $this->activeAgentMessage = $this->history->addMessage(
-                '●',
+            $this->activeAgentMessage = $this->history->addEntry(
+                HistoryEntryKind::AssistantMessage,
                 '',
-                'agent',
             );
         }
 
@@ -413,7 +398,7 @@ final class ConversationView
     public function showEmptyResponse(): void
     {
         if (!$this->activeAgentMessage instanceof HistoryEntry) {
-            $this->history->addMessage('●', '_Empty response._', 'agent');
+            $this->history->addEntry(HistoryEntryKind::AssistantMessage, '_Empty response._');
 
             return;
         }
@@ -423,7 +408,7 @@ final class ConversationView
 
     public function showResponseStopped(): void
     {
-        $this->history->addNote('Stopped', 'notice');
+        $this->history->addEntry(HistoryEntryKind::ResponseStopped, 'Stopped');
         $this->activeAgentMessage = null;
     }
 
@@ -432,17 +417,17 @@ final class ConversationView
      */
     public function showNotice(string $text): void
     {
-        $this->history->addMessage('·', $text, 'notice');
+        $this->history->addEntry(HistoryEntryKind::Notice, $text);
     }
 
     public function showWarning(string $message): void
     {
-        $this->history->addMessage('Warning', $message, 'warning');
+        $this->history->addEntry(HistoryEntryKind::Warning, $message);
     }
 
     public function showError(string $message): void
     {
-        $this->history->addMessage('Error', $message, 'error');
+        $this->history->addEntry(HistoryEntryKind::Error, $message);
     }
 
     public function showUnknownCommand(string $command): void

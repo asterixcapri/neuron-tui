@@ -53,12 +53,27 @@ final class HistoryPane
     }
 
     /**
-     * Adds a message spoken by somebody, rendered as Markdown.
+     * Adds an entry using the presentation associated with its kind.
      */
-    public function addMessage(
-        string $speaker,
+    public function addEntry(HistoryEntryKind $kind, string $text): HistoryEntry
+    {
+        return match ($kind) {
+            HistoryEntryKind::UserMessage => $this->addPrefixedEntry('❯', $text, 'user'),
+            HistoryEntryKind::AssistantMessage => $this->addPrefixedEntry('●', $text, 'agent'),
+            HistoryEntryKind::ToolActivity => $this->addNote($text, 'tool'),
+            HistoryEntryKind::Notice => $this->addPrefixedEntry('·', $text, 'notice', 'event-muted'),
+            HistoryEntryKind::Warning => $this->addPrefixedEntry('!', $text, 'warning'),
+            HistoryEntryKind::Error => $this->addPrefixedEntry('×', $text, 'error'),
+            HistoryEntryKind::ResponseStopped => $this->addPrefixedEntry('■', $text, 'notice', 'event-muted'),
+            HistoryEntryKind::WorkingIndicator => $this->addNote($text, 'loading'),
+        };
+    }
+
+    private function addPrefixedEntry(
+        string $symbol,
         string $text,
         string $styleClass,
+        ?string $contentStyleClass = null,
     ): HistoryEntry {
         $message = new ContainerWidget();
         $message->addStyleClass('message');
@@ -67,11 +82,16 @@ final class HistoryPane
             $message->addStyleClass('user-message');
         }
 
-        $label = new TextWidget($speaker);
+        $label = new TextWidget($symbol);
         $label->addStyleClass('speaker');
         $label->addStyleClass($styleClass);
         $markdown = new MarkdownWidget($text);
         $markdown->addStyleClass('message-content');
+
+        if ($contentStyleClass !== null) {
+            $markdown->addStyleClass($contentStyleClass);
+        }
+
         $message->add($label);
         $message->add($markdown);
 
@@ -79,7 +99,7 @@ final class HistoryPane
             $this->terminal,
             $message,
             $markdown,
-            self::MESSAGE_RESERVED_COLUMNS + mb_strwidth($speaker, 'UTF-8'),
+            self::MESSAGE_RESERVED_COLUMNS + mb_strwidth($symbol, 'UTF-8'),
             $this->paintedHeightChanged(...),
         );
 
@@ -89,7 +109,7 @@ final class HistoryPane
     /**
      * Adds an unspoken line of the History, such as tool activity.
      */
-    public function addNote(string $text, string $styleClass): HistoryEntry
+    private function addNote(string $text, string $styleClass): HistoryEntry
     {
         $note = new TextWidget($text);
         $note->addStyleClass($styleClass);

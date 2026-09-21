@@ -99,7 +99,7 @@ final class WorkingIndicator
 
     private function show(float $now): void
     {
-        $this->line = $this->history->addNote($this->text($now), 'loading');
+        $this->line = $this->history->addEntry(HistoryEntryKind::WorkingIndicator, $this->text($now));
         $this->history->followLatest();
     }
 
