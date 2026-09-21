@@ -18,6 +18,31 @@ use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
 final class ConversationViewTest extends TestCase
 {
+    public function testShiftEnterKeepsThePromptAtTheTopOfTheComposer(): void
+    {
+        $terminal = new VirtualTerminal(columns: 80, rows: 24);
+        $view = new ConversationView($terminal, 'Neuron AI', 'Conversation');
+        $display = '';
+
+        EventLoop::queue(static function () use ($terminal, $view, &$display): void {
+            $terminal->simulateInput('First line');
+            $terminal->simulateInput("\x1b[13;2u");
+            $terminal->simulateInput('Second line');
+            $terminal->simulateInput("\x1b[13;2u");
+            $terminal->simulateInput('Third line');
+            $terminal->clearOutput();
+            $view->paintPendingChanges();
+            $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+            $view->stop();
+        });
+
+        $view->run();
+
+        self::assertStringContainsString('❯ First line', $display);
+        self::assertStringContainsString('  Second line', $display);
+        self::assertStringContainsString('  Third line', $display);
+    }
+
     public function testInterfaceEventsHaveConsistentPrefixesAndStopSeparatesResponses(): void
     {
         $terminal = new VirtualTerminal(columns: 80, rows: 40);
