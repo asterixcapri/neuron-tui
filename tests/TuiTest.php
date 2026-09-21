@@ -2748,7 +2748,7 @@ MARKDOWN;
             $pickerOutput,
         );
         self::assertStringContainsString(
-            "\x1b[90mA lighter detail",
+            "\x1b[38;2;128;128;128mA lighter detail",
             $pickerOutput,
         );
         self::assertSame('detailed', $chosen);
