@@ -9,11 +9,13 @@ use NeuronInteraction\Configuration\ConfigurationStore;
 use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Session\SessionStore;
 use NeuronTui\Command\TuiCommandAdapter;
+use NeuronTui\UserMessageProcessorInterface;
 use NeuronTui\View\ConversationView;
 use Symfony\Component\Tui\Event\InputEvent;
 use Symfony\Component\Tui\Event\SubmitEvent;
 use Symfony\Component\Tui\Input\Key;
 use Symfony\Component\Tui\Input\Keybindings;
+use Throwable;
 
 /**
  * Interprets human input and keeps submission, recall, and draft editing together.
@@ -29,6 +31,7 @@ final class ConversationInputHandler
         private readonly Commands $commands,
         private readonly SessionStore $sessionStore,
         private readonly ConfigurationStore $configurationStore,
+        private readonly UserMessageProcessorInterface $processor = new UserMessageProcessing(),
     ) {
     }
 
@@ -57,7 +60,21 @@ final class ConversationInputHandler
             return;
         }
 
-        $this->runtime->submitMessage($submission);
+        try {
+            $prompt = $this->processor->forAgent($submission->content);
+
+            if (trim($prompt) === '') {
+                $this->view->showError('The prepared user message is empty.');
+
+                return;
+            }
+        } catch (Throwable $exception) {
+            $this->view->showError($exception->getMessage());
+
+            return;
+        }
+
+        $this->runtime->submitMessage(new MessageForAgent($prompt));
     }
 
     public function handleDraftChange(): void

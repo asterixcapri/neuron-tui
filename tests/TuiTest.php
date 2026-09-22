@@ -3843,6 +3843,46 @@ MARKDOWN;
         }
     }
 
+    public function testASlashAfterTextShowsAndFiltersCommands(): void
+    {
+        $display = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
+            [new HelpCommand(), new LeaveCommand()],
+            'ask /',
+        ));
+        self::assertStringContainsString('Lists what can be typed here.', $display);
+        self::assertStringContainsString('/exit', $display);
+
+        $filtered = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
+            [new HelpCommand(), new LeaveCommand()],
+            'ask /hel',
+        ));
+        self::assertStringContainsString('Lists what can be typed here.', $filtered);
+        self::assertStringNotContainsString('/exit', $filtered);
+    }
+
+    public function testASlashOnANewLineShowsCommands(): void
+    {
+        $display = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
+            [new HelpCommand()],
+            'ask',
+            "\x1b[13;2u",
+            '/hel',
+        ));
+        self::assertStringContainsString('Lists what can be typed here.', $display);
+    }
+
+    public function testSlashesInUrlsAndPathsDoNotShowSuggestions(): void
+    {
+        foreach (['see https://example.com/', 'read src/View/', 'read /tmp/'] as $draft) {
+            $display = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
+                [new HelpCommand()],
+                $draft,
+            ));
+            self::assertStringNotContainsString('Lists what can be typed here.', $display);
+            self::assertStringNotContainsString('No commands match', $display);
+        }
+    }
+
     /**
      * A slash in the middle of a message is text for the Agent.
      */

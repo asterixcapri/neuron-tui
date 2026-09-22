@@ -21,8 +21,8 @@ use Symfony\Component\Tui\Widget\TextWidget;
  * uses — for the bounded height and the scroll counter it draws by itself —
  * and nothing else is shared.
  *
- * What is on screen is read from the draft and from the turn: a single line
- * beginning with a slash and no whitespace yet is a name being written, and
+ * What is on screen is read from the draft and from the turn: a word
+ * beginning with a slash at the end of the draft is a name being written, and
  * anything else takes the suggestions away. The names that carry what has
  * been written stay, each saying with a bold stretch why it is there; when
  * none do, the one line that says so takes the list's place, because there
@@ -244,6 +244,27 @@ final class CommandSuggestions
         return $this->shownItems[$this->selectedIndex]['value'] ?? null;
     }
 
+    /** The draft with only the trailing slash word completed. */
+    public function completedDraft(): ?string
+    {
+        $chosen = $this->selectedCommandName();
+        $name = self::nameBeingWritten($this->draft);
+
+        if ($chosen === null || $name === null) {
+            return null;
+        }
+
+        return substr($this->draft, 0, strlen($this->draft) - strlen($name))
+            . $chosen . ' ';
+    }
+
+    public function isInline(): bool
+    {
+        $name = self::nameBeingWritten($this->draft);
+
+        return $name !== null && $name !== $this->draft;
+    }
+
     /**
      * Chooses the line above the one chosen now, the last one being above
      * the first. Answers whether there was a list to move through.
@@ -300,18 +321,20 @@ final class CommandSuggestions
      */
     private function refresh(): void
     {
-        if ($this->dismissed || !self::isNameBeingWritten($this->draft)) {
+        $name = self::nameBeingWritten($this->draft);
+
+        if ($this->dismissed || $name === null) {
             $this->hide();
 
             return;
         }
 
-        $lines = $this->linesMatching($this->draft);
+        $lines = $this->linesMatching($name);
 
         if ($lines === []) {
             $this->noMatchesMessage->setText(
                 'No commands match "'
-                    . DisplayableText::preview($this->draft, self::DRAFT_WIDTH)
+                    . DisplayableText::preview($name, self::DRAFT_WIDTH)
                     . '"',
             );
             $this->showWidget($this->noMatchesMessage);
@@ -489,19 +512,16 @@ final class CommandSuggestions
     }
 
     /**
-     * Whether the draft is a name being written after a slash.
-     *
-     * One line, a slash to open it and no whitespace since: a space begins
-     * the arguments, a new line makes the draft a message, and a draft that
-     * lost its slash is a message too. A slash anywhere but first is text
-     * for the Agent and is never one of these.
-     *
-     * Read byte by byte rather than as UTF-8: a draft that was pasted in is
-     * bytes nobody validated, and asking whether a name is being written
-     * must answer that question rather than fail on the encoding.
+     * The trailing slash word, whether it starts the draft or follows text.
+     * Whitespace ends the name; slashes inside URLs and paths stay text.
+     * Read bytes so pasted text need not be valid UTF-8.
      */
-    private static function isNameBeingWritten(string $draft): bool
+    private static function nameBeingWritten(string $draft): ?string
     {
-        return preg_match('/^\/\S*\z/', $draft) === 1;
+        if (preg_match('~(?:^|\s)(/[^\s/]*)\z~', $draft, $matches) !== 1) {
+            return null;
+        }
+
+        return $matches[1];
     }
 }

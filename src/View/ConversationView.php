@@ -10,7 +10,9 @@ use InvalidArgumentException;
 use LogicException;
 use NeuronAI\Chat\Messages\Message;
 use NeuronInteraction\Command\CommandInterface;
+use NeuronTui\Conversation\UserMessageProcessing;
 use NeuronTui\History\HistoryProjection;
+use NeuronTui\UserMessageProcessorInterface;
 use NeuronTui\View\Widget\ComposerEditor;
 use Symfony\Component\Tui\Event\CancelEvent;
 use Symfony\Component\Tui\Event\ChangeEvent;
@@ -110,6 +112,7 @@ final class ConversationView
         array $commands = [],
         ?string $figlet = null,
         string $figletFont = 'standard',
+        private readonly UserMessageProcessorInterface $processor = new UserMessageProcessing(),
     ) {
         $this->tui = new Tui(
             ConversationStyleSheet::create(),
@@ -230,7 +233,7 @@ final class ConversationView
         $this->history->clear();
         $this->activeAgentMessage = null;
 
-        $projection = new HistoryProjection($messages);
+        $projection = new HistoryProjection($messages, $this->processor);
 
         foreach ($projection->entries() as $entry) {
             $this->history->addEntry($entry->kind, $entry->text);
@@ -364,7 +367,7 @@ final class ConversationView
     {
         $this->history->addEntry(
             HistoryEntryKind::UserMessage,
-            DisplayableText::compactSkillInvocation($contents),
+            $this->processor->forDisplay($contents),
         );
     }
 
@@ -479,7 +482,7 @@ final class ConversationView
             ];
 
             foreach ($messages as $message) {
-                $message = DisplayableText::safe($message);
+                $message = DisplayableText::safe($this->processor->forDisplay($message));
                 $lines[] = '  ↳ ' . str_replace(
                     "\n",
                     "\n    ",
@@ -563,9 +566,8 @@ final class ConversationView
      * holding the focus, rather than by giving the list the focus: the
      * composer keeps it throughout, and a key is taken from it only where
      * the suggestions have an answer for it — Tab excepted, which is never
-     * the composer's. ↑↓ cost the composer nothing meanwhile, a name being
-     * written being one line by definition. Enter replaces a selectable
-     * draft before the composer submits it through its usual path.
+     * the composer's. Enter completes an inline name without submitting; a
+     * command at the start is submitted through the composer's usual path.
      */
     private function handleSuggestionKeys(InputEvent $event): void
     {
@@ -606,6 +608,13 @@ final class ConversationView
         }
 
         if ($this->suggestionKeybindings->matches($data, 'suggestion-run')) {
+            if ($this->suggestions->isListOpen() && $this->suggestions->isInline()) {
+                $event->stopPropagation();
+                $this->completeCommandName();
+
+                return;
+            }
+
             $chosen = $this->suggestions->selectedCommandName();
 
             if ($chosen !== null) {
@@ -657,13 +666,13 @@ final class ConversationView
      */
     private function completeCommandName(): void
     {
-        $chosen = $this->suggestions->selectedCommandName();
+        $draft = $this->suggestions->completedDraft();
 
-        if ($chosen === null) {
+        if ($draft === null) {
             return;
         }
 
-        $this->writeDraft($chosen . ' ');
+        $this->writeDraft($draft);
         $this->tui->requestRender();
     }
 
@@ -692,6 +701,8 @@ final class ConversationView
     private function showStatus(): void
     {
         $this->status->setText(match (true) {
+            $this->suggestions->isListOpen() && $this->suggestions->isInline()
+                => 'suggesting · ↑↓ moves · Tab/Enter completes',
             $this->suggestions->isListOpen() => self::SUGGESTING_STATUS,
             $this->stopping => 'Stop requested · HTTP only · tools continue',
             $this->working && $this->responseStoppable => 'Enter queues · Esc stops response · Shift+Enter adds a line',

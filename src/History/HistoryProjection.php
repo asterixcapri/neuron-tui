@@ -15,6 +15,8 @@ use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Tools\ToolInterface;
+use NeuronTui\Conversation\UserMessageProcessing;
+use NeuronTui\UserMessageProcessorInterface;
 use NeuronTui\View\DisplayableText;
 use NeuronTui\View\HistoryEntryKind;
 
@@ -53,8 +55,10 @@ final class HistoryProjection
     private array $entries = [];
 
     /** @param array<Message> $messages */
-    public function __construct(array $messages)
-    {
+    public function __construct(
+        array $messages,
+        private readonly UserMessageProcessorInterface $processor = new UserMessageProcessing(),
+    ) {
         $this->correlation = new ToolCallCorrelation();
 
         foreach ($messages as $message) {
@@ -149,7 +153,7 @@ final class HistoryProjection
             $content = match (true) {
                 $block instanceof ReasoningContent => null,
                 $block instanceof TextContent => $kind === HistoryEntryKind::UserMessage
-                    ? DisplayableText::compactSkillInvocation($block->getContent())
+                    ? $this->processor->forDisplay($block->getContent())
                     : $block->getContent(),
                 $block instanceof ImageContent => '[Image]',
                 $block instanceof FileContent => $this->filePlaceholder($block),

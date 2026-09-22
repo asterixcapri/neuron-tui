@@ -8,16 +8,50 @@ use InvalidArgumentException;
 use LogicException;
 use NeuronAI\Chat\Messages\AssistantMessage;
 use NeuronAI\Chat\Messages\UserMessage;
+use NeuronInteraction\Command\HelpCommand;
 use NeuronTui\View\ChoiceOption;
 use NeuronTui\View\ConversationView;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 use Revolt\EventLoop;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
+use Symfony\Component\Tui\Event\SubmitEvent;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
 final class ConversationViewTest extends TestCase
 {
+    public function testInlineCompletionPreservesTheDraftAndDoesNotSubmitIt(): void
+    {
+        foreach (["\t", "\r"] as $completionKey) {
+            $terminal = new VirtualTerminal(columns: 100, rows: 24);
+            $view = new ConversationView($terminal, 'Neuron AI', 'Conversation', [new HelpCommand()]);
+            $submitted = [];
+            $view->onSubmit(static function (SubmitEvent $event) use (&$submitted): void {
+                $submitted[] = $event->getValue();
+            });
+
+            EventLoop::queue(static function () use ($terminal, $view, $completionKey, &$submitted): void {
+                $terminal->simulateInput('spiegami già /hel');
+                self::assertTrue($view->hasCommandSuggestions());
+                $terminal->clearOutput();
+                $view->paintPendingChanges();
+                self::assertStringContainsString(
+                    'Tab/Enter completes',
+                    AnsiUtils::stripAnsiCodes($terminal->getOutput()),
+                );
+                $terminal->simulateInput($completionKey);
+                self::assertFalse($view->hasCommandSuggestions());
+                self::assertSame([], $submitted);
+                $terminal->simulateInput('per favore');
+                $terminal->simulateInput("\r");
+                $view->stop();
+            });
+
+            $view->run();
+            self::assertSame(['spiegami già /help per favore'], $submitted);
+        }
+    }
+
     public function testShiftEnterKeepsThePromptAtTheTopOfTheComposer(): void
     {
         $terminal = new VirtualTerminal(columns: 80, rows: 24);
