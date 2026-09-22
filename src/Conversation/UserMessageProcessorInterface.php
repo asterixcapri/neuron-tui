@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace NeuronTui;
+namespace NeuronTui\Conversation;
 
 /** Host-defined preparation and presentation of user messages. */
 interface UserMessageProcessorInterface

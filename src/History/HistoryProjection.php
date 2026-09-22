@@ -16,7 +16,7 @@ use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Tools\ToolInterface;
 use NeuronTui\Conversation\UserMessageProcessing;
-use NeuronTui\UserMessageProcessorInterface;
+use NeuronTui\Conversation\UserMessageProcessorInterface;
 use NeuronTui\View\DisplayableText;
 use NeuronTui\View\HistoryEntryKind;
 

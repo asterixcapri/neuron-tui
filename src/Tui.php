@@ -16,6 +16,7 @@ use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Conversation\ConversationInputHandler;
 use NeuronTui\Conversation\ConversationRuntime;
 use NeuronTui\Conversation\UserMessageProcessing;
+use NeuronTui\Conversation\UserMessageProcessorInterface;
 use NeuronTui\View\ConversationView;
 use Symfony\Component\Tui\Terminal\Terminal;
 use Symfony\Component\Tui\Terminal\TerminalInterface;

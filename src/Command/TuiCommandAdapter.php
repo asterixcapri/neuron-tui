@@ -17,7 +17,7 @@ use NeuronInteraction\Session\SessionStore;
 use NeuronTui\Conversation\ConversationRuntime;
 use NeuronTui\Conversation\MessageForAgent;
 use NeuronTui\Conversation\UserMessageProcessing;
-use NeuronTui\UserMessageProcessorInterface;
+use NeuronTui\Conversation\UserMessageProcessorInterface;
 use NeuronTui\View\ChoiceOption;
 use NeuronTui\View\ConversationView;
 use Revolt\EventLoop;

@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace NeuronTui\Conversation;
 
-use NeuronTui\UserMessageProcessorInterface;
-
 /** @internal */
 final readonly class UserMessageProcessing implements UserMessageProcessorInterface
 {

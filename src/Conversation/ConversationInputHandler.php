@@ -9,7 +9,6 @@ use NeuronInteraction\Configuration\ConfigurationStore;
 use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Session\SessionStore;
 use NeuronTui\Command\TuiCommandAdapter;
-use NeuronTui\UserMessageProcessorInterface;
 use NeuronTui\View\ConversationView;
 use Symfony\Component\Tui\Event\InputEvent;
 use Symfony\Component\Tui\Event\SubmitEvent;
