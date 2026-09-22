@@ -27,9 +27,9 @@ final class HistoryPaneTest extends TestCase
 
         $display = $this->paint($terminal);
 
-        self::assertMatchesRegularExpression('/ ! Alpha beta gamma *\r?\n/', $display);
-        self::assertMatchesRegularExpression('/   delta *\r?\n/', $display);
-        self::assertMatchesRegularExpression('/   Next line *\r?\n/', $display);
+        self::assertMatchesRegularExpression('/^! Alpha beta gamma *\r?$/m', $display);
+        self::assertMatchesRegularExpression('/^  delta *\r?$/m', $display);
+        self::assertMatchesRegularExpression('/^  Next line *\r?$/m', $display);
         self::assertSame(3, $entry->height());
     }
 

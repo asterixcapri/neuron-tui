@@ -38,7 +38,7 @@ final class ConversationStyleSheet
             ':root' => new Style(gap: 1),
             '.header' => new Style(
                 border: new Border(0, 0, 1, 0, 'normal', self::BORDER_COLOR),
-                padding: new Padding(0, 1, 1, 1),
+                padding: new Padding(0, 1, 1, 0),
             ),
             '.figlet' => new Style(
                 padding: new Padding(0, 0, 1, 0),
@@ -49,7 +49,7 @@ final class ConversationStyleSheet
             '.subtitle' => new Style(color: self::SECONDARY_TEXT_COLOR),
             '.history' => new Style(
                 gap: 1,
-                padding: Padding::xy(1),
+                padding: new Padding(0, 1, 0, 0),
             ),
             '.message' => new Style(
                 direction: Direction::Horizontal,
@@ -77,12 +77,12 @@ final class ConversationStyleSheet
             '.loading' => new Style(color: self::SECONDARY_TEXT_COLOR),
             '.queued-message' => new Style(
                 color: self::SECONDARY_TEXT_COLOR,
-                padding: Padding::xy(1),
+                padding: new Padding(0, 1, 0, 0),
             ),
             '.picker' => new Style(
                 border: new Border(1, 0, 0, 0, 'normal', self::BORDER_COLOR),
                 gap: 1,
-                padding: new Padding(1, 1, 0, 1),
+                padding: new Padding(1, 1, 0, 0),
             ),
             '.picker-heading' => new Style(color: self::ACCENT_COLOR, bold: true),
             '.picker-description' => new Style(color: self::SECONDARY_TEXT_COLOR),
@@ -96,7 +96,7 @@ final class ConversationStyleSheet
             '.picker-list::scroll-info' => new Style(
                 color: self::SECONDARY_TEXT_COLOR,
             ),
-            '.suggestions' => new Style(padding: Padding::xy(1)),
+            '.suggestions' => new Style(padding: new Padding(0, 1, 0, 0)),
             '.suggestions-list::selected' => new Style(color: self::ACCENT_COLOR),
             '.suggestions-list::scroll-info' => new Style(
                 color: self::SECONDARY_TEXT_COLOR,

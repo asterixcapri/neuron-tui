@@ -2996,7 +2996,7 @@ MARKDOWN;
                 $terminal->simulateInput('match');
                 $terminal->simulateInput("\x1b[B\x1b[B");
                 $terminal->clearOutput();
-                $terminal->simulateResize(22, 24);
+                $terminal->simulateResize(21, 24);
             },
         );
         EventLoop::delay(
@@ -3006,7 +3006,7 @@ MARKDOWN;
                     $terminal->getOutput(),
                 );
                 $terminal->clearOutput();
-                $terminal->simulateResize(22, 7);
+                $terminal->simulateResize(21, 7);
             },
         );
         EventLoop::delay(
