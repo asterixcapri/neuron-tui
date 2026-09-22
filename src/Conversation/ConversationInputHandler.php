@@ -54,7 +54,7 @@ final class ConversationInputHandler
             $this->commands->run(
                 $submission->name,
                 $submission->value,
-                new TuiCommandAdapter($this->runtime, $this->view, $this->commands, $this->sessionStore, $this->configurationStore),
+                new TuiCommandAdapter($this->runtime, $this->view, $this->commands, $this->sessionStore, $this->configurationStore, $this->processor),
             );
 
             return;

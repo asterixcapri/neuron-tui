@@ -15,7 +15,11 @@ use NeuronAI\Testing\FakeAIProvider;
 use NeuronInteraction\Command\CommandAdapterInterface;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Command\ResumeCommand;
+use NeuronInteraction\Command\Selection;
+use NeuronInteraction\Command\SelectionOption;
 use NeuronInteraction\InputHistory\InputHistory;
+use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Tui;
 use NeuronTui\UserMessageProcessorInterface;
@@ -157,6 +161,87 @@ final class UserMessageProcessorTest extends TestCase
         self::assertStringNotContainsString('A[Second]', $queued);
         self::assertCount(2, $provider->getRecorded());
         self::assertSame('A[Second]', $provider->getRecorded()[1]->messages[2]->getContent());
+    }
+
+    public function testSessionTitlesAreProcessedBeforeDisplayAndSearchIncludingRenamedResumeCommands(): void
+    {
+        foreach (['/resume', '/continue'] as $name) {
+            $store = new SessionStore(new InMemoryStorage(), 'local');
+            $session = $store->create();
+            $session->addMessage(new UserMessage('B[A[stored-payload]]'));
+            for ($index = 0; $index < 5; ++$index) {
+                $store->create()->addMessage(new UserMessage('Other session ' . $index));
+            }
+            $agent = new Agent();
+            $terminal = new VirtualTerminal(rows: 30);
+            $processor = $this->createMock(UserMessageProcessorInterface::class);
+            $processor->expects(self::never())->method('forAgent');
+            $processor->method('forDisplay')->willReturnCallback(
+                static fn (string $content): string => $content === 'stored-payload' ? 'Readable session' : $content,
+            );
+            $display = '';
+            EventLoop::queue(static fn () => $terminal->simulateInput($name . "\r"));
+            EventLoop::delay(0.05, static fn () => $terminal->simulateInput('Readable'));
+            EventLoop::delay(0.08, static function () use ($terminal, &$display): void {
+                $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+                $terminal->simulateInput("\r");
+            });
+            EventLoop::delay(0.1, static fn () => $terminal->simulateInput("\x03"));
+
+            Tui::make($agent, $terminal, commands: new Commands(new ResumeCommand($name)), sessionStore: $store)
+                ->addUserMessageProcessor([$processor, new EnvelopeProcessor('A'), new EnvelopeProcessor('B')])
+                ->run();
+
+            self::assertStringContainsString('Readable session', $display);
+            self::assertStringNotContainsString('stored-payload', $display);
+            self::assertSame('B[A[stored-payload]]', $agent->getChatHistory()->getMessages()[0]->getContent());
+            self::assertSame('B[A[stored-payload]]', $store->read($session->getKey())?->getMessages()[0]->getContent());
+        }
+    }
+
+    public function testCustomCommandPickerLabelsAreProcessedButTheirValuesArePreserved(): void
+    {
+        $command = new class implements CommandInterface {
+            public ?string $chosen = null;
+
+            public function name(): string
+            {
+                return '/custom';
+            }
+            public function describe(): string
+            {
+                return 'Choose an option.';
+            }
+            public function run(CommandAdapterInterface $adapter, string $value): void
+            {
+                if ($value !== '') {
+                    $this->chosen = $value;
+
+                    return;
+                }
+
+                $adapter->requestSelection(new Selection($this->name(), 'Custom options', [
+                    new SelectionOption('opaque-key', 'A[Readable label]'),
+                    new SelectionOption('other-key', 'Ordinary label'),
+                ]));
+            }
+        };
+        $terminal = new VirtualTerminal(rows: 30);
+        $display = '';
+        EventLoop::queue(static fn () => $terminal->simulateInput("/custom\r"));
+        EventLoop::delay(0.05, static function () use ($terminal, &$display): void {
+            $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+            $terminal->simulateInput("\r");
+        });
+        EventLoop::delay(0.1, static fn () => $terminal->simulateInput("\x03"));
+
+        Tui::make(new Agent(), $terminal, commands: new Commands($command))
+            ->addUserMessageProcessor(new EnvelopeProcessor('A'))->run();
+
+        self::assertStringContainsString('Readable label', $display);
+        self::assertStringContainsString('Ordinary label', $display);
+        self::assertStringNotContainsString('A[Readable label]', $display);
+        self::assertSame('opaque-key', $command->chosen);
     }
 
     public function testRegistrationIsClosedOnceTheTuiHasRun(): void

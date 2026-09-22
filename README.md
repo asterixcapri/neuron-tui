@@ -89,37 +89,6 @@ Tui::make($agent, commands: $commands)->run();
 Each standard command accepts a custom slash-prefixed name: `new LeaveCommand('/quit')`
 replaces `/exit` with `/quit`.
 
-## User-message processors
-
-Register application-specific preparation and presentation before `run()`:
-
-```php
-$tui = Tui::make($agent, commands: $commands);
-$tui->addUserMessageProcessor($processor);
-$tui->addUserMessageProcessor([$anotherProcessor, $lastProcessor]);
-$tui->run();
-```
-
-Each processor implements `NeuronTui\UserMessageProcessorInterface`:
-
-- `forAgent(string $input): string` prepares an ordinary user submission before
-  it is queued. Processors run in registration order, each receiving the previous
-  result. Throwing rejects the submission, shows the error and keeps the draft.
-  An empty final result is also rejected.
-- `forDisplay(string $content): string` presents user text in reverse registration
-  order, including queued messages and loaded History. It must handle arbitrary
-  text, including old messages it did not prepare, without side effects.
-
-Input history retains the text as typed; the Agent's History retains the prepared
-content. Assistant messages and tool output are not processed. Commands bypass
-`forAgent()`, including prompts they produce, but user messages produced by
-commands still use `forDisplay()`.
-
-With no processors registered, text passes through unchanged. Neuron TUI does
-not interpret skill markup: applications that previously relied on compact
-`<skill>` presentation must register their own processor. This also controls
-presentation of existing sessions without rewriting them.
-
 ## Sessions
 
 Use `/clear` to start a new conversation and `/resume` to return to a saved one.

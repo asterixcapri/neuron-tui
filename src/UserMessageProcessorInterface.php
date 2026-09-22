@@ -16,8 +16,9 @@ interface UserMessageProcessorInterface
 
     /**
      * Present user text without changing History. Also called for queued
-     * messages and loaded History, including text this processor did not
-     * prepare. Must accept arbitrary text and be safe to call repeatedly.
+     * messages, loaded History and picker labels from any command. Must accept
+     * arbitrary text, leave unrecognized content unchanged and be safe to call
+     * repeatedly. Option values are never processed.
      * This is a display projection, not necessarily an inverse of forAgent().
      */
     public function forDisplay(string $content): string;
