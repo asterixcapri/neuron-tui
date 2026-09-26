@@ -75,7 +75,7 @@ final class CommandHistoryTest extends TestCase
     {
         $this->runCommand(static function (CommandAdapterInterface $adapter): void {
             $adapter->agent()->setChatHistory(new InMemoryChatHistory());
-            $adapter->promptAgent('Question in the new conversation');
+            $adapter->promptAgent(new UserMessage('Question in the new conversation'));
         });
 
         $display = $this->display();

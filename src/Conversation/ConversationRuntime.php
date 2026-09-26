@@ -7,6 +7,7 @@ namespace NeuronTui\Conversation;
 use Amp\Future;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\History\ChatHistoryInterface;
+use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
 use NeuronInteraction\Http\StopSignal;
 use NeuronTui\View\ConversationView;
@@ -47,10 +48,10 @@ final class ConversationRuntime
         $this->turnRunner = new TurnRunner($this->view);
     }
 
-    public function submitMessage(MessageForAgent $message): void
+    public function submitMessage(UserMessage $message): void
     {
         $this->view->emptyComposer();
-        $accepted = $this->turnQueue->accept($message->content);
+        $accepted = $this->turnQueue->accept($message);
 
         if ($accepted === null) {
             $this->showQueuedMessages();
@@ -194,7 +195,7 @@ final class ConversationRuntime
      * The queue has already prepared the Turn. Execution is scheduled by
      * tick(), both for a fresh submission and for a previously queued message.
      */
-    private function showTurnStarted(string $message): void
+    private function showTurnStarted(UserMessage $message): void
     {
         $this->responseStopRequested = false;
         $this->stopSignal?->clear();

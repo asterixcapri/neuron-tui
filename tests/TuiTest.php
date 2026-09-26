@@ -1234,7 +1234,7 @@ MARKDOWN;
         $storage = new \NeuronInteraction\Storage\InMemoryStorage();
         $command = $this->commandThat(
             static function (CommandAdapterInterface $adapter, string $value): void {
-                $adapter->promptAgent('Review ' . $value . '.');
+                $adapter->promptAgent(new UserMessage('Review ' . $value . '.'));
             },
         );
         EventLoop::queue(
@@ -1263,7 +1263,7 @@ MARKDOWN;
         );
         self::assertSame(
             ['/probe this diff'],
-            (new \NeuronInteraction\InputHistory\InputHistory($storage))->entries(),
+            array_map(static fn (UserMessage $message): ?string => $message->getContent(), (new InputHistory($storage))->entries()),
         );
     }
 
@@ -1306,7 +1306,7 @@ MARKDOWN;
         self::assertSame(['first invocation finished'], $beforeChoice);
         self::assertSame(['first invocation finished', 'stable-value'], $events);
         self::assertStringContainsString('Request submitted.', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
-        self::assertSame(['/probe'], (new \NeuronInteraction\InputHistory\InputHistory($storage))->entries());
+        self::assertSame(['/probe'], array_map(static fn (UserMessage $message): ?string => $message->getContent(), (new InputHistory($storage))->entries()));
     }
 
     public function testStoppingImmediatelyAfterRequestingSelectionLeavesWithoutPresentingIt(): void
@@ -1426,7 +1426,7 @@ MARKDOWN;
         self::assertStringContainsString('RuntimeException: Selected command failed.', $display);
         self::assertStringNotContainsString('Original conversation.', $display);
         self::assertStringNotContainsString('Replacement conversation.', $display);
-        self::assertSame(['/choose', '/replace'], $inputHistory->entries());
+        self::assertSame(['/choose', '/replace'], array_map(static fn (UserMessage $message): ?string => $message->getContent(), $inputHistory->entries()));
     }
 
     public function testSelectedCommandIsReadmittedAfterItsRequesterStartsAnAgentTurn(): void
@@ -1450,7 +1450,7 @@ MARKDOWN;
                 $adapter->requestSelection(new Selection('/apply', 'Choose an action', [
                     new SelectionOption('selected-value', 'An action'),
                 ]));
-                $adapter->promptAgent('Generated request.');
+                $adapter->promptAgent(new UserMessage('Generated request.'));
             },
             '/choose',
         );
@@ -1478,7 +1478,7 @@ MARKDOWN;
         );
         $provider->assertCallCount(1);
         self::assertSame('Generated request.', $provider->getRecorded()[0]->messages[0]->getContent());
-        self::assertSame(['/choose'], $inputHistory->entries());
+        self::assertSame(['/choose'], array_map(static fn (UserMessage $message): ?string => $message->getContent(), $inputHistory->entries()));
     }
 
     public function testACommandReachesTheAgentToChangeProviderInstructionsAndTools(): void

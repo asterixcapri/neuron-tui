@@ -42,11 +42,12 @@ final class ConversationInputHandler
 
         $this->inputHistory->leave();
 
-        if ($event->isBlank()) {
+        if ($event->isBlank() && !$this->view->composerHasAttachments()) {
             return;
         }
 
-        $this->inputHistory->record($event->getValue());
+        $original = $this->view->composerMessage();
+        $this->inputHistory->record($original);
         $submission = SubmissionParser::parse($event->getValue());
 
         if ($submission instanceof CommandInput) {
@@ -60,9 +61,9 @@ final class ConversationInputHandler
         }
 
         try {
-            $prompt = $this->processor->forAgent($submission->content);
+            $prompt = $this->processor->forAgent(($submission->getContent() ?? ''));
 
-            if (trim($prompt) === '') {
+            if (trim($prompt) === '' && !$this->view->composerHasAttachments()) {
                 $this->view->showError('The prepared user message is empty.');
 
                 return;
@@ -73,7 +74,8 @@ final class ConversationInputHandler
             return;
         }
 
-        $this->runtime->submitMessage(new MessageForAgent($prompt));
+        $message = $this->view->composerMessage($prompt);
+        $this->runtime->submitMessage($message);
     }
 
     public function handleDraftChange(): void
@@ -122,7 +124,7 @@ final class ConversationInputHandler
                 $this->inputHistory->isNavigating()
                 || $this->view->isComposerEmpty()
             ) {
-                $input = $this->inputHistory->older();
+                $input = $this->inputHistory->older($this->view->composerMessage());
 
                 if ($input !== null) {
                     $event->stopPropagation();

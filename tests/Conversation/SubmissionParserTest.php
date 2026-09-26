@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace NeuronTui\Tests\Conversation;
 
+use NeuronAI\Chat\Messages\UserMessage;
 use NeuronTui\Conversation\CommandInput;
-use NeuronTui\Conversation\MessageForAgent;
 use NeuronTui\Conversation\SubmissionParser;
 use PHPUnit\Framework\TestCase;
 
@@ -15,18 +15,18 @@ final class SubmissionParserTest extends TestCase
     {
         $submission = SubmissionParser::parse("First line\nsecond line");
 
-        self::assertInstanceOf(MessageForAgent::class, $submission);
-        self::assertSame("First line\nsecond line", $submission->content);
+        self::assertInstanceOf(UserMessage::class, $submission);
+        self::assertSame("First line\nsecond line", $submission->getContent());
     }
 
     public function testAMessageKeepsEveryCharacterIncludingItsSpacing(): void
     {
         $submission = SubmissionParser::parse("  Type /clear to start over \n");
 
-        self::assertInstanceOf(MessageForAgent::class, $submission);
+        self::assertInstanceOf(UserMessage::class, $submission);
         self::assertSame(
             "  Type /clear to start over \n",
-            $submission->content,
+            $submission->getContent(),
         );
     }
 
@@ -88,7 +88,7 @@ final class SubmissionParserTest extends TestCase
     {
         $submission = SubmissionParser::parse('Type /clear to start over');
 
-        self::assertInstanceOf(MessageForAgent::class, $submission);
-        self::assertSame('Type /clear to start over', $submission->content);
+        self::assertInstanceOf(UserMessage::class, $submission);
+        self::assertSame('Type /clear to start over', $submission->getContent());
     }
 }

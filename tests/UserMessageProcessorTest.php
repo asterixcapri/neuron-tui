@@ -7,7 +7,9 @@ namespace NeuronTui\Tests;
 use Generator;
 use LogicException;
 use NeuronAI\Agent\Agent;
+use NeuronAI\Chat\Enums\SourceType;
 use NeuronAI\Chat\Messages\AssistantMessage;
+use NeuronAI\Chat\Messages\ContentBlocks\ImageContent;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
 use NeuronAI\Chat\Messages\UserMessage;
@@ -31,6 +33,8 @@ use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
 final class UserMessageProcessorTest extends TestCase
 {
+    private const string IMAGE = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+
     public function testSingleAndArrayRegistrationsComposeWithoutChangingInputHistory(): void
     {
         $provider = new FakeAIProvider(new AssistantMessage('Reply.'));
@@ -51,7 +55,7 @@ final class UserMessageProcessorTest extends TestCase
 
         self::assertSame('C[B[A[Hello]]]', $provider->getRecorded()[0]->messages[0]->getContent());
         self::assertSame('C[B[A[Hello]]]', $agent->getChatHistory()->getMessages()[0]->getContent());
-        self::assertSame('Hello', $inputHistory->older());
+        self::assertSame('Hello', $inputHistory->older()?->getContent());
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('❯ Hello', $display);
         self::assertStringNotContainsString('C[B[A[Hello]]]', $display);
@@ -92,7 +96,7 @@ final class UserMessageProcessorTest extends TestCase
             }
             public function run(CommandAdapterInterface $adapter, string $value): void
             {
-                $adapter->promptAgent('A[Command prompt]');
+                $adapter->promptAgent(new UserMessage('A[Command prompt]'));
             }
         };
         $terminal = new VirtualTerminal(rows: 30);
@@ -242,6 +246,68 @@ final class UserMessageProcessorTest extends TestCase
         self::assertStringContainsString('Ordinary label', $display);
         self::assertStringNotContainsString('A[Readable label]', $display);
         self::assertSame('opaque-key', $command->chosen);
+    }
+
+    public function testCommandMessagesKeepTheirImagesAndMetadataThroughTheQueue(): void
+    {
+        $first = new UserMessage(new ImageContent(self::IMAGE, SourceType::BASE64, 'image/png'));
+        $second = new UserMessage(new ImageContent(self::IMAGE, SourceType::BASE64, 'image/png'));
+        $second->addMetadata('original', 'queued attachment');
+        $command = new class($first, $second) implements CommandInterface {
+            public function __construct(private UserMessage $first, private UserMessage $second)
+            {
+            }
+            public function name(): string
+            {
+                return '/photos';
+            }
+            public function describe(): string
+            {
+                return 'Send two photos.';
+            }
+            public function run(CommandAdapterInterface $adapter, string $value): void
+            {
+                $adapter->promptAgent($this->first);
+                $adapter->promptAgent($this->second);
+            }
+        };
+        $provider = new FakeAIProvider(new AssistantMessage('One.'), new AssistantMessage('Two.'));
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        $terminal = new VirtualTerminal(rows: 30);
+        EventLoop::queue(static fn () => $terminal->simulateInput("/photos\r"));
+        EventLoop::delay(0.3, static fn () => $terminal->simulateInput("\x03"));
+
+        Tui::make($agent, $terminal, commands: new Commands($command))->run();
+
+        self::assertCount(2, $provider->getRecorded());
+        self::assertSame($first, $provider->getRecorded()[0]->messages[0]);
+        self::assertSame($second, $provider->getRecorded()[1]->messages[2]);
+        self::assertStringContainsString('[Image]', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
+    }
+
+    public function testRecalledInputKeepsItsImageWhenItsTextIsPrepared(): void
+    {
+        $inputs = new InputHistory(new InMemoryStorage());
+        $image = new ImageContent(self::IMAGE, SourceType::BASE64, 'image/png');
+        $message = new UserMessage('Original');
+        $message->addContent($image);
+        $inputs->record($message);
+        $provider = new FakeAIProvider(new AssistantMessage('Received.'));
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        $terminal = new VirtualTerminal(rows: 30);
+        EventLoop::queue(static fn () => $terminal->simulateInput("\x1b[A\r"));
+        EventLoop::delay(0.15, static fn () => $terminal->simulateInput("\x03"));
+
+        Tui::make($agent, $terminal, inputHistory: $inputs)->addUserMessageProcessor(new EnvelopeProcessor('A'))->run();
+
+        $sent = $provider->getRecorded()[0]->messages[0];
+        self::assertSame('A[Original]', $sent->getContent());
+        self::assertCount(2, $sent->getContentBlocks());
+        self::assertInstanceOf(ImageContent::class, $sent->getContentBlocks()[1]);
+        self::assertSame($image->content, $sent->getContentBlocks()[1]->content);
+        self::assertStringContainsString('[Image]', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
     }
 
     public function testRegistrationIsClosedOnceTheTuiHasRun(): void

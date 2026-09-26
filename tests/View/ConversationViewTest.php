@@ -6,7 +6,9 @@ namespace NeuronTui\Tests\View;
 
 use InvalidArgumentException;
 use LogicException;
+use NeuronAI\Chat\Enums\SourceType;
 use NeuronAI\Chat\Messages\AssistantMessage;
+use NeuronAI\Chat\Messages\ContentBlocks\FileContent;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronInteraction\Command\HelpCommand;
 use NeuronTui\View\ChoiceOption;
@@ -20,6 +22,41 @@ use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
 final class ConversationViewTest extends TestCase
 {
+    public function testTheComposerOwnsAttachmentsThroughEditingPreparationAndClearing(): void
+    {
+        $terminal = new VirtualTerminal(columns: 100, rows: 24);
+        $view = new ConversationView($terminal, 'Neuron AI', 'Conversation');
+        $original = new UserMessage(new FileContent('report bytes', SourceType::BASE64, 'application/pdf', 'report.pdf'));
+        $original->addMetadata('source', 'original input');
+        $view->recallInput($original);
+        self::assertFalse($view->isComposerEmpty());
+
+        EventLoop::queue(static function () use ($terminal, $view, $original): void {
+            $terminal->simulateInput('Explain this file');
+            $draft = $view->composerMessage();
+            self::assertSame('Explain this file', $draft->getContent());
+            self::assertCount(2, $draft->getContentBlocks());
+            self::assertInstanceOf(FileContent::class, $draft->getContentBlocks()[1]);
+            self::assertSame('original input', $draft->getMetadata('source'));
+            self::assertNull($original->getContent());
+
+            $prepared = $view->composerMessage('Prepared instructions');
+            self::assertSame('Prepared instructions', $prepared->getContent());
+            self::assertInstanceOf(FileContent::class, $prepared->getContentBlocks()[1]);
+            self::assertSame('Explain this file', $view->composerMessage()->getContent());
+
+            $view->emptyComposer();
+            self::assertTrue($view->isComposerEmpty());
+            self::assertFalse($view->composerHasAttachments());
+            $terminal->simulateInput('New draft');
+            self::assertSame('New draft', $view->composerMessage()->getContent());
+            self::assertCount(1, $view->composerMessage()->getContentBlocks());
+            $view->stop();
+        });
+
+        $view->run();
+    }
+
     public function testInlineCompletionPreservesTheDraftAndDoesNotSubmitIt(): void
     {
         foreach (["\t", "\r"] as $completionKey) {

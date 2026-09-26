@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace NeuronTui\Conversation;
 
+use NeuronAI\Chat\Messages\UserMessage;
+
 /**
  * Reads what a person typed and says what it is.
  *
@@ -34,9 +36,9 @@ final class SubmissionParser
      */
     public static function parse(
         string $input,
-    ): CommandInput|MessageForAgent {
+    ): CommandInput|UserMessage {
         if (!str_starts_with($input, '/')) {
-            return new MessageForAgent($input);
+            return new UserMessage($input);
         }
 
         // The input begins with a slash, so there is always a first word:

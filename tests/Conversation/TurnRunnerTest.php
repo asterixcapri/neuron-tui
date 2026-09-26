@@ -10,6 +10,7 @@ use NeuronAI\Chat\Messages\AssistantMessage;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
 use NeuronAI\Chat\Messages\ToolCallMessage;
+use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Tools\Tool;
 use NeuronTui\Conversation\TurnRunner;
@@ -166,8 +167,8 @@ final class TurnRunnerTest extends TestCase
 
         EventLoop::queue(
             static function () use ($turn, $earlier, $later): void {
-                $turn->run($earlier, 'Who answers?');
-                $turn->run($later, 'And now?');
+                $turn->run($earlier, new UserMessage('Who answers?'));
+                $turn->run($later, new UserMessage('And now?'));
             },
         );
         EventLoop::run();
@@ -201,7 +202,7 @@ final class TurnRunnerTest extends TestCase
         $turn = new TurnRunner($view);
 
         EventLoop::queue(
-            static fn () => $turn->run($agent, $message),
+            static fn () => $turn->run($agent, new UserMessage($message)),
         );
         EventLoop::run();
 

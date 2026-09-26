@@ -111,7 +111,7 @@ final class InputHistoryTest extends TestCase
                 '/probe refused',
                 '/probe accepted recalled',
             ],
-            $storage->read('input-history', 'entries')?->data,
+            array_map(static fn (UserMessage $message): ?string => $message->getContent(), (new InputHistory($storage))->entries()),
         );
     }
 
@@ -178,7 +178,7 @@ final class InputHistoryTest extends TestCase
         );
         self::assertSame(
             ['First question', 'Second question'],
-            $storage->read('input-history', 'entries')?->data,
+            array_map(static fn (UserMessage $message): ?string => $message->getContent(), (new InputHistory($storage))->entries()),
         );
         self::assertCount(1, $provider->getRecorded());
     }
@@ -239,11 +239,7 @@ final class InputHistoryTest extends TestCase
         $earlier = (new SessionStore($storage, 'test-user'))->create();
         $earlier->addMessage(new UserMessage('Earlier subject.'));
         $earlier->addMessage(new AssistantMessage('Earlier answer.'));
-        $storage->write(
-            'input-history',
-            'entries',
-            ['Remember across resume'],
-        );
+        (new InputHistory($storage))->record(new UserMessage('Remember across resume'));
         $terminal = new VirtualTerminal(rows: 24);
 
         EventLoop::queue(
@@ -451,7 +447,7 @@ final class InputHistoryTest extends TestCase
 
         self::assertSame(
             ['  Remember me  ', '  Remember me  again'],
-            $storage->read('input-history', 'entries')?->data,
+            array_map(static fn (UserMessage $message): ?string => $message->getContent(), (new InputHistory($storage))->entries()),
         );
     }
 
@@ -538,7 +534,7 @@ final class InputHistoryTest extends TestCase
         );
         self::assertSame(
             ['older', 'newest', 'prefix-newest-edited'],
-            $fixture->storage->read('input-history', 'entries')?->data,
+            array_map(static fn (UserMessage $message): ?string => $message->getContent(), (new InputHistory($fixture->storage))->entries()),
         );
     }
 
@@ -666,7 +662,7 @@ final class InputHistoryTest extends TestCase
         $agent = new Agent();
         $agent->setAiProvider(new FakeAIProvider());
         $storage = new InMemoryStorage();
-        $storage->write('input-history', 'entries', ['stored input']);
+        (new InputHistory($storage))->record(new UserMessage('stored input'));
         $terminal = new VirtualTerminal(rows: 24);
         $command = new class() implements CommandInterface {
             public ?string $chosen = null;
@@ -892,7 +888,10 @@ final readonly class InputHistoryTuiFixture
         $this->agent = new Agent();
         $this->agent->setAiProvider($this->provider);
         $this->storage = new InMemoryStorage();
-        $this->storage->write('input-history', 'entries', $entries);
+        $inputs = new InputHistory($this->storage);
+        foreach ($entries as $entry) {
+            $inputs->record(new UserMessage($entry));
+        }
         $this->terminal = new VirtualTerminal(columns: $columns, rows: 24);
     }
 }

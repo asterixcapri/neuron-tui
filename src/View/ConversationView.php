@@ -9,6 +9,7 @@ use Closure;
 use InvalidArgumentException;
 use LogicException;
 use NeuronAI\Chat\Messages\Message;
+use NeuronAI\Chat\Messages\UserMessage;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronTui\Conversation\UserMessageProcessing;
 use NeuronTui\Conversation\UserMessageProcessorInterface;
@@ -248,19 +249,31 @@ final class ConversationView
      */
     public function emptyComposer(): void
     {
-        $this->writeDraft('');
+        $this->editor->writeDraft(new UserMessage(''));
+        $this->suggestions->draftChanged('');
+        $this->showStatus();
+    }
+
+    public function composerMessage(?string $text = null): UserMessage
+    {
+        return $this->editor->message($text);
+    }
+
+    public function composerHasAttachments(): bool
+    {
+        return $this->editor->hasAttachments();
     }
 
     public function isComposerEmpty(): bool
     {
-        return $this->editor->getText() === '';
+        return $this->editor->getText() === '' && !$this->editor->hasAttachments();
     }
 
     /**
      * Replaces the composer with a recalled input without treating it as a
      * freshly typed Command prefix.
      */
-    public function recallInput(string $input): void
+    public function recallInput(UserMessage $input): void
     {
         $this->editor->writeDraft($input);
         $this->suggestions->dismiss();
@@ -363,11 +376,18 @@ final class ConversationView
         return $this->suggestions->isOnScreen();
     }
 
-    public function acceptUserMessage(string $contents): void
+    private function messagePreview(UserMessage $message): string
+    {
+        $projection = new HistoryProjection([$message], $this->processor);
+
+        return implode("\n\n", array_map(static fn ($entry): string => $entry->text, $projection->entries()));
+    }
+
+    public function acceptUserMessage(UserMessage $contents): void
     {
         $this->history->addEntry(
             HistoryEntryKind::UserMessage,
-            $this->processor->forDisplay($contents),
+            $this->messagePreview($contents),
         );
     }
 
@@ -470,7 +490,7 @@ final class ConversationView
     }
 
     /**
-     * @param list<string> $messages
+     * @param list<UserMessage> $messages
      */
     public function showQueuedMessages(array $messages): void
     {
@@ -482,7 +502,7 @@ final class ConversationView
             ];
 
             foreach ($messages as $message) {
-                $message = DisplayableText::safe($this->processor->forDisplay($message));
+                $message = DisplayableText::safe($this->messagePreview($message));
                 $lines[] = '  ↳ ' . str_replace(
                     "\n",
                     "\n    ",
@@ -684,7 +704,7 @@ final class ConversationView
      */
     private function writeDraft(string $draft): void
     {
-        $this->editor->writeDraft($draft);
+        $this->editor->writeText($draft);
         $this->suggestions->draftChanged($draft);
         $this->showStatus();
     }

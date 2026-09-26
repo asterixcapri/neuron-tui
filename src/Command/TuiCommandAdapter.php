@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace NeuronTui\Command;
 
 use NeuronAI\Agent\Agent;
+use NeuronAI\Chat\Messages\UserMessage;
 use NeuronInteraction\Command\CommandAdapterInterface;
 use NeuronInteraction\Command\CommandExecution;
 use NeuronInteraction\Command\CommandInterface;
@@ -15,7 +16,6 @@ use NeuronInteraction\Command\SelectionOption;
 use NeuronInteraction\Configuration\ConfigurationStore;
 use NeuronInteraction\Session\SessionStore;
 use NeuronTui\Conversation\ConversationRuntime;
-use NeuronTui\Conversation\MessageForAgent;
 use NeuronTui\Conversation\UserMessageProcessing;
 use NeuronTui\Conversation\UserMessageProcessorInterface;
 use NeuronTui\View\ChoiceOption;
@@ -96,11 +96,11 @@ final class TuiCommandAdapter implements CommandAdapterInterface
         $this->view->showError($text);
     }
 
-    public function promptAgent(string $prompt): void
+    public function promptAgent(UserMessage $prompt): void
     {
         $this->runtime->synchronizeHistory();
 
-        $this->runtime->submitMessage(new MessageForAgent($prompt));
+        $this->runtime->submitMessage($prompt);
     }
 
     public function requestSelection(Selection $request): void

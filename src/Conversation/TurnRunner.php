@@ -48,7 +48,7 @@ final class TurnRunner
      *
      * @param (Closure(): bool)|null $responseWasStopped
      */
-    public function run(Agent $agent, string $message, ?Closure $responseWasStopped = null): void
+    public function run(Agent $agent, UserMessage $message, ?Closure $responseWasStopped = null): void
     {
         $toolActivity = $this->view->beginAgentResponse();
         $responseText = '';
@@ -56,7 +56,7 @@ final class TurnRunner
 
         try {
             $events = $agent
-                ->stream(new UserMessage($message))
+                ->stream($message)
                 ->events();
 
             foreach ($events as $event) {

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace NeuronTui\Conversation;
 
+use NeuronAI\Chat\Messages\UserMessage;
+
 /**
  * What becomes of a message written while the Agent is still answering.
  *
@@ -23,9 +25,9 @@ final class TurnQueue
 {
     private TurnQueueState $state = TurnQueueState::Idle;
 
-    private ?string $readyMessage = null;
+    private ?UserMessage $readyMessage = null;
 
-    /** @var list<string> */
+    /** @var list<UserMessage> */
     private array $queuedMessages = [];
 
     /**
@@ -34,7 +36,7 @@ final class TurnQueue
      * Returns the message when it starts a turn now, and null when a turn is
      * already under way and the message has joined the queue behind it.
      */
-    public function accept(string $message): ?string
+    public function accept(UserMessage $message): ?UserMessage
     {
         if ($this->state !== TurnQueueState::Idle) {
             $this->queuedMessages[] = $message;
@@ -51,7 +53,7 @@ final class TurnQueue
      * Returns null when no ready message awaits execution handoff. Taking the
      * message does not invoke the Agent.
      */
-    public function takeForExecution(): ?string
+    public function takeForExecution(): ?UserMessage
     {
         if ($this->state !== TurnQueueState::Ready) {
             return null;
@@ -70,7 +72,7 @@ final class TurnQueue
      * Returns the message at the head of the queue, whose turn starts now, or
      * null when nothing was waiting.
      */
-    public function finishAndAdvance(): ?string
+    public function finishAndAdvance(): ?UserMessage
     {
         $this->state = TurnQueueState::Idle;
 
@@ -84,7 +86,7 @@ final class TurnQueue
     /**
      * The messages still waiting, in the order they will be sent.
      *
-     * @return list<string>
+     * @return list<UserMessage>
      */
     public function queuedMessages(): array
     {
@@ -103,7 +105,7 @@ final class TurnQueue
         return $this->state !== TurnQueueState::Idle;
     }
 
-    private function prepareTurn(string $message): string
+    private function prepareTurn(UserMessage $message): UserMessage
     {
         $this->readyMessage = $message;
         $this->state = TurnQueueState::Ready;

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronTui\Tests\Conversation;
 
+use NeuronAI\Chat\Messages\UserMessage;
 use NeuronTui\Conversation\TurnQueue;
 use PHPUnit\Framework\TestCase;
 
@@ -12,31 +13,37 @@ final class TurnQueueTest extends TestCase
     public function testTheFirstMessagePreparesATurnStraightAway(): void
     {
         $turns = new TurnQueue();
+        $first = new UserMessage('First question');
 
-        self::assertSame('First question', $turns->accept('First question'));
+        self::assertSame($first, $turns->accept($first));
         self::assertSame([], $turns->queuedMessages());
-        self::assertSame('First question', $turns->takeForExecution());
+        self::assertSame($first, $turns->takeForExecution());
     }
 
     public function testAMessageReadyForExecutionAlreadyOccupiesTheTurn(): void
     {
         $turns = new TurnQueue();
-        $turns->accept('First question');
+        $first = new UserMessage('First question');
+        $second = new UserMessage('Second question');
+        $turns->accept($first);
 
-        self::assertNull($turns->accept('Second question'));
-        self::assertSame(['Second question'], $turns->queuedMessages());
+        self::assertNull($turns->accept($second));
+        self::assertSame([$second], $turns->queuedMessages());
     }
 
     public function testAMessageArrivingWhileTheAgentWorksWaitsBehindTheTurn(): void
     {
         $turns = new TurnQueue();
-        $turns->accept('First question');
+        $first = new UserMessage('First question');
+        $second = new UserMessage('Second question');
+        $third = new UserMessage('Third question');
+        $turns->accept($first);
         $turns->takeForExecution();
 
-        self::assertNull($turns->accept('Second question'));
-        self::assertNull($turns->accept('Third question'));
+        self::assertNull($turns->accept($second));
+        self::assertNull($turns->accept($third));
         self::assertSame(
-            ['Second question', 'Third question'],
+            [$second, $third],
             $turns->queuedMessages(),
         );
     }
@@ -44,7 +51,8 @@ final class TurnQueueTest extends TestCase
     public function testTheMessageOfATurnIsHandedOverOnlyOnce(): void
     {
         $turns = new TurnQueue();
-        $turns->accept('First question');
+        $first = new UserMessage('First question');
+        $turns->accept($first);
         $turns->takeForExecution();
 
         self::assertNull($turns->takeForExecution());
@@ -60,26 +68,31 @@ final class TurnQueueTest extends TestCase
     public function testACompletedTurnPreparesWaitingMessagesInOrder(): void
     {
         $turns = new TurnQueue();
-        $turns->accept('First question');
+        $first = new UserMessage('First question');
+        $second = new UserMessage('Second question');
+        $third = new UserMessage('Third question');
+        $turns->accept($first);
         $turns->takeForExecution();
-        $turns->accept('Second question');
-        $turns->accept('Third question');
+        $turns->accept($second);
+        $turns->accept($third);
 
-        self::assertSame('Second question', $turns->finishAndAdvance());
-        self::assertSame(['Third question'], $turns->queuedMessages());
-        self::assertSame('Second question', $turns->takeForExecution());
-        self::assertSame('Third question', $turns->finishAndAdvance());
+        self::assertSame($second, $turns->finishAndAdvance());
+        self::assertSame([$third], $turns->queuedMessages());
+        self::assertSame($second, $turns->takeForExecution());
+        self::assertSame($third, $turns->finishAndAdvance());
         self::assertSame([], $turns->queuedMessages());
-        self::assertSame('Third question', $turns->takeForExecution());
+        self::assertSame($third, $turns->takeForExecution());
     }
 
     public function testATurnThatSettlesWithNothingBehindItLeavesTheQueueIdle(): void
     {
         $turns = new TurnQueue();
-        $turns->accept('First question');
+        $first = new UserMessage('First question');
+        $second = new UserMessage('Second question');
+        $turns->accept($first);
         $turns->takeForExecution();
 
         self::assertNull($turns->finishAndAdvance());
-        self::assertSame('Second question', $turns->accept('Second question'));
+        self::assertSame($second, $turns->accept($second));
     }
 }
