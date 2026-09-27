@@ -10,6 +10,8 @@ use NeuronAI\Chat\History\ChatHistoryInterface;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
 use NeuronInteraction\Http\StopSignal;
+use NeuronInteraction\Session\Session;
+use NeuronTui\Session\SessionTitleGeneration;
 use NeuronTui\View\ConversationView;
 use NeuronTui\View\WorkingIndicator;
 use Throwable;
@@ -42,6 +44,7 @@ final class ConversationRuntime
         private Agent $agent,
         private readonly ConversationView $view,
         private readonly ?StopSignal $stopSignal = null,
+        private readonly ?SessionTitleGeneration $titleGeneration = null,
     ) {
         $this->workingIndicator = $this->view->workingIndicator();
         $this->turnQueue = new TurnQueue();
@@ -146,8 +149,12 @@ final class ConversationRuntime
             // Capture the Agent when execution is scheduled, so this Turn
             // finishes with that Agent even if another takes over.
             $agent = $this->agent;
-            $this->runningTurn = async(function () use ($agent, $message): void {
+            $history = $agent->getChatHistory();
+            $this->runningTurn = async(function () use ($agent, $message, $history): void {
                 $this->turnRunner->run($agent, $message, $this->responseWasStopped(...));
+                if (!$this->stopped && !$this->responseStopRequested && $history instanceof Session) {
+                    $this->titleGeneration?->schedule($history, $agent);
+                }
             });
 
             return true;

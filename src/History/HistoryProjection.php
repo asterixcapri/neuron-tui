@@ -5,20 +5,15 @@ declare(strict_types=1);
 namespace NeuronTui\History;
 
 use NeuronAI\Chat\Enums\MessageRole;
-use NeuronAI\Chat\Messages\ContentBlocks\AudioContent;
-use NeuronAI\Chat\Messages\ContentBlocks\FileContent;
-use NeuronAI\Chat\Messages\ContentBlocks\ImageContent;
-use NeuronAI\Chat\Messages\ContentBlocks\ReasoningContent;
-use NeuronAI\Chat\Messages\ContentBlocks\TextContent;
-use NeuronAI\Chat\Messages\ContentBlocks\VideoContent;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Tools\ToolInterface;
-use NeuronTui\Conversation\UserMessageProcessing;
-use NeuronTui\Conversation\UserMessageProcessorInterface;
-use NeuronTui\View\DisplayableText;
+use NeuronInteraction\Message\UserMessageFactory;
+use NeuronInteraction\Message\UserMessageProcessorInterface;
+use NeuronInteraction\Message\UserMessageProcessors;
 use NeuronTui\View\HistoryEntryKind;
+use NeuronTui\View\MessageTextFormatter;
 
 /**
  * The Agent's messages as the one ordered stream of entries a person sees.
@@ -36,8 +31,6 @@ use NeuronTui\View\HistoryEntryKind;
  */
 final class HistoryProjection
 {
-    private const int FILENAME_WIDTH = 80;
-
     /**
      * Presentation fallback for unavailable historical timing, rather than
      * a measured duration.
@@ -57,7 +50,7 @@ final class HistoryProjection
     /** @param array<Message> $messages */
     public function __construct(
         array $messages,
-        private readonly UserMessageProcessorInterface $processor = new UserMessageProcessing(),
+        private readonly UserMessageProcessorInterface $userMessageProcessor = new UserMessageProcessors(),
     ) {
         $this->correlation = new ToolCallCorrelation();
 
@@ -147,41 +140,10 @@ final class HistoryProjection
 
     private function messageText(Message $message, HistoryEntryKind $kind): string
     {
-        $parts = [];
-
-        foreach ($message->getContentBlocks() as $block) {
-            $content = match (true) {
-                $block instanceof ReasoningContent => null,
-                $block instanceof TextContent => $kind === HistoryEntryKind::UserMessage
-                    ? $this->processor->forDisplay($block->getContent())
-                    : $block->getContent(),
-                $block instanceof ImageContent => '[Image]',
-                $block instanceof FileContent => $this->filePlaceholder($block),
-                $block instanceof AudioContent => '[Audio]',
-                $block instanceof VideoContent => '[Video]',
-                default => null,
-            };
-
-            if ($content !== null && $content !== '') {
-                $parts[] = $content;
-            }
+        if ($kind === HistoryEntryKind::UserMessage) {
+            $message = $this->userMessageProcessor->forDisplay(UserMessageFactory::fromMessage($message));
         }
 
-        return implode("\n\n", $parts);
-    }
-
-    private function filePlaceholder(FileContent $file): string
-    {
-        if ($file->filename === null) {
-            return '[File]';
-        }
-
-        // Safe first, so a stripped escape sequence cannot forge the
-        // separator that basename() then splits on.
-        $filename = DisplayableText::safe($file->filename);
-        $filename = basename(str_replace('\\', '/', $filename));
-        $filename = DisplayableText::preview($filename, self::FILENAME_WIDTH);
-
-        return $filename === '' ? '[File]' : '[File: ' . $filename . ']';
+        return MessageTextFormatter::format($message);
     }
 }

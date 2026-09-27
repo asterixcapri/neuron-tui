@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace NeuronTui\Tests;
 
 use Generator;
-use LogicException;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\Enums\SourceType;
 use NeuronAI\Chat\Messages\AssistantMessage;
+use NeuronAI\Chat\Messages\ContentBlocks\FileContent;
 use NeuronAI\Chat\Messages\ContentBlocks\ImageContent;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
@@ -21,9 +21,10 @@ use NeuronInteraction\Command\ResumeCommand;
 use NeuronInteraction\Command\Selection;
 use NeuronInteraction\Command\SelectionOption;
 use NeuronInteraction\InputHistory\InputHistory;
+use NeuronInteraction\Message\UserMessageProcessorInterface;
+use NeuronInteraction\Message\UserMessageProcessors;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\InMemoryStorage;
-use NeuronTui\Conversation\UserMessageProcessorInterface;
 use NeuronTui\Tui;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
@@ -42,9 +43,8 @@ final class UserMessageProcessorTest extends TestCase
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $inputHistory = new InputHistory(new InMemoryStorage());
-        $tui = Tui::make($agent, $terminal, inputHistory: $inputHistory);
-        self::assertSame($tui, $tui->addUserMessageProcessor(new EnvelopeProcessor('A')));
-        self::assertSame($tui, $tui->addUserMessageProcessor([
+        $tui = Tui::make($agent, $terminal, inputHistory: $inputHistory, userMessageProcessors: new UserMessageProcessors([
+            new EnvelopeProcessor('A'),
             new EnvelopeProcessor('B'),
             new EnvelopeProcessor('C'),
         ]));
@@ -69,10 +69,10 @@ final class UserMessageProcessorTest extends TestCase
         $terminal = new VirtualTerminal(rows: 30);
         EventLoop::delay(0.05, static fn () => $terminal->simulateInput("\x03"));
 
-        Tui::make($agent, $terminal)->addUserMessageProcessor([
+        Tui::make($agent, $terminal, userMessageProcessors: new UserMessageProcessors([
             new EnvelopeProcessor('A'),
             new EnvelopeProcessor('B'),
-        ])->run();
+        ]))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('❯ Earlier', $display);
@@ -103,8 +103,8 @@ final class UserMessageProcessorTest extends TestCase
         EventLoop::queue(static fn () => $terminal->simulateInput("/prepared\r"));
         EventLoop::delay(0.15, static fn () => $terminal->simulateInput("\x03"));
 
-        Tui::make($agent, $terminal, commands: new Commands($command))
-            ->addUserMessageProcessor(new EnvelopeProcessor('A'))->run();
+        Tui::make($agent, $terminal, commands: new Commands($command), userMessageProcessors: new UserMessageProcessors(new EnvelopeProcessor('A')))
+            ->run();
 
         self::assertSame('A[Command prompt]', $provider->getRecorded()[0]->messages[0]->getContent());
         self::assertStringContainsString('❯ Command prompt', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
@@ -116,20 +116,20 @@ final class UserMessageProcessorTest extends TestCase
         $agent = new Agent();
         $agent->setAiProvider($provider);
         $processor = new class implements UserMessageProcessorInterface {
-            public function forAgent(string $input): string
+            public function forAgent(UserMessage $input): UserMessage
             {
                 throw new RuntimeException('Cannot prepare message.');
             }
-            public function forDisplay(string $content): string
+            public function forDisplay(UserMessage $content): UserMessage
             {
-                return $content;
+                return clone $content;
             }
         };
         $terminal = new VirtualTerminal(rows: 30);
         EventLoop::queue(static fn () => $terminal->simulateInput("Keep my draft\r"));
         EventLoop::delay(0.1, static fn () => $terminal->simulateInput("\x03"));
 
-        Tui::make($agent, $terminal)->addUserMessageProcessor($processor)->run();
+        Tui::make($agent, $terminal, userMessageProcessors: new UserMessageProcessors($processor))->run();
 
         self::assertSame([], $provider->getRecorded());
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -159,7 +159,7 @@ final class UserMessageProcessorTest extends TestCase
         });
         EventLoop::delay(0.4, static fn () => $terminal->simulateInput("\x03"));
 
-        Tui::make($agent, $terminal)->addUserMessageProcessor(new EnvelopeProcessor('A'))->run();
+        Tui::make($agent, $terminal, userMessageProcessors: new UserMessageProcessors(new EnvelopeProcessor('A')))->run();
 
         self::assertStringContainsString('↳ Second', $queued);
         self::assertStringNotContainsString('A[Second]', $queued);
@@ -167,12 +167,15 @@ final class UserMessageProcessorTest extends TestCase
         self::assertSame('A[Second]', $provider->getRecorded()[1]->messages[2]->getContent());
     }
 
-    public function testSessionTitlesAreProcessedBeforeDisplayAndSearchIncludingRenamedResumeCommands(): void
+    public function testStoredSessionTitlesAreDisplayedAndSearchableIncludingRenamedResumeCommands(): void
     {
         foreach (['/resume', '/continue'] as $name) {
             $store = new SessionStore(new InMemoryStorage(), 'local');
             $session = $store->create();
-            $session->addMessage(new UserMessage('B[A[stored-payload]]'));
+            $titleMessage = new UserMessage('B[A[stored-payload]]');
+            $titleMessage->setMetadata(['title-source' => 'original']);
+            $session->addMessage($titleMessage);
+            $session->setTitle('Readable session');
             for ($index = 0; $index < 5; ++$index) {
                 $store->create()->addMessage(new UserMessage('Other session ' . $index));
             }
@@ -181,7 +184,15 @@ final class UserMessageProcessorTest extends TestCase
             $processor = $this->createMock(UserMessageProcessorInterface::class);
             $processor->expects(self::never())->method('forAgent');
             $processor->method('forDisplay')->willReturnCallback(
-                static fn (string $content): string => $content === 'stored-payload' ? 'Readable session' : $content,
+                static function (UserMessage $message): UserMessage {
+                    $result = clone $message;
+                    if ($message->getContent() === 'stored-payload') {
+                        self::assertSame('original', $message->jsonSerialize()['title-source']);
+                        $result->setContents('Readable session');
+                    }
+
+                    return $result;
+                },
             );
             $display = '';
             EventLoop::queue(static fn () => $terminal->simulateInput($name . "\r"));
@@ -192,8 +203,8 @@ final class UserMessageProcessorTest extends TestCase
             });
             EventLoop::delay(0.1, static fn () => $terminal->simulateInput("\x03"));
 
-            Tui::make($agent, $terminal, commands: new Commands(new ResumeCommand($name)), sessionStore: $store)
-                ->addUserMessageProcessor([$processor, new EnvelopeProcessor('A'), new EnvelopeProcessor('B')])
+            Tui::make($agent, $terminal, commands: new Commands(new ResumeCommand($name)), sessionStore: $store, userMessageProcessors: new UserMessageProcessors([$processor, new EnvelopeProcessor('A'), new EnvelopeProcessor('B')]))
+
                 ->run();
 
             self::assertStringContainsString('Readable session', $display);
@@ -203,7 +214,7 @@ final class UserMessageProcessorTest extends TestCase
         }
     }
 
-    public function testCustomCommandPickerLabelsAreProcessedButTheirValuesArePreserved(): void
+    public function testCustomCommandPickerLabelsAndValuesArePreserved(): void
     {
         $command = new class implements CommandInterface {
             public ?string $chosen = null;
@@ -239,12 +250,12 @@ final class UserMessageProcessorTest extends TestCase
         });
         EventLoop::delay(0.1, static fn () => $terminal->simulateInput("\x03"));
 
-        Tui::make(new Agent(), $terminal, commands: new Commands($command))
-            ->addUserMessageProcessor(new EnvelopeProcessor('A'))->run();
+        Tui::make(new Agent(), $terminal, commands: new Commands($command), userMessageProcessors: new UserMessageProcessors(new EnvelopeProcessor('A')))
+            ->run();
 
         self::assertStringContainsString('Readable label', $display);
         self::assertStringContainsString('Ordinary label', $display);
-        self::assertStringNotContainsString('A[Readable label]', $display);
+        self::assertStringContainsString('A[Readable label]', $display);
         self::assertSame('opaque-key', $command->chosen);
     }
 
@@ -300,7 +311,7 @@ final class UserMessageProcessorTest extends TestCase
         EventLoop::queue(static fn () => $terminal->simulateInput("\x1b[A\r"));
         EventLoop::delay(0.15, static fn () => $terminal->simulateInput("\x03"));
 
-        Tui::make($agent, $terminal, inputHistory: $inputs)->addUserMessageProcessor(new EnvelopeProcessor('A'))->run();
+        Tui::make($agent, $terminal, inputHistory: $inputs, userMessageProcessors: new UserMessageProcessors(new EnvelopeProcessor('A')))->run();
 
         $sent = $provider->getRecorded()[0]->messages[0];
         self::assertSame('A[Original]', $sent->getContent());
@@ -310,16 +321,42 @@ final class UserMessageProcessorTest extends TestCase
         self::assertStringContainsString('[Image]', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
     }
 
-    public function testRegistrationIsClosedOnceTheTuiHasRun(): void
+    public function testPreparationAndDisplayCanTransformAttachmentsWithoutChangingHistory(): void
     {
-        $terminal = new VirtualTerminal();
-        $tui = Tui::make(new Agent(), $terminal);
-        EventLoop::queue(static fn () => $terminal->simulateInput("\x03"));
-        $tui->run();
+        $processor = new class implements UserMessageProcessorInterface {
+            public function forAgent(UserMessage $message): UserMessage
+            {
+                $result = clone $message;
+                $result->addContent(new FileContent('ZmlsZQ==', SourceType::BASE64, 'application/pdf', 'report.pdf'));
 
-        $this->expectException(LogicException::class);
-        $tui->addUserMessageProcessor(new EnvelopeProcessor('A'));
+                return $result;
+            }
+            public function forDisplay(UserMessage $message): UserMessage
+            {
+                TestCase::assertInstanceOf(FileContent::class, $message->getContentBlocks()[1]);
+                $result = clone $message;
+                $result->setContents('Message with attachment');
+
+                return $result;
+            }
+        };
+        $provider = new FakeAIProvider(new AssistantMessage('Received.'));
+        $agent = new Agent();
+        $agent->setAiProvider($provider);
+        $terminal = new VirtualTerminal(rows: 30);
+        EventLoop::queue(static fn () => $terminal->simulateInput("Original request\r"));
+        EventLoop::delay(0.15, static fn () => $terminal->simulateInput("\x03"));
+
+        Tui::make($agent, $terminal, userMessageProcessors: new UserMessageProcessors($processor))->run();
+
+        $saved = $agent->getChatHistory()->getMessages()[0];
+        self::assertSame('Original request', $saved->getContent());
+        self::assertCount(2, $saved->getContentBlocks());
+        self::assertInstanceOf(FileContent::class, $saved->getContentBlocks()[1]);
+        self::assertStringContainsString('❯ Message with attachment', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
     }
+
+
 }
 
 final readonly class EnvelopeProcessor implements UserMessageProcessorInterface
@@ -328,15 +365,31 @@ final readonly class EnvelopeProcessor implements UserMessageProcessorInterface
     {
     }
 
-    public function forAgent(string $input): string
+    public function forAgent(UserMessage $input): UserMessage
     {
-        return $this->label . '[' . $input . ']';
+        return $this->withText($input, $this->label . '[' . ($input->getContent() ?? '') . ']');
     }
 
-    public function forDisplay(string $content): string
+    public function forDisplay(UserMessage $content): UserMessage
     {
-        return str_starts_with($content, $this->label . '[') && str_ends_with($content, ']')
-            ? substr($content, strlen($this->label) + 1, -1)
-            : $content;
+        $text = $content->getContent() ?? '';
+        if (str_starts_with($text, $this->label . '[') && str_ends_with($text, ']')) {
+            $text = substr($text, strlen($this->label) + 1, -1);
+        }
+
+        return $this->withText($content, $text);
+    }
+
+    private function withText(UserMessage $original, string $text): UserMessage
+    {
+        $result = clone $original;
+        $result->setContents($text);
+        foreach ($original->getContentBlocks() as $block) {
+            if (!$block instanceof \NeuronAI\Chat\Messages\ContentBlocks\TextContent) {
+                $result->addContent(clone $block);
+            }
+        }
+
+        return $result;
     }
 }

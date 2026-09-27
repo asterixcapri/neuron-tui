@@ -16,8 +16,6 @@ use NeuronInteraction\Command\SelectionOption;
 use NeuronInteraction\Configuration\ConfigurationStore;
 use NeuronInteraction\Session\SessionStore;
 use NeuronTui\Conversation\ConversationRuntime;
-use NeuronTui\Conversation\UserMessageProcessing;
-use NeuronTui\Conversation\UserMessageProcessorInterface;
 use NeuronTui\View\ChoiceOption;
 use NeuronTui\View\ConversationView;
 use Revolt\EventLoop;
@@ -37,7 +35,6 @@ final class TuiCommandAdapter implements CommandAdapterInterface
         private readonly Commands $commands,
         private readonly SessionStore $sessionStore,
         private readonly ConfigurationStore $configurationStore,
-        private readonly UserMessageProcessorInterface $processor = new UserMessageProcessing(),
     ) {
     }
 
@@ -118,7 +115,7 @@ final class TuiCommandAdapter implements CommandAdapterInterface
                     array_map(
                         fn (SelectionOption $option): ChoiceOption => new ChoiceOption(
                             $option->value,
-                            $this->processor->forDisplay($option->label),
+                            $option->label,
                             $option->description,
                         ),
                         $request->options,
@@ -130,7 +127,7 @@ final class TuiCommandAdapter implements CommandAdapterInterface
                     $this->commands->run(
                         $request->command,
                         $chosen,
-                        new self($this->runtime, $this->view, $this->commands, $this->sessionStore, $this->configurationStore, $this->processor),
+                        new self($this->runtime, $this->view, $this->commands, $this->sessionStore, $this->configurationStore),
                     );
                 }
             } catch (Throwable $exception) {

@@ -11,8 +11,8 @@ use LogicException;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronInteraction\Command\CommandInterface;
-use NeuronTui\Conversation\UserMessageProcessing;
-use NeuronTui\Conversation\UserMessageProcessorInterface;
+use NeuronInteraction\Message\UserMessageProcessorInterface;
+use NeuronInteraction\Message\UserMessageProcessors;
 use NeuronTui\History\HistoryProjection;
 use NeuronTui\View\Widget\ComposerEditor;
 use Symfony\Component\Tui\Event\CancelEvent;
@@ -49,6 +49,10 @@ final class ConversationView
      * Application asked to hear first.
      */
     private const int SUGGESTION_KEYS_PRIORITY = 50;
+
+    private readonly TerminalInterface $terminal;
+
+    private readonly UserMessageProcessorInterface $userMessageProcessors;
 
     private readonly Tui $tui;
 
@@ -107,14 +111,16 @@ final class ConversationView
      *     them, which are what the Command suggestions have to offer
      */
     public function __construct(
-        private readonly TerminalInterface $terminal,
+        TerminalInterface $terminal,
         string $title,
         string $subtitle,
         array $commands = [],
         ?string $figlet = null,
         string $figletFont = 'standard',
-        private readonly UserMessageProcessorInterface $processor = new UserMessageProcessing(),
+        UserMessageProcessorInterface $userMessageProcessors = new UserMessageProcessors(),
     ) {
+        $this->terminal = $terminal;
+        $this->userMessageProcessors = $userMessageProcessors;
         $this->tui = new Tui(
             ConversationStyleSheet::create(),
             $this->terminal,
@@ -234,7 +240,7 @@ final class ConversationView
         $this->history->clear();
         $this->activeAgentMessage = null;
 
-        $projection = new HistoryProjection($messages, $this->processor);
+        $projection = new HistoryProjection($messages, $this->userMessageProcessors);
 
         foreach ($projection->entries() as $entry) {
             $this->history->addEntry($entry->kind, $entry->text);
@@ -378,9 +384,7 @@ final class ConversationView
 
     private function messagePreview(UserMessage $message): string
     {
-        $projection = new HistoryProjection([$message], $this->processor);
-
-        return implode("\n\n", array_map(static fn ($entry): string => $entry->text, $projection->entries()));
+        return MessageTextFormatter::format($this->userMessageProcessors->forDisplay($message));
     }
 
     public function acceptUserMessage(UserMessage $contents): void

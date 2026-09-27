@@ -16,8 +16,10 @@ use NeuronAI\Chat\Messages\ContentBlocks\VideoContent;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\ToolResultMessage;
+use NeuronAI\Chat\Messages\Usage;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Tools\Tool;
+use NeuronInteraction\Message\UserMessageProcessorInterface;
 use NeuronTui\History\HistoryProjection;
 use NeuronTui\History\ProjectedEntry;
 use NeuronTui\View\HistoryEntryKind;
@@ -25,6 +27,33 @@ use PHPUnit\Framework\TestCase;
 
 final class HistoryProjectionTest extends TestCase
 {
+    public function testGenericUserMessageReachesProcessorWithItsDataAndIndependentContents(): void
+    {
+        $message = new Message(MessageRole::USER, [
+            (new TextContent('Original input'))->setMetadata(['part' => 'question']),
+            new FileContent('https://example.com/report.pdf', SourceType::URL, 'application/pdf', 'report.pdf'),
+        ]);
+        $message->addMetadata('source', 'history');
+        $message->setUsage(new Usage(12, 3));
+        $original = $message->jsonSerialize();
+        $processor = $this->createMock(UserMessageProcessorInterface::class);
+        $processor->expects(self::never())->method('forAgent');
+        $processor->expects(self::once())->method('forDisplay')->willReturnCallback(
+            static function (UserMessage $converted) use ($message, $original): UserMessage {
+                self::assertSame($original, $converted->jsonSerialize());
+                self::assertNotSame($message->getContentBlocks()[0], $converted->getContentBlocks()[0]);
+                self::assertNotSame($message->getUsage(), $converted->getUsage());
+
+                return new UserMessage('Displayed input');
+            },
+        );
+
+        $entries = (new HistoryProjection([$message], $processor))->entries();
+
+        self::assertSame([[HistoryEntryKind::UserMessage, 'Displayed input']], self::summarize($entries));
+        self::assertSame($original, $message->jsonSerialize());
+    }
+
     public function testAConversationBecomesOneOrderedStreamOfEntries(): void
     {
         $entries = $this->project([

@@ -283,6 +283,35 @@ cp .env.example .env
 Each example runs on its own. Model and Full also offer Anthropic through
 `/model` when `ANTHROPIC_API_KEY` is configured. Use `Ctrl+C` to exit.
 
+## User message processors
+
+Pass implementations of `NeuronInteraction\Message\UserMessageProcessorInterface`
+to `new UserMessageProcessors($processor)` or `new UserMessageProcessors([$first, $second])`,
+then supply the collection to `Tui::make(userMessageProcessors: $processors, agent: $agent)`. Both `forAgent()` and `forDisplay()` receive and
+return complete Neuron `UserMessage` objects. Preparation happens before queuing
+ordinary input; Commands and their prepared prompts bypass it. Display projection
+happens before rendering new messages, queued messages and loaded History, while
+the saved messages remain unchanged.
+
+Preparation follows registration order; display uses reverse order. Ordinary picker
+labels remain unchanged. Resume titles come from saved Session metadata. Option values remain unchanged.
+
+## Session titles
+
+When the Agent uses a `NeuronInteraction\Session\Session`, the TUI automatically
+uses `NeuronInteraction\Session\SessionTitleGenerator` after each successful, uninterrupted turn while
+`Session::title()` is null, up to three attempts per Session. Null results and failures
+both count toward the limit, stored as `titleGenerationAttempts` in Session metadata
+so reopening the application does not reset it. It uses an isolated copy of the answering Agent's
+provider and a snapshot of the Session history. No caller configuration
+is needed. This makes an additional model request; greetings or style requests
+alone should return null, allowing a later turn to try again.
+
+A generated or manually assigned title stops further automatic requests.
+Generation runs in the background; errors leave the title null and allow a later turn to retry, without showing
+warnings. Sessions without a title are shown as `New session`. Messages and
+attachments remain unchanged. Already-started requests may save their results after the TUI closes.
+
 ## Development
 
 A fresh checkout needs the Composer dependencies and the agent skills, which

@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace NeuronTui\Conversation;
 
+use NeuronAI\Chat\Messages\ContentBlocks\TextContent;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Configuration\ConfigurationStore;
 use NeuronInteraction\InputHistory\InputHistory;
+use NeuronInteraction\Message\UserMessageProcessorInterface;
+use NeuronInteraction\Message\UserMessageProcessors;
 use NeuronInteraction\Session\SessionStore;
 use NeuronTui\Command\TuiCommandAdapter;
 use NeuronTui\View\ConversationView;
@@ -30,7 +33,7 @@ final class ConversationInputHandler
         private readonly Commands $commands,
         private readonly SessionStore $sessionStore,
         private readonly ConfigurationStore $configurationStore,
-        private readonly UserMessageProcessorInterface $processor = new UserMessageProcessing(),
+        private readonly UserMessageProcessorInterface $userMessageProcessors = new UserMessageProcessors(),
     ) {
     }
 
@@ -54,16 +57,19 @@ final class ConversationInputHandler
             $this->commands->run(
                 $submission->name,
                 $submission->value,
-                new TuiCommandAdapter($this->runtime, $this->view, $this->commands, $this->sessionStore, $this->configurationStore, $this->processor),
+                new TuiCommandAdapter($this->runtime, $this->view, $this->commands, $this->sessionStore, $this->configurationStore),
             );
 
             return;
         }
 
         try {
-            $prompt = $this->processor->forAgent(($submission->getContent() ?? ''));
+            $message = $this->userMessageProcessors->forAgent($original);
 
-            if (trim($prompt) === '' && !$this->view->composerHasAttachments()) {
+            if (trim($message->getContent() ?? '') === '' && array_all(
+                $message->getContentBlocks(),
+                static fn ($block): bool => $block instanceof TextContent,
+            )) {
                 $this->view->showError('The prepared user message is empty.');
 
                 return;
@@ -74,7 +80,6 @@ final class ConversationInputHandler
             return;
         }
 
-        $message = $this->view->composerMessage($prompt);
         $this->runtime->submitMessage($message);
     }
 

@@ -11,12 +11,12 @@ use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Configuration\ConfigurationStore;
 use NeuronInteraction\Http\StopSignal;
 use NeuronInteraction\InputHistory\InputHistory;
+use NeuronInteraction\Message\UserMessageProcessors;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Conversation\ConversationInputHandler;
 use NeuronTui\Conversation\ConversationRuntime;
-use NeuronTui\Conversation\UserMessageProcessing;
-use NeuronTui\Conversation\UserMessageProcessorInterface;
+use NeuronTui\Session\SessionTitleGeneration;
 use NeuronTui\View\ConversationView;
 use Symfony\Component\Tui\Terminal\Terminal;
 use Symfony\Component\Tui\Terminal\TerminalInterface;
@@ -54,8 +54,7 @@ final class Tui
 
     private ?StopSignal $stopSignal = null;
 
-    /** @var list<UserMessageProcessorInterface> */
-    private array $userMessageProcessors = [];
+    private readonly UserMessageProcessors $userMessageProcessors;
 
     public function __construct(
         private readonly Agent $agent,
@@ -64,7 +63,9 @@ final class Tui
         ?SessionStore $sessionStore = null,
         ?ConfigurationStore $configurationStore = null,
         ?InputHistory $inputHistory = null,
+        ?UserMessageProcessors $userMessageProcessors = null,
     ) {
+        $this->userMessageProcessors = $userMessageProcessors ?? new UserMessageProcessors();
         $this->commands = $commands ?? new Commands();
         $this->sessionStore = $sessionStore ?? new SessionStore(
             new InMemoryStorage(),
@@ -81,8 +82,9 @@ final class Tui
         ?SessionStore $sessionStore = null,
         ?ConfigurationStore $configurationStore = null,
         ?InputHistory $inputHistory = null,
+        ?UserMessageProcessors $userMessageProcessors = null,
     ): self {
-        return new self($agent, $terminal, $commands, $sessionStore, $configurationStore, $inputHistory);
+        return new self($agent, $terminal, $commands, $sessionStore, $configurationStore, $inputHistory, $userMessageProcessors);
     }
 
     public function setTitle(string $title): self
@@ -91,35 +93,6 @@ final class Tui
         $this->title = $title;
 
         return $this;
-    }
-
-    /**
-     * Add processors in Agent preparation order; display uses reverse order.
-     *
-     * @param UserMessageProcessorInterface|list<UserMessageProcessorInterface> $processors
-     */
-    public function addUserMessageProcessor(UserMessageProcessorInterface|array $processors): self
-    {
-        $this->ensureNotStarted();
-        $processors = is_array($processors) ? $processors : [$processors];
-        $validated = [];
-
-        foreach ($processors as $processor) {
-            $validated[] = self::requireUserMessageProcessor($processor);
-        }
-
-        array_push($this->userMessageProcessors, ...$validated);
-
-        return $this;
-    }
-
-    private static function requireUserMessageProcessor(mixed $processor): UserMessageProcessorInterface
-    {
-        if (!$processor instanceof UserMessageProcessorInterface) {
-            throw new InvalidArgumentException('A user-message processor must implement UserMessageProcessorInterface.');
-        }
-
-        return $processor;
     }
 
     /** Share the signal configured on the provider's StoppableHttpClient. */
@@ -165,7 +138,6 @@ final class Tui
         $this->started = true;
 
         $terminal = $this->terminal ?? new Terminal();
-        $processing = new UserMessageProcessing($this->userMessageProcessors);
         $view = new ConversationView(
             $terminal,
             $this->title,
@@ -173,9 +145,10 @@ final class Tui
             $this->commands->all(),
             $this->figlet,
             $this->figletFont,
-            $processing,
+            $this->userMessageProcessors,
         );
-        $runtime = new ConversationRuntime($this->agent, $view, $this->stopSignal);
+        $sessionTitleGeneration = new SessionTitleGeneration();
+        $runtime = new ConversationRuntime($this->agent, $view, $this->stopSignal, $sessionTitleGeneration);
         $input = new ConversationInputHandler(
             $view,
             $this->inputHistory,
@@ -183,7 +156,7 @@ final class Tui
             $this->commands,
             $this->sessionStore,
             $this->configurationStore,
-            $processing,
+            $this->userMessageProcessors,
         );
         $runtime->synchronizeHistory();
         $view->onSubmit($input->handleSubmit(...));

@@ -108,7 +108,7 @@ final class SessionCompositionTest extends TestCase
 
         self::assertSame($initial, $agent->getChatHistory());
         self::assertCount(1, $sessionStore->summaries());
-        self::assertSame('Stored subject', $sessionStore->summaries()[0]->title);
+        self::assertNull($sessionStore->summaries()[0]->title);
         self::assertStringContainsString('Host selected subject', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
     }
 

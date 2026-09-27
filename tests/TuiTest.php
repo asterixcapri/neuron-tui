@@ -5059,7 +5059,9 @@ MARKDOWN;
         $fillSession = $this->commandThat(
             static function (CommandAdapterInterface $adapter) use (&$earlier): void {
                 $earlier = $adapter->agent()->getChatHistory();
+                self::assertInstanceOf(Session::class, $earlier);
                 $earlier->addMessage(new UserMessage('Earlier question.'));
+                $earlier->setTitle('Earlier question.');
                 $earlier->addMessage(new AssistantMessage('Earlier answer.'));
             },
         );
@@ -5155,7 +5157,7 @@ MARKDOWN;
         $listed = $sessionStore->summaries();
 
         self::assertCount(1, $listed);
-        self::assertSame('A question', $listed[0]->title);
+        self::assertNull($listed[0]->title);
         $reopened = $sessionStore->read($listed[0]->key);
         self::assertNotNull($reopened);
         self::assertSame(
@@ -5171,9 +5173,9 @@ MARKDOWN;
         // minted, so writing in it lists it ahead of the other.
         $agent->getChatHistory()->addMessage(new UserMessage('Written later'));
         self::assertSame(
-            ['Written later', 'A question'],
+            [null, null],
             array_map(
-                static fn (SessionSummary $session): string => $session->title,
+                static fn (SessionSummary $session): ?string => $session->title,
                 $sessionStore->summaries(),
             ),
         );
@@ -5269,6 +5271,7 @@ MARKDOWN;
         $sessionStore = new SessionStore($storage, 'test-user');
         $earlier = $sessionStore->create();
         $earlier->addMessage(new UserMessage('The earlier subject'));
+        $earlier->setTitle('The earlier subject');
         $earlier->addMessage(new Message(MessageRole::ASSISTANT, [
             new ReasoningContent('Private chain of thought.'),
             new TextContent('The earlier answer.'),
@@ -5348,6 +5351,7 @@ MARKDOWN;
             $sessionStore = new SessionStore($storage, 'test-user');
             $earlier = $sessionStore->create();
             $earlier->addMessage(new UserMessage('The stored subject'));
+            $earlier->setTitle('The stored subject');
             $earlier->addMessage(new AssistantMessage('The stored answer.'));
             $listed = $sessionStore->summaries();
             self::assertCount(1, $listed);
@@ -5445,6 +5449,7 @@ MARKDOWN;
         $sessionStore = new SessionStore($storage, 'test-user');
         $earlier = $sessionStore->create();
         $earlier->addMessage(new UserMessage('The earlier subject'));
+        $earlier->setTitle('The earlier subject');
         $terminal = new VirtualTerminal(rows: 30);
         EventLoop::delay(
             0.04,
@@ -5506,6 +5511,7 @@ MARKDOWN;
         $earlier = $sessionStore->create();
         $title = "The earlier\x00 subject";
         $earlier->addMessage(new UserMessage($title));
+        $earlier->setTitle($title);
         self::assertSame($title, $sessionStore->summaries()[0]->title);
         $terminal = new VirtualTerminal(rows: 24);
         $pickerDisplay = null;
@@ -5565,9 +5571,9 @@ MARKDOWN;
         );
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
-        $sessionStore->create()->addMessage(
-            new UserMessage('The earlier subject'),
-        );
+        $earlier = $sessionStore->create();
+        $earlier->addMessage(new UserMessage('The earlier subject'));
+        $earlier->setTitle('The earlier subject');
         $terminal = new VirtualTerminal(rows: 24);
         $pickerDisplay = null;
         EventLoop::queue(
@@ -5657,11 +5663,12 @@ MARKDOWN;
         $agent = new Agent();
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
-        $sessionStore->create()->addMessage(
-            new UserMessage('Alpha subject'),
-        );
+        $stored = $sessionStore->create();
+        $stored->addMessage(new UserMessage('Alpha subject'));
+        $stored->setTitle('Alpha subject');
         $beta = $sessionStore->create();
         $beta->addMessage(new UserMessage('Beta subject'));
+        $beta->setTitle('Beta subject');
 
         foreach (['Gamma', 'Delta', 'Epsilon', 'Zeta'] as $subject) {
             $sessionStore->create()->addMessage(
@@ -5784,9 +5791,9 @@ MARKDOWN;
         $agent->setAiProvider($provider);
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
-        $sessionStore->create()->addMessage(
-            new UserMessage('The earlier subject'),
-        );
+        $earlier = $sessionStore->create();
+        $earlier->addMessage(new UserMessage('The earlier subject'));
+        $earlier->setTitle('The earlier subject');
         $terminal = new VirtualTerminal(rows: 24);
         EventLoop::queue(
             static fn () => $terminal->simulateInput("A question\r"),
@@ -5836,6 +5843,7 @@ MARKDOWN;
         $sessionStore = new SessionStore($storage, 'test-user');
         $earlier = $sessionStore->create();
         $earlier->addMessage(new UserMessage('The earlier subject'));
+        $earlier->setTitle('The earlier subject');
         $earlier->addMessage(new AssistantMessage('The earlier answer.'));
         $terminal = new VirtualTerminal(rows: 30);
         $pickerDisplay = null;
@@ -5916,7 +5924,7 @@ MARKDOWN;
         self::assertSame(
             ['The earlier subject'],
             array_map(
-                static fn (SessionSummary $session): string => $session->title,
+                static fn (SessionSummary $session): ?string => $session->title,
                 $sessionStore->summaries(),
             ),
         );
@@ -5930,6 +5938,7 @@ MARKDOWN;
         $sessionStore = new SessionStore($storage, 'test-user');
         $earlier = $sessionStore->create();
         $earlier->addMessage(new UserMessage('The earlier subject'));
+        $earlier->setTitle('The earlier subject');
         $terminal = new VirtualTerminal(rows: 30);
         $refusedDisplay = null;
         $pickerDisplay = null;
