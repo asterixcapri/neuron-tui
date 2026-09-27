@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace NeuronTui\Session;
 
-use Amp\Future;
 use InvalidArgumentException;
 use NeuronAI\Agent\Agent;
 use NeuronInteraction\Session\Session;
@@ -16,7 +15,7 @@ use function Amp\async;
 /** @internal Generates a title after successful turns within a per-Session attempt limit. */
 final class SessionTitleGeneration
 {
-    /** @var array<string, Future<void>> */
+    /** @var array<string, true> */
     private array $running = [];
 
     public function __construct(private readonly int $maxAttempts = 3)
@@ -48,7 +47,8 @@ final class SessionTitleGeneration
             return;
         }
 
-        $this->running[$key] = async(function () use ($session, $key, $provider): void {
+        $this->running[$key] = true;
+        async(function () use ($session, $key, $provider): void {
             try {
                 $generator = new SessionTitleGenerator($provider, $session);
                 $title = $generator->generate();
