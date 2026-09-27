@@ -78,7 +78,7 @@ use NeuronInteraction\Command\HelpCommand;
 use NeuronInteraction\Command\LeaveCommand;
 use NeuronTui\Tui;
 
-$commands = new Commands([
+$commands = (new Commands())->addCommand([
     new HelpCommand(),
     new LeaveCommand(),
 ]);
@@ -111,7 +111,7 @@ $sessionStore = new SessionStore($storage, 'local-user');
 
 $agent->setChatHistory($sessionStore->create());
 
-$commands = new Commands([
+$commands = (new Commands())->addCommand([
     new ClearCommand(),
     new ResumeCommand()
 ]);
@@ -250,7 +250,7 @@ final class ReviewCommand implements CommandInterface
     }
 }
 
-Tui::make($agent, commands: new Commands(new ReviewCommand()))->run();
+Tui::make($agent, commands: (new Commands())->addCommand(new ReviewCommand()))->run();
 ```
 
 Commands communicate through `notify()`, `warn()` and `error()`. Neuron TUI
@@ -276,9 +276,21 @@ cp .env.example .env
 | --- | --- | --- |
 | [basic.php](examples/bin/basic.php) | An Agent and the TUI. | `php bin/basic.php` |
 | [stop.php](examples/bin/stop.php) | Experimental opt-in HTTP EOF with automatic Neuron history persistence. | `php bin/stop.php` |
-| [sessions.php](examples/bin/sessions.php) | Saved conversations with `/clear` and `/resume`. | `php bin/sessions.php` |
+| [sessions.php](examples/bin/sessions.php) | Saved conversations with automatic titles, `/clear` and `/resume`. | `php bin/sessions.php` |
 | [model.php](examples/bin/model.php) | Model selection with `/model`, remembering the choice between runs. Conversation stays in memory. | `php bin/model.php` |
-| [full.php](examples/bin/full.php) | Sessions, model selection, input history, response stop, tools and a custom header. | `php bin/full.php` |
+| [messages.php](examples/bin/messages.php) | File references expanded for the Agent while displaying the original input. | `php bin/messages.php` |
+| [full.php](examples/bin/full.php) | Sessions with automatic titles, message processing, model selection, input history, response stop, tools and a custom header. | `php bin/full.php` |
+
+Messages and Full inject `FileReferenceProcessor` through `UserMessageProcessors`.
+Try `Explain @composer.json` or `Compare @bin/basic.php @bin/sessions.php`.
+References use paths relative to `examples/`, without spaces. The processor reads
+UTF-8 text files inside that directory and appends their contents to ordinary
+messages sent to the Agent. Missing files and paths outside the directory reject
+submission and retain the draft. Each distinct reference is expanded once per
+message. The added blocks are hidden when displaying live or resumed History;
+the original text, attachments and metadata are preserved. Display never rereads
+the files. Commands bypass preparation. Input history retains the original input,
+so recalling and submitting a draft reads the current file contents again.
 
 Each example runs on its own. Model and Full also offer Anthropic through
 `/model` when `ANTHROPIC_API_KEY` is configured. Use `Ctrl+C` to exit.
@@ -286,7 +298,8 @@ Each example runs on its own. Model and Full also offer Anthropic through
 ## User message processors
 
 Pass implementations of `NeuronInteraction\Message\UserMessageProcessorInterface`
-to `new UserMessageProcessors($processor)` or `new UserMessageProcessors([$first, $second])`,
+to `(new UserMessageProcessors())->addProcessor($processor)` or
+`(new UserMessageProcessors())->addProcessor([$first, $second])`,
 then supply the collection to `Tui::make(userMessageProcessors: $processors, agent: $agent)`. Both `forAgent()` and `forDisplay()` receive and
 return complete Neuron `UserMessage` objects. Preparation happens before queuing
 ordinary input; Commands and their prepared prompts bypass it. Display projection
@@ -328,6 +341,27 @@ Then:
 composer test
 composer stan
 composer --working-dir=examples install
+```
+
+The examples install published releases. To try local changes without modifying
+Composer manifests or locks, replace the installed packages with symlinks.
+From the repository root, assuming `neuron-interaction` is a sibling checkout:
+
+```bash
+mv examples/vendor/asterixcapri/neuron-tui /tmp/neuron-tui-demo-package
+ln -s "$(pwd)" examples/vendor/asterixcapri/neuron-tui
+mv examples/vendor/asterixcapri/neuron-interaction /tmp/neuron-interaction-demo-package
+ln -s "$(cd ../neuron-interaction && pwd)" examples/vendor/asterixcapri/neuron-interaction
+```
+
+Use unused backup paths for the two `mv` commands. The symlinks are under the
+ignored `vendor` directory; the examples' lock is also ignored. Composer still
+uses the installed release metadata: changes to dependencies or autoload rules
+need a separate dependency update. A reinstall replaces the local links with
+the published packages. Run the example tests against the local checkouts with:
+
+```bash
+vendor/bin/phpunit -c examples/phpunit.xml.dist
 ```
 
 The automated suite uses Neuron AI's fake provider, real provider parsers with

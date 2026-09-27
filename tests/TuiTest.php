@@ -1048,7 +1048,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([new LeaveCommand()]),
+            commands: (new Commands())->addCommand([new LeaveCommand()]),
         ))->run();
 
         self::assertIsString($intermediateDisplay);
@@ -1124,7 +1124,7 @@ MARKDOWN;
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
-            commands: new Commands(self::sessionCommands()),
+            commands: (new Commands())->addCommand(self::sessionCommands()),
         ))->run();
 
         // `/resume <key>` installs the Session directly without a Picker.
@@ -1176,7 +1176,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([$command]),
+            commands: (new Commands())->addCommand([$command]),
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -1211,7 +1211,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([$command]),
+            commands: (new Commands())->addCommand([$command]),
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -1250,7 +1250,7 @@ MARKDOWN;
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
-            commands: new Commands([$command]),
+            commands: (new Commands())->addCommand([$command]),
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -1298,7 +1298,7 @@ MARKDOWN;
         Tui::make(
             new Agent(),
             $terminal,
-            commands: new Commands($command),
+            commands: (new Commands())->addCommand($command),
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
         )->run();
@@ -1335,7 +1335,7 @@ MARKDOWN;
             $terminal->simulateInput("\x03");
         });
 
-        Tui::make(new Agent(), $terminal, commands: new Commands([$requester, $target]))->run();
+        Tui::make(new Agent(), $terminal, commands: (new Commands())->addCommand([$requester, $target]))->run();
 
         EventLoop::cancel($fallback);
         // Run the queued presentation callback even if shutdown resumed run()
@@ -1408,7 +1408,7 @@ MARKDOWN;
         Tui::make(
             $agent,
             $terminal,
-            commands: new Commands([$requester, $replacement, $target]),
+            commands: (new Commands())->addCommand([$requester, $replacement, $target]),
             inputHistory: $inputHistory,
         )->run();
 
@@ -1467,7 +1467,7 @@ MARKDOWN;
         Tui::make(
             $agent,
             $terminal,
-            commands: new Commands([$requester, $target]),
+            commands: (new Commands())->addCommand([$requester, $target]),
             inputHistory: $inputHistory,
         )->run();
 
@@ -1514,7 +1514,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([$command]),
+            commands: (new Commands())->addCommand([$command]),
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -1562,7 +1562,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([$command]),
+            commands: (new Commands())->addCommand([$command]),
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -1620,7 +1620,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([$command]),
+            commands: (new Commands())->addCommand([$command]),
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -1662,7 +1662,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([$command]),
+            commands: (new Commands())->addCommand([$command]),
         ))->run();
 
         self::assertFalse($forcedExit);
@@ -1694,7 +1694,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([$command]),
+            commands: (new Commands())->addCommand([$command]),
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -1734,7 +1734,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([$command]),
+            commands: (new Commands())->addCommand([$command]),
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -1857,7 +1857,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([
+            commands: (new Commands())->addCommand([
                 new ClearCommand('/wipe'),
                 new LeaveCommand('/quit'),
             ]),
@@ -1905,7 +1905,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([new HelpCommand(), new LeaveCommand(), $command]),
+            commands: (new Commands())->addCommand([new HelpCommand(), new LeaveCommand(), $command]),
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -1949,7 +1949,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([new LeaveCommand()]),
+            commands: (new Commands())->addCommand([new LeaveCommand()]),
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -1993,7 +1993,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([$command]),
+            commands: (new Commands())->addCommand([$command]),
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -2032,7 +2032,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([$command]),
+            commands: (new Commands())->addCommand([$command]),
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -2089,7 +2089,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([$command]),
+            commands: (new Commands())->addCommand([$command]),
         ))->run();
 
         self::assertIsString($refusedDisplay);
@@ -2145,7 +2145,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([$command]),
+            commands: (new Commands())->addCommand([$command]),
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -2204,7 +2204,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([$command]),
+            commands: (new Commands())->addCommand([$command]),
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -2271,7 +2271,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([new HelpCommand(), new LeaveCommand()]),
+            commands: (new Commands())->addCommand([new HelpCommand(), new LeaveCommand()]),
         ))->run();
 
         self::assertIsString($midTurnDisplay);
@@ -2341,7 +2341,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([new HelpCommand('/guide'), new LeaveCommand('/quit')]),
+            commands: (new Commands())->addCommand([new HelpCommand('/guide'), new LeaveCommand('/quit')]),
         ))->run();
 
         self::assertIsString($midTurnDisplay);
@@ -2413,7 +2413,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([$command]),
+            commands: (new Commands())->addCommand([$command]),
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -2501,7 +2501,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([$command]),
+            commands: (new Commands())->addCommand([$command]),
         ))->run();
 
         self::assertIsString($initialDisplay);
@@ -2607,7 +2607,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([$command]),
+            commands: (new Commands())->addCommand([$command]),
         ))->run();
 
         self::assertIsString($withoutDescription);
@@ -2677,7 +2677,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([$command]),
+            commands: (new Commands())->addCommand([$command]),
         ))->run();
 
         self::assertIsString($pickerOutput);
@@ -2813,7 +2813,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([$command]),
+            commands: (new Commands())->addCommand([$command]),
         ))->run();
 
         self::assertIsString($scrolledDisplay);
@@ -2910,7 +2910,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([$command]),
+            commands: (new Commands())->addCommand([$command]),
         ))->run();
 
         self::assertIsString($initialDisplay);
@@ -3052,7 +3052,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([$command]),
+            commands: (new Commands())->addCommand([$command]),
         ))->run();
 
         self::assertIsString($shortDisplay);
@@ -3146,7 +3146,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([$command]),
+            commands: (new Commands())->addCommand([$command]),
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -3197,7 +3197,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([$command]),
+            commands: (new Commands())->addCommand([$command]),
         ))->run();
 
         self::assertSame('nothing yet', $chosen);
@@ -3260,7 +3260,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([$command]),
+            commands: (new Commands())->addCommand([$command]),
         ))->run();
 
         self::assertIsString($narrowedDisplay);
@@ -3354,7 +3354,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([$command]),
+            commands: (new Commands())->addCommand([$command]),
         ))->run();
 
         self::assertIsString($shortDisplay);
@@ -3434,7 +3434,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([$command]),
+            commands: (new Commands())->addCommand([$command]),
         ))->run();
 
         self::assertIsString($filteredDisplay);
@@ -3557,7 +3557,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([$command]),
+            commands: (new Commands())->addCommand([$command]),
         ))->run();
 
         self::assertIsString($emptyDisplay);
@@ -3620,7 +3620,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([new HelpCommand(), new LeaveCommand()]),
+            commands: (new Commands())->addCommand([new HelpCommand(), new LeaveCommand()]),
         ))->run();
 
         self::assertIsString($display);
@@ -3669,7 +3669,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([new HelpCommand()]),
+            commands: (new Commands())->addCommand([new HelpCommand()]),
         ))->run();
 
         self::assertIsString($display);
@@ -3736,7 +3736,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands($commands),
+            commands: (new Commands())->addCommand($commands),
         ))->run();
 
         self::assertIsString($display);
@@ -3825,7 +3825,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([new HelpCommand()]),
+            commands: (new Commands())->addCommand([new HelpCommand()]),
         ))->run();
 
         self::assertIsString($open);
@@ -3910,7 +3910,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([new HelpCommand()]),
+            commands: (new Commands())->addCommand([new HelpCommand()]),
         ))->run();
 
         self::assertIsString($display);
@@ -4265,7 +4265,7 @@ MARKDOWN;
             },
         );
 
-        $tui = new Tui(new Agent(), $terminal, commands: new Commands($commands));
+        $tui = new Tui(new Agent(), $terminal, commands: (new Commands())->addCommand($commands));
 
         $tui->run();
 
@@ -4374,7 +4374,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([$refused, $concurrent]),
+            commands: (new Commands())->addCommand([$refused, $concurrent]),
         ))->run();
 
         self::assertIsString($midTurnDisplay);
@@ -4439,7 +4439,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([$refused]),
+            commands: (new Commands())->addCommand([$refused]),
         ))->run();
 
         self::assertIsString($midTurnDisplay);
@@ -4496,7 +4496,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([$command]),
+            commands: (new Commands())->addCommand([$command]),
         ))->run();
 
         self::assertIsString($choosingDisplay);
@@ -4626,7 +4626,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([
+            commands: (new Commands())->addCommand([
                 $this->commandThat($note('/alpha'), '/alpha'),
                 $this->commandThat($note('/album'), '/album'),
             ]),
@@ -4671,7 +4671,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([self::commandNamed('/alpha', 'The only one.')]),
+            commands: (new Commands())->addCommand([self::commandNamed('/alpha', 'The only one.')]),
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -4763,7 +4763,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([new HelpCommand()]),
+            commands: (new Commands())->addCommand([new HelpCommand()]),
         ))->run();
 
         self::assertIsString($closed);
@@ -4880,7 +4880,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands([new HelpCommand()]),
+            commands: (new Commands())->addCommand([new HelpCommand()]),
         ))->run();
 
         self::assertIsString($open);
@@ -5023,7 +5023,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands(self::sessionCommands()),
+            commands: (new Commands())->addCommand(self::sessionCommands()),
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -5096,7 +5096,7 @@ MARKDOWN;
             terminal: $terminal,
             sessionStore: $sessionStore,
             inputHistory: new InputHistory($storage),
-            commands: new Commands([
+            commands: (new Commands())->addCommand([
                 ...self::sessionCommands(),
                 $fillSession,
             ]),
@@ -5151,7 +5151,7 @@ MARKDOWN;
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
-            commands: new Commands(self::sessionCommands()),
+            commands: (new Commands())->addCommand(self::sessionCommands()),
         ))->run();
 
         $listed = $sessionStore->summaries();
@@ -5242,7 +5242,7 @@ MARKDOWN;
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
-            commands: new Commands([
+            commands: (new Commands())->addCommand([
                 ...self::sessionCommands(),
                 $remember,
             ]),
@@ -5306,7 +5306,7 @@ MARKDOWN;
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
-            commands: new Commands(self::sessionCommands()),
+            commands: (new Commands())->addCommand(self::sessionCommands()),
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -5390,7 +5390,7 @@ MARKDOWN;
                 terminal: $terminal,
                 sessionStore: new SessionStore($storage, 'test-user'),
                 inputHistory: new InputHistory($storage),
-                commands: new Commands(self::sessionCommands()),
+                commands: (new Commands())->addCommand(self::sessionCommands()),
             ))->run();
 
             self::assertIsString($pickerDisplay);
@@ -5480,7 +5480,7 @@ MARKDOWN;
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
-            commands: new Commands(self::sessionCommands()),
+            commands: (new Commands())->addCommand(self::sessionCommands()),
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -5539,7 +5539,7 @@ MARKDOWN;
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
-            commands: new Commands(self::sessionCommands()),
+            commands: (new Commands())->addCommand(self::sessionCommands()),
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -5612,7 +5612,7 @@ MARKDOWN;
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
-            commands: new Commands([
+            commands: (new Commands())->addCommand([
                 ...self::sessionCommands(),
                 $remember,
             ]),
@@ -5649,7 +5649,7 @@ MARKDOWN;
         (new Tui(
             $agent,
             terminal: $terminal,
-            commands: new Commands(self::sessionCommands()),
+            commands: (new Commands())->addCommand(self::sessionCommands()),
         ))->run();
 
         self::assertStringContainsString(
@@ -5708,7 +5708,7 @@ MARKDOWN;
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
-            commands: new Commands(self::sessionCommands()),
+            commands: (new Commands())->addCommand(self::sessionCommands()),
         ))->run();
 
         self::assertIsString($narrowedDisplay);
@@ -5757,7 +5757,7 @@ MARKDOWN;
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
-            commands: new Commands(self::sessionCommands()),
+            commands: (new Commands())->addCommand(self::sessionCommands()),
         ))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -5817,7 +5817,7 @@ MARKDOWN;
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
-            commands: new Commands(self::sessionCommands()),
+            commands: (new Commands())->addCommand(self::sessionCommands()),
         ))->run();
 
         self::assertIsString($refusedDisplay);
@@ -5895,7 +5895,7 @@ MARKDOWN;
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
-            commands: new Commands([
+            commands: (new Commands())->addCommand([
                 new ClearCommand(),
                 new ResumeCommand(),
                 new LeaveCommand(),
@@ -5977,7 +5977,7 @@ MARKDOWN;
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
-            commands: new Commands([
+            commands: (new Commands())->addCommand([
                 new ResumeCommand(),
                 new LeaveCommand(),
             ]),
@@ -6049,7 +6049,7 @@ MARKDOWN;
             terminal: $terminal,
             sessionStore: new SessionStore($storage, 'test-user'),
             inputHistory: new InputHistory($storage),
-            commands: new Commands([
+            commands: (new Commands())->addCommand([
                 new ClearCommand(),
                 new LeaveCommand(),
             ]),
@@ -6126,7 +6126,7 @@ MARKDOWN;
             },
         );
 
-        (new Tui($agent, terminal: $terminal, commands: new Commands($restore)))
+        (new Tui($agent, terminal: $terminal, commands: (new Commands())->addCommand($restore)))
             ->run();
 
         self::assertIsString($initialDisplay);

@@ -99,7 +99,7 @@ final class InputHistoryTest extends TestCase
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, $terminal, sessionStore: new SessionStore($storage, 'test-user'), inputHistory: new InputHistory($storage), commands: new Commands($command)))
+        (new Tui($agent, $terminal, sessionStore: new SessionStore($storage, 'test-user'), inputHistory: new InputHistory($storage), commands: (new Commands())->addCommand($command)))
             ->run();
 
         self::assertSame(['accepted', 'accepted recalled'], $command->arguments);
@@ -219,7 +219,7 @@ final class InputHistoryTest extends TestCase
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, $terminal, sessionStore: $sessionStore, inputHistory: new InputHistory($storage), commands: new Commands(new ClearCommand())))
+        (new Tui($agent, $terminal, sessionStore: $sessionStore, inputHistory: new InputHistory($storage), commands: (new Commands())->addCommand(new ClearCommand())))
             ->run();
 
         self::assertCount(2, $provider->getRecorded());
@@ -263,7 +263,7 @@ final class InputHistoryTest extends TestCase
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, $terminal, sessionStore: new SessionStore($storage, 'test-user'), inputHistory: new InputHistory($storage), commands: new Commands(new ResumeCommand())))
+        (new Tui($agent, $terminal, sessionStore: new SessionStore($storage, 'test-user'), inputHistory: new InputHistory($storage), commands: (new Commands())->addCommand(new ResumeCommand())))
             ->run();
 
         self::assertCount(1, $provider->getRecorded());
@@ -644,7 +644,7 @@ final class InputHistoryTest extends TestCase
             },
         );
 
-        (new Tui($fixture->agent, $fixture->terminal, sessionStore: new SessionStore($fixture->storage, 'test-user'), inputHistory: new InputHistory($fixture->storage), commands: new Commands([
+        (new Tui($fixture->agent, $fixture->terminal, sessionStore: new SessionStore($fixture->storage, 'test-user'), inputHistory: new InputHistory($fixture->storage), commands: (new Commands())->addCommand([
             self::commandNamed('/alpha', 'The first suggestion.'),
             self::commandNamed('/album', 'The second suggestion.'),
         ])))
@@ -705,7 +705,7 @@ final class InputHistoryTest extends TestCase
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, $terminal, sessionStore: new SessionStore($storage, 'test-user'), inputHistory: new InputHistory($storage), commands: new Commands($command)))
+        (new Tui($agent, $terminal, sessionStore: new SessionStore($storage, 'test-user'), inputHistory: new InputHistory($storage), commands: (new Commands())->addCommand($command)))
             ->run();
 
         self::assertSame('last', $command->chosen);
@@ -779,7 +779,7 @@ final class InputHistoryTest extends TestCase
             },
         );
 
-        (new Tui($fixture->agent, $fixture->terminal, sessionStore: new SessionStore($fixture->storage, 'test-user'), inputHistory: new InputHistory($fixture->storage), commands: new Commands(self::commandNamed('/probe', 'Runs the probe.'))))
+        (new Tui($fixture->agent, $fixture->terminal, sessionStore: new SessionStore($fixture->storage, 'test-user'), inputHistory: new InputHistory($fixture->storage), commands: (new Commands())->addCommand(self::commandNamed('/probe', 'Runs the probe.'))))
             ->run();
 
         self::assertIsString($recalled);
@@ -821,7 +821,7 @@ final class InputHistoryTest extends TestCase
             },
         );
 
-        (new Tui($fixture->agent, $fixture->terminal, sessionStore: new SessionStore($fixture->storage, 'test-user'), inputHistory: new InputHistory($fixture->storage), commands: new Commands(self::commandNamed('/probe', 'Runs the probe.'))))
+        (new Tui($fixture->agent, $fixture->terminal, sessionStore: new SessionStore($fixture->storage, 'test-user'), inputHistory: new InputHistory($fixture->storage), commands: (new Commands())->addCommand(self::commandNamed('/probe', 'Runs the probe.'))))
             ->run();
 
         self::assertIsString($display);

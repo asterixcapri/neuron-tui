@@ -12,12 +12,14 @@ use NeuronInteraction\Configuration\ConfigurationStore;
 use NeuronInteraction\Http\StoppableHttpClient;
 use NeuronInteraction\Http\StopSignal;
 use NeuronInteraction\InputHistory\InputHistory;
+use NeuronInteraction\Message\UserMessageProcessors;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\FileStorage;
 use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Tui;
 use NeuronTuiDemo\AIProviderFactory;
 use NeuronTuiDemo\DemoAgent;
+use NeuronTuiDemo\FileReferenceProcessor;
 use NeuronTuiDemo\ModelCommand;
 use Symfony\Component\Dotenv\Dotenv;
 
@@ -56,12 +58,17 @@ $commands = (new Commands())->addCommand([
     new HelpCommand(),
 ]);
 
+$userMessageProcessors = (new UserMessageProcessors())->addProcessor([
+    new FileReferenceProcessor(__DIR__ . '/..'),
+]);
+
 Tui::make(
     $agent,
     commands: $commands,
     sessionStore: $sessionStore,
     configurationStore: $configurationStore,
     inputHistory: $inputHistory,
+    userMessageProcessors: $userMessageProcessors,
 )
     ->setStopSignal($stopSignal)
     ->setFiglet('NeuronTUI')

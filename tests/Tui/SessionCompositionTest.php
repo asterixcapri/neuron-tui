@@ -73,7 +73,7 @@ final class SessionCompositionTest extends TestCase
             EventLoop::delay(0.23, static fn () => $terminal->simulateInput("\r"));
             EventLoop::delay(0.29, static fn () => $terminal->simulateInput("\x03"));
 
-            Tui::make($agent, $terminal, new Commands([new ClearCommand(), new ResumeCommand()]), $sessionStore)->run();
+            Tui::make($agent, $terminal, (new Commands())->addCommand([new ClearCommand(), new ResumeCommand()]), $sessionStore)->run();
 
             self::assertEquals($initialMessages, $startup);
             self::assertIsArray($beforeClear);
@@ -209,7 +209,7 @@ final class SessionCompositionTest extends TestCase
             EventLoop::delay(0.04, static fn () => $terminal->simulateInput("\r"));
             $timeout = EventLoop::delay(0.15, static fn () => $terminal->simulateInput("\x03"));
 
-            Tui::make(new Agent(), $terminal, new Commands($command), configurationStore: $store)->run();
+            Tui::make(new Agent(), $terminal, (new Commands())->addCommand($command), configurationStore: $store)->run();
             EventLoop::cancel($timeout);
 
             self::assertCount(2, $received);
@@ -259,7 +259,7 @@ final class SessionCompositionTest extends TestCase
 
             EventLoop::delay(0.07, static fn () => $terminal->simulateInput("/resume\r"));
 
-            Tui::make($agent, $terminal, commands: new Commands([$command, new ResumeCommand()]), sessionStore: $supplySessionStore ? new SessionStore($storage, 'test-user') : null)->run();
+            Tui::make($agent, $terminal, commands: (new Commands())->addCommand([$command, new ResumeCommand()]), sessionStore: $supplySessionStore ? new SessionStore($storage, 'test-user') : null)->run();
 
             self::assertCount(2, $received);
             self::assertInstanceOf(SessionStore::class, $received[0]);
@@ -295,7 +295,7 @@ final class SessionCompositionTest extends TestCase
         );
         EventLoop::queue(static fn () => $terminal->simulateInput("/inspect\r"));
 
-        Tui::make(new Agent(), $terminal, new Commands($command))->run();
+        Tui::make(new Agent(), $terminal, (new Commands())->addCommand($command))->run();
 
         self::assertSame('local', $owner);
     }
@@ -318,7 +318,7 @@ final class SessionCompositionTest extends TestCase
         (new Tui(
             new Agent(),
             $terminal,
-            new Commands($command),
+            (new Commands())->addCommand($command),
             sessionStore: $sessionStore,
         ))->run();
 
@@ -355,7 +355,7 @@ final class SessionCompositionTest extends TestCase
             });
             EventLoop::delay(0.29, static fn () => $terminal->simulateInput("\x03"));
 
-            Tui::make($agent, $terminal, new Commands([new ClearCommand(), new ResumeCommand()]), $sessionStore)->run();
+            Tui::make($agent, $terminal, (new Commands())->addCommand([new ClearCommand(), new ResumeCommand()]), $sessionStore)->run();
 
             self::assertInstanceOf(Session::class, $cleared);
             self::assertSame('alice', $cleared->getUserId());
@@ -404,7 +404,7 @@ final class SessionCompositionTest extends TestCase
         });
         EventLoop::delay(0.1, static fn () => $terminal->simulateInput("\x03"));
 
-        Tui::make($agent, $terminal, new Commands(new ResumeCommand()), $sessionStore)->run();
+        Tui::make($agent, $terminal, (new Commands())->addCommand(new ResumeCommand()), $sessionStore)->run();
 
         self::assertSame($initial, $agent->getChatHistory());
         self::assertStringContainsString(

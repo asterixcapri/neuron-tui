@@ -72,7 +72,7 @@ final class HttpResponseStopTest extends TestCase
         EventLoop::queue(static fn () => $terminal->simulateInput("Question\r"));
         EventLoop::delay(0.15, static fn () => $terminal->simulateInput("\x03"));
 
-        Tui::make($agent, $terminal, new Commands(new HelpCommand()))->setStopSignal($stopSignal)->run();
+        Tui::make($agent, $terminal, (new Commands())->addCommand(new HelpCommand()))->setStopSignal($stopSignal)->run();
 
         self::assertSame(0, $stream->closes);
         self::assertStringNotContainsString('Stop requested', AnsiUtils::stripAnsiCodes($terminal->getOutput()));

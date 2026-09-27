@@ -1,0 +1,32 @@
+<?php
+
+declare(strict_types=1);
+
+use NeuronAI\Agent\Agent;
+use NeuronInteraction\InputHistory\InputHistory;
+use NeuronInteraction\Message\UserMessageProcessors;
+use NeuronInteraction\Storage\InMemoryStorage;
+use NeuronTui\Tui;
+use NeuronTuiDemo\AIProviderFactory;
+use NeuronTuiDemo\FileReferenceProcessor;
+use Symfony\Component\Dotenv\Dotenv;
+
+require_once __DIR__ . '/../vendor/autoload.php';
+
+(new Dotenv())->bootEnv(__DIR__ . '/../.env');
+
+$agent = new Agent();
+$agent->setAiProvider(AIProviderFactory::create('openai:gpt-5.4-nano'));
+
+$inputHistory = new InputHistory(new InMemoryStorage());
+$userMessageProcessors = (new UserMessageProcessors())->addProcessor([
+    new FileReferenceProcessor(__DIR__ . '/..'),
+]);
+
+Tui::make(
+    $agent,
+    inputHistory: $inputHistory,
+    userMessageProcessors: $userMessageProcessors,
+)
+    ->setSubtitle('Try: Explain @composer.json')
+    ->run();

@@ -1,0 +1,72 @@
+<?php
+
+declare(strict_types=1);
+
+namespace NeuronTuiDemo;
+
+use InvalidArgumentException;
+use NeuronAI\Chat\Messages\ContentBlocks\TextContent;
+use NeuronAI\Chat\Messages\UserMessage;
+use NeuronInteraction\Message\UserMessageProcessorInterface;
+use RuntimeException;
+
+/** Expands @file references for the Agent without displaying the added contents. */
+final readonly class FileReferenceProcessor implements UserMessageProcessorInterface
+{
+    private string $directory;
+
+    public function __construct(string $directory)
+    {
+        $resolved = realpath($directory);
+        if ($resolved === false || !is_dir($resolved)) {
+            throw new InvalidArgumentException('The reference directory must exist.');
+        }
+
+        $this->directory = $resolved;
+    }
+
+    public function forAgent(UserMessage $message): UserMessage
+    {
+        $prepared = clone $message;
+        preg_match_all('~(?<!\\S)@([A-Za-z0-9_./-]+)~', $message->getContent() ?? '', $matches);
+
+        foreach (array_unique($matches[1]) as $reference) {
+            $path = realpath($this->directory . '/' . $reference);
+            if ($path === false || !is_file($path) || !str_starts_with($path, $this->directory . '/')) {
+                throw new RuntimeException("Reference @{$reference} must be a file inside the example directory.");
+            }
+
+            $contents = file_get_contents($path);
+            if ($contents === false || preg_match('//u', $contents) !== 1) {
+                throw new RuntimeException("Reference @{$reference} must be a readable UTF-8 text file.");
+            }
+
+            $context = new TextContent("Referenced file: {$reference}\n\n{$contents}");
+            $context->addMetadata('fileReference', $reference);
+            $prepared->addContent($context);
+        }
+
+        return $prepared;
+    }
+
+    public function forDisplay(UserMessage $message): UserMessage
+    {
+        $display = clone $message;
+        $contents = [];
+        foreach ($message->getContentBlocks() as $block) {
+            if ($block instanceof TextContent && is_string($block->getMetadata('fileReference'))) {
+                continue;
+            }
+
+            $contents[] = clone $block;
+        }
+
+        // setContents(array) appends blocks; a single block replaces the contents.
+        $display->setContents(array_shift($contents) ?? '');
+        foreach ($contents as $block) {
+            $display->addContent($block);
+        }
+
+        return $display;
+    }
+}

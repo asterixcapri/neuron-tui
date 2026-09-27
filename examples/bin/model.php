@@ -23,8 +23,10 @@ $modelId = $configurationStore->read('model', 'openai:gpt-5.4-nano');
 $agent = DemoAgent::make();
 $agent->setAiProvider(AIProviderFactory::create($modelId));
 
+$commands = (new Commands())->addCommand(new ModelCommand());
+
 Tui::make(
     $agent,
-    commands: new Commands(new ModelCommand()),
+    commands: $commands,
     configurationStore: $configurationStore,
 )->run();

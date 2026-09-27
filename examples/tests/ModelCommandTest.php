@@ -55,7 +55,7 @@ final class ModelCommandTest extends TestCase
             }
             EventLoop::delay(0.08, static fn () => $terminal->simulateInput("\x03"));
 
-            Tui::make($agent, $terminal, new Commands(new ModelCommand()), configurationStore: $store)->run();
+            Tui::make($agent, $terminal, (new Commands())->addCommand(new ModelCommand()), configurationStore: $store)->run();
 
             self::assertSame($model, (new ConfigurationStore($storage, 'demo-user'))->read('model'));
             self::assertSame('dark', $store->read('theme'));
@@ -87,7 +87,7 @@ final class ModelCommandTest extends TestCase
         EventLoop::delay(0.04, static fn () => $terminal->simulateInput("\x1b"));
         EventLoop::delay(0.08, static fn () => $terminal->simulateInput("\x03"));
 
-        Tui::make($agent, $terminal, new Commands(new ModelCommand()), configurationStore: $store)->run();
+        Tui::make($agent, $terminal, (new Commands())->addCommand(new ModelCommand()), configurationStore: $store)->run();
 
         self::assertSame(['model' => 'previous'], $store->entries());
         self::assertSame($provider, $agent->resolveProvider());
@@ -105,7 +105,7 @@ final class ModelCommandTest extends TestCase
         EventLoop::queue(static fn () => $terminal->simulateInput("/model unknown:model\r"));
         EventLoop::delay(0.08, static fn () => $terminal->simulateInput("\x03"));
 
-        Tui::make($agent, $terminal, new Commands(new ModelCommand()), configurationStore: $store)->run();
+        Tui::make($agent, $terminal, (new Commands())->addCommand(new ModelCommand()), configurationStore: $store)->run();
 
         self::assertSame('previous', $store->read('model'));
         self::assertSame($provider, $agent->resolveProvider());
@@ -129,7 +129,7 @@ final class ModelCommandTest extends TestCase
             EventLoop::queue(static fn () => $terminal->simulateInput("/model openai:gpt-5.4-nano\r"));
             EventLoop::delay(0.08, static fn () => $terminal->simulateInput("\x03"));
 
-            Tui::make($agent, $terminal, new Commands(new ModelCommand()), configurationStore: $store)->run();
+            Tui::make($agent, $terminal, (new Commands())->addCommand(new ModelCommand()), configurationStore: $store)->run();
 
             self::assertSame('previous', $store->read('model'));
             self::assertSame($history, $agent->getChatHistory());

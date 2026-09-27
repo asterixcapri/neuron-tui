@@ -108,7 +108,7 @@ final class CommandHistoryTest extends TestCase
                 ($this->run)($adapter);
             }
         };
-        $commands = new Commands($command);
+        $commands = (new Commands())->addCommand($command);
         $storage = new InMemoryStorage();
         $commands->run('/probe', '', new TuiCommandAdapter(
             $this->runtime,
