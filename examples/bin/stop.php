@@ -32,7 +32,6 @@ $agent->setAiProvider(AIProviderFactory::create(
     ),
 ));
 
-Tui::make($agent)
-    ->setStopSignal($stopSignal)
+Tui::make($agent, stopSignal: $stopSignal)
     ->setSubtitle('HTTP stop experiment · Escape requests EOF')
     ->run();

@@ -200,8 +200,7 @@ $agent->setAiProvider(new OpenAIResponses(
     httpClient: $client,
 ));
 
-Tui::make($agent)
-    ->setStopSignal($stopSignal)
+Tui::make($agent, stopSignal: $stopSignal)
     ->run();
 ```
 

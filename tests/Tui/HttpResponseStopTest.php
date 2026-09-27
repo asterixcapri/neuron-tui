@@ -44,7 +44,7 @@ final class HttpResponseStopTest extends TestCase
         EventLoop::delay(0.18, static fn () => $terminal->simulateInput("!\r"));
         EventLoop::delay(0.3, static fn () => $terminal->simulateInput("\x03"));
 
-        Tui::make($agent, $terminal)->setStopSignal($stopSignal)->run();
+        (new Tui($agent, $terminal, stopSignal: $stopSignal))->run();
 
         self::assertSame($history, $agent->getChatHistory());
         self::assertSame(['First', 'Partial', 'Second', 'Second answer', 'Third', 'Third answer', 'Draf!t', 'Draft answer'], array_map(static fn (Message $message): ?string => $message->getContent(), $history->getMessages()));
@@ -72,7 +72,7 @@ final class HttpResponseStopTest extends TestCase
         EventLoop::queue(static fn () => $terminal->simulateInput("Question\r"));
         EventLoop::delay(0.15, static fn () => $terminal->simulateInput("\x03"));
 
-        Tui::make($agent, $terminal, (new Commands())->addCommand(new HelpCommand()))->setStopSignal($stopSignal)->run();
+        Tui::make($agent, $terminal, (new Commands())->addCommand(new HelpCommand()), stopSignal: $stopSignal)->run();
 
         self::assertSame(0, $stream->closes);
         self::assertStringNotContainsString('Stop requested', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
@@ -94,7 +94,7 @@ final class HttpResponseStopTest extends TestCase
         EventLoop::queue(static fn () => $terminal->simulateInput("Question\r"));
         EventLoop::delay(0.18, static fn () => $terminal->simulateInput("\x03"));
 
-        Tui::make($agent, $terminal)->setStopSignal($stopSignal)->run();
+        Tui::make($agent, $terminal, stopSignal: $stopSignal)->run();
 
         self::assertSame(['Next', 'Next answer'], array_map(static fn (Message $message): ?string => $message->getContent(), $agent->getChatHistory()->getMessages()));
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());

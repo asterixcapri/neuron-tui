@@ -52,8 +52,6 @@ final class Tui
 
     private bool $started = false;
 
-    private ?StopSignal $stopSignal = null;
-
     private readonly UserMessageProcessors $userMessageProcessors;
 
     public function __construct(
@@ -64,6 +62,7 @@ final class Tui
         ?ConfigurationStore $configurationStore = null,
         ?InputHistory $inputHistory = null,
         ?UserMessageProcessors $userMessageProcessors = null,
+        private readonly ?StopSignal $stopSignal = null,
     ) {
         $this->userMessageProcessors = $userMessageProcessors ?? new UserMessageProcessors();
         $this->commands = $commands ?? new Commands();
@@ -83,23 +82,15 @@ final class Tui
         ?ConfigurationStore $configurationStore = null,
         ?InputHistory $inputHistory = null,
         ?UserMessageProcessors $userMessageProcessors = null,
+        ?StopSignal $stopSignal = null,
     ): self {
-        return new self($agent, $terminal, $commands, $sessionStore, $configurationStore, $inputHistory, $userMessageProcessors);
+        return new self($agent, $terminal, $commands, $sessionStore, $configurationStore, $inputHistory, $userMessageProcessors, $stopSignal);
     }
 
     public function setTitle(string $title): self
     {
         $this->ensureNotStarted();
         $this->title = $title;
-
-        return $this;
-    }
-
-    /** Share the signal configured on the provider's StoppableHttpClient. */
-    public function setStopSignal(StopSignal $stopSignal): self
-    {
-        $this->ensureNotStarted();
-        $this->stopSignal = $stopSignal;
 
         return $this;
     }

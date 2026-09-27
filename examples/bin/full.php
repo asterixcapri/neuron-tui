@@ -69,8 +69,8 @@ Tui::make(
     configurationStore: $configurationStore,
     inputHistory: $inputHistory,
     userMessageProcessors: $userMessageProcessors,
+    stopSignal: $stopSignal,
 )
-    ->setStopSignal($stopSignal)
     ->setFiglet('NeuronTUI')
     ->setTitle('Neuron TUI Demo')
     ->setSubtitle('Powered by Neuron AI')
