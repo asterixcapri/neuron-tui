@@ -238,6 +238,7 @@ $stopSignal = new StopSignal(new InMemoryStorage(), 'chatKey');
 $client = new StoppableHttpClient(
     inner: new AmpHttpClient(),
     stopSignal: $stopSignal,
+    // Yield to the event loop so the TUI can read Escape while streaming.
     onPoll: function (): void {
         delay(0);
     },
@@ -253,10 +254,9 @@ Tui::make($agent, stopSignal: $stopSignal)
     ->run();
 ```
 
-`onPoll` lets the TUI process keyboard input while streaming. The TUI clears
-the signal before each turn; Escape requests a stop, and Neuron finalizes the
-partial response. This does not cancel local tools or guarantee remote generation
-has stopped. Use a distinct signal key for concurrent responses.
+The TUI clears the signal before each turn; Escape requests a stop, and Neuron
+finalizes the partial response. This does not cancel local tools or guarantee
+remote generation has stopped. Use a distinct signal key for concurrent responses.
 
 See [stop.php](examples/bin/stop.php) for the complete example.
 

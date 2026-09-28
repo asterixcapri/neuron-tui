@@ -26,6 +26,7 @@ $agent->setAiProvider(AIProviderFactory::create(
     httpClient: new StoppableHttpClient(
         inner: new AmpHttpClient(),
         stopSignal: $stopSignal,
+        // Yield to the event loop so the TUI can read Escape while streaming.
         onPoll: function (): void {
             delay(0);
         },
