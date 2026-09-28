@@ -299,9 +299,9 @@ cp .env.example .env
 | Example | What it shows | Run from `examples/` |
 | --- | --- | --- |
 | [basic.php](examples/bin/basic.php) | An Agent and the TUI. | `php bin/basic.php` |
-| [stop.php](examples/bin/stop.php) | Experimental opt-in HTTP EOF with automatic Neuron history persistence. | `php bin/stop.php` |
 | [sessions.php](examples/bin/sessions.php) | Saved conversations with automatic titles, `/clear` and `/resume`. | `php bin/sessions.php` |
 | [model.php](examples/bin/model.php) | Model selection with `/model`, remembering the choice between runs. Conversation stays in memory. | `php bin/model.php` |
+| [stop.php](examples/bin/stop.php) | Stopping a streaming response with Escape. | `php bin/stop.php` |
 | [messages.php](examples/bin/messages.php) | File references expanded for the Agent while displaying the original input. | `php bin/messages.php` |
 | [full.php](examples/bin/full.php) | Sessions with automatic titles, message processing, model selection, input history, response stop, tools and a custom header. | `php bin/full.php` |
 
