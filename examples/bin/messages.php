@@ -19,6 +19,8 @@ $agent = new Agent();
 $agent->setAiProvider(AIProviderFactory::create('openai:gpt-5.4-nano'));
 
 $inputHistory = new InputHistory(new InMemoryStorage());
+// Expand file references for the Agent. Try `Explain @composer.json` or
+// `Compare @bin/basic.php @bin/sessions.php`; paths are relative to examples/.
 $userMessageProcessors = (new UserMessageProcessors())->addProcessor([
     new FileReferenceProcessor(__DIR__ . '/..'),
 ]);

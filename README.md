@@ -286,7 +286,8 @@ See [messages.php](examples/bin/messages.php) for the complete example.
 
 ## Examples
 
-Install the example dependencies and set `OPENAI_API_KEY` in `.env`:
+Install the example dependencies and set `OPENAI_API_KEY` in `.env`, plus
+`ANTHROPIC_API_KEY` to choose Anthropic models with `/model`:
 
 ```bash
 cd examples
@@ -303,12 +304,6 @@ cp .env.example .env
 | [model.php](examples/bin/model.php) | Model selection with `/model`, remembering the choice between runs. Conversation stays in memory. | `php bin/model.php` |
 | [messages.php](examples/bin/messages.php) | File references expanded for the Agent while displaying the original input. | `php bin/messages.php` |
 | [full.php](examples/bin/full.php) | Sessions with automatic titles, message processing, model selection, input history, response stop, tools and a custom header. | `php bin/full.php` |
-
-Messages and Full expand file references for the Agent. Try `Explain @composer.json`
-or `Compare @bin/basic.php @bin/sessions.php`; paths are relative to `examples/`.
-
-Each example runs on its own. Model and Full also offer Anthropic through
-`/model` when `ANTHROPIC_API_KEY` is configured. Use `Ctrl+C` to exit.
 
 ## Development
 
