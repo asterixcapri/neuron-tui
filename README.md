@@ -89,6 +89,55 @@ Tui::make($agent, commands: $commands)->run();
 Each standard command accepts a custom slash-prefixed name: `new LeaveCommand('/quit')`
 replaces `/exit` with `/quit`.
 
+## Custom commands
+
+Implement `CommandInterface` to add your own behavior. This command sends the
+staged Git diff to the Agent for review:
+
+```php
+use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Command\CommandAdapterInterface;
+use NeuronInteraction\Command\CommandInterface;
+use NeuronTui\Tui;
+
+final class ReviewCommand implements CommandInterface
+{
+    public function name(): string
+    {
+        return '/review';
+    }
+
+    public function describe(): string
+    {
+        return 'Reviews what is staged in git.';
+    }
+
+    /** @param CommandAdapterInterface<mixed> $adapter */
+    public function run(CommandAdapterInterface $adapter, string $value): void
+    {
+        $diff = shell_exec('git diff --staged') ?: '';
+
+        if (trim($diff) === '') {
+            $adapter->warn('Nothing staged to review.');
+
+            return;
+        }
+
+        $adapter->promptAgent("Review this diff:\n\n" . $diff);
+    }
+}
+
+Tui::make($agent, commands: (new Commands())->addCommand(new ReviewCommand()))->run();
+```
+
+Commands communicate through `notify()`, `warn()` and `error()`. Neuron TUI
+shows notices, yellow `Warning` labels and red `Error` labels respectively.
+Return from your command after reporting an error if it cannot continue.
+
+While the Agent is responding, ordinary commands are unavailable. Commands that
+can safely run during a response may implement
+`NeuronInteraction\Command\ConcurrentCommandInterface`; Help and Leave already do.
+
 ## Sessions
 
 Use `/clear` to start a new conversation and `/resume` to return to a saved one.
@@ -211,54 +260,29 @@ has stopped. Use a distinct signal key for concurrent responses.
 
 See [stop.php](examples/bin/stop.php) for the complete example.
 
-## Custom commands
+## User message processors
 
-Implement `CommandInterface` to add your own behavior. This command sends the
-staged Git diff to the Agent for review:
+A user message processor changes what the Agent receives without changing what
+the user sees. Implement `NeuronInteraction\Message\UserMessageProcessorInterface`:
+`forAgent()` prepares ordinary input before it is sent, and `forDisplay()` adjusts
+messages before they are shown, including resumed History.
 
 ```php
-use NeuronInteraction\Command\Commands;
-use NeuronInteraction\Command\CommandAdapterInterface;
-use NeuronInteraction\Command\CommandInterface;
+use NeuronInteraction\Message\UserMessageProcessors;
 use NeuronTui\Tui;
 
-final class ReviewCommand implements CommandInterface
-{
-    public function name(): string
-    {
-        return '/review';
-    }
+$processors = (new UserMessageProcessors())->addProcessor([
+    new FileReferenceProcessor(__DIR__),
+]);
 
-    public function describe(): string
-    {
-        return 'Reviews what is staged in git.';
-    }
-
-    /** @param CommandAdapterInterface<mixed> $adapter */
-    public function run(CommandAdapterInterface $adapter, string $value): void
-    {
-        $diff = shell_exec('git diff --staged') ?: '';
-
-        if (trim($diff) === '') {
-            $adapter->warn('Nothing staged to review.');
-
-            return;
-        }
-
-        $adapter->promptAgent("Review this diff:\n\n" . $diff);
-    }
-}
-
-Tui::make($agent, commands: (new Commands())->addCommand(new ReviewCommand()))->run();
+Tui::make($agent, userMessageProcessors: $processors)->run();
 ```
 
-Commands communicate through `notify()`, `warn()` and `error()`. Neuron TUI
-shows notices, yellow `Warning` labels and red `Error` labels respectively.
-Return from your command after reporting an error if it cannot continue.
+Processors prepare messages in registration order and display them in reverse
+order. Saved messages are never changed, and Commands bypass processors. If
+`forAgent()` throws, the TUI shows the error and keeps the draft.
 
-While the Agent is responding, ordinary commands are unavailable. Commands that
-can safely run during a response may implement
-`NeuronInteraction\Command\ConcurrentCommandInterface`; Help and Leave already do.
+See [messages.php](examples/bin/messages.php) for the complete example.
 
 ## Examples
 
@@ -280,49 +304,11 @@ cp .env.example .env
 | [messages.php](examples/bin/messages.php) | File references expanded for the Agent while displaying the original input. | `php bin/messages.php` |
 | [full.php](examples/bin/full.php) | Sessions with automatic titles, message processing, model selection, input history, response stop, tools and a custom header. | `php bin/full.php` |
 
-Messages and Full inject `FileReferenceProcessor` through `UserMessageProcessors`.
-Try `Explain @composer.json` or `Compare @bin/basic.php @bin/sessions.php`.
-References use paths relative to `examples/`, without spaces. The processor reads
-UTF-8 text files inside that directory and appends their contents to ordinary
-messages sent to the Agent. Missing files and paths outside the directory reject
-submission and retain the draft. Each distinct reference is expanded once per
-message. The added blocks are hidden when displaying live or resumed History;
-the original text, attachments and metadata are preserved. Display never rereads
-the files. Commands bypass preparation. Input history retains the original input,
-so recalling and submitting a draft reads the current file contents again.
+Messages and Full expand file references for the Agent. Try `Explain @composer.json`
+or `Compare @bin/basic.php @bin/sessions.php`; paths are relative to `examples/`.
 
 Each example runs on its own. Model and Full also offer Anthropic through
 `/model` when `ANTHROPIC_API_KEY` is configured. Use `Ctrl+C` to exit.
-
-## User message processors
-
-Pass implementations of `NeuronInteraction\Message\UserMessageProcessorInterface`
-to `(new UserMessageProcessors())->addProcessor($processor)` or
-`(new UserMessageProcessors())->addProcessor([$first, $second])`,
-then supply the collection to `Tui::make(userMessageProcessors: $processors, agent: $agent)`. Both `forAgent()` and `forDisplay()` receive and
-return complete Neuron `UserMessage` objects. Preparation happens before queuing
-ordinary input; Commands and their prepared prompts bypass it. Display projection
-happens before rendering new messages, queued messages and loaded History, while
-the saved messages remain unchanged.
-
-Preparation follows registration order; display uses reverse order. Ordinary picker
-labels remain unchanged. Resume titles come from saved Session metadata. Option values remain unchanged.
-
-## Session titles
-
-When the Agent uses a `NeuronInteraction\Session\Session`, the TUI automatically
-uses `NeuronInteraction\Session\SessionTitleGenerator` after each successful, uninterrupted turn while
-`Session::title()` is null, up to three attempts per Session. Null results and failures
-both count toward the limit, stored as `titleGenerationAttempts` in Session metadata
-so reopening the application does not reset it. It uses an isolated copy of the answering Agent's
-provider and a snapshot of the Session history. No caller configuration
-is needed. This makes an additional model request; greetings or style requests
-alone should return null, allowing a later turn to try again.
-
-A generated or manually assigned title stops further automatic requests.
-Generation runs in the background; errors leave the title null and allow a later turn to retry, without showing
-warnings. Sessions without a title are shown as `New session`. Messages and
-attachments remain unchanged. Already-started requests may save their results after the TUI closes.
 
 ## Development
 
@@ -342,22 +328,7 @@ composer stan
 composer --working-dir=examples install
 ```
 
-The examples install published releases. To try local changes without modifying
-Composer manifests or locks, replace the installed packages with symlinks.
-From the repository root, assuming `neuron-interaction` is a sibling checkout:
-
-```bash
-mv examples/vendor/asterixcapri/neuron-tui /tmp/neuron-tui-demo-package
-ln -s "$(pwd)" examples/vendor/asterixcapri/neuron-tui
-mv examples/vendor/asterixcapri/neuron-interaction /tmp/neuron-interaction-demo-package
-ln -s "$(cd ../neuron-interaction && pwd)" examples/vendor/asterixcapri/neuron-interaction
-```
-
-Use unused backup paths for the two `mv` commands. The symlinks are under the
-ignored `vendor` directory; the examples' lock is also ignored. Composer still
-uses the installed release metadata: changes to dependencies or autoload rules
-need a separate dependency update. A reinstall replaces the local links with
-the published packages. Run the example tests against the local checkouts with:
+Run the example tests with:
 
 ```bash
 vendor/bin/phpunit -c examples/phpunit.xml.dist
