@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 use NeuronAI\Agent\Agent;
 use NeuronAI\HttpClient\Amp\AmpHttpClient;
-use NeuronInteraction\Http\StoppableHttpClient;
+use NeuronAI\HttpClient\StoppableHttpClient;
 use NeuronInteraction\Http\StopSignal;
 use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Tui;
@@ -24,12 +24,13 @@ $agent = (new Agent())->setThreadId(bin2hex(random_bytes(16)));
 $agent->setAiProvider(AIProviderFactory::create(
     modelId: 'openai:gpt-5.4-nano',
     httpClient: new StoppableHttpClient(
-        inner: new AmpHttpClient(),
-        stopSignal: $stopSignal,
-        // Yield to the event loop so the TUI can read Escape while streaming.
-        onPoll: function (): void {
-            delay(0);
-        },
+        client: new AmpHttpClient(),
+        shouldStop: $stopSignal->stopCallback(
+            // Yield to the event loop so the TUI can read Escape while streaming.
+            onPoll: function (): void {
+                delay(0);
+            },
+        ),
     ),
 ));
 

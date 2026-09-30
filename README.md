@@ -229,7 +229,7 @@ configure the provider with this client:
 ```php
 use NeuronAI\HttpClient\Amp\AmpHttpClient;
 use NeuronAI\Providers\OpenAI\Responses\OpenAIResponses;
-use NeuronInteraction\Http\StoppableHttpClient;
+use NeuronAI\HttpClient\StoppableHttpClient;
 use NeuronInteraction\Http\StopSignal;
 use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Tui;
@@ -239,12 +239,13 @@ use function Amp\delay;
 $stopSignal = new StopSignal(new InMemoryStorage(), 'chatKey');
 
 $client = new StoppableHttpClient(
-    inner: new AmpHttpClient(),
-    stopSignal: $stopSignal,
-    // Yield to the event loop so the TUI can read Escape while streaming.
-    onPoll: function (): void {
-        delay(0);
-    },
+    client: new AmpHttpClient(),
+    shouldStop: $stopSignal->stopCallback(
+        // Yield to the event loop so the TUI can read Escape while streaming.
+        onPoll: function (): void {
+            delay(0);
+        },
+    ),
 );
 
 $agent->setAiProvider(new OpenAIResponses(

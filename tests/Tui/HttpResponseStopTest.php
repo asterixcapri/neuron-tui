@@ -6,10 +6,10 @@ namespace NeuronTui\Tests\Tui;
 
 use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\Messages\Message;
+use NeuronAI\HttpClient\StoppableHttpClient;
 use NeuronAI\Providers\OpenAI\OpenAI;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Command\HelpCommand;
-use NeuronInteraction\Http\StoppableHttpClient;
 use NeuronInteraction\Http\StopSignal;
 use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Tests\Http\FixtureHttpClient;
@@ -106,7 +106,7 @@ final class HttpResponseStopTest extends TestCase
     private function agent(FixtureHttpClient $client, StopSignal $stopSignal): Agent
     {
         $agent = (new Agent())->setThreadId('test-thread');
-        $agent->setAiProvider(new OpenAI('fixture-key', 'fixture-model', httpClient: new StoppableHttpClient(inner: $client, stopSignal: $stopSignal, onPoll: static function (): void { delay(0); })));
+        $agent->setAiProvider(new OpenAI('fixture-key', 'fixture-model', httpClient: new StoppableHttpClient(client: $client, shouldStop: $stopSignal->stopCallback(onPoll: static function (): void { delay(0); }))));
 
         return $agent;
     }

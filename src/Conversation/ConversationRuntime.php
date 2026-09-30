@@ -109,7 +109,7 @@ final class ConversationRuntime
         return $this->stopSignal !== null;
     }
 
-    /** A requested flag disappears when StoppableStream consumes it. */
+    /** A requested flag disappears when the StopSignal callback consumes it. */
     private function responseWasStopped(): bool
     {
         return $this->responseStopRequested
