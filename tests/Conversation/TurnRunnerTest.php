@@ -12,8 +12,8 @@ use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
 use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Testing\FakeAIProvider;
-use NeuronAI\Tools\Tool;
 use NeuronTui\Conversation\TurnRunner;
+use NeuronTui\Tests\Tools\CallbackTool;
 use NeuronTui\View\ConversationView;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
@@ -33,7 +33,7 @@ final class TurnRunnerTest extends TestCase
                 yield new TextChunk('turn-stream', 'Forty');
                 yield new TextChunk('turn-stream', '-two.');
 
-                return $response;
+                return new \NeuronAI\Providers\ProviderResponse(message: $response);
             }
         };
 
@@ -63,21 +63,21 @@ final class TurnRunnerTest extends TestCase
     public function testProgressAfterToolsAppearsAsANewMessageInStreamOrder(): void
     {
         $terminal = new VirtualTerminal(columns: 120, rows: 40);
-        $lookup = (new Tool('lookup'))
+        $lookup = (new CallbackTool('lookup'))
             ->setCallId('lookup-call')
             ->setInputs([])
             ->setCallable(static fn (): string => 'Found the record.');
-        $check = (new Tool('check'))
+        $check = (new CallbackTool('check'))
             ->setCallId('check-call')
             ->setInputs([])
             ->setCallable(static fn (): string => 'Record verified.');
         $provider = new FakeAIProvider(
-            new ToolCallMessage('Finding the record.', [$lookup]),
-            new ToolCallMessage('Found it; checking the record.', [$check]),
+            new ToolCallMessage('Finding the record.', [$lookup->call()]),
+            new ToolCallMessage('Found it; checking the record.', [$check->call()]),
             new AssistantMessage('The record is verified.'),
         );
 
-        $display = $this->runTurn($provider, 'Find and verify the record.', $terminal);
+        $display = $this->runTurn($provider, 'Find and verify the record.', $terminal, [$lookup, $check]);
 
         self::assertMatchesRegularExpression(
             '/● Finding the record\..*● lookup.*● Found it; checking the record\..*● check.*● The record is verified\./s',
@@ -95,7 +95,7 @@ final class TurnRunnerTest extends TestCase
                 yield new TextChunk('blank-stream', '');
                 yield new TextChunk('blank-stream', " \n\t ");
 
-                return $response;
+                return new \NeuronAI\Providers\ProviderResponse(message: $response);
             }
         };
 
@@ -107,16 +107,16 @@ final class TurnRunnerTest extends TestCase
     public function testATurnSpentOnToolsAloneIsNotAnEmptyAnswer(): void
     {
         $terminal = new VirtualTerminal(columns: 100, rows: 24);
-        $tool = (new Tool('lookup'))
+        $tool = (new CallbackTool('lookup'))
             ->setCallId('lookup-call')
             ->setInputs(['q' => 'alpha'])
             ->setCallable(static fn (): string => 'alpha result');
         $provider = new FakeAIProvider(
-            new ToolCallMessage(tools: [$tool]),
+            new ToolCallMessage(tools: [$tool->call()]),
             new AssistantMessage(),
         );
 
-        $display = $this->runTurn($provider, 'Run the tool.', $terminal);
+        $display = $this->runTurn($provider, 'Run the tool.', $terminal, [$tool]);
 
         self::assertStringContainsString('● lookup {"q":"alpha"}', $display);
         self::assertStringContainsString('⎿ alpha result', $display);
@@ -126,12 +126,12 @@ final class TurnRunnerTest extends TestCase
     public function testAnEmptyTextChunkBeforeAToolDoesNotCreateAnEmptyMessage(): void
     {
         $terminal = new VirtualTerminal(columns: 100, rows: 24);
-        $tool = (new Tool('lookup'))
+        $tool = (new CallbackTool('lookup'))
             ->setCallId('lookup-call')
             ->setInputs(['q' => 'alpha'])
             ->setCallable(static fn (): string => 'alpha result');
         $provider = new class(
-            new ToolCallMessage(tools: [$tool]),
+            new ToolCallMessage(tools: [$tool->call()]),
             new AssistantMessage('Found it.'),
         ) extends FakeAIProvider {
             protected function streamChunks(Message $response): Generator
@@ -139,16 +139,16 @@ final class TurnRunnerTest extends TestCase
                 if ($response instanceof ToolCallMessage) {
                     yield new TextChunk('empty-before-tool', '');
 
-                    return $response;
+                    return new \NeuronAI\Providers\ProviderResponse(message: $response);
                 }
 
                 yield from parent::streamChunks($response);
 
-                return $response;
+                return new \NeuronAI\Providers\ProviderResponse(message: $response);
             }
         };
 
-        $display = $this->runTurn($provider, 'Run the tool.', $terminal);
+        $display = $this->runTurn($provider, 'Run the tool.', $terminal, [$tool]);
 
         self::assertDoesNotMatchRegularExpression('/\R ●\h+\R/', $display);
         self::assertStringContainsString('● lookup {"q":"alpha"}', $display);
@@ -180,9 +180,31 @@ final class TurnRunnerTest extends TestCase
         $second->assertCallCount(1);
     }
 
+    public function testAnApprovalPauseDoesNotCompleteTheTurnOrShowAnEmptyResponse(): void
+    {
+        $terminal = new VirtualTerminal(rows: 24);
+        $tool = (new CallbackTool('publish'))->setCallId('publish-call');
+        $tool->requireApproval();
+        $provider = new FakeAIProvider(new ToolCallMessage(tools: [$tool->call()]));
+        $agent = $this->agentOf($provider)->addTool($tool);
+        $view = new ConversationView($terminal, 'Neuron AI', 'Conversation');
+        $turn = new TurnRunner($view);
+        $completed = null;
+        EventLoop::queue(static function () use ($turn, $agent, &$completed): void {
+            $completed = $turn->run($agent, new UserMessage('Publish now'));
+        });
+        EventLoop::run();
+        $view->paintPendingChanges();
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+        self::assertFalse($completed);
+        self::assertStringContainsString('Human-in-the-loop interruptions are not supported.', $display);
+        self::assertStringNotContainsString('Empty response.', $display);
+        $provider->assertCallCount(1);
+    }
+
     private function agentOf(FakeAIProvider $provider): Agent
     {
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
 
         return $agent;
@@ -191,13 +213,17 @@ final class TurnRunnerTest extends TestCase
     /**
      * Takes one turn against the given provider and reads back what the
      * terminal was told to show.
+     *
+     * @param list<CallbackTool> $tools
      */
     private function runTurn(
         FakeAIProvider $provider,
         string $message,
         VirtualTerminal $terminal,
+        array $tools = [],
     ): string {
         $agent = $this->agentOf($provider);
+        $agent->addTool($tools);
         $view = new ConversationView($terminal, 'Neuron AI', 'Conversation');
         $turn = new TurnRunner($view);
 

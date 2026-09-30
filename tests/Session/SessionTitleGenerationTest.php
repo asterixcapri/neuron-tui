@@ -14,6 +14,7 @@ use NeuronAI\Testing\FakeAIProvider;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Session\SessionTitleGeneration;
+use NeuronTui\Tests\History\SessionHistory;
 use NeuronTui\Tui;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
@@ -30,21 +31,21 @@ final class SessionTitleGenerationTest extends TestCase
         $requests = new TitleRequests(['{"title":null}', '{"title":"Configurazione Redis"}']);
         $agent = $this->agent($requests);
         $session = (new SessionStore(new InMemoryStorage(), 'local'))->create();
-        $session->addMessage(new UserMessage('ciao, /caveman'));
-        $session->addMessage(new AssistantMessage('Ciao!'));
+        SessionHistory::of($session)->addMessage(new UserMessage('ciao, /caveman'));
+        SessionHistory::of($session)->addMessage(new AssistantMessage('Ciao!'));
         $generation = new SessionTitleGeneration();
 
         $generation->schedule($session, $agent);
         delay(0.01);
-        self::assertNull($session->title());
+        self::assertNull($session->getTitle());
         self::assertSame(1, $requests->count);
 
-        $session->addMessage(new UserMessage('Aiutami a configurare Redis'));
-        $original = $session->jsonSerialize();
+        SessionHistory::of($session)->addMessage(new UserMessage('Aiutami a configurare Redis'));
+        $original = $session->getMessages();
         $generation->schedule($session, $agent);
         delay(0.01);
-        self::assertSame('Configurazione Redis', $session->title());
-        self::assertSame($original, $session->jsonSerialize());
+        self::assertSame('Configurazione Redis', $session->getTitle());
+        self::assertEquals($original, $session->getMessages());
 
         $generation->schedule($session, $agent);
         delay(0.01);
@@ -57,7 +58,7 @@ final class SessionTitleGenerationTest extends TestCase
         $requests = new TitleRequests(['{"title":"Automatic title"}']);
         $agent = $this->agent($requests);
         $session = (new SessionStore(new InMemoryStorage(), 'local'))->create();
-        $session->addMessage(new UserMessage('A subject'));
+        SessionHistory::of($session)->addMessage(new UserMessage('A subject'));
         $generation = new SessionTitleGeneration();
         $generation->schedule($session, $agent);
         $generation->schedule($session, $agent);
@@ -66,24 +67,24 @@ final class SessionTitleGenerationTest extends TestCase
 
         self::assertSame(1, $requests->count);
         self::assertSame('1', $session->getMetadata()['titleGenerationAttempts']);
-        self::assertSame('Manual title', $session->title());
+        self::assertSame('Manual title', $session->getTitle());
     }
 
     public function testAnErrorLeavesTheTitleNullAndAllowsTheNextTurnToRetry(): void
     {
         $requests = new TitleRequests([]);
         $session = (new SessionStore(new InMemoryStorage(), 'local'))->create();
-        $session->addMessage(new UserMessage('A subject'));
+        SessionHistory::of($session)->addMessage(new UserMessage('A subject'));
         $generation = new SessionTitleGeneration();
         $agent = $this->agent($requests);
         $generation->schedule($session, $agent);
         delay(0.01);
 
-        self::assertNull($session->title());
+        self::assertNull($session->getTitle());
         $requests->responses[] = '{"title":"Recovered title"}';
         $generation->schedule($session, $agent);
         delay(0.01);
-        self::assertSame('Recovered title', $session->title());
+        self::assertSame('Recovered title', $session->getTitle());
     }
 
     public function testNullResultsStopAtTheDefaultLimitAcrossReloads(): void
@@ -92,7 +93,7 @@ final class SessionTitleGenerationTest extends TestCase
         $storage = new InMemoryStorage();
         $store = new SessionStore($storage, 'local');
         $session = $store->create();
-        $session->addMessage(new UserMessage('hello'));
+        SessionHistory::of($session)->addMessage(new UserMessage('hello'));
         $agent = $this->agent($requests);
 
         for ($turn = 0; $turn < 4; ++$turn) {
@@ -104,14 +105,14 @@ final class SessionTitleGenerationTest extends TestCase
 
         self::assertSame(3, $requests->count);
         self::assertSame('3', $session->getMetadata()['titleGenerationAttempts']);
-        self::assertNull($session->title());
+        self::assertNull($session->getTitle());
     }
 
     public function testErrorsCountTowardTheConfiguredLimit(): void
     {
         $requests = new TitleRequests([]);
         $session = (new SessionStore(new InMemoryStorage(), 'local'))->create();
-        $session->addMessage(new UserMessage('A subject'));
+        SessionHistory::of($session)->addMessage(new UserMessage('A subject'));
         $generation = new SessionTitleGeneration(maxAttempts: 2);
         $agent = $this->agent($requests);
 
@@ -122,14 +123,14 @@ final class SessionTitleGenerationTest extends TestCase
 
         self::assertSame(2, $requests->count);
         self::assertSame('2', $session->getMetadata()['titleGenerationAttempts']);
-        self::assertNull($session->title());
+        self::assertNull($session->getTitle());
     }
 
     public function testInvalidAttemptMetadataDoesNotStartARequest(): void
     {
         $requests = new TitleRequests(['{"title":"Unused"}']);
         $session = (new SessionStore(new InMemoryStorage(), 'local'))->create();
-        $session->addMessage(new UserMessage('A subject'));
+        SessionHistory::of($session)->addMessage(new UserMessage('A subject'));
         $session->setMetadata('titleGenerationAttempts', 'invalid');
 
         (new SessionTitleGeneration())->schedule($session, $this->agent($requests));
@@ -152,7 +153,7 @@ final class SessionTitleGenerationTest extends TestCase
         $store = new SessionStore(new InMemoryStorage(), 'local');
         $session = $store->create();
         $agent = $this->agent($requests);
-        $agent->setChatHistory($session);
+        $agent = ($session)->bindTo($agent);
         $terminal = new VirtualTerminal();
         EventLoop::queue(static fn () => $terminal->simulateInput("ciao\r"));
         EventLoop::delay(0.05, static fn () => $terminal->simulateInput("Configuriamo Redis\r"));
@@ -161,9 +162,9 @@ final class SessionTitleGenerationTest extends TestCase
 
         Tui::make($agent, $terminal, sessionStore: $store)->run();
 
-        self::assertSame('Configurazione Redis', $session->title());
+        self::assertSame('Configurazione Redis', $session->getTitle());
         self::assertSame(2, $requests->count);
-        self::assertCount(6, $session->getMessages());
+        self::assertCount(6, $agent->getChatHistory()->getMessages());
         self::assertSame('Configurazione Redis', $store->summaries()[0]->title);
     }
 
@@ -173,16 +174,16 @@ final class SessionTitleGenerationTest extends TestCase
         $store = new SessionStore(new InMemoryStorage(), 'local');
         $session = $store->create();
         $agent = $this->agent($requests);
-        $agent->setChatHistory($session);
+        $agent = ($session)->bindTo($agent);
         $terminal = new VirtualTerminal();
         EventLoop::queue(static fn () => $terminal->simulateInput("A subject\r"));
         EventLoop::delay(0.1, static fn () => $terminal->simulateInput("\x03"));
 
         Tui::make($agent, $terminal, sessionStore: $store)->run();
 
-        self::assertNull($session->title());
+        self::assertNull($session->getTitle());
         self::assertSame(1, $requests->count);
-        self::assertCount(2, $session->getMessages());
+        self::assertCount(2, $agent->getChatHistory()->getMessages());
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('Ciao!', $display);
         self::assertStringNotContainsString('Session title generation failed', $display);
@@ -194,7 +195,7 @@ final class SessionTitleGenerationTest extends TestCase
         $requests = new TitleRequests(['{"title":"Late title"}']);
         $store = new SessionStore(new InMemoryStorage(), 'local');
         $session = $store->create();
-        $session->addMessage(new UserMessage('A subject'));
+        SessionHistory::of($session)->addMessage(new UserMessage('A subject'));
         $generation = new SessionTitleGeneration();
         $generation->schedule($session, $this->agent($requests));
         $store->delete($session->getKey());
@@ -210,14 +211,14 @@ final class SessionTitleGenerationTest extends TestCase
         $store = new SessionStore(new InMemoryStorage(), 'local');
         $session = $store->create();
         $agent = $this->agent($requests);
-        $agent->setChatHistory($session);
+        $agent = ($session)->bindTo($agent);
         $terminal = new VirtualTerminal();
         EventLoop::queue(static fn () => $terminal->simulateInput("A subject\r"));
         EventLoop::delay(0.1, static fn () => $terminal->simulateInput("\x03"));
 
         Tui::make($agent, $terminal, sessionStore: $store)->run();
 
-        self::assertNull($session->title());
+        self::assertNull($session->getTitle());
         self::assertSame(0, $requests->count);
     }
 
@@ -238,7 +239,7 @@ final class SessionTitleGenerationTest extends TestCase
                 return yield from parent::stream(...$messages);
             }
 
-            public function structured(array|Message $messages, string $class, array $response_schema): Message
+            public function structured(array|Message $messages, string $class, array $response_schema): \NeuronAI\Providers\ProviderResponse
             {
                 ++$this->requests->count;
                 $response = array_shift($this->requests->responses);
@@ -246,11 +247,11 @@ final class SessionTitleGenerationTest extends TestCase
                     throw new RuntimeException('Title provider unavailable.');
                 }
 
-                return new AssistantMessage($response);
+                return new \NeuronAI\Providers\ProviderResponse(message: new AssistantMessage($response));
             }
         };
 
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
 
         return $agent;

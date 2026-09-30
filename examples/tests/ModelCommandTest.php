@@ -40,7 +40,7 @@ final class ModelCommandTest extends TestCase
             $storage = new InMemoryStorage();
             $store = new ConfigurationStore($storage, 'demo-user');
             $store->write('theme', 'dark');
-            $agent = new Agent();
+            $agent = (new Agent())->setThreadId('test-thread');
             $agent->setAiProvider(new FakeAIProvider());
             $history = $agent->getChatHistory();
             $history->addMessage(new UserMessage('Keep this conversation'));
@@ -62,8 +62,8 @@ final class ModelCommandTest extends TestCase
             if ($selection) {
                 self::assertSame(['theme' => 'dark'], $beforeSelection);
             }
-            self::assertInstanceOf(OpenAIResponses::class, $agent->resolveProvider());
-            self::assertSame($history, $agent->getChatHistory());
+            self::assertInstanceOf(OpenAIResponses::class, $agent->getProvider());
+            self::assertSame($history->getThreadId(), $agent->getChatHistory()->getThreadId());
             self::assertSame('Keep this conversation', $history->getMessages()[0]->getContent());
             self::assertStringContainsString("Model changed to {$model}.", AnsiUtils::stripAnsiCodes($terminal->getOutput()));
         } finally {
@@ -79,7 +79,7 @@ final class ModelCommandTest extends TestCase
     {
         $store = new ConfigurationStore(new InMemoryStorage(), 'demo-user');
         $store->write('model', 'previous');
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $provider = new FakeAIProvider();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal();
@@ -90,7 +90,7 @@ final class ModelCommandTest extends TestCase
         Tui::make($agent, $terminal, (new Commands())->addCommand(new ModelCommand()), configurationStore: $store)->run();
 
         self::assertSame(['model' => 'previous'], $store->entries());
-        self::assertSame($provider, $agent->resolveProvider());
+        self::assertSame($provider, $agent->getProvider());
         self::assertStringNotContainsString('Model changed to', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
     }
 
@@ -98,7 +98,7 @@ final class ModelCommandTest extends TestCase
     {
         $store = new ConfigurationStore(new InMemoryStorage(), 'demo-user');
         $store->write('model', 'previous');
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $provider = new FakeAIProvider();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal();
@@ -108,7 +108,7 @@ final class ModelCommandTest extends TestCase
         Tui::make($agent, $terminal, (new Commands())->addCommand(new ModelCommand()), configurationStore: $store)->run();
 
         self::assertSame('previous', $store->read('model'));
-        self::assertSame($provider, $agent->resolveProvider());
+        self::assertSame($provider, $agent->getProvider());
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('Unknown provider: unknown.', $display);
         self::assertStringNotContainsString('Model changed to', $display);
@@ -123,7 +123,7 @@ final class ModelCommandTest extends TestCase
             $storage->method('read')->willReturn(new StoredDocument('stored', ['model' => 'previous'], ['userId' => 'demo-user']));
             $storage->method('write')->willThrowException(new RuntimeException('Preferences unavailable'));
             $store = new ConfigurationStore($storage, 'demo-user');
-            $agent = new Agent();
+            $agent = (new Agent())->setThreadId('test-thread');
             $history = $agent->getChatHistory();
             $terminal = new VirtualTerminal();
             EventLoop::queue(static fn () => $terminal->simulateInput("/model openai:gpt-5.4-nano\r"));
@@ -132,7 +132,7 @@ final class ModelCommandTest extends TestCase
             Tui::make($agent, $terminal, (new Commands())->addCommand(new ModelCommand()), configurationStore: $store)->run();
 
             self::assertSame('previous', $store->read('model'));
-            self::assertSame($history, $agent->getChatHistory());
+            self::assertSame($history->getThreadId(), $agent->getChatHistory()->getThreadId());
             $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
             self::assertStringContainsString('Preferences unavailable', $display);
             self::assertStringNotContainsString('Model changed to', $display);

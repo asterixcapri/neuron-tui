@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronTui\History;
 
-use NeuronAI\Tools\ToolInterface;
+use NeuronAI\Tools\ToolCall;
 use NeuronTui\View\DisplayableText;
 
 /**
@@ -24,7 +24,7 @@ final class ToolActivityText
     /**
      * A call whose result has not come back.
      */
-    public static function pending(ToolInterface $tool): string
+    public static function pending(ToolCall $tool): string
     {
         return self::callText($tool) . "\n  ⎿ Running…";
     }
@@ -34,17 +34,17 @@ final class ToolActivityText
      * historical timing is unavailable.
      */
     public static function completed(
-        ToolInterface $tool,
+        ToolCall $tool,
         float $elapsedSeconds,
     ): string {
         return self::callText($tool)
             . "\n  ⎿ "
-            . DisplayableText::preview($tool->getResult(), self::DETAIL_WIDTH)
+            . DisplayableText::preview((string) $tool->getResult(), self::DETAIL_WIDTH)
             . "\n  Done in "
             . self::duration($elapsedSeconds);
     }
 
-    private static function callText(ToolInterface $tool): string
+    private static function callText(ToolCall $tool): string
     {
         $encodedInputs = json_encode(
             $tool->getInputs(),

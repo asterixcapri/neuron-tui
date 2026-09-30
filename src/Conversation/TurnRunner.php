@@ -46,18 +46,18 @@ final class TurnRunner
     /**
      * Sends the message and shows the answer as it comes back.
      *
+     * Returns whether the turn completed without a stop or approval pause.
+     *
      * @param (Closure(): bool)|null $responseWasStopped
      */
-    public function run(Agent $agent, UserMessage $message, ?Closure $responseWasStopped = null): void
+    public function run(Agent $agent, UserMessage $message, ?Closure $responseWasStopped = null): bool
     {
         $toolActivity = $this->view->beginAgentResponse();
         $responseText = '';
         $pendingAgentText = '';
 
         try {
-            $events = $agent
-                ->stream($message)
-                ->events();
+            $events = $agent->stream($message);
 
             foreach ($events as $event) {
                 if ($event instanceof ToolCallChunk) {
@@ -107,6 +107,10 @@ final class TurnRunner
                 );
                 $this->view->paintPendingChanges();
             }
+            $interrupted = $events->getReturn()->isInterrupted();
+            if ($interrupted) {
+                $this->view->showError('Human-in-the-loop interruptions are not supported.');
+            }
         } finally {
             // EOF leaves Neuron's normal message/state persistence in charge.
             $stopped = $responseWasStopped?->__invoke() ?? false;
@@ -118,9 +122,11 @@ final class TurnRunner
 
         $displayableText = DisplayableText::safe($responseText);
 
-        if (!$stopped && trim($displayableText) === '' && !$toolActivity->hasActivity()) {
+        if (!$interrupted && !$stopped && trim($displayableText) === '' && !$toolActivity->hasActivity()) {
             $this->workingIndicator->stop();
             $this->view->showEmptyResponse();
         }
+
+        return !$interrupted && !$stopped;
     }
 }

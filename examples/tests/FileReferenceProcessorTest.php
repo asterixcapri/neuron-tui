@@ -58,7 +58,7 @@ final class FileReferenceProcessorTest extends TestCase
     public function testTuiSendsFileContentsButDisplaysAndRecallsTheOriginalInput(): void
     {
         $provider = new FakeAIProvider(new AssistantMessage('The file contains demo text.'));
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $inputHistory = new InputHistory(new InMemoryStorage());

@@ -13,6 +13,7 @@
 /CONTEXT.md export-ignore
 /skills-lock.json export-ignore
 /phpstan.neon export-ignore
+/phpstan export-ignore
 /phpunit.xml.dist export-ignore
 
 # Consumers resolve their own dependencies

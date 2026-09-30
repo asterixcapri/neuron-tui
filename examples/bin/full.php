@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use NeuronAI\HttpClient\AmpHttpClient;
+use NeuronAI\HttpClient\Amp\AmpHttpClient;
 use NeuronInteraction\Command\ClearCommand;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Command\HelpCommand;
@@ -46,9 +46,9 @@ $httpClient = new StoppableHttpClient(
     },
 );
 
-$agent = DemoAgent::make();
+$agent = DemoAgent::make()->setThreadId(bin2hex(random_bytes(16)));
 $agent->setAiProvider(AIProviderFactory::create($modelId, $httpClient));
-$agent->setChatHistory($sessionStore->create());
+$agent = ($sessionStore->create())->bindTo($agent);
 
 $commands = (new Commands())->addCommand([
     new ClearCommand(),

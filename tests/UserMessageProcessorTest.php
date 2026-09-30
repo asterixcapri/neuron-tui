@@ -25,6 +25,7 @@ use NeuronInteraction\Message\UserMessageProcessorInterface;
 use NeuronInteraction\Message\UserMessageProcessors;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\InMemoryStorage;
+use NeuronTui\Tests\History\SessionHistory;
 use NeuronTui\Tui;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
@@ -39,7 +40,7 @@ final class UserMessageProcessorTest extends TestCase
     public function testSingleAndArrayRegistrationsComposeWithoutChangingInputHistory(): void
     {
         $provider = new FakeAIProvider(new AssistantMessage('Reply.'));
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $inputHistory = new InputHistory(new InMemoryStorage());
@@ -63,7 +64,7 @@ final class UserMessageProcessorTest extends TestCase
 
     public function testLoadedUserMessagesUseTheSamePresentationButAssistantMessagesDoNot(): void
     {
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->getChatHistory()->addMessage(new UserMessage('B[A[Earlier]]'));
         $agent->getChatHistory()->addMessage(new AssistantMessage('B[A[Reply]]'));
         $terminal = new VirtualTerminal(rows: 30);
@@ -83,7 +84,7 @@ final class UserMessageProcessorTest extends TestCase
     public function testCommandsBypassPreparationIncludingThePromptsTheyProduce(): void
     {
         $provider = new FakeAIProvider(new AssistantMessage('Done.'));
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $command = new class implements CommandInterface {
             public function name(): string
@@ -113,7 +114,7 @@ final class UserMessageProcessorTest extends TestCase
     public function testPreparationFailureLeavesTheDraftAndDoesNotContactTheProvider(): void
     {
         $provider = new FakeAIProvider();
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $processor = new class implements UserMessageProcessorInterface {
             public function forAgent(UserMessage $input): UserMessage
@@ -145,10 +146,10 @@ final class UserMessageProcessorTest extends TestCase
                 \Amp\delay(0.15);
                 yield new TextChunk('reply', $response->getContent() ?? '');
 
-                return $response;
+                return new \NeuronAI\Providers\ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $queued = '';
@@ -174,12 +175,12 @@ final class UserMessageProcessorTest extends TestCase
             $session = $store->create();
             $titleMessage = new UserMessage('B[A[stored-payload]]');
             $titleMessage->setMetadata(['title-source' => 'original']);
-            $session->addMessage($titleMessage);
+            SessionHistory::of($session)->addMessage($titleMessage);
             $session->setTitle('Readable session');
             for ($index = 0; $index < 5; ++$index) {
-                $store->create()->addMessage(new UserMessage('Other session ' . $index));
+                SessionHistory::of($store->create())->addMessage(new UserMessage('Other session ' . $index));
             }
-            $agent = new Agent();
+            $agent = (new Agent())->setThreadId('test-thread');
             $terminal = new VirtualTerminal(rows: 30);
             $processor = $this->createMock(UserMessageProcessorInterface::class);
             $processor->expects(self::never())->method('forAgent');
@@ -187,7 +188,7 @@ final class UserMessageProcessorTest extends TestCase
                 static function (UserMessage $message): UserMessage {
                     $result = clone $message;
                     if ($message->getContent() === 'stored-payload') {
-                        self::assertSame('original', $message->jsonSerialize()['title-source']);
+                        self::assertSame('original', $message->getMetadata('title-source'));
                         $result->setContents('Readable session');
                     }
 
@@ -195,6 +196,7 @@ final class UserMessageProcessorTest extends TestCase
                 },
             );
             $display = '';
+            $tui = Tui::make($agent, $terminal, commands: (new Commands())->addCommand(new ResumeCommand($name)), sessionStore: $store, userMessageProcessors: (new UserMessageProcessors())->addProcessor([$processor, new EnvelopeProcessor('A'), new EnvelopeProcessor('B')]));
             EventLoop::queue(static fn () => $terminal->simulateInput($name . "\r"));
             EventLoop::delay(0.05, static fn () => $terminal->simulateInput('Readable'));
             EventLoop::delay(0.08, static function () use ($terminal, &$display): void {
@@ -203,13 +205,11 @@ final class UserMessageProcessorTest extends TestCase
             });
             EventLoop::delay(0.1, static fn () => $terminal->simulateInput("\x03"));
 
-            Tui::make($agent, $terminal, commands: (new Commands())->addCommand(new ResumeCommand($name)), sessionStore: $store, userMessageProcessors: (new UserMessageProcessors())->addProcessor([$processor, new EnvelopeProcessor('A'), new EnvelopeProcessor('B')]))
-
-                ->run();
+            $tui->run();
 
             self::assertStringContainsString('Readable session', $display);
             self::assertStringNotContainsString('stored-payload', $display);
-            self::assertSame('B[A[stored-payload]]', $agent->getChatHistory()->getMessages()[0]->getContent());
+            self::assertSame('B[A[stored-payload]]', $tui->agent()->getChatHistory()->getMessages()[0]->getContent());
             self::assertSame('B[A[stored-payload]]', $store->read($session->getKey())?->getMessages()[0]->getContent());
         }
     }
@@ -250,7 +250,7 @@ final class UserMessageProcessorTest extends TestCase
         });
         EventLoop::delay(0.1, static fn () => $terminal->simulateInput("\x03"));
 
-        Tui::make(new Agent(), $terminal, commands: (new Commands())->addCommand($command), userMessageProcessors: (new UserMessageProcessors())->addProcessor(new EnvelopeProcessor('A')))
+        Tui::make((new Agent())->setThreadId('test-thread'), $terminal, commands: (new Commands())->addCommand($command), userMessageProcessors: (new UserMessageProcessors())->addProcessor(new EnvelopeProcessor('A')))
             ->run();
 
         self::assertStringContainsString('Readable label', $display);
@@ -283,7 +283,7 @@ final class UserMessageProcessorTest extends TestCase
             }
         };
         $provider = new FakeAIProvider(new AssistantMessage('One.'), new AssistantMessage('Two.'));
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         EventLoop::queue(static fn () => $terminal->simulateInput("/photos\r"));
@@ -292,8 +292,8 @@ final class UserMessageProcessorTest extends TestCase
         Tui::make($agent, $terminal, commands: (new Commands())->addCommand($command))->run();
 
         self::assertCount(2, $provider->getRecorded());
-        self::assertSame($first, $provider->getRecorded()[0]->messages[0]);
-        self::assertSame($second, $provider->getRecorded()[1]->messages[2]);
+        self::assertEquals($first, $provider->getRecorded()[0]->messages[0]);
+        self::assertEquals($second, $provider->getRecorded()[1]->messages[2]);
         self::assertStringContainsString('[Image]', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
     }
 
@@ -305,7 +305,7 @@ final class UserMessageProcessorTest extends TestCase
         $message->addContent($image);
         $inputs->record($message);
         $provider = new FakeAIProvider(new AssistantMessage('Received.'));
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         EventLoop::queue(static fn () => $terminal->simulateInput("\x1b[A\r"));
@@ -341,7 +341,7 @@ final class UserMessageProcessorTest extends TestCase
             }
         };
         $provider = new FakeAIProvider(new AssistantMessage('Received.'));
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         EventLoop::queue(static fn () => $terminal->simulateInput("Original request\r"));

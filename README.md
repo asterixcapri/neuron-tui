@@ -14,12 +14,12 @@ Requires PHP 8.4.1+ and an interactive terminal.
 
 ## Installation
 
-The `0.8.x` branch supports Neuron AI 3.
+The `0.9.x` branch supports Neuron AI 4. The `0.8.x` branch supports Neuron AI 3.
 
 Run this command in your application's directory:
 
 ```bash
-composer require asterixcapri/neuron-tui
+composer require asterixcapri/neuron-tui:^0.9@dev
 ```
 
 Composer also installs Neuron Interaction and the other required dependencies.
@@ -36,7 +36,7 @@ implementation:
 use NeuronAI\Agent\Agent;
 use NeuronTui\Tui;
 
-$agent = new Agent();
+$agent = Agent::make(workflowId: bin2hex(random_bytes(16)));
 $agent->setAiProvider($provider);
 
 Tui::make($agent)->run();
@@ -98,6 +98,7 @@ staged Git diff to the Agent for review:
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Command\CommandAdapterInterface;
 use NeuronInteraction\Command\CommandInterface;
+use NeuronAI\Chat\Messages\UserMessage;
 use NeuronTui\Tui;
 
 final class ReviewCommand implements CommandInterface
@@ -123,7 +124,7 @@ final class ReviewCommand implements CommandInterface
             return;
         }
 
-        $adapter->promptAgent("Review this diff:\n\n" . $diff);
+        $adapter->promptAgent(new UserMessage("Review this diff:\n\n" . $diff));
     }
 }
 
@@ -158,7 +159,7 @@ use NeuronTui\Tui;
 $storage = new FileStorage(__DIR__ . '/.storage');
 $sessionStore = new SessionStore($storage, 'local-user');
 
-$agent->setChatHistory($sessionStore->create());
+$agent = $sessionStore->create()->bindTo($agent);
 
 $commands = (new Commands())->addCommand([
     new ClearCommand(),
@@ -173,7 +174,9 @@ Tui::make(
 ```
 
 Use a user identifier appropriate to your application in place of `local-user`.
-By default, Sessions last only for the current run.
+By default, Sessions last only for the current run. Session selection can replace
+the Agent instance; use `$tui->agent()` to retrieve the currently selected Agent.
+Always retain the Agent copy returned by `Session::bindTo()`.
 
 ## Configuration
 
@@ -224,7 +227,7 @@ streaming with Escape. Install `amphp/http-client` in your application, then
 configure the provider with this client:
 
 ```php
-use NeuronAI\HttpClient\AmpHttpClient;
+use NeuronAI\HttpClient\Amp\AmpHttpClient;
 use NeuronAI\Providers\OpenAI\Responses\OpenAIResponses;
 use NeuronInteraction\Http\StoppableHttpClient;
 use NeuronInteraction\Http\StopSignal;

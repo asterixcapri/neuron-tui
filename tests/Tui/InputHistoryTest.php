@@ -22,6 +22,7 @@ use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\FileStorage;
 use NeuronInteraction\Storage\InMemoryStorage;
+use NeuronTui\Tests\History\SessionHistory;
 use NeuronTui\Tui;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
@@ -40,10 +41,10 @@ final class InputHistoryTest extends TestCase
                 \Amp\delay(0.3);
                 yield new TextChunk('slow-stream', 'A slow answer.');
 
-                return $response;
+                return new \NeuronAI\Providers\ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $storage = new InMemoryStorage();
         $terminal = new VirtualTerminal(rows: 24);
@@ -136,10 +137,10 @@ final class InputHistoryTest extends TestCase
                     $response->getContent() ?? '',
                 );
 
-                return $response;
+                return new \NeuronAI\Providers\ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $storage = new InMemoryStorage();
         $terminal = new VirtualTerminal(rows: 30);
@@ -189,11 +190,11 @@ final class InputHistoryTest extends TestCase
             new AssistantMessage('First answer.'),
             new AssistantMessage('Second answer.'),
         );
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
-        $agent->setChatHistory($sessionStore->create());
+        $agent = ($sessionStore->create())->bindTo($agent);
         $terminal = new VirtualTerminal(rows: 24);
 
         EventLoop::queue(
@@ -233,12 +234,12 @@ final class InputHistoryTest extends TestCase
     public function testResumingASessionKeepsItsInputHistoryAvailable(): void
     {
         $provider = new FakeAIProvider(new AssistantMessage('A new answer.'));
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $storage = new InMemoryStorage();
         $earlier = (new SessionStore($storage, 'test-user'))->create();
-        $earlier->addMessage(new UserMessage('Earlier subject.'));
-        $earlier->addMessage(new AssistantMessage('Earlier answer.'));
+        SessionHistory::of($earlier)->addMessage(new UserMessage('Earlier subject.'));
+        SessionHistory::of($earlier)->addMessage(new AssistantMessage('Earlier answer.'));
         (new InputHistory($storage))->record(new UserMessage('Remember across resume'));
         $terminal = new VirtualTerminal(rows: 24);
 
@@ -279,7 +280,7 @@ final class InputHistoryTest extends TestCase
         $firstProvider = new FakeAIProvider(
             new AssistantMessage('First answer.'),
         );
-        $firstAgent = new Agent();
+        $firstAgent = (new Agent())->setThreadId('test-thread');
         $firstAgent->setAiProvider($firstProvider);
         $firstTerminal = new VirtualTerminal(rows: 24);
 
@@ -297,7 +298,7 @@ final class InputHistoryTest extends TestCase
         $secondProvider = new FakeAIProvider(
             new AssistantMessage('Second answer.'),
         );
-        $secondAgent = new Agent();
+        $secondAgent = (new Agent())->setThreadId('test-thread');
         $secondAgent->setAiProvider($secondProvider);
         $secondTerminal = new VirtualTerminal(rows: 24);
 
@@ -327,7 +328,7 @@ final class InputHistoryTest extends TestCase
             $firstProvider = new FakeAIProvider(
                 new AssistantMessage('First answer.'),
             );
-            $firstAgent = new Agent();
+            $firstAgent = (new Agent())->setThreadId('test-thread');
             $firstAgent->setAiProvider($firstProvider);
             $firstTerminal = new VirtualTerminal(rows: 24);
 
@@ -346,7 +347,7 @@ final class InputHistoryTest extends TestCase
             $secondProvider = new FakeAIProvider(
                 new AssistantMessage('Second answer.'),
             );
-            $secondAgent = new Agent();
+            $secondAgent = (new Agent())->setThreadId('test-thread');
             $secondAgent->setAiProvider($secondProvider);
             $secondTerminal = new VirtualTerminal(rows: 24);
 
@@ -389,7 +390,7 @@ final class InputHistoryTest extends TestCase
             new AssistantMessage('First answer.'),
             new AssistantMessage('Second answer.'),
         );
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 24);
 
@@ -422,7 +423,7 @@ final class InputHistoryTest extends TestCase
     public function testUpRecallsTheNewestSubmittedMessageAtItsEnd(): void
     {
         $provider = new FakeAIProvider(new AssistantMessage('An answer.'));
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $storage = new InMemoryStorage();
         $terminal = new VirtualTerminal(rows: 24);
@@ -454,7 +455,7 @@ final class InputHistoryTest extends TestCase
     public function testUpWithNoStoredInputsLeavesTheComposerEmpty(): void
     {
         $provider = new FakeAIProvider(new AssistantMessage('An answer.'));
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $storage = new InMemoryStorage();
         $terminal = new VirtualTerminal(rows: 24);
@@ -659,7 +660,7 @@ final class InputHistoryTest extends TestCase
 
     public function testPickerArrowsDoNotNavigateInputHistory(): void
     {
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider(new FakeAIProvider());
         $storage = new InMemoryStorage();
         (new InputHistory($storage))->record(new UserMessage('stored input'));
@@ -885,7 +886,7 @@ final readonly class InputHistoryTuiFixture
         $this->provider = new FakeAIProvider(
             new AssistantMessage('An answer.'),
         );
-        $this->agent = new Agent();
+        $this->agent = (new Agent())->setThreadId('test-thread');
         $this->agent->setAiProvider($this->provider);
         $this->storage = new InMemoryStorage();
         $inputs = new InputHistory($this->storage);

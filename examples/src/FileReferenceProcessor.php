@@ -61,11 +61,7 @@ final readonly class FileReferenceProcessor implements UserMessageProcessorInter
             $contents[] = clone $block;
         }
 
-        // setContents(array) appends blocks; a single block replaces the contents.
-        $display->setContents(array_shift($contents) ?? '');
-        foreach ($contents as $block) {
-            $display->addContent($block);
-        }
+        $display->setContents($contents);
 
         return $display;
     }

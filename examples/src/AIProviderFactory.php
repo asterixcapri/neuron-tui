@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronTuiDemo;
 
-use NeuronAI\HttpClient\AmpHttpClient;
+use NeuronAI\HttpClient\Amp\AmpHttpClient;
 use NeuronAI\HttpClient\HttpClientInterface;
 use NeuronAI\Providers\AIProviderInterface;
 use NeuronAI\Providers\Anthropic\Anthropic;

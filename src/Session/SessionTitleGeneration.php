@@ -28,7 +28,7 @@ final class SessionTitleGeneration
     public function schedule(Session $session, Agent $agent): void
     {
         $key = $session->getKey();
-        if ($session->title() !== null || isset($this->running[$key])) {
+        if ($session->getTitle() !== null || isset($this->running[$key])) {
             return;
         }
 
@@ -42,7 +42,7 @@ final class SessionTitleGeneration
                 return;
             }
             $session->setMetadata('titleGenerationAttempts', (string) ($attempts + 1));
-            $provider = clone $agent->resolveProvider();
+            $provider = clone $agent->getProvider();
         } catch (Throwable) {
             return;
         }
@@ -52,7 +52,7 @@ final class SessionTitleGeneration
             try {
                 $generator = new SessionTitleGenerator($provider, $session);
                 $title = $generator->generate();
-                if ($title !== null && $session->title() === null) {
+                if ($title !== null && $session->getTitle() === null) {
                     $session->setTitle($title);
                 }
             } catch (Throwable) {

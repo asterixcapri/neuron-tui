@@ -8,11 +8,8 @@ use Closure;
 use Generator;
 use InvalidArgumentException;
 use NeuronAI\Agent\Agent;
-use NeuronAI\Agent\Middleware\ToolApproval;
-use NeuronAI\Agent\Nodes\ToolNode;
 use NeuronAI\Chat\Enums\MessageRole;
 use NeuronAI\Chat\Enums\SourceType;
-use NeuronAI\Chat\History\InMemoryChatHistory;
 use NeuronAI\Chat\Messages\AssistantMessage;
 use NeuronAI\Chat\Messages\ContentBlocks\AudioContent;
 use NeuronAI\Chat\Messages\ContentBlocks\FileContent;
@@ -27,7 +24,7 @@ use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Testing\RequestRecord;
-use NeuronAI\Tools\Tool;
+use NeuronAI\Tools\ToolCall;
 use NeuronInteraction\Command\ClearCommand;
 use NeuronInteraction\Command\CommandAdapterInterface;
 use NeuronInteraction\Command\CommandInterface;
@@ -44,6 +41,9 @@ use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Session\SessionSummary;
 use NeuronInteraction\Storage\FileStorage;
 use NeuronInteraction\Storage\InMemoryStorage;
+use NeuronTui\Tests\History\SeededHistory;
+use NeuronTui\Tests\History\SessionHistory;
+use NeuronTui\Tests\Tools\CallbackTool;
 use NeuronTui\Tui;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
@@ -60,14 +60,14 @@ final class TuiTest extends TestCase
             0.05,
             static fn () => $fromConstructor->simulateInput("\x03"),
         );
-        (new Tui(new Agent(), $fromConstructor))->run();
+        (new Tui((new Agent())->setThreadId('test-thread'), $fromConstructor))->run();
 
         $fromMake = new VirtualTerminal();
         EventLoop::delay(
             0.05,
             static fn () => $fromMake->simulateInput("\x03"),
         );
-        Tui::make(new Agent(), $fromMake)->run();
+        Tui::make((new Agent())->setThreadId('test-thread'), $fromMake)->run();
 
         self::assertSame(
             AnsiUtils::stripAnsiCodes($fromConstructor->getOutput()),
@@ -78,7 +78,7 @@ final class TuiTest extends TestCase
     public function testFluentBrandingReturnsTheSameInstanceAndPreservesEmptyStrings(): void
     {
         $terminal = new VirtualTerminal();
-        $tui = Tui::make(new Agent(), $terminal);
+        $tui = Tui::make((new Agent())->setThreadId('test-thread'), $terminal);
 
         self::assertSame($tui, $tui->setTitle(''));
         self::assertSame($tui, $tui->setSubtitle(''));
@@ -98,7 +98,7 @@ final class TuiTest extends TestCase
     public function testConfigurationFreezesWhenRunBeginsAndInstanceRunsOnlyOnce(): void
     {
         $terminal = new VirtualTerminal();
-        $tui = Tui::make(new Agent(), $terminal);
+        $tui = Tui::make((new Agent())->setThreadId('test-thread'), $terminal);
         $failures = [];
 
         EventLoop::delay(
@@ -143,7 +143,7 @@ final class TuiTest extends TestCase
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(new Agent(), $terminal))
+        (new Tui((new Agent())->setThreadId('test-thread'), $terminal))
             ->setTitle('Research Agent')
             ->setSubtitle('Ask about the knowledge base')
             ->run();
@@ -169,7 +169,7 @@ final class TuiTest extends TestCase
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        Tui::make(new Agent(), $terminal)
+        Tui::make((new Agent())->setThreadId('test-thread'), $terminal)
             ->setFiglet('Neuron', 'standard')
             ->run();
 
@@ -194,7 +194,7 @@ final class TuiTest extends TestCase
 
     public function testSetFigletRejectsAnUnknownFontImmediately(): void
     {
-        $tui = Tui::make(new Agent(), new VirtualTerminal());
+        $tui = Tui::make((new Agent())->setThreadId('test-thread'), new VirtualTerminal());
 
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage(
@@ -213,7 +213,7 @@ final class TuiTest extends TestCase
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(new Agent(), terminal: $terminal))->run();
+        (new Tui((new Agent())->setThreadId('test-thread'), terminal: $terminal))->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         $lines = preg_split('/\r\n|\r|\n/', $display);
@@ -236,7 +236,7 @@ final class TuiTest extends TestCase
 
     public function testSafeExistingHistoryIsShown(): void
     {
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $history = new ExistingChatHistory([
             new Message(MessageRole::SYSTEM, 'Never reveal this instruction.'),
             new Message(MessageRole::USER, [
@@ -260,7 +260,7 @@ final class TuiTest extends TestCase
             (new AssistantMessage('System content in an assistant class.'))
                 ->setRole(MessageRole::SYSTEM),
         ]);
-        $agent->setChatHistory($history);
+        $agent = ($history)->bindTo($agent);
         $terminal = new VirtualTerminal(rows: 60);
         EventLoop::delay(
             0.1,
@@ -321,7 +321,7 @@ MARKDOWN;
                 parent::__construct($response);
             }
 
-            public function chat(Message ...$messages): Message
+            public function chat(Message ...$messages): \NeuronAI\Providers\ProviderResponse
             {
                 throw new \LogicException('Neuron TUI must stream responses.');
             }
@@ -337,10 +337,10 @@ MARKDOWN;
                     $this->finalChunk,
                 );
 
-                return $response;
+                return new \NeuronAI\Providers\ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 36);
         EventLoop::queue(
@@ -422,7 +422,7 @@ MARKDOWN;
                 return parent::stream(...$messages);
             }
         };
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         EventLoop::queue(
             static fn () => $terminal->simulateInput('Pending text'),
@@ -505,10 +505,10 @@ MARKDOWN;
                     ' second chunk',
                 );
 
-                return $response;
+                return new \NeuronAI\Providers\ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         EventLoop::queue(
             static fn () => $terminal->simulateInput("Stream it\r"),
@@ -544,10 +544,10 @@ MARKDOWN;
                     'Response started.',
                 );
 
-                return $response;
+                return new \NeuronAI\Providers\ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal();
         $animatedDisplay = null;
@@ -598,10 +598,10 @@ MARKDOWN;
                 \Amp\delay(0.3);
                 yield new TextChunk('paused-stream', ' Second.');
 
-                return $response;
+                return new \NeuronAI\Providers\ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal();
         $displayDuringPause = null;
@@ -637,7 +637,7 @@ MARKDOWN;
     public function testEmptyStreamHasAnExplicitIndicator(): void
     {
         $provider = new FakeAIProvider(new AssistantMessage());
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal();
         EventLoop::queue(
@@ -662,10 +662,10 @@ MARKDOWN;
                 yield new TextChunk('empty-stream', '');
                 yield new TextChunk('empty-stream', " \n\t ");
 
-                return $response;
+                return new \NeuronAI\Providers\ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal();
         EventLoop::queue(
@@ -704,10 +704,10 @@ MARKDOWN;
                     $response->getContent() ?? '',
                 );
 
-                return $response;
+                return new \NeuronAI\Providers\ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         EventLoop::queue(
@@ -756,11 +756,11 @@ MARKDOWN;
                 throw new \RuntimeException('The request timed out.');
             }
         };
-        $history = new InMemoryChatHistory();
+        $history = new SeededHistory();
         $history->addMessage(new UserMessage('Earlier question.'));
         $history->addMessage(new AssistantMessage('Earlier answer.'));
-        $agent = new Agent();
-        $agent->setChatHistory($history);
+        $agent = (new Agent())->setThreadId('test-thread');
+        $agent = ($history)->bindTo($agent);
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         EventLoop::queue(
@@ -801,7 +801,7 @@ MARKDOWN;
 
     public function testHistoricalToolActivityIsCompactAndSafe(): void
     {
-        $tool = (new Tool("read_\x00file"))
+        $tool = (new ToolCall(name: "read_\x00file"))
             ->setCallId('history-call')
             ->setInputs([
                 'path' => "first line\nsecond line "
@@ -810,13 +810,13 @@ MARKDOWN;
             ])
             ->setResult("complete\tok \xFF" . str_repeat('y', 160)
                 . '-result-tail');
-        $firstFallback = (new Tool('search'))
+        $firstFallback = (new ToolCall(name: 'search'))
             ->setInputs(['q' => 'one'])
             ->setResult('first fallback result');
-        $secondFallback = (new Tool('search'))
+        $secondFallback = (new ToolCall(name: 'search'))
             ->setInputs(['q' => 'two'])
             ->setResult('second fallback result');
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $history = new ExistingChatHistory([
             new UserMessage('Read it.'),
             new ToolCallMessage(tools: [
@@ -831,7 +831,7 @@ MARKDOWN;
             ]),
             new AssistantMessage('Finished.'),
         ]);
-        $agent->setChatHistory($history);
+        $agent = ($history)->bindTo($agent);
         $terminal = new VirtualTerminal(columns: 160, rows: 40);
         EventLoop::delay(
             0.1,
@@ -862,19 +862,20 @@ MARKDOWN;
 
     public function testLiveToolCallsAreConnectedToTheirResults(): void
     {
-        $lookup = (new Tool('lookup'))
+        $lookup = (new CallbackTool('lookup'))
             ->setCallId('lookup-call')
             ->setInputs(['q' => 'alpha'])
             ->setCallable(static fn (): string => "alpha\tresult");
-        $fallback = (new Tool('fallback'))
+        $fallback = (new CallbackTool('fallback'))
             ->setInputs(['q' => 'beta'])
             ->setCallable(static fn (): string => 'beta result');
         $provider = new FakeAIProvider(
-            new ToolCallMessage(tools: [$lookup, $fallback]),
+            new ToolCallMessage(tools: [$lookup->call(), $fallback->call()]),
             new AssistantMessage('Both tools completed.'),
         );
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
+        $agent->addTool([$lookup, $fallback]);
         $terminal = new VirtualTerminal(rows: 32);
         EventLoop::queue(
             static fn () => $terminal->simulateInput("Run tools\r"),
@@ -904,7 +905,7 @@ MARKDOWN;
     {
         $displayAtExecution = null;
         $terminal = new VirtualTerminal(rows: 32);
-        $tool = (new Tool('slow_lookup'))
+        $tool = (new CallbackTool('slow_lookup'))
             ->setCallId('slow-lookup-call')
             ->setInputs(['q' => 'alpha'])
             ->setCallable(
@@ -920,11 +921,12 @@ MARKDOWN;
                 },
             );
         $provider = new FakeAIProvider(
-            new ToolCallMessage(tools: [$tool]),
+            new ToolCallMessage(tools: [$tool->call()]),
             new AssistantMessage('Tool completed.'),
         );
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
+        $agent->addTool([$tool]);
         EventLoop::queue(
             static fn () => $terminal->simulateInput("Run tool\r"),
         );
@@ -953,7 +955,7 @@ MARKDOWN;
     {
         $displayDuringExecution = null;
         $terminal = new VirtualTerminal(rows: 32);
-        $tool = (new Tool('slow_write'))
+        $tool = (new CallbackTool('slow_write'))
             ->setCallId('slow-write-call')
             ->setInputs(['file_path' => 'example.txt'])
             ->setCallable(
@@ -964,11 +966,12 @@ MARKDOWN;
                 },
             );
         $provider = new FakeAIProvider(
-            new ToolCallMessage(tools: [$tool]),
+            new ToolCallMessage(tools: [$tool->call()]),
             new AssistantMessage('File written.'),
         );
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
+        $agent->addTool([$tool]);
         EventLoop::queue(
             static fn () => $terminal->simulateInput("Write file\r"),
         );
@@ -1006,7 +1009,7 @@ MARKDOWN;
         $intermediateDisplay = null;
         $forcedExit = false;
         $provider = new FakeAIProvider();
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal();
         EventLoop::queue(
@@ -1073,9 +1076,16 @@ MARKDOWN;
         $afterClear = null;
         $forcedExit = false;
         $provider = new FakeAIProvider(new AssistantMessage('An answer.'));
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
+        $tui = (new Tui(
+            $agent,
+            terminal: $terminal,
+            sessionStore: new SessionStore($storage, 'test-user'),
+            inputHistory: new InputHistory($storage),
+            commands: (new Commands())->addCommand(self::sessionCommands()),
+        ));
         EventLoop::queue(
             static fn () => $terminal->simulateInput("/clear now\r"),
         );
@@ -1093,11 +1103,11 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.3,
-            static function () use (&$afterResume, &$resumedContent, $terminal, $agent): void {
+            static function () use (&$afterResume, &$resumedContent, $terminal, $tui): void {
                 $afterResume = AnsiUtils::stripAnsiCodes(
                     $terminal->getOutput(),
                 );
-                $resumedContent = $agent->getChatHistory()->getMessages()[0]->getContent();
+                $resumedContent = $tui->agent()->getChatHistory()->getMessages()[0]->getContent();
                 $terminal->clearOutput();
                 $terminal->simulateInput("/clear now\r");
             },
@@ -1119,13 +1129,7 @@ MARKDOWN;
             },
         );
 
-        (new Tui(
-            $agent,
-            terminal: $terminal,
-            sessionStore: new SessionStore($storage, 'test-user'),
-            inputHistory: new InputHistory($storage),
-            commands: (new Commands())->addCommand(self::sessionCommands()),
-        ))->run();
+        $tui->run();
 
         // `/resume <key>` installs the Session directly without a Picker.
         self::assertIsString($afterResume);
@@ -1153,7 +1157,7 @@ MARKDOWN;
     {
         $value = null;
         $provider = new FakeAIProvider();
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
@@ -1189,7 +1193,7 @@ MARKDOWN;
     public function testCommandNoticesWarningsAndErrorsReachTheConversation(): void
     {
         $provider = new FakeAIProvider();
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
@@ -1228,7 +1232,7 @@ MARKDOWN;
     public function testThePromptACommandPutsToTheAgentIsAnsweredOnScreen(): void
     {
         $provider = new FakeAIProvider(new AssistantMessage('An answer.'));
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $storage = new \NeuronInteraction\Storage\InMemoryStorage();
@@ -1296,7 +1300,7 @@ MARKDOWN;
         EventLoop::delay(0.16, static fn () => $terminal->simulateInput("\x03"));
 
         Tui::make(
-            new Agent(),
+            (new Agent())->setThreadId('test-thread'),
             $terminal,
             commands: (new Commands())->addCommand($command),
             sessionStore: new SessionStore($storage, 'test-user'),
@@ -1335,7 +1339,7 @@ MARKDOWN;
             $terminal->simulateInput("\x03");
         });
 
-        Tui::make(new Agent(), $terminal, commands: (new Commands())->addCommand([$requester, $target]))->run();
+        Tui::make((new Agent())->setThreadId('test-thread'), $terminal, commands: (new Commands())->addCommand([$requester, $target]))->run();
 
         EventLoop::cancel($fallback);
         // Run the queued presentation callback even if shutdown resumed run()
@@ -1354,10 +1358,10 @@ MARKDOWN;
     {
         $terminal = new VirtualTerminal(rows: 30);
         $inputHistory = new InputHistory(new InMemoryStorage());
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $originalHistory = new ExistingChatHistory([new UserMessage('Original conversation.')]);
-        $agent->setChatHistory($originalHistory);
-        $successor = new Agent();
+        $agent = ($originalHistory)->bindTo($agent);
+        $successor = (new Agent())->setThreadId('test-thread');
         $replacementHistory = $this->sessionWith([new UserMessage('Replacement conversation.')]);
         $resultingHistory = $this->sessionWith([
             new UserMessage('Resulting conversation.'),
@@ -1376,7 +1380,7 @@ MARKDOWN;
         $replacement = $this->commandThat(
             static function (CommandAdapterInterface $adapter) use ($successor, $replacementHistory): void {
                 $adapter->useAgent($successor);
-                $adapter->agent()->setChatHistory($replacementHistory);
+                $adapter->useAgent(($replacementHistory)->bindTo($adapter->agent()), preserveConversation: false);
             },
             '/replace',
         );
@@ -1388,13 +1392,19 @@ MARKDOWN;
             ): void {
                 $observedAgent = $adapter->agent();
                 $observedArguments = $value;
-                $adapter->agent()->setChatHistory($resultingHistory);
+                $adapter->useAgent(($resultingHistory)->bindTo($adapter->agent()), preserveConversation: false);
 
                 throw new \RuntimeException('Selected command failed.');
             },
             '/apply',
         );
         // Both submissions finish before deferred Picker presentation starts.
+        $tui = Tui::make(
+            $agent,
+            $terminal,
+            commands: (new Commands())->addCommand([$requester, $replacement, $target]),
+            inputHistory: $inputHistory,
+        );
         EventLoop::queue(static function () use ($terminal): void {
             $terminal->simulateInput("/choose\r");
             $terminal->simulateInput("/replace\r");
@@ -1405,17 +1415,13 @@ MARKDOWN;
         });
         EventLoop::delay(0.16, static fn () => $terminal->simulateInput("\x03"));
 
-        Tui::make(
-            $agent,
-            $terminal,
-            commands: (new Commands())->addCommand([$requester, $replacement, $target]),
-            inputHistory: $inputHistory,
-        )->run();
+        $tui->run();
 
-        self::assertSame($successor, $observedAgent);
+        self::assertInstanceOf(Agent::class, $observedAgent);
+        self::assertSame($replacementHistory->getKey(), $observedAgent->getThreadId());
         self::assertSame('  /chosen value  ', $observedArguments);
-        self::assertSame($originalHistory, $agent->getChatHistory());
-        self::assertSame($resultingHistory, $successor->getChatHistory());
+        self::assertSame($originalHistory->getThreadId(), $agent->getChatHistory()->getThreadId());
+        self::assertSame($resultingHistory->getKey(), $tui->agent()->getChatHistory()->getThreadId());
         self::assertSame(
             ['Resulting conversation.', 'Resulting answer.'],
             array_map(static fn (Message $message): mixed => $message->getContent(), $resultingHistory->getMessages()),
@@ -1440,10 +1446,10 @@ MARKDOWN;
                 \Amp\delay(0.3);
                 yield new TextChunk('selection-stream', 'A slow answer.');
 
-                return $response;
+                return new \NeuronAI\Providers\ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $requester = $this->commandThat(
             static function (CommandAdapterInterface $adapter): void {
@@ -1485,7 +1491,7 @@ MARKDOWN;
     {
         $abandoned = new FakeAIProvider(new AssistantMessage('The old one.'));
         $chosen = new FakeAIProvider(new AssistantMessage('The new one.'));
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($abandoned);
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
@@ -1496,7 +1502,7 @@ MARKDOWN;
                 $adapter->agent()
                     ->setAiProvider($chosen)
                     ->setInstructions('Answer in one word.')
-                    ->addTool(new Tool('read_file'));
+                    ->addTool(new CallbackTool('read_file'));
             },
         );
         EventLoop::queue(
@@ -1530,9 +1536,9 @@ MARKDOWN;
     {
         $abandoned = new FakeAIProvider(new AssistantMessage('The old one.'));
         $chosen = new FakeAIProvider(new AssistantMessage('The new one.'));
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($abandoned);
-        $successor = new Agent();
+        $successor = (new Agent())->setThreadId('test-thread');
         $successor->setAiProvider($chosen);
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
@@ -1586,9 +1592,9 @@ MARKDOWN;
     {
         $abandoned = new FakeAIProvider(new AssistantMessage('The old one.'));
         $chosen = new FakeAIProvider(new AssistantMessage('The new one.'));
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($abandoned);
-        $successor = new Agent();
+        $successor = (new Agent())->setThreadId('test-thread');
         $successor->setAiProvider($chosen);
         $replacementSession = (new SessionStore(new InMemoryStorage(), 'test-user'))->create();
         $terminal = new VirtualTerminal(rows: 30);
@@ -1598,9 +1604,14 @@ MARKDOWN;
                 string $value,
             ) use ($successor, $replacementSession): void {
                 $adapter->useAgent($successor);
-                $adapter->agent()->setChatHistory($replacementSession);
+                $adapter->useAgent(($replacementSession)->bindTo($adapter->agent()), preserveConversation: false);
             },
         );
+        $tui = (new Tui(
+            $agent,
+            terminal: $terminal,
+            commands: (new Commands())->addCommand([$command]),
+        ));
         EventLoop::queue(
             static fn () => $terminal->simulateInput("A question\r"),
         );
@@ -1617,11 +1628,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
-            terminal: $terminal,
-            commands: (new Commands())->addCommand([$command]),
-        ))->run();
+        $tui->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('The new one.', $display);
@@ -1639,7 +1646,7 @@ MARKDOWN;
     public function testACommandCanLeaveTheTerminal(): void
     {
         $forcedExit = false;
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
@@ -1671,7 +1678,7 @@ MARKDOWN;
     public function testACommandThatFailsLeavesAnErrorLineAndAUsableTerminal(): void
     {
         $provider = new FakeAIProvider(new AssistantMessage('An answer.'));
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
@@ -1708,21 +1715,26 @@ MARKDOWN;
 
     public function testACommandThatFailsAfterChangingConversationSaysSoOnTheNewOne(): void
     {
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider(new FakeAIProvider());
-        $agent->setChatHistory(new ExistingChatHistory([
+        $agent = (new ExistingChatHistory([
             new UserMessage('Earlier question.'),
             new AssistantMessage('Earlier answer.'),
-        ]));
+        ]))->bindTo($agent);
         $replacementSession = (new SessionStore(new InMemoryStorage(), 'test-user'))->create();
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
             static function (CommandAdapterInterface $adapter, string $value) use ($replacementSession): void {
-                $adapter->agent()->setChatHistory($replacementSession);
+                $adapter->useAgent(($replacementSession)->bindTo($adapter->agent()), preserveConversation: false);
 
                 throw new \RuntimeException('The command broke.');
             },
         );
+        $tui = (new Tui(
+            $agent,
+            terminal: $terminal,
+            commands: (new Commands())->addCommand([$command]),
+        ));
         EventLoop::queue(
             static fn () => $terminal->simulateInput("/probe\r"),
         );
@@ -1731,11 +1743,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
-            terminal: $terminal,
-            commands: (new Commands())->addCommand([$command]),
-        ))->run();
+        $tui->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -1752,7 +1760,7 @@ MARKDOWN;
     {
         $forcedExit = false;
         $provider = new FakeAIProvider();
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         EventLoop::queue(
@@ -1815,13 +1823,21 @@ MARKDOWN;
         $forcedExit = false;
         $unknownDisplay = null;
         $wipedDisplay = null;
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider(new FakeAIProvider());
-        $agent->setChatHistory(new ExistingChatHistory([
+        $agent = (new ExistingChatHistory([
             new UserMessage('Earlier question.'),
             new AssistantMessage('Earlier answer.'),
-        ]));
+        ]))->bindTo($agent);
         $terminal = new VirtualTerminal(rows: 24);
+        $tui = (new Tui(
+            $agent,
+            terminal: $terminal,
+            commands: (new Commands())->addCommand([
+                new ClearCommand('/wipe'),
+                new LeaveCommand('/quit'),
+            ]),
+        ));
         EventLoop::queue(
             static fn () => $terminal->simulateInput("/clear\r"),
         );
@@ -1854,14 +1870,7 @@ MARKDOWN;
             },
         );
 
-        (new Tui(
-            $agent,
-            terminal: $terminal,
-            commands: (new Commands())->addCommand([
-                new ClearCommand('/wipe'),
-                new LeaveCommand('/quit'),
-            ]),
-        ))->run();
+        $tui->run();
 
         // The name it was given is the only name it answers to.
         self::assertIsString($unknownDisplay);
@@ -1876,7 +1885,7 @@ MARKDOWN;
             'Earlier question.',
             $wipedDisplay,
         );
-        self::assertSame([], $agent->getChatHistory()->getMessages());
+        self::assertSame([], $tui->agent()->getChatHistory()->getMessages());
         // `/quit` behaves as `/exit` always did.
         self::assertFalse($forcedExit);
     }
@@ -1887,7 +1896,7 @@ MARKDOWN;
     public function testHelpListsTheMountedCommandsWithTheirDescriptions(): void
     {
         $provider = new FakeAIProvider();
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
@@ -1935,7 +1944,7 @@ MARKDOWN;
     public function testATerminalWithoutHelpMountedDoesNotAnswerToIt(): void
     {
         $provider = new FakeAIProvider();
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         EventLoop::queue(
@@ -1963,7 +1972,7 @@ MARKDOWN;
 
     public function testTheScreenShowsTheSessionACommandSelected(): void
     {
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider(new FakeAIProvider());
         $restored = $this->sessionWith([
             new UserMessage('A restored question.'),
@@ -1972,9 +1981,14 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
             static function (CommandAdapterInterface $adapter, string $value) use ($restored): void {
-                $adapter->agent()->setChatHistory($restored);
+                $adapter->useAgent(($restored)->bindTo($adapter->agent()), preserveConversation: false);
             },
         );
+        $tui = (new Tui(
+            $agent,
+            terminal: $terminal,
+            commands: (new Commands())->addCommand([$command]),
+        ));
         EventLoop::queue(
             static fn () => $terminal->simulateInput("A question\r"),
         );
@@ -1990,11 +2004,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
-            terminal: $terminal,
-            commands: (new Commands())->addCommand([$command]),
-        ))->run();
+        $tui->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -2007,7 +2017,7 @@ MARKDOWN;
 
     public function testACommandThatLeavesTheConversationAloneLeavesTheScreenAlone(): void
     {
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider(new FakeAIProvider(
             new AssistantMessage('An answer.'),
         ));
@@ -2054,10 +2064,10 @@ MARKDOWN;
                 \Amp\delay(0.4);
                 yield new TextChunk('slow-stream', 'A slow answer.');
 
-                return $response;
+                return new \NeuronAI\Providers\ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
@@ -2115,10 +2125,10 @@ MARKDOWN;
                 \Amp\delay(0.5);
                 yield new TextChunk('slow-stream', 'A slow answer.');
 
-                return $response;
+                return new \NeuronAI\Providers\ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 24);
         $command = new HelpCommand('/probe');
@@ -2174,10 +2184,10 @@ MARKDOWN;
                 \Amp\delay(0.5);
                 yield new TextChunk('slow-stream', 'A slow answer.');
 
-                return $response;
+                return new \NeuronAI\Providers\ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->concurrentCommand();
@@ -2238,10 +2248,10 @@ MARKDOWN;
                 \Amp\delay(0.5);
                 yield new TextChunk('slow-stream', 'A slow answer.');
 
-                return $response;
+                return new \NeuronAI\Providers\ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 24);
         EventLoop::queue(
@@ -2304,10 +2314,10 @@ MARKDOWN;
                 $this->completed = true;
                 yield new TextChunk('slow-stream', 'A slow answer.');
 
-                return $response;
+                return new \NeuronAI\Providers\ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 24);
         EventLoop::queue(
@@ -2366,7 +2376,7 @@ MARKDOWN;
     {
         $chosen = 'nothing yet';
         $pickerDisplay = null;
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
@@ -2437,7 +2447,7 @@ MARKDOWN;
         $chosen = null;
         $initialDisplay = null;
         $movedDisplay = null;
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(columns: 48, rows: 30);
         $command = $this->commandThat(
@@ -2538,7 +2548,7 @@ MARKDOWN;
     {
         $withoutDescription = null;
         $withDescription = null;
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(columns: 32, rows: 30);
         $command = $this->commandThat(
@@ -2634,7 +2644,7 @@ MARKDOWN;
     {
         $chosen = null;
         $pickerOutput = null;
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(columns: 42, rows: 32);
         $command = $this->commandThat(
@@ -2758,7 +2768,7 @@ MARKDOWN;
     {
         $chosen = null;
         $scrolledDisplay = null;
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(rows: 40);
         $command = $this->commandThat(
@@ -2832,7 +2842,7 @@ MARKDOWN;
         $initialDisplay = null;
         $scrolledDisplay = null;
         $wrappedDisplay = null;
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(columns: 36, rows: 40);
         $command = $this->commandThat(
@@ -2941,7 +2951,7 @@ MARKDOWN;
         $lowDisplay = null;
         $grownDisplay = null;
         $reopenedDisplay = null;
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(columns: 40, rows: 30);
         $command = $this->commandThat(
@@ -3100,7 +3110,7 @@ MARKDOWN;
     public function testAnAbandonedChoiceDoesNotInvokeItsTargetCommand(): void
     {
         $chosen = 'nothing yet';
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
@@ -3165,7 +3175,7 @@ MARKDOWN;
     {
         $chosen = 'nothing yet';
         $completions = 0;
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
@@ -3208,7 +3218,7 @@ MARKDOWN;
     {
         $chosen = 'nothing yet';
         $narrowedDisplay = null;
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
@@ -3276,7 +3286,7 @@ MARKDOWN;
         $shortDisplay = null;
         $longDisplay = null;
         $filteredDisplay = null;
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
@@ -3373,7 +3383,7 @@ MARKDOWN;
     {
         $chosen = null;
         $filteredDisplay = null;
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(columns: 38, rows: 32);
         $command = $this->commandThat(
@@ -3459,7 +3469,7 @@ MARKDOWN;
         $afterEnter = null;
         $restoredDisplay = null;
         $reopenedDisplay = null;
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
@@ -3597,7 +3607,7 @@ MARKDOWN;
     public function testWritingASlashShowsTheMountedCommandsWithTheirDescriptions(): void
     {
         $provider = new FakeAIProvider();
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $display = null;
@@ -3647,7 +3657,7 @@ MARKDOWN;
      */
     public function testTheSuggestionsSitAboveAComposerThatKeepsTakingText(): void
     {
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $terminal = new VirtualTerminal(rows: 30);
         $display = null;
         EventLoop::delay(
@@ -3704,7 +3714,7 @@ MARKDOWN;
      */
     public function testMoreCommandsThanFitAreCountedRatherThanDropped(): void
     {
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $terminal = new VirtualTerminal(rows: 30);
         $commands = [];
 
@@ -3752,7 +3762,7 @@ MARKDOWN;
      */
     public function testASpaceANewLineOrADeletedSlashTakesTheSuggestionsAway(): void
     {
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $terminal = new VirtualTerminal(rows: 30);
         $open = null;
         $afterSpace = null;
@@ -3888,7 +3898,7 @@ MARKDOWN;
      */
     public function testASlashInTheMiddleOfAMessageSuggestsNothing(): void
     {
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $terminal = new VirtualTerminal(rows: 30);
         $display = null;
         EventLoop::delay(
@@ -3925,7 +3935,7 @@ MARKDOWN;
      */
     public function testATerminalWithoutCommandsSaysNothingMatches(): void
     {
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $terminal = new VirtualTerminal(rows: 30);
         $display = null;
         EventLoop::delay(
@@ -4265,7 +4275,7 @@ MARKDOWN;
             },
         );
 
-        $tui = new Tui(new Agent(), $terminal, commands: (new Commands())->addCommand($commands));
+        $tui = new Tui((new Agent())->setThreadId('test-thread'), $terminal, commands: (new Commands())->addCommand($commands));
 
         $tui->run();
 
@@ -4324,10 +4334,10 @@ MARKDOWN;
                 \Amp\delay(0.5);
                 yield new TextChunk('slow-stream', 'A slow answer.');
 
-                return $response;
+                return new \NeuronAI\Providers\ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $concurrent = $this->concurrentCommand('/pulse');
@@ -4400,10 +4410,10 @@ MARKDOWN;
                 \Amp\delay(0.5);
                 yield new TextChunk('slow-stream', 'A slow answer.');
 
-                return $response;
+                return new \NeuronAI\Providers\ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $refused = $this->commandThat(
@@ -4457,7 +4467,7 @@ MARKDOWN;
     public function testNoSuggestionsAreShownWhileAPickerIsOpen(): void
     {
         $choosingDisplay = null;
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
@@ -4581,7 +4591,7 @@ MARKDOWN;
      */
     public function testTabWritesTheChosenNameAndTheArgumentsFollowIt(): void
     {
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $terminal = new VirtualTerminal(rows: 30);
         $ran = null;
         $value = null;
@@ -4649,7 +4659,7 @@ MARKDOWN;
      */
     public function testTabWritesNothingWhenNoCommandMatches(): void
     {
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $terminal = new VirtualTerminal(rows: 30);
         EventLoop::delay(
             0.05,
@@ -4691,7 +4701,7 @@ MARKDOWN;
     public function testTabWritesNothingWhileTheListIsClosed(): void
     {
         $provider = new FakeAIProvider(new AssistantMessage('An answer.'));
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         EventLoop::delay(
@@ -4725,7 +4735,7 @@ MARKDOWN;
      */
     public function testEscapeClosesTheListAndTheNextOneEmptiesTheDraft(): void
     {
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $terminal = new VirtualTerminal(rows: 30);
         $closed = null;
         $emptied = null;
@@ -4846,10 +4856,15 @@ MARKDOWN;
      */
     public function testTheStatusLineNamesTheKeysWhileTheListIsOpen(): void
     {
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $terminal = new VirtualTerminal(rows: 30);
         $open = null;
         $closed = null;
+        $tui = (new Tui(
+            $agent,
+            terminal: $terminal,
+            commands: (new Commands())->addCommand([new HelpCommand()]),
+        ));
         EventLoop::delay(
             0.05,
             static fn () => $terminal->simulateInput('/'),
@@ -4877,11 +4892,7 @@ MARKDOWN;
             },
         );
 
-        (new Tui(
-            $agent,
-            terminal: $terminal,
-            commands: (new Commands())->addCommand([new HelpCommand()]),
-        ))->run();
+        $tui->run();
 
         self::assertIsString($open);
         self::assertStringContainsString('↑↓ moves', $open);
@@ -4963,7 +4974,7 @@ MARKDOWN;
         $session = (new SessionStore(new InMemoryStorage(), 'test-user'))->create();
 
         foreach ($messages as $message) {
-            $session->addMessage($message);
+            SessionHistory::of($session)->addMessage($message);
         }
 
         return $session;
@@ -4982,13 +4993,18 @@ MARKDOWN;
     public function testTheDefaultStorageWritesNothingToDisk(): void
     {
         $provider = new FakeAIProvider(new AssistantMessage('An answer.'));
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $pickerDisplay = null;
         $workingDirectory = getcwd();
         self::assertIsString($workingDirectory);
         $before = scandir($workingDirectory);
+        $tui = (new Tui(
+            $agent,
+            terminal: $terminal,
+            commands: (new Commands())->addCommand(self::sessionCommands()),
+        ));
         EventLoop::delay(
             0.03,
             static fn () => $terminal->simulateInput("/clear\r"),
@@ -5020,11 +5036,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
-            terminal: $terminal,
-            commands: (new Commands())->addCommand(self::sessionCommands()),
-        ))->run();
+        $tui->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -5037,7 +5049,7 @@ MARKDOWN;
             array_map(
                 static fn (Message $message): string => (string) $message
                     ->getContent(),
-                $agent->getChatHistory()->getMessages(),
+                $tui->agent()->getChatHistory()->getMessages(),
             ),
         );
         // The directory the old default invented is named because it is the
@@ -5051,22 +5063,32 @@ MARKDOWN;
 
     public function testClearOpensAnEmptySessionOverTheOneOnScreen(): void
     {
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
-        $agent->setChatHistory($sessionStore->create());
+        $agent = ($sessionStore->create())->bindTo($agent);
         $earlier = null;
         $fillSession = $this->commandThat(
             static function (CommandAdapterInterface $adapter) use (&$earlier): void {
-                $earlier = $adapter->agent()->getChatHistory();
-                self::assertInstanceOf(Session::class, $earlier);
-                $earlier->addMessage(new UserMessage('Earlier question.'));
+                $earlier = $adapter->sessionStore()->read($adapter->agent()->getChatHistory()->getThreadId());
+                self::assertNotNull($earlier);
+                SessionHistory::of($earlier)->addMessage(new UserMessage('Earlier question.'));
                 $earlier->setTitle('Earlier question.');
-                $earlier->addMessage(new AssistantMessage('Earlier answer.'));
+                SessionHistory::of($earlier)->addMessage(new AssistantMessage('Earlier answer.'));
             },
         );
         $terminal = new VirtualTerminal(rows: 24);
         $clearedDisplay = null;
+        $tui = (new Tui(
+            $agent,
+            terminal: $terminal,
+            sessionStore: $sessionStore,
+            inputHistory: new InputHistory($storage),
+            commands: (new Commands())->addCommand([
+                ...self::sessionCommands(),
+                $fillSession,
+            ]),
+        ));
         EventLoop::queue(
             static fn () => $terminal->simulateInput("/probe\r"),
         );
@@ -5091,16 +5113,7 @@ MARKDOWN;
             },
         );
 
-        (new Tui(
-            $agent,
-            terminal: $terminal,
-            sessionStore: $sessionStore,
-            inputHistory: new InputHistory($storage),
-            commands: (new Commands())->addCommand([
-                ...self::sessionCommands(),
-                $fillSession,
-            ]),
-        ))->run();
+        $tui->run();
 
         self::assertIsString($clearedDisplay);
         self::assertStringContainsString('draft', $clearedDisplay);
@@ -5113,7 +5126,7 @@ MARKDOWN;
             $clearedDisplay,
         );
         self::assertStringNotContainsString('/clear', $clearedDisplay);
-        self::assertSame([], $agent->getChatHistory()->getMessages());
+        self::assertSame([], $tui->agent()->getChatHistory()->getMessages());
         self::assertNotNull($earlier);
         self::assertCount(2, $earlier->getMessages());
         $listed = $sessionStore->summaries();
@@ -5124,11 +5137,18 @@ MARKDOWN;
     public function testClearLeavesTheConversationItReplacedStored(): void
     {
         $provider = new FakeAIProvider(new AssistantMessage('An answer.'));
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
         $terminal = new VirtualTerminal(rows: 24);
+        $tui = (new Tui(
+            $agent,
+            terminal: $terminal,
+            sessionStore: new SessionStore($storage, 'test-user'),
+            inputHistory: new InputHistory($storage),
+            commands: (new Commands())->addCommand(self::sessionCommands()),
+        ));
         EventLoop::delay(
             0.03,
             static fn () => $terminal->simulateInput("/clear\r"),
@@ -5146,13 +5166,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
-            terminal: $terminal,
-            sessionStore: new SessionStore($storage, 'test-user'),
-            inputHistory: new InputHistory($storage),
-            commands: (new Commands())->addCommand(self::sessionCommands()),
-        ))->run();
+        $tui->run();
 
         $listed = $sessionStore->summaries();
 
@@ -5168,10 +5182,10 @@ MARKDOWN;
                 $reopened->getMessages(),
             ),
         );
-        self::assertSame([], $agent->getChatHistory()->getMessages());
+        self::assertSame([], $tui->agent()->getChatHistory()->getMessages());
         // The Session the Agent was left holding is the newer one SessionStore
         // minted, so writing in it lists it ahead of the other.
-        $agent->getChatHistory()->addMessage(new UserMessage('Written later'));
+        $tui->agent()->getChatHistory()->addMessage(new UserMessage('Written later'));
         self::assertSame(
             [null, null],
             array_map(
@@ -5193,10 +5207,10 @@ MARKDOWN;
                 \Amp\delay(0.5);
                 yield new TextChunk('slow-stream', 'A slow answer.');
 
-                return $response;
+                return new \NeuronAI\Providers\ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $ongoing = null;
         $remember = $this->commandThat(
@@ -5207,6 +5221,16 @@ MARKDOWN;
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
         $terminal = new VirtualTerminal(rows: 24);
+        $tui = (new Tui(
+            $agent,
+            terminal: $terminal,
+            sessionStore: new SessionStore($storage, 'test-user'),
+            inputHistory: new InputHistory($storage),
+            commands: (new Commands())->addCommand([
+                ...self::sessionCommands(),
+                $remember,
+            ]),
+        ));
         EventLoop::queue(
             static fn () => $terminal->simulateInput("/probe\r"),
         );
@@ -5237,16 +5261,7 @@ MARKDOWN;
             },
         );
 
-        (new Tui(
-            $agent,
-            terminal: $terminal,
-            sessionStore: new SessionStore($storage, 'test-user'),
-            inputHistory: new InputHistory($storage),
-            commands: (new Commands())->addCommand([
-                ...self::sessionCommands(),
-                $remember,
-            ]),
-        ))->run();
+        $tui->run();
 
         self::assertIsString($refusedDisplay);
         self::assertStringContainsString(
@@ -5256,7 +5271,7 @@ MARKDOWN;
         self::assertStringContainsString('❯ A question', $refusedDisplay);
         self::assertSame([], $sessionStore->summaries());
         self::assertNotNull($ongoing);
-        self::assertSame($ongoing, $agent->getChatHistory());
+        self::assertSame($ongoing->getThreadId(), $tui->agent()->getChatHistory()->getThreadId());
         self::assertFalse($forcedExit);
     }
 
@@ -5265,19 +5280,26 @@ MARKDOWN;
         $provider = new FakeAIProvider(
             new AssistantMessage('A later answer.'),
         );
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
         $earlier = $sessionStore->create();
-        $earlier->addMessage(new UserMessage('The earlier subject'));
+        SessionHistory::of($earlier)->addMessage(new UserMessage('The earlier subject'));
         $earlier->setTitle('The earlier subject');
-        $earlier->addMessage(new Message(MessageRole::ASSISTANT, [
+        SessionHistory::of($earlier)->addMessage(new Message(MessageRole::ASSISTANT, [
             new ReasoningContent('Private chain of thought.'),
             new TextContent('The earlier answer.'),
         ]));
         $terminal = new VirtualTerminal(rows: 30);
         $pickerDisplay = null;
+        $tui = (new Tui(
+            $agent,
+            terminal: $terminal,
+            sessionStore: new SessionStore($storage, 'test-user'),
+            inputHistory: new InputHistory($storage),
+            commands: (new Commands())->addCommand(self::sessionCommands()),
+        ));
         EventLoop::delay(
             0.04,
             static fn () => $terminal->simulateInput("/resume\r"),
@@ -5301,13 +5323,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
-            terminal: $terminal,
-            sessionStore: new SessionStore($storage, 'test-user'),
-            inputHistory: new InputHistory($storage),
-            commands: (new Commands())->addCommand(self::sessionCommands()),
-        ))->run();
+        $tui->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -5327,7 +5343,7 @@ MARKDOWN;
             array_map(
                 static fn (Message $message): string => (string) $message
                     ->getContent(),
-                array_slice($agent->getChatHistory()->getMessages(), 0, 2),
+                array_slice($tui->agent()->getChatHistory()->getMessages(), 0, 2),
             ),
         );
         $provider->assertSent(
@@ -5350,9 +5366,9 @@ MARKDOWN;
             $storage = new FileStorage($directory);
             $sessionStore = new SessionStore($storage, 'test-user');
             $earlier = $sessionStore->create();
-            $earlier->addMessage(new UserMessage('The stored subject'));
+            SessionHistory::of($earlier)->addMessage(new UserMessage('The stored subject'));
             $earlier->setTitle('The stored subject');
-            $earlier->addMessage(new AssistantMessage('The stored answer.'));
+            SessionHistory::of($earlier)->addMessage(new AssistantMessage('The stored answer.'));
             $listed = $sessionStore->summaries();
             self::assertCount(1, $listed);
             $document = $storage->read(
@@ -5363,9 +5379,16 @@ MARKDOWN;
             $storedBytes = $document->size();
             self::assertLessThan(1_024, $storedBytes);
 
-            $agent = new Agent();
+            $agent = (new Agent())->setThreadId('test-thread');
             $terminal = new VirtualTerminal(rows: 30);
             $pickerDisplay = null;
+            $tui = (new Tui(
+                $agent,
+                terminal: $terminal,
+                sessionStore: new SessionStore($storage, 'test-user'),
+                inputHistory: new InputHistory($storage),
+                commands: (new Commands())->addCommand(self::sessionCommands()),
+            ));
             EventLoop::delay(
                 0.04,
                 static fn () => $terminal->simulateInput("/resume\r"),
@@ -5385,13 +5408,7 @@ MARKDOWN;
                 static fn () => $terminal->simulateInput("\x03"),
             );
 
-            (new Tui(
-                $agent,
-                terminal: $terminal,
-                sessionStore: new SessionStore($storage, 'test-user'),
-                inputHistory: new InputHistory($storage),
-                commands: (new Commands())->addCommand(self::sessionCommands()),
-            ))->run();
+            $tui->run();
 
             self::assertIsString($pickerDisplay);
             self::assertStringContainsString(
@@ -5407,7 +5424,7 @@ MARKDOWN;
                 array_map(
                     static fn (Message $message): string => (string) $message
                         ->getContent(),
-                    $agent->getChatHistory()->getMessages(),
+                    $tui->agent()->getChatHistory()->getMessages(),
                 ),
             );
         } finally {
@@ -5441,16 +5458,23 @@ MARKDOWN;
      */
     public function testTheSessionPickerStillResumesWhenOpenedASecondTime(): void
     {
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider(new FakeAIProvider(
             new AssistantMessage('A later answer.'),
         ));
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
         $earlier = $sessionStore->create();
-        $earlier->addMessage(new UserMessage('The earlier subject'));
+        SessionHistory::of($earlier)->addMessage(new UserMessage('The earlier subject'));
         $earlier->setTitle('The earlier subject');
         $terminal = new VirtualTerminal(rows: 30);
+        $tui = (new Tui(
+            $agent,
+            terminal: $terminal,
+            sessionStore: new SessionStore($storage, 'test-user'),
+            inputHistory: new InputHistory($storage),
+            commands: (new Commands())->addCommand(self::sessionCommands()),
+        ));
         EventLoop::delay(
             0.04,
             static fn () => $terminal->simulateInput("/resume\r"),
@@ -5475,13 +5499,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
-            terminal: $terminal,
-            sessionStore: new SessionStore($storage, 'test-user'),
-            inputHistory: new InputHistory($storage),
-            commands: (new Commands())->addCommand(self::sessionCommands()),
-        ))->run();
+        $tui->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -5492,7 +5510,7 @@ MARKDOWN;
             array_map(
                 static fn (Message $message): string => (string) $message
                     ->getContent(),
-                $agent->getChatHistory()->getMessages(),
+                $tui->agent()->getChatHistory()->getMessages(),
             ),
         );
     }
@@ -5505,16 +5523,23 @@ MARKDOWN;
      */
     public function testASessionTitledWithANullByteIsListedAndResumed(): void
     {
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
         $earlier = $sessionStore->create();
         $title = "The earlier\x00 subject";
-        $earlier->addMessage(new UserMessage($title));
+        SessionHistory::of($earlier)->addMessage(new UserMessage($title));
         $earlier->setTitle($title);
         self::assertSame($title, $sessionStore->summaries()[0]->title);
         $terminal = new VirtualTerminal(rows: 24);
         $pickerDisplay = null;
+        $tui = (new Tui(
+            $agent,
+            terminal: $terminal,
+            sessionStore: new SessionStore($storage, 'test-user'),
+            inputHistory: new InputHistory($storage),
+            commands: (new Commands())->addCommand(self::sessionCommands()),
+        ));
         EventLoop::delay(
             0.04,
             static fn () => $terminal->simulateInput("/resume\r"),
@@ -5534,13 +5559,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
-            terminal: $terminal,
-            sessionStore: new SessionStore($storage, 'test-user'),
-            inputHistory: new InputHistory($storage),
-            commands: (new Commands())->addCommand(self::sessionCommands()),
-        ))->run();
+        $tui->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -5555,14 +5574,14 @@ MARKDOWN;
             array_map(
                 static fn (Message $message): string => (string) $message
                     ->getContent(),
-                $agent->getChatHistory()->getMessages(),
+                $tui->agent()->getChatHistory()->getMessages(),
             ),
         );
     }
 
     public function testEscapeLeavesTheSessionPickerWithTheSameSession(): void
     {
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $ongoing = null;
         $remember = $this->commandThat(
             static function (CommandAdapterInterface $adapter) use (&$ongoing): void {
@@ -5572,10 +5591,20 @@ MARKDOWN;
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
         $earlier = $sessionStore->create();
-        $earlier->addMessage(new UserMessage('The earlier subject'));
+        SessionHistory::of($earlier)->addMessage(new UserMessage('The earlier subject'));
         $earlier->setTitle('The earlier subject');
         $terminal = new VirtualTerminal(rows: 24);
         $pickerDisplay = null;
+        $tui = (new Tui(
+            $agent,
+            terminal: $terminal,
+            sessionStore: new SessionStore($storage, 'test-user'),
+            inputHistory: new InputHistory($storage),
+            commands: (new Commands())->addCommand([
+                ...self::sessionCommands(),
+                $remember,
+            ]),
+        ));
         EventLoop::queue(
             static fn () => $terminal->simulateInput("/probe\r"),
         );
@@ -5607,16 +5636,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
-            terminal: $terminal,
-            sessionStore: new SessionStore($storage, 'test-user'),
-            inputHistory: new InputHistory($storage),
-            commands: (new Commands())->addCommand([
-                ...self::sessionCommands(),
-                $remember,
-            ]),
-        ))->run();
+        $tui->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -5630,13 +5650,18 @@ MARKDOWN;
         self::assertStringNotContainsString('zzz', $display);
         self::assertStringContainsString('ready · Enter sends', $display);
         self::assertNotNull($ongoing);
-        self::assertSame($ongoing, $agent->getChatHistory());
+        self::assertSame($ongoing->getThreadId(), $tui->agent()->getChatHistory()->getThreadId());
     }
 
     public function testResumeSaysSoWhenThereIsNothingToReturnTo(): void
     {
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $terminal = new VirtualTerminal(rows: 24);
+        $tui = (new Tui(
+            $agent,
+            terminal: $terminal,
+            commands: (new Commands())->addCommand(self::sessionCommands()),
+        ));
         EventLoop::delay(
             0.04,
             static fn () => $terminal->simulateInput("/resume\r"),
@@ -5646,11 +5671,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
-            terminal: $terminal,
-            commands: (new Commands())->addCommand(self::sessionCommands()),
-        ))->run();
+        $tui->run();
 
         self::assertStringContainsString(
             'There is no earlier Session to return to yet.',
@@ -5660,24 +5681,31 @@ MARKDOWN;
 
     public function testTypingNarrowsThePickerInsteadOfTheComposer(): void
     {
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
         $stored = $sessionStore->create();
-        $stored->addMessage(new UserMessage('Alpha subject'));
+        SessionHistory::of($stored)->addMessage(new UserMessage('Alpha subject'));
         $stored->setTitle('Alpha subject');
         $beta = $sessionStore->create();
-        $beta->addMessage(new UserMessage('Beta subject'));
+        SessionHistory::of($beta)->addMessage(new UserMessage('Beta subject'));
         $beta->setTitle('Beta subject');
 
         foreach (['Gamma', 'Delta', 'Epsilon', 'Zeta'] as $subject) {
-            $sessionStore->create()->addMessage(
+            SessionHistory::of($sessionStore->create())->addMessage(
                 new UserMessage($subject . ' subject'),
             );
         }
 
         $terminal = new VirtualTerminal(rows: 24);
         $narrowedDisplay = null;
+        $tui = (new Tui(
+            $agent,
+            terminal: $terminal,
+            sessionStore: new SessionStore($storage, 'test-user'),
+            inputHistory: new InputHistory($storage),
+            commands: (new Commands())->addCommand(self::sessionCommands()),
+        ));
         EventLoop::delay(
             0.04,
             static fn () => $terminal->simulateInput("/resume\r"),
@@ -5703,13 +5731,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
-            terminal: $terminal,
-            sessionStore: new SessionStore($storage, 'test-user'),
-            inputHistory: new InputHistory($storage),
-            commands: (new Commands())->addCommand(self::sessionCommands()),
-        ))->run();
+        $tui->run();
 
         self::assertIsString($narrowedDisplay);
         self::assertStringContainsString('Beta subject', $narrowedDisplay);
@@ -5719,22 +5741,29 @@ MARKDOWN;
             array_map(
                 static fn (Message $message): string => (string) $message
                     ->getContent(),
-                $agent->getChatHistory()->getMessages(),
+                $tui->agent()->getChatHistory()->getMessages(),
             ),
         );
     }
 
     public function testArrowKeysChooseAnotherSessionInThePicker(): void
     {
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
         $older = $sessionStore->create();
-        $older->addMessage(new UserMessage('The older subject'));
-        $sessionStore->create()->addMessage(
+        SessionHistory::of($older)->addMessage(new UserMessage('The older subject'));
+        SessionHistory::of($sessionStore->create())->addMessage(
             new UserMessage('The newer subject'),
         );
         $terminal = new VirtualTerminal(rows: 24);
+        $tui = (new Tui(
+            $agent,
+            terminal: $terminal,
+            sessionStore: new SessionStore($storage, 'test-user'),
+            inputHistory: new InputHistory($storage),
+            commands: (new Commands())->addCommand(self::sessionCommands()),
+        ));
         EventLoop::delay(
             0.04,
             static fn () => $terminal->simulateInput("/resume\r"),
@@ -5752,13 +5781,7 @@ MARKDOWN;
             static fn () => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui(
-            $agent,
-            terminal: $terminal,
-            sessionStore: new SessionStore($storage, 'test-user'),
-            inputHistory: new InputHistory($storage),
-            commands: (new Commands())->addCommand(self::sessionCommands()),
-        ))->run();
+        $tui->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
@@ -5768,7 +5791,7 @@ MARKDOWN;
             array_map(
                 static fn (Message $message): string => (string) $message
                     ->getContent(),
-                $agent->getChatHistory()->getMessages(),
+                $tui->agent()->getChatHistory()->getMessages(),
             ),
         );
     }
@@ -5784,17 +5807,24 @@ MARKDOWN;
                 \Amp\delay(0.4);
                 yield new TextChunk('slow-stream', 'A slow answer.');
 
-                return $response;
+                return new \NeuronAI\Providers\ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
         $earlier = $sessionStore->create();
-        $earlier->addMessage(new UserMessage('The earlier subject'));
+        SessionHistory::of($earlier)->addMessage(new UserMessage('The earlier subject'));
         $earlier->setTitle('The earlier subject');
         $terminal = new VirtualTerminal(rows: 24);
+        $tui = (new Tui(
+            $agent,
+            terminal: $terminal,
+            sessionStore: new SessionStore($storage, 'test-user'),
+            inputHistory: new InputHistory($storage),
+            commands: (new Commands())->addCommand(self::sessionCommands()),
+        ));
         EventLoop::queue(
             static fn () => $terminal->simulateInput("A question\r"),
         );
@@ -5812,13 +5842,7 @@ MARKDOWN;
             },
         );
 
-        (new Tui(
-            $agent,
-            terminal: $terminal,
-            sessionStore: new SessionStore($storage, 'test-user'),
-            inputHistory: new InputHistory($storage),
-            commands: (new Commands())->addCommand(self::sessionCommands()),
-        ))->run();
+        $tui->run();
 
         self::assertIsString($refusedDisplay);
         self::assertStringContainsString(
@@ -5837,18 +5861,29 @@ MARKDOWN;
      */
     public function testMountingSessionCommandsMakesEachAvailable(): void
     {
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider(new FakeAIProvider());
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
         $earlier = $sessionStore->create();
-        $earlier->addMessage(new UserMessage('The earlier subject'));
+        SessionHistory::of($earlier)->addMessage(new UserMessage('The earlier subject'));
         $earlier->setTitle('The earlier subject');
-        $earlier->addMessage(new AssistantMessage('The earlier answer.'));
+        SessionHistory::of($earlier)->addMessage(new AssistantMessage('The earlier answer.'));
         $terminal = new VirtualTerminal(rows: 30);
         $pickerDisplay = null;
         $resumedDisplay = null;
         $clearedDisplay = null;
+        $tui = (new Tui(
+            $agent,
+            terminal: $terminal,
+            sessionStore: new SessionStore($storage, 'test-user'),
+            inputHistory: new InputHistory($storage),
+            commands: (new Commands())->addCommand([
+                new ClearCommand(),
+                new ResumeCommand(),
+                new LeaveCommand(),
+            ]),
+        ));
         EventLoop::delay(
             0.04,
             static fn () => $terminal->simulateInput("/resume\r"),
@@ -5890,17 +5925,7 @@ MARKDOWN;
             },
         );
 
-        (new Tui(
-            $agent,
-            terminal: $terminal,
-            sessionStore: new SessionStore($storage, 'test-user'),
-            inputHistory: new InputHistory($storage),
-            commands: (new Commands())->addCommand([
-                new ClearCommand(),
-                new ResumeCommand(),
-                new LeaveCommand(),
-            ]),
-        ))->run();
+        $tui->run();
 
         self::assertIsString($pickerDisplay);
         self::assertStringContainsString(
@@ -5918,7 +5943,7 @@ MARKDOWN;
             'The earlier subject',
             $clearedDisplay,
         );
-        self::assertSame([], $agent->getChatHistory()->getMessages());
+        self::assertSame([], $tui->agent()->getChatHistory()->getMessages());
         // Both commands reached the one SessionStore instance the runtime owns,
         // so the Session the first resumed is the one the second left stored.
         self::assertSame(
@@ -5932,16 +5957,26 @@ MARKDOWN;
 
     public function testResumeCanBeMountedWithoutClear(): void
     {
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider(new FakeAIProvider());
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
         $earlier = $sessionStore->create();
-        $earlier->addMessage(new UserMessage('The earlier subject'));
+        SessionHistory::of($earlier)->addMessage(new UserMessage('The earlier subject'));
         $earlier->setTitle('The earlier subject');
         $terminal = new VirtualTerminal(rows: 30);
         $refusedDisplay = null;
         $pickerDisplay = null;
+        $tui = (new Tui(
+            $agent,
+            terminal: $terminal,
+            sessionStore: new SessionStore($storage, 'test-user'),
+            inputHistory: new InputHistory($storage),
+            commands: (new Commands())->addCommand([
+                new ResumeCommand(),
+                new LeaveCommand(),
+            ]),
+        ));
         EventLoop::delay(
             0.04,
             static fn () => $terminal->simulateInput("/clear\r"),
@@ -5972,16 +6007,7 @@ MARKDOWN;
             },
         );
 
-        (new Tui(
-            $agent,
-            terminal: $terminal,
-            sessionStore: new SessionStore($storage, 'test-user'),
-            inputHistory: new InputHistory($storage),
-            commands: (new Commands())->addCommand([
-                new ResumeCommand(),
-                new LeaveCommand(),
-            ]),
-        ))->run();
+        $tui->run();
 
         self::assertIsString($refusedDisplay);
         self::assertStringContainsString(
@@ -6001,16 +6027,26 @@ MARKDOWN;
 
     public function testClearCanBeMountedWithoutResume(): void
     {
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider(new FakeAIProvider());
         $storage = new InMemoryStorage();
-        $agent->setChatHistory(new ExistingChatHistory([
+        $agent = (new ExistingChatHistory([
             new UserMessage('The earlier subject'),
             new AssistantMessage('The earlier answer.'),
-        ]));
+        ]))->bindTo($agent);
         $terminal = new VirtualTerminal(rows: 30);
         $refusedDisplay = null;
         $clearedDisplay = null;
+        $tui = (new Tui(
+            $agent,
+            terminal: $terminal,
+            sessionStore: new SessionStore($storage, 'test-user'),
+            inputHistory: new InputHistory($storage),
+            commands: (new Commands())->addCommand([
+                new ClearCommand(),
+                new LeaveCommand(),
+            ]),
+        ));
         EventLoop::delay(
             0.04,
             static fn () => $terminal->simulateInput("/resume\r"),
@@ -6044,16 +6080,7 @@ MARKDOWN;
             },
         );
 
-        (new Tui(
-            $agent,
-            terminal: $terminal,
-            sessionStore: new SessionStore($storage, 'test-user'),
-            inputHistory: new InputHistory($storage),
-            commands: (new Commands())->addCommand([
-                new ClearCommand(),
-                new LeaveCommand(),
-            ]),
-        ))->run();
+        $tui->run();
 
         self::assertIsString($refusedDisplay);
         self::assertStringContainsString(
@@ -6070,7 +6097,7 @@ MARKDOWN;
             'The earlier subject',
             $clearedDisplay,
         );
-        self::assertSame([], $agent->getChatHistory()->getMessages());
+        self::assertSame([], $tui->agent()->getChatHistory()->getMessages());
     }
 
     public function testPageKeysBrowseAConversationAndReturnToLatest(): void
@@ -6082,17 +6109,18 @@ MARKDOWN;
             $messages[] = new AssistantMessage("Answer {$turn}");
         }
 
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $history = $this->sessionWith($messages);
         $restore = $this->commandThat(
             static function (CommandAdapterInterface $adapter) use ($history): void {
-                $adapter->agent()->setChatHistory($history);
+                $adapter->useAgent(($history)->bindTo($adapter->agent()), preserveConversation: false);
             },
         );
         $terminal = new VirtualTerminal(rows: 16);
         $initialDisplay = null;
         $scrolledDisplay = null;
         $latestDisplay = null;
+        $tui = (new Tui($agent, terminal: $terminal, commands: (new Commands())->addCommand($restore)));
         EventLoop::queue(
             static fn () => $terminal->simulateInput("/probe\r"),
         );
@@ -6126,8 +6154,7 @@ MARKDOWN;
             },
         );
 
-        (new Tui($agent, terminal: $terminal, commands: (new Commands())->addCommand($restore)))
-            ->run();
+        $tui->run();
 
         self::assertIsString($initialDisplay);
         self::assertStringContainsString('Answer 20', $initialDisplay);
@@ -6180,10 +6207,10 @@ MARKDOWN;
                     "\n" . $this->third,
                 );
 
-                return $response;
+                return new \NeuronAI\Providers\ProviderResponse(message: $response);
             }
         };
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 16);
         $followingDisplay = null;
@@ -6238,14 +6265,14 @@ MARKDOWN;
     public function testHumanInterruptionIsExplicitlyUnsupported(): void
     {
         PublishToolCallback::$executed = false;
-        $tool = (new Tool('publish'))
+        $tool = (new CallbackTool('publish'))
             ->setCallId('publish-call')
             ->setInputs(['target' => 'production'])
             ->setCallable(new PublishToolCallback());
-        $provider = new FakeAIProvider(new ToolCallMessage(tools: [$tool]));
-        $agent = new Agent();
+        $provider = new FakeAIProvider(new ToolCallMessage(tools: [$tool->call()]));
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
-        $agent->addMiddleware(ToolNode::class, new ToolApproval());
+        $agent->addTool($tool->requireApproval());
         $terminal = new VirtualTerminal(rows: 28);
         EventLoop::queue(
             static fn () => $terminal->simulateInput("Publish now\r"),
@@ -6279,7 +6306,7 @@ MARKDOWN;
         $this->expectException(\LogicException::class);
         $this->expectExceptionMessage('Terminal could not initialize.');
 
-        (new Tui(new Agent(), terminal: new FailingTerminal()))->run();
+        (new Tui((new Agent())->setThreadId('test-thread'), terminal: new FailingTerminal()))->run();
     }
 
     public function testDefaultTerminalRejectsNonInteractiveInput(): void
@@ -6293,11 +6320,11 @@ MARKDOWN;
             'Neuron TUI requires an interactive TTY.',
         );
 
-        (new Tui(new Agent()))->run();
+        (new Tui((new Agent())->setThreadId('test-thread')))->run();
     }
 }
 
-final class ExistingChatHistory extends InMemoryChatHistory
+final class ExistingChatHistory extends SeededHistory
 {
     /**
      * @param list<Message> $messages
@@ -6305,7 +6332,9 @@ final class ExistingChatHistory extends InMemoryChatHistory
     public function __construct(array $messages)
     {
         parent::__construct();
-        $this->history = $messages;
+        foreach ($messages as $message) {
+            $this->store->append($this->threadId, $message);
+        }
     }
 }
 
