@@ -96,7 +96,8 @@ final readonly class ModelCommand implements CommandInterface
             return;
         }
 
-        $adapter->agent()->setAiProvider(AIProviderFactory::create($value, $this->httpClient));
+        $provider = AIProviderFactory::create($value, $this->httpClient);
+        $adapter->agent()->setAiProvider($provider);
         $adapter->configurationStore()->write('model', $value);
         $adapter->notify("Model changed to {$value}.");
     }
