@@ -3,13 +3,13 @@
 declare(strict_types=1);
 
 use NeuronAI\HttpClient\Amp\AmpHttpClient;
+use NeuronAI\HttpClient\StoppableHttpClient;
 use NeuronInteraction\Command\ClearCommand;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Command\HelpCommand;
 use NeuronInteraction\Command\LeaveCommand;
 use NeuronInteraction\Command\ResumeCommand;
 use NeuronInteraction\Configuration\ConfigurationStore;
-use NeuronInteraction\Http\StoppableHttpClient;
 use NeuronInteraction\Http\StopSignal;
 use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Message\UserMessageProcessors;
@@ -39,11 +39,12 @@ $modelId = $configurationStore->read('model', 'openai:gpt-5.4-nano');
 $stopSignal = new StopSignal(new InMemoryStorage(), 'full');
 
 $httpClient = new StoppableHttpClient(
-    inner: new AmpHttpClient(),
-    stopSignal: $stopSignal,
-    onPoll: function (): void {
-        delay(0);
-    },
+    client: new AmpHttpClient(),
+    shouldStop: $stopSignal->stopCallback(
+        onPoll: function (): void {
+            delay(0);
+        },
+    ),
 );
 
 $agent = DemoAgent::make()->setThreadId(bin2hex(random_bytes(16)));
