@@ -40,24 +40,4 @@ final class FixtureHttpClient implements HttpClientInterface
         return array_shift($this->streams) ?? throw new RuntimeException('Unexpected additional HTTP request');
     }
 
-    public function withHeaders(array $headers): HttpClientInterface
-    {
-        $this->headers = [...$this->headers, ...$headers];
-
-        return $this;
-    }
-
-    public function withBaseUri(string $baseUri): HttpClientInterface
-    {
-        $this->baseUri = $baseUri;
-
-        return $this;
-    }
-
-    public function withTimeout(float $timeout): HttpClientInterface
-    {
-        $this->timeout = $timeout;
-
-        return $this;
-    }
 }

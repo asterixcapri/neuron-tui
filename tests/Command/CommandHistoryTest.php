@@ -6,7 +6,6 @@ namespace NeuronTui\Tests\Command;
 
 use Closure;
 use NeuronAI\Agent\Agent;
-use NeuronAI\Chat\History\InMemoryChatHistory;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronInteraction\Command\CommandAdapterInterface;
 use NeuronInteraction\Command\CommandInterface;
@@ -16,6 +15,7 @@ use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Command\TuiCommandAdapter;
 use NeuronTui\Conversation\ConversationRuntime;
+use NeuronTui\Tests\History\SeededHistory;
 use NeuronTui\View\ConversationView;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
@@ -29,10 +29,10 @@ final class CommandHistoryTest extends TestCase
 
     protected function setUp(): void
     {
-        $agent = new Agent();
-        $history = new InMemoryChatHistory();
+        $agent = (new Agent())->setThreadId('test-thread');
+        $history = new SeededHistory();
         $history->addMessage(new UserMessage('Earlier conversation'));
-        $agent->setChatHistory($history);
+        $agent = ($history)->bindTo($agent);
         $this->terminal = new VirtualTerminal(rows: 30);
         $this->view = new ConversationView($this->terminal, 'Neuron AI', 'Conversation');
         $this->runtime = new ConversationRuntime($agent, $this->view);
@@ -41,11 +41,11 @@ final class CommandHistoryTest extends TestCase
 
     public function testCompletionDisplaysAHistoryReplacedDirectlyOnTheAgent(): void
     {
-        $replacement = new InMemoryChatHistory();
+        $replacement = new SeededHistory();
         $replacement->addMessage(new UserMessage('Replacement conversation'));
 
         $this->runCommand(static function (CommandAdapterInterface $adapter) use ($replacement): void {
-            $adapter->agent()->setChatHistory($replacement);
+            $adapter->useAgent(($replacement)->bindTo($adapter->agent()), preserveConversation: false);
         });
 
         $display = $this->display();
@@ -56,7 +56,7 @@ final class CommandHistoryTest extends TestCase
     public function testMessagesAfterAHistoryChangeSurviveCompletionAndTheNextInvocation(): void
     {
         $this->runCommand(static function (CommandAdapterInterface $adapter): void {
-            $adapter->agent()->setChatHistory(new InMemoryChatHistory());
+            $adapter->useAgent((new SeededHistory())->bindTo($adapter->agent()), preserveConversation: false);
             $adapter->notify('Session changed');
             $adapter->warn('A warning remains');
             $adapter->error('An expected error remains');
@@ -74,7 +74,7 @@ final class CommandHistoryTest extends TestCase
     public function testAPromptAfterAHistoryChangeRemainsVisibleAtCompletion(): void
     {
         $this->runCommand(static function (CommandAdapterInterface $adapter): void {
-            $adapter->agent()->setChatHistory(new InMemoryChatHistory());
+            $adapter->useAgent((new SeededHistory())->bindTo($adapter->agent()), preserveConversation: false);
             $adapter->promptAgent(new UserMessage('Question in the new conversation'));
         });
 

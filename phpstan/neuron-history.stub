@@ -1,0 +1,15 @@
+<?php
+
+namespace NeuronAI\Chat\History;
+
+use NeuronAI\Chat\Messages\Message;
+
+class ChatHistory
+{
+    /** @return list<Message> */
+    public function getMessages(): array {}
+}
+
+namespace NeuronAI\Chat\Messages;
+
+class Message {}

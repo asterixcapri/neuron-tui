@@ -6,11 +6,9 @@ namespace NeuronTui\Conversation;
 
 use Amp\Future;
 use NeuronAI\Agent\Agent;
-use NeuronAI\Chat\History\ChatHistoryInterface;
 use NeuronAI\Chat\Messages\UserMessage;
-use NeuronAI\Workflow\Interrupt\WorkflowInterrupt;
 use NeuronInteraction\Http\StopSignal;
-use NeuronInteraction\Session\Session;
+use NeuronInteraction\Session\SessionStore;
 use NeuronTui\Session\SessionTitleGeneration;
 use NeuronTui\View\ConversationView;
 use NeuronTui\View\WorkingIndicator;
@@ -38,13 +36,14 @@ final class ConversationRuntime
 
     private bool $responseStopRequested = false;
 
-    private ?ChatHistoryInterface $displayedHistory = null;
+    private ?string $displayedHistory = null;
 
     public function __construct(
         private Agent $agent,
         private readonly ConversationView $view,
         private readonly ?StopSignal $stopSignal = null,
         private readonly ?SessionTitleGeneration $titleGeneration = null,
+        private readonly ?SessionStore $sessionStore = null,
     ) {
         $this->workingIndicator = $this->view->workingIndicator();
         $this->turnQueue = new TurnQueue();
@@ -70,12 +69,12 @@ final class ConversationRuntime
     {
         $history = $this->agent->getChatHistory();
 
-        if ($history === $this->displayedHistory) {
+        if ($history->getThreadId() === $this->displayedHistory) {
             return;
         }
 
         $this->view->showHistory($history->getMessages());
-        $this->displayedHistory = $history;
+        $this->displayedHistory = $history->getThreadId();
     }
 
     public function agent(): Agent
@@ -131,9 +130,23 @@ final class ConversationRuntime
      * the next answer, which comes from elsewhere. A command that knows the
      * two Agents are not interchangeable installs another History itself.
      */
-    public function useAgent(Agent $agent): void
+    public function useAgent(Agent $agent, bool $preserveConversation = true): void
     {
-        $agent->setChatHistory($this->agent->getChatHistory());
+        if (!$preserveConversation) {
+            $this->displayedHistory = null;
+            $this->agent = $agent;
+            return;
+        }
+        if ($this->sessionStore !== null) {
+            $agent = $this->sessionStore->transfer($this->agent, $agent);
+        } else {
+            $store = new \NeuronAI\Chat\History\InMemoryMessageStore();
+            $history = $this->agent->getChatHistory();
+            foreach ($history->getMessages() as $message) {
+                $store->append($history->getThreadId(), $message);
+            }
+            $agent = $agent->for($history->getThreadId())->setMessageStore($store);
+        }
         $this->agent = $agent;
     }
 
@@ -151,9 +164,12 @@ final class ConversationRuntime
             $agent = $this->agent;
             $history = $agent->getChatHistory();
             $this->runningTurn = async(function () use ($agent, $message, $history): void {
-                $this->turnRunner->run($agent, $message, $this->responseWasStopped(...));
-                if (!$this->stopped && !$this->responseStopRequested && $history instanceof Session) {
-                    $this->titleGeneration?->schedule($history, $agent);
+                $completed = $this->turnRunner->run($agent, $message, $this->responseWasStopped(...));
+                if ($completed && !$this->stopped && !$this->responseStopRequested) {
+                    $session = $this->sessionStore?->read($history->getThreadId());
+                    if ($session !== null) {
+                        $this->titleGeneration?->schedule($session, $agent);
+                    }
                 }
             });
 
@@ -172,11 +188,6 @@ final class ConversationRuntime
 
         try {
             $this->runningTurn->await();
-        } catch (WorkflowInterrupt $exception) {
-            $this->view->showError(
-                'Human-in-the-loop interruptions are not supported. '
-                    . $exception->getMessage(),
-            );
         } catch (Throwable $exception) {
             $this->showFailure($exception);
         }

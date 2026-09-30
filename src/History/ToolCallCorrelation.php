@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronTui\History;
 
-use NeuronAI\Tools\ToolInterface;
+use NeuronAI\Tools\ToolCall;
 
 /**
  * Where each tool call was shown, so that its result can find it again.
@@ -25,7 +25,7 @@ final class ToolCallCorrelation
     /** @var array<string, list<int>> */
     private array $positionsByName = [];
 
-    public function registerCall(ToolInterface $tool, int $position): void
+    public function registerCall(ToolCall $tool, int $position): void
     {
         $callId = $tool->getCallId();
 
@@ -44,7 +44,7 @@ final class ToolCallCorrelation
      * association. Without a call ID, matching consumes the first waiting
      * position for the tool's name. An unmatched result returns null.
      */
-    public function matchResult(ToolInterface $tool): ?int
+    public function matchResult(ToolCall $tool): ?int
     {
         $callId = $tool->getCallId();
 

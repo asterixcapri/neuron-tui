@@ -65,7 +65,7 @@ final class DuplicateCommandsTest extends TestCase
                 static fn () => $terminal->simulateInput("/clear\r"),
             );
 
-            (new Tui(new Agent(), $terminal, commands: $add(new Commands(), $first, $second)))->run();
+            (new Tui((new Agent())->setThreadId('test-thread'), $terminal, commands: $add(new Commands(), $first, $second)))->run();
 
             self::assertSame(['first'], $ran, $form);
         }
@@ -130,7 +130,7 @@ final class DuplicateCommandsTest extends TestCase
             ->addCommand([$commands[3], $commands[4]])
             ->addCommand([$commands[5], $commands[6]])
             ->addCommand(new HelpCommand());
-        (new Tui(new Agent(), $terminal, commands: $mounted))->run();
+        (new Tui((new Agent())->setThreadId('test-thread'), $terminal, commands: $mounted))->run();
 
         self::assertIsString($suggestions);
         self::assertInOrder($descriptions, $suggestions);

@@ -141,9 +141,9 @@ final class TuiCommandAdapter implements CommandAdapterInterface
         return $this->runtime->agent();
     }
 
-    public function useAgent(Agent $agent): void
+    public function useAgent(Agent $agent, bool $preserveConversation = true): void
     {
-        $this->runtime->useAgent($agent);
+        $this->runtime->useAgent($agent, $preserveConversation);
     }
 
     public function commands(): Commands

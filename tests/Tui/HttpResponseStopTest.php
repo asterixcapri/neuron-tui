@@ -31,7 +31,7 @@ final class HttpResponseStopTest extends TestCase
         $stopSignal = new StopSignal(new InMemoryStorage(), 'conversation');
         // The Host clears a leftover signal before starting a new Turn.
         $stopSignal->request();
-        $first = new FixtureStream($this->body('Partial') . $this->body(' Hidden'), static function (string $line) use ($terminal): void {
+        $first = new FixtureStream($this->body('Partial', complete: false) . $this->body(' Hidden'), static function (string $line) use ($terminal): void {
             if (str_contains($line, 'Partial')) {
                 $terminal->simulateInput("Second\rThird\rDraft\x1b[D\x1b");
                 delay(0.08);
@@ -46,9 +46,9 @@ final class HttpResponseStopTest extends TestCase
 
         (new Tui($agent, $terminal, stopSignal: $stopSignal))->run();
 
-        self::assertSame($history, $agent->getChatHistory());
-        self::assertSame(['First', 'Partial', 'Second', 'Second answer', 'Third', 'Third answer', 'Draf!t', 'Draft answer'], array_map(static fn (Message $message): ?string => $message->getContent(), $history->getMessages()));
-        self::assertNull($history->getMessages()[1]->getMetadata('stop_reason'));
+        self::assertSame($history->getThreadId(), $agent->getChatHistory()->getThreadId());
+        self::assertSame(['First', 'Partial', 'Second', 'Second answer', 'Third', 'Third answer', 'Draf!t', 'Draft answer'], array_map(static fn (Message $message): ?string => $message->getContent(), $agent->getChatHistory()->getMessages()));
+        self::assertSame('stopped', $agent->getChatHistory()->getMessages()[1]->getMetadata('stop_reason'));
         self::assertCount(4, $client->requests);
         self::assertSame(1, $first->closes);
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -105,14 +105,14 @@ final class HttpResponseStopTest extends TestCase
 
     private function agent(FixtureHttpClient $client, StopSignal $stopSignal): Agent
     {
-        $agent = new Agent();
+        $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider(new OpenAI('fixture-key', 'fixture-model', httpClient: new StoppableHttpClient(inner: $client, stopSignal: $stopSignal, onPoll: static function (): void { delay(0); })));
 
         return $agent;
     }
 
-    private function body(string $text): string
+    private function body(string $text, bool $complete = true): string
     {
-        return 'data: ' . json_encode(['id' => 'msg-1', 'choices' => [['index' => 0, 'delta' => ['content' => $text], 'finish_reason' => null]]], JSON_THROW_ON_ERROR) . "\n\n";
+        return 'data: ' . json_encode(['id' => 'msg-1', 'choices' => [['index' => 0, 'delta' => ['content' => $text], 'finish_reason' => $complete ? 'stop' : null]]], JSON_THROW_ON_ERROR) . "\n\n";
     }
 }

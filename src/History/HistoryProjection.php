@@ -8,7 +8,7 @@ use NeuronAI\Chat\Enums\MessageRole;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\ToolResultMessage;
-use NeuronAI\Tools\ToolInterface;
+use NeuronAI\Tools\ToolCall;
 use NeuronInteraction\Message\UserMessageFactory;
 use NeuronInteraction\Message\UserMessageProcessorInterface;
 use NeuronInteraction\Message\UserMessageProcessors;
@@ -79,7 +79,7 @@ final class HistoryProjection
         if ($message instanceof ToolCallMessage) {
             $this->appendMessage(HistoryEntryKind::AssistantMessage, $message);
 
-            foreach ($message->getTools() as $tool) {
+            foreach ($message->getToolCalls() as $tool) {
                 $this->appendToolCall($tool);
             }
 
@@ -87,7 +87,7 @@ final class HistoryProjection
         }
 
         if ($message instanceof ToolResultMessage) {
-            foreach ($message->getTools() as $tool) {
+            foreach ($message->getToolCalls() as $tool) {
                 $this->applyToolResult($tool);
             }
 
@@ -113,7 +113,7 @@ final class HistoryProjection
         $this->entries[] = new ProjectedEntry($kind, $text);
     }
 
-    private function appendToolCall(ToolInterface $tool): int
+    private function appendToolCall(ToolCall $tool): int
     {
         $this->entries[] = new ProjectedEntry(
             HistoryEntryKind::ToolActivity,
@@ -125,7 +125,7 @@ final class HistoryProjection
         return $position;
     }
 
-    private function applyToolResult(ToolInterface $tool): void
+    private function applyToolResult(ToolCall $tool): void
     {
         // A result that finds no call of its own is still worth showing, so
         // it opens the call it should have answered and closes it at once.

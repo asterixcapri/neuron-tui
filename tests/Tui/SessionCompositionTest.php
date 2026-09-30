@@ -6,7 +6,6 @@ namespace NeuronTui\Tests\Tui;
 
 use Closure;
 use NeuronAI\Agent\Agent;
-use NeuronAI\Chat\History\InMemoryChatHistory;
 use NeuronAI\Chat\Messages\AssistantMessage;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Testing\FakeAIProvider;
@@ -19,10 +18,11 @@ use NeuronInteraction\Command\Selection;
 use NeuronInteraction\Command\SelectionOption;
 use NeuronInteraction\Configuration\ConfigurationStore;
 use NeuronInteraction\InputHistory\InputHistory;
-use NeuronInteraction\Session\Session;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\FileStorage;
 use NeuronInteraction\Storage\InMemoryStorage;
+use NeuronTui\Tests\History\SeededHistory;
+use NeuronTui\Tests\History\SessionHistory;
 use NeuronTui\Tui;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
@@ -37,50 +37,51 @@ final class SessionCompositionTest extends TestCase
             $sessionStore = $composition === 'default' ? null : new SessionStore(new InMemoryStorage(), 'test-user');
             $initial = $sessionStore !== null
                 ? $sessionStore->create()
-                : new InMemoryChatHistory();
-            $initial->addMessage(new UserMessage('Initial subject'));
-            $initial->addMessage(new AssistantMessage('Initial answer'));
+                : new SeededHistory();
+            SessionHistory::of($initial)->addMessage(new UserMessage('Initial subject'));
+            SessionHistory::of($initial)->addMessage(new AssistantMessage('Initial answer'));
             $selectedKey = null;
             if ($sessionStore !== null) {
                 $selectedKey = $sessionStore->summaries()[0]->key;
                 $initial = $sessionStore->read($selectedKey);
                 self::assertNotNull($initial);
             }
-            $initialMessages = $initial->getMessages();
-            $agent = new Agent();
-            $agent->setChatHistory($initial);
+            $initialMessages = SessionHistory::of($initial)->getMessages();
+            $agent = (new Agent())->setThreadId('test-thread');
+            $agent = ($initial)->bindTo($agent);
             $agent->setAiProvider(new FakeAIProvider(new AssistantMessage('Generated continuation')));
             $terminal = new VirtualTerminal(rows: 40);
             $startup = null;
             $beforeClear = null;
             $afterClear = null;
-            EventLoop::queue(static function () use ($agent, &$startup): void {
-                $startup = $agent->getChatHistory()->getMessages();
+            $tui = Tui::make($agent, $terminal, (new Commands())->addCommand([new ClearCommand(), new ResumeCommand()]), $sessionStore);
+            EventLoop::queue(static function () use ($tui, &$startup): void {
+                $startup = $tui->agent()->getChatHistory()->getMessages();
             });
             if ($sessionStore === null) {
                 // The default collection starts managing History only after /clear.
                 EventLoop::delay(0.01, static fn () => $terminal->simulateInput("/clear\r"));
             }
             EventLoop::delay(0.03, static fn () => $terminal->simulateInput("Later question\r"));
-            EventLoop::delay(0.15, static function () use ($agent, $terminal, &$beforeClear): void {
-                $beforeClear = $agent->getChatHistory()->getMessages();
+            EventLoop::delay(0.15, static function () use ($tui, $terminal, &$beforeClear): void {
+                $beforeClear = $tui->agent()->getChatHistory()->getMessages();
                 $terminal->simulateInput("/clear\r");
             });
-            EventLoop::delay(0.19, static function () use ($agent, $terminal, &$afterClear): void {
-                $afterClear = $agent->getChatHistory()->getMessages();
+            EventLoop::delay(0.19, static function () use ($tui, $terminal, &$afterClear): void {
+                $afterClear = $tui->agent()->getChatHistory()->getMessages();
                 $terminal->simulateInput("/resume\r");
             });
             EventLoop::delay(0.23, static fn () => $terminal->simulateInput("\r"));
             EventLoop::delay(0.29, static fn () => $terminal->simulateInput("\x03"));
 
-            Tui::make($agent, $terminal, (new Commands())->addCommand([new ClearCommand(), new ResumeCommand()]), $sessionStore)->run();
+            $tui->run();
 
             self::assertEquals($initialMessages, $startup);
             self::assertIsArray($beforeClear);
             self::assertCount($sessionStore === null ? 2 : 4, $beforeClear);
             self::assertSame('Generated continuation', $beforeClear[count($beforeClear) - 1]->getContent());
             self::assertSame([], $afterClear);
-            self::assertEquals($beforeClear, $agent->getChatHistory()->getMessages());
+            self::assertEquals($beforeClear, $tui->agent()->getChatHistory()->getMessages());
             $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
             if ($sessionStore !== null) {
                 self::assertStringContainsString('Initial subject', $display);
@@ -96,17 +97,17 @@ final class SessionCompositionTest extends TestCase
     public function testStartupDoesNotAutomaticallySelectAStoredSession(): void
     {
         $sessionStore = new SessionStore(new InMemoryStorage(), 'test-user');
-        $sessionStore->create()->addMessage(new UserMessage('Stored subject'));
-        $initial = new InMemoryChatHistory();
+        SessionHistory::of($sessionStore->create())->addMessage(new UserMessage('Stored subject'));
+        $initial = new SeededHistory();
         $initial->addMessage(new UserMessage('Host selected subject'));
-        $agent = new Agent();
-        $agent->setChatHistory($initial);
+        $agent = (new Agent())->setThreadId('test-thread');
+        $agent = ($initial)->bindTo($agent);
         $terminal = new VirtualTerminal();
         EventLoop::delay(0.12, static fn () => $terminal->simulateInput("\x03"));
 
         Tui::make($agent, $terminal, sessionStore: $sessionStore)->run();
 
-        self::assertSame($initial, $agent->getChatHistory());
+        self::assertSame($initial->getThreadId(), $agent->getChatHistory()->getThreadId());
         self::assertCount(1, $sessionStore->summaries());
         self::assertNull($sessionStore->summaries()[0]->title);
         self::assertStringContainsString('Host selected subject', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
@@ -122,7 +123,7 @@ final class SessionCompositionTest extends TestCase
                 EventLoop::delay(0.06, static fn () => $terminal->simulateInput("\x03"));
 
                 (new Tui(
-                    new Agent(),
+                    (new Agent())->setThreadId('test-thread'),
                     $terminal,
                     sessionStore: $supplySessionStore ? new SessionStore(new InMemoryStorage(), 'test-user') : null,
                     inputHistory: $inputs,
@@ -147,7 +148,7 @@ final class SessionCompositionTest extends TestCase
                     static function (CommandAdapterInterface $adapter) use (&$received): void {
                         $received[] = [$adapter->commands(), $adapter->sessionStore()];
                         if (count($received) === 1) {
-                            $adapter->sessionStore()->create()->addMessage(new \NeuronAI\Chat\Messages\UserMessage('Kept by this module'));
+                            SessionHistory::of($adapter->sessionStore()->create())->addMessage(new \NeuronAI\Chat\Messages\UserMessage('Kept by this module'));
                         } else {
                             self::assertCount(1, $adapter->sessionStore()->summaries());
                         }
@@ -155,7 +156,7 @@ final class SessionCompositionTest extends TestCase
                 );
                 $commands = new Commands();
                 $terminal = new VirtualTerminal();
-                $tui = Tui::make(new Agent(), $terminal, $commands, $sessionStore, inputHistory: $inputs);
+                $tui = Tui::make((new Agent())->setThreadId('test-thread'), $terminal, $commands, $sessionStore, inputHistory: $inputs);
                 $commands->addCommand($command);
                 EventLoop::queue(static fn () => $terminal->simulateInput("/inspect\r"));
                 EventLoop::delay(0.04, static fn () => $terminal->simulateInput("\x1b[A\r"));
@@ -209,7 +210,7 @@ final class SessionCompositionTest extends TestCase
             EventLoop::delay(0.04, static fn () => $terminal->simulateInput("\r"));
             $timeout = EventLoop::delay(0.15, static fn () => $terminal->simulateInput("\x03"));
 
-            Tui::make(new Agent(), $terminal, (new Commands())->addCommand($command), configurationStore: $store)->run();
+            Tui::make((new Agent())->setThreadId('test-thread'), $terminal, (new Commands())->addCommand($command), configurationStore: $store)->run();
             EventLoop::cancel($timeout);
 
             self::assertCount(2, $received);
@@ -232,11 +233,11 @@ final class SessionCompositionTest extends TestCase
     {
         foreach ([false, true] as $supplySessionStore) {
             $storage = new InMemoryStorage();
-            $previous = new InMemoryChatHistory();
+            $previous = new SeededHistory();
             $previous->addMessage(new UserMessage('External conversation'));
             $previous->addMessage(new AssistantMessage('External answer'));
-            $agent = new Agent();
-            $agent->setChatHistory($previous);
+            $agent = (new Agent())->setThreadId('test-thread');
+            $agent = ($previous)->bindTo($agent);
             $terminal = new VirtualTerminal();
             $received = [];
             $command = $this->commandThat(
@@ -245,6 +246,7 @@ final class SessionCompositionTest extends TestCase
                 },
             );
 
+            $tui = Tui::make($agent, $terminal, commands: (new Commands())->addCommand([$command, new ResumeCommand()]), sessionStore: $supplySessionStore ? new SessionStore($storage, 'test-user') : null);
             EventLoop::queue(
                 static fn () => $terminal->simulateInput("/inspect\r"),
             );
@@ -259,13 +261,13 @@ final class SessionCompositionTest extends TestCase
 
             EventLoop::delay(0.07, static fn () => $terminal->simulateInput("/resume\r"));
 
-            Tui::make($agent, $terminal, commands: (new Commands())->addCommand([$command, new ResumeCommand()]), sessionStore: $supplySessionStore ? new SessionStore($storage, 'test-user') : null)->run();
+            $tui->run();
 
             self::assertCount(2, $received);
             self::assertInstanceOf(SessionStore::class, $received[0]);
             self::assertSame($received[0], $received[1]);
-            self::assertSame($previous, $agent->getChatHistory());
-            self::assertCount(2, $agent->getChatHistory()->getMessages());
+            self::assertSame($previous->getThreadId(), $tui->agent()->getChatHistory()->getThreadId());
+            self::assertCount(2, $tui->agent()->getChatHistory()->getMessages());
             self::assertSame([], $received[0]->summaries());
             self::assertStringContainsString('External conversation', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
 
@@ -295,7 +297,7 @@ final class SessionCompositionTest extends TestCase
         );
         EventLoop::queue(static fn () => $terminal->simulateInput("/inspect\r"));
 
-        Tui::make(new Agent(), $terminal, (new Commands())->addCommand($command))->run();
+        Tui::make((new Agent())->setThreadId('test-thread'), $terminal, (new Commands())->addCommand($command))->run();
 
         self::assertSame('local', $owner);
     }
@@ -316,7 +318,7 @@ final class SessionCompositionTest extends TestCase
         EventLoop::queue(static fn () => $terminal->simulateInput("/inspect\r"));
 
         (new Tui(
-            new Agent(),
+            (new Agent())->setThreadId('test-thread'),
             $terminal,
             (new Commands())->addCommand($command),
             sessionStore: $sessionStore,
@@ -334,19 +336,20 @@ final class SessionCompositionTest extends TestCase
             $storage = new FileStorage($directory);
             $sessionStore = new SessionStore($storage, 'alice');
             $foreign = (new SessionStore($storage, 'bob'))->create();
-            $foreign->addMessage(new UserMessage('Private Bob subject'));
+            SessionHistory::of($foreign)->addMessage(new UserMessage('Private Bob subject'));
             $initial = $sessionStore->create();
-            $agent = new Agent();
-            $agent->setChatHistory($initial);
+            $agent = (new Agent())->setThreadId('test-thread');
+            $agent = ($initial)->bindTo($agent);
             $provider = new FakeAIProvider(new AssistantMessage('Persisted Alice answer'));
             $agent->setAiProvider($provider);
             $terminal = new VirtualTerminal(rows: 30);
             $cleared = null;
             $picker = null;
+            $tui = Tui::make($agent, $terminal, (new Commands())->addCommand([new ClearCommand(), new ResumeCommand()]), $sessionStore);
             EventLoop::queue(static fn () => $terminal->simulateInput("Alice subject\r"));
             EventLoop::delay(0.15, static fn () => $terminal->simulateInput("/clear\r"));
-            EventLoop::delay(0.19, static function () use ($agent, $terminal, &$cleared): void {
-                $cleared = $agent->getChatHistory();
+            EventLoop::delay(0.19, static function () use ($tui, $terminal, &$cleared): void {
+                $cleared = $tui->agent()->getChatHistory();
                 $terminal->simulateInput("/resume\r");
             });
             EventLoop::delay(0.23, static function () use ($terminal, &$picker): void {
@@ -355,22 +358,24 @@ final class SessionCompositionTest extends TestCase
             });
             EventLoop::delay(0.29, static fn () => $terminal->simulateInput("\x03"));
 
-            Tui::make($agent, $terminal, (new Commands())->addCommand([new ClearCommand(), new ResumeCommand()]), $sessionStore)->run();
+            $tui->run();
 
-            self::assertInstanceOf(Session::class, $cleared);
-            self::assertSame('alice', $cleared->getUserId());
-            self::assertNotSame($initial->getKey(), $cleared->getKey());
+            self::assertInstanceOf(\NeuronAI\Chat\History\ChatHistory::class, $cleared);
+            $clearedSession = $sessionStore->read($cleared->getThreadId());
+            self::assertNotNull($clearedSession);
+            self::assertSame('alice', $clearedSession->getUserId());
+            self::assertNotSame($initial->getKey(), $cleared->getThreadId());
             self::assertSame([], $cleared->getMessages());
             self::assertIsString($picker);
             self::assertStringContainsString('Alice subject', $picker);
             self::assertStringNotContainsString('Private Bob subject', $picker);
-            self::assertInstanceOf(Session::class, $agent->getChatHistory());
-            self::assertSame($initial->getKey(), $agent->getChatHistory()->getKey());
+            self::assertNotNull($sessionStore->read($tui->agent()->getChatHistory()->getThreadId()));
+            self::assertSame($initial->getKey(), $tui->agent()->getChatHistory()->getThreadId());
             $reopened = (new SessionStore(new FileStorage($directory), 'alice'))->read($initial->getKey());
             self::assertNotNull($reopened);
             self::assertCount(2, $reopened->getMessages());
             self::assertSame('Persisted Alice answer', $reopened->getMessages()[1]->getContent());
-            self::assertEquals($reopened->getMessages(), $agent->getChatHistory()->getMessages());
+            self::assertEquals($reopened->getMessages(), $tui->agent()->getChatHistory()->getMessages());
             self::assertNull($sessionStore->read($foreign->getKey()));
             self::assertNotNull((new SessionStore(new FileStorage($directory), 'bob'))->read($foreign->getKey()));
             $provider->assertCallCount(1);
@@ -391,12 +396,13 @@ final class SessionCompositionTest extends TestCase
     {
         $sessionStore = new SessionStore(new InMemoryStorage(), 'alice');
         $earlier = $sessionStore->create();
-        $earlier->addMessage(new UserMessage('Session removed during selection'));
-        $initial = new InMemoryChatHistory();
+        SessionHistory::of($earlier)->addMessage(new UserMessage('Session removed during selection'));
+        $initial = new SeededHistory();
         $initial->addMessage(new UserMessage('Current conversation'));
-        $agent = new Agent();
-        $agent->setChatHistory($initial);
+        $agent = (new Agent())->setThreadId('test-thread');
+        $agent = ($initial)->bindTo($agent);
         $terminal = new VirtualTerminal();
+        $tui = Tui::make($agent, $terminal, (new Commands())->addCommand(new ResumeCommand()), $sessionStore);
         EventLoop::queue(static fn () => $terminal->simulateInput("/resume\r"));
         EventLoop::delay(0.05, static function () use ($sessionStore, $earlier, $terminal): void {
             $sessionStore->delete($earlier->getKey());
@@ -404,9 +410,9 @@ final class SessionCompositionTest extends TestCase
         });
         EventLoop::delay(0.1, static fn () => $terminal->simulateInput("\x03"));
 
-        Tui::make($agent, $terminal, (new Commands())->addCommand(new ResumeCommand()), $sessionStore)->run();
+        $tui->run();
 
-        self::assertSame($initial, $agent->getChatHistory());
+        self::assertSame($initial->getThreadId(), $tui->agent()->getChatHistory()->getThreadId());
         self::assertStringContainsString(
             'No Session is named by that key.',
             AnsiUtils::stripAnsiCodes($terminal->getOutput()),

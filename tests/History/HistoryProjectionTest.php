@@ -18,7 +18,7 @@ use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Chat\Messages\Usage;
 use NeuronAI\Chat\Messages\UserMessage;
-use NeuronAI\Tools\Tool;
+use NeuronAI\Tools\ToolCall;
 use NeuronInteraction\Message\UserMessageProcessorInterface;
 use NeuronTui\History\HistoryProjection;
 use NeuronTui\History\ProjectedEntry;
@@ -162,7 +162,7 @@ final class HistoryProjectionTest extends TestCase
 
     public function testAnUnsafeToolResultIsPreviewedRatherThanShownRaw(): void
     {
-        $tool = (new Tool("read_\x00file"))
+        $tool = (new ToolCall(name: "read_\x00file"))
             ->setCallId('history-call')
             ->setInputs(['path' => "first line\nsecond line"])
             ->setResult("complete\tok \xFF" . str_repeat('y', 160)
@@ -190,7 +190,7 @@ final class HistoryProjectionTest extends TestCase
 
     public function testAToolCallIsPairedWithItsResult(): void
     {
-        $tool = (new Tool('lookup'))
+        $tool = (new ToolCall(name: 'lookup'))
             ->setCallId('lookup-call')
             ->setInputs(['q' => 'alpha'])
             ->setResult('alpha result');
@@ -214,11 +214,11 @@ final class HistoryProjectionTest extends TestCase
 
     public function testAResultArrivingOutOfOrderStillFindsItsCall(): void
     {
-        $first = (new Tool('first'))
+        $first = (new ToolCall(name: 'first'))
             ->setCallId('first-call')
             ->setInputs(['q' => 'one'])
             ->setResult('first result');
-        $second = (new Tool('second'))
+        $second = (new ToolCall(name: 'second'))
             ->setCallId('second-call')
             ->setInputs(['q' => 'two'])
             ->setResult('second result');
@@ -237,10 +237,10 @@ final class HistoryProjectionTest extends TestCase
 
     public function testCallsWithoutACallIdArePairedInTheOrderMade(): void
     {
-        $first = (new Tool('search'))
+        $first = (new ToolCall(name: 'search'))
             ->setInputs(['q' => 'one'])
             ->setResult('first fallback result');
-        $second = (new Tool('search'))
+        $second = (new ToolCall(name: 'search'))
             ->setInputs(['q' => 'two'])
             ->setResult('second fallback result');
 
@@ -262,7 +262,7 @@ final class HistoryProjectionTest extends TestCase
 
     public function testAToolCallWhoseResultNeverArrivesIsStillShown(): void
     {
-        $abandoned = (new Tool('lookup'))
+        $abandoned = (new ToolCall(name: 'lookup'))
             ->setCallId('abandoned-call')
             ->setInputs(['q' => 'alpha']);
 
@@ -280,7 +280,7 @@ final class HistoryProjectionTest extends TestCase
 
     public function testAResultWithoutACallStillProducesAnEntry(): void
     {
-        $orphan = (new Tool('lookup'))
+        $orphan = (new ToolCall(name: 'lookup'))
             ->setCallId('orphan-call')
             ->setInputs(['q' => 'alpha'])
             ->setResult('orphan result');
@@ -296,7 +296,7 @@ final class HistoryProjectionTest extends TestCase
 
     public function testTextSentWithAToolCallComesBeforeTheActivity(): void
     {
-        $tool = (new Tool('lookup'))
+        $tool = (new ToolCall(name: 'lookup'))
             ->setCallId('lookup-call')
             ->setInputs(['q' => 'alpha']);
 
@@ -323,7 +323,7 @@ final class HistoryProjectionTest extends TestCase
 
     public function testTheProjectionCanBeRunAgainAtAnyMoment(): void
     {
-        $tool = (new Tool('lookup'))
+        $tool = (new ToolCall(name: 'lookup'))
             ->setCallId('lookup-call')
             ->setInputs(['q' => 'alpha'])
             ->setResult('alpha result');

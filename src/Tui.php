@@ -52,6 +52,8 @@ final class Tui
 
     private bool $started = false;
 
+    private ?ConversationRuntime $runtime = null;
+
     private readonly UserMessageProcessors $userMessageProcessors;
 
     public function __construct(
@@ -123,6 +125,12 @@ final class Tui
         return $this;
     }
 
+    /** The Agent currently answering, including a copy bound to a selected Session. */
+    public function agent(): Agent
+    {
+        return $this->runtime?->agent() ?? $this->agent;
+    }
+
     public function run(): void
     {
         $this->ensureNotStarted();
@@ -139,7 +147,7 @@ final class Tui
             $this->userMessageProcessors,
         );
         $sessionTitleGeneration = new SessionTitleGeneration();
-        $runtime = new ConversationRuntime($this->agent, $view, $this->stopSignal, $sessionTitleGeneration);
+        $runtime = $this->runtime = new ConversationRuntime($this->agent, $view, $this->stopSignal, $sessionTitleGeneration, $this->sessionStore);
         $input = new ConversationInputHandler(
             $view,
             $this->inputHistory,
