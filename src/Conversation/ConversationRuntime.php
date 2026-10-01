@@ -37,13 +37,24 @@ final class ConversationRuntime
         $core->subscribe($renderer->consume(...));
     }
 
-    public function submitMessage(UserMessage $message): void
+    public function submitUserMessage(UserMessage $message): void
     {
-        $this->view->emptyComposer();
         $idle = !$this->core->isBusy() && $this->runningTurn === null;
         $this->core->submitMessage($message);
-        if ($idle) {
-            $this->showTurnStarted($message);
+        $this->presentAcceptedMessage($idle);
+    }
+    public function submitMessage(UserMessage $message): void
+    {
+        $idle = !$this->core->isBusy() && $this->runningTurn === null;
+        $this->core->submitPrompt($message);
+        $this->presentAcceptedMessage($idle);
+    }
+    private function presentAcceptedMessage(bool $idle): void
+    {
+        $this->view->emptyComposer();
+        $ready = $this->core->readyMessage();
+        if ($idle && $ready !== null) {
+            $this->showTurnStarted($ready);
         } else {
             $this->showQueuedMessages();
         }
