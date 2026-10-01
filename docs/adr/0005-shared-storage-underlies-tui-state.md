@@ -1,5 +1,13 @@
 # Shared storage underlies TUI state
 
+_Conversation Runtime extraction moves initial Session creation, ownership
+validation and Agent/Session binding into the core runtime supplied by the Host
+Application. The TUI and its Command Adapter obtain the same SessionStore from
+that runtime. SessionMessageStore and Neuron ChatHistory persistence remain
+unchanged; saved Sessions require no schema migration. This scoped revision
+supersedes TUI-owned Session initialization below._
+
+
 _The Refine Interaction composition revision supersedes runtime-owned module
 construction and a single TUI Storage configuration below. The Host Application
 may supply Commands, SessionStore and InputHistory independently. Tui creates

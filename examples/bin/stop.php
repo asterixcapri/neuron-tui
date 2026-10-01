@@ -5,7 +5,9 @@ declare(strict_types=1);
 use NeuronAI\Agent\Agent;
 use NeuronAI\HttpClient\Amp\AmpHttpClient;
 use NeuronAI\HttpClient\StoppableHttpClient;
+use NeuronChatCore\Conversation\ConversationRuntime as CoreRuntime;
 use NeuronChatCore\Interruption\StopSignal;
+use NeuronChatCore\Session\SessionStore;
 use NeuronChatCore\Storage\InMemoryStorage;
 use NeuronTui\Tui;
 use NeuronTuiDemo\AIProviderFactory;
@@ -34,6 +36,6 @@ $agent->setAiProvider(AIProviderFactory::create(
     ),
 ));
 
-Tui::make($agent, stopSignal: $stopSignal)
+Tui::make(new CoreRuntime($agent, new SessionStore(new InMemoryStorage(), 'local'), stopSignal: $stopSignal))
     ->setSubtitle('HTTP stop experiment · Escape requests EOF')
     ->run();

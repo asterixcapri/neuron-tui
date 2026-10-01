@@ -13,7 +13,6 @@ use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Providers\ProviderResponse;
 use NeuronAI\Testing\FakeAIProvider;
-use NeuronTui\Conversation\TurnRunner;
 use NeuronTui\Tests\Tools\CallbackTool;
 use NeuronTui\View\ConversationView;
 use PHPUnit\Framework\TestCase;

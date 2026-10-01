@@ -19,6 +19,7 @@ use NeuronChatCore\Command\Commands;
 use NeuronChatCore\Command\ResumeCommand;
 use NeuronChatCore\Command\Selection;
 use NeuronChatCore\Command\SelectionOption;
+use NeuronChatCore\Conversation\ConversationRuntime as CoreRuntime;
 use NeuronChatCore\InputHistory\InputHistory;
 use NeuronChatCore\Session\SessionStore;
 use NeuronChatCore\Storage\FileStorage;
@@ -113,7 +114,7 @@ final class InputHistoryTest extends TestCase
             static fn() => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, $terminal, sessionStore: new SessionStore($storage, 'test-user'), inputHistory: new InputHistory($storage), commands: (new Commands())->addCommand($command)))
+        (new Tui(new CoreRuntime($agent, new SessionStore($storage, 'test-user')), $terminal, inputHistory: new InputHistory($storage), commands: (new Commands())->addCommand($command)))
             ->run();
 
         self::assertSame(['accepted', 'accepted recalled'], $command->arguments);
@@ -181,7 +182,7 @@ final class InputHistoryTest extends TestCase
             },
         );
 
-        (new Tui($agent, $terminal, sessionStore: new SessionStore($storage, 'test-user'), inputHistory: new InputHistory($storage)))->run();
+        (new Tui(new CoreRuntime($agent, new SessionStore($storage, 'test-user')), $terminal, inputHistory: new InputHistory($storage)))->run();
 
         self::assertIsString($whileQueued);
         $whileQueued = AnsiUtils::stripAnsiCodes($whileQueued);
@@ -233,7 +234,7 @@ final class InputHistoryTest extends TestCase
             static fn() => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, $terminal, sessionStore: $sessionStore, inputHistory: new InputHistory($storage), commands: (new Commands())->addCommand(new ClearCommand())))
+        (new Tui(new CoreRuntime($agent, $sessionStore), $terminal, inputHistory: new InputHistory($storage), commands: (new Commands())->addCommand(new ClearCommand())))
             ->run();
 
         self::assertCount(2, $provider->getRecorded());
@@ -277,7 +278,7 @@ final class InputHistoryTest extends TestCase
             static fn() => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, $terminal, sessionStore: new SessionStore($storage, 'test-user'), inputHistory: new InputHistory($storage), commands: (new Commands())->addCommand(new ResumeCommand())))
+        (new Tui(new CoreRuntime($agent, new SessionStore($storage, 'test-user')), $terminal, inputHistory: new InputHistory($storage), commands: (new Commands())->addCommand(new ResumeCommand())))
             ->run();
 
         self::assertCount(1, $provider->getRecorded());
@@ -306,7 +307,7 @@ final class InputHistoryTest extends TestCase
             0.2,
             static fn() => $firstTerminal->simulateInput("\x03"),
         );
-        (new Tui($firstAgent, $firstTerminal, sessionStore: new SessionStore($storage, 'test-user'), inputHistory: new InputHistory($storage)))->run();
+        (new Tui(new CoreRuntime($firstAgent, new SessionStore($storage, 'test-user')), $firstTerminal, inputHistory: new InputHistory($storage)))->run();
 
         $secondProvider = new FakeAIProvider(
             new AssistantMessage('Second answer.'),
@@ -323,7 +324,7 @@ final class InputHistoryTest extends TestCase
             0.2,
             static fn() => $secondTerminal->simulateInput("\x03"),
         );
-        (new Tui($secondAgent, $secondTerminal, sessionStore: new SessionStore($storage, 'test-user'), inputHistory: new InputHistory($storage)))->run();
+        (new Tui(new CoreRuntime($secondAgent, new SessionStore($storage, 'test-user')), $secondTerminal, inputHistory: new InputHistory($storage)))->run();
 
         self::assertSame(
             'Remember between TUIs recalled',
@@ -354,7 +355,7 @@ final class InputHistoryTest extends TestCase
                 0.2,
                 static fn() => $firstTerminal->simulateInput("\x03"),
             );
-            (new Tui($firstAgent, $firstTerminal, sessionStore: new SessionStore(new FileStorage($directory), 'test-user'), inputHistory: new InputHistory(new FileStorage($directory))))
+            (new Tui(new CoreRuntime($firstAgent, new SessionStore(new FileStorage($directory), 'test-user')), $firstTerminal, inputHistory: new InputHistory(new FileStorage($directory))))
                 ->run();
 
             $secondProvider = new FakeAIProvider(
@@ -372,7 +373,7 @@ final class InputHistoryTest extends TestCase
                 0.2,
                 static fn() => $secondTerminal->simulateInput("\x03"),
             );
-            (new Tui($secondAgent, $secondTerminal, sessionStore: new SessionStore(new FileStorage($directory), 'test-user'), inputHistory: new InputHistory(new FileStorage($directory))))
+            (new Tui(new CoreRuntime($secondAgent, new SessionStore(new FileStorage($directory), 'test-user')), $secondTerminal, inputHistory: new InputHistory(new FileStorage($directory))))
                 ->run();
 
             self::assertSame(
@@ -422,7 +423,7 @@ final class InputHistoryTest extends TestCase
             static fn() => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, $terminal))->run();
+        (new Tui(new CoreRuntime($agent, new SessionStore(new InMemoryStorage(), 'local')), $terminal))->run();
 
         self::assertCount(2, $provider->getRecorded());
         self::assertSame(
@@ -457,7 +458,7 @@ final class InputHistoryTest extends TestCase
             static fn() => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, $terminal, sessionStore: new SessionStore($storage, 'test-user'), inputHistory: new InputHistory($storage)))->run();
+        (new Tui(new CoreRuntime($agent, new SessionStore($storage, 'test-user')), $terminal, inputHistory: new InputHistory($storage)))->run();
 
         self::assertSame(
             ['  Remember me  ', '  Remember me  again'],
@@ -484,7 +485,7 @@ final class InputHistoryTest extends TestCase
             static fn() => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, $terminal, sessionStore: new SessionStore($storage, 'test-user'), inputHistory: new InputHistory($storage)))->run();
+        (new Tui(new CoreRuntime($agent, new SessionStore($storage, 'test-user')), $terminal, inputHistory: new InputHistory($storage)))->run();
 
         self::assertCount(1, $provider->getRecorded());
         self::assertSame(
@@ -511,7 +512,7 @@ final class InputHistoryTest extends TestCase
             static fn() => $fixture->terminal->simulateInput("\x03"),
         );
 
-        (new Tui($fixture->agent, $fixture->terminal, sessionStore: new SessionStore($fixture->storage, 'test-user'), inputHistory: new InputHistory($fixture->storage)))
+        (new Tui(new CoreRuntime($fixture->agent, new SessionStore($fixture->storage, 'test-user')), $fixture->terminal, inputHistory: new InputHistory($fixture->storage)))
             ->run();
 
         self::assertSame(
@@ -539,7 +540,7 @@ final class InputHistoryTest extends TestCase
             static fn() => $fixture->terminal->simulateInput("\x03"),
         );
 
-        (new Tui($fixture->agent, $fixture->terminal, sessionStore: new SessionStore($fixture->storage, 'test-user'), inputHistory: new InputHistory($fixture->storage)))
+        (new Tui(new CoreRuntime($fixture->agent, new SessionStore($fixture->storage, 'test-user')), $fixture->terminal, inputHistory: new InputHistory($fixture->storage)))
             ->run();
 
         self::assertSame(
@@ -567,7 +568,7 @@ final class InputHistoryTest extends TestCase
             static fn() => $fixture->terminal->simulateInput("\x03"),
         );
 
-        (new Tui($fixture->agent, $fixture->terminal, sessionStore: new SessionStore($fixture->storage, 'test-user'), inputHistory: new InputHistory($fixture->storage)))
+        (new Tui(new CoreRuntime($fixture->agent, new SessionStore($fixture->storage, 'test-user')), $fixture->terminal, inputHistory: new InputHistory($fixture->storage)))
             ->run();
 
         self::assertSame(
@@ -594,7 +595,7 @@ final class InputHistoryTest extends TestCase
             static fn() => $fixture->terminal->simulateInput("\x03"),
         );
 
-        (new Tui($fixture->agent, $fixture->terminal, sessionStore: new SessionStore($fixture->storage, 'test-user'), inputHistory: new InputHistory($fixture->storage)))
+        (new Tui(new CoreRuntime($fixture->agent, new SessionStore($fixture->storage, 'test-user')), $fixture->terminal, inputHistory: new InputHistory($fixture->storage)))
             ->run();
 
         self::assertSame(
@@ -621,7 +622,7 @@ final class InputHistoryTest extends TestCase
             static fn() => $fixture->terminal->simulateInput("\x03"),
         );
 
-        (new Tui($fixture->agent, $fixture->terminal, sessionStore: new SessionStore($fixture->storage, 'test-user'), inputHistory: new InputHistory($fixture->storage)))
+        (new Tui(new CoreRuntime($fixture->agent, new SessionStore($fixture->storage, 'test-user')), $fixture->terminal, inputHistory: new InputHistory($fixture->storage)))
             ->run();
 
         self::assertSame(
@@ -658,7 +659,7 @@ final class InputHistoryTest extends TestCase
             },
         );
 
-        (new Tui($fixture->agent, $fixture->terminal, sessionStore: new SessionStore($fixture->storage, 'test-user'), inputHistory: new InputHistory($fixture->storage), commands: (new Commands())->addCommand([
+        (new Tui(new CoreRuntime($fixture->agent, new SessionStore($fixture->storage, 'test-user')), $fixture->terminal, inputHistory: new InputHistory($fixture->storage), commands: (new Commands())->addCommand([
             self::commandNamed('/alpha', 'The first suggestion.'),
             self::commandNamed('/album', 'The second suggestion.'),
         ])))
@@ -719,7 +720,7 @@ final class InputHistoryTest extends TestCase
             static fn() => $terminal->simulateInput("\x03"),
         );
 
-        (new Tui($agent, $terminal, sessionStore: new SessionStore($storage, 'test-user'), inputHistory: new InputHistory($storage), commands: (new Commands())->addCommand($command)))
+        (new Tui(new CoreRuntime($agent, new SessionStore($storage, 'test-user')), $terminal, inputHistory: new InputHistory($storage), commands: (new Commands())->addCommand($command)))
             ->run();
 
         self::assertSame('last', $command->chosen);
@@ -740,7 +741,7 @@ final class InputHistoryTest extends TestCase
             static fn() => $fixture->terminal->simulateInput("\x03"),
         );
 
-        (new Tui($fixture->agent, $fixture->terminal, sessionStore: new SessionStore($fixture->storage, 'test-user'), inputHistory: new InputHistory($fixture->storage)))
+        (new Tui(new CoreRuntime($fixture->agent, new SessionStore($fixture->storage, 'test-user')), $fixture->terminal, inputHistory: new InputHistory($fixture->storage)))
             ->run();
 
         self::assertSame(
@@ -793,7 +794,7 @@ final class InputHistoryTest extends TestCase
             },
         );
 
-        (new Tui($fixture->agent, $fixture->terminal, sessionStore: new SessionStore($fixture->storage, 'test-user'), inputHistory: new InputHistory($fixture->storage), commands: (new Commands())->addCommand(self::commandNamed('/probe', 'Runs the probe.'))))
+        (new Tui(new CoreRuntime($fixture->agent, new SessionStore($fixture->storage, 'test-user')), $fixture->terminal, inputHistory: new InputHistory($fixture->storage), commands: (new Commands())->addCommand(self::commandNamed('/probe', 'Runs the probe.'))))
             ->run();
 
         self::assertIsString($recalled);
@@ -835,7 +836,7 @@ final class InputHistoryTest extends TestCase
             },
         );
 
-        (new Tui($fixture->agent, $fixture->terminal, sessionStore: new SessionStore($fixture->storage, 'test-user'), inputHistory: new InputHistory($fixture->storage), commands: (new Commands())->addCommand(self::commandNamed('/probe', 'Runs the probe.'))))
+        (new Tui(new CoreRuntime($fixture->agent, new SessionStore($fixture->storage, 'test-user')), $fixture->terminal, inputHistory: new InputHistory($fixture->storage), commands: (new Commands())->addCommand(self::commandNamed('/probe', 'Runs the probe.'))))
             ->run();
 
         self::assertIsString($display);

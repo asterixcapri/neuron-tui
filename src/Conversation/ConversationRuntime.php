@@ -7,7 +7,7 @@ namespace NeuronTui\Conversation;
 use Amp\Future;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\Messages\UserMessage;
-use NeuronChatCore\Interruption\StopSignal;
+use NeuronChatCore\Conversation\ConversationRuntime as CoreRuntime;
 use NeuronChatCore\Session\Session;
 use NeuronTui\Session\SessionTitleGeneration;
 use NeuronTui\View\ConversationView;
@@ -17,212 +17,136 @@ use Throwable;
 use function Amp\async;
 use function microtime;
 
-/**
- * Coordinates the answering Agent, Turn preparation, execution and presentation.
- *
- * @internal
- */
+/** Terminal scheduling and presentation for the host's core runtime. @internal */
 final class ConversationRuntime
 {
     private readonly WorkingIndicator $workingIndicator;
-
-    private readonly TurnQueue $turnQueue;
-
-    private readonly TurnRunner $turnRunner;
-
     /** @var Future<mixed>|null */
     private ?Future $runningTurn = null;
-
     private bool $stopped = false;
-
-    private bool $responseStopRequested = false;
-
+    private bool $turnPresented = false;
     private ?string $displayedHistory = null;
 
     public function __construct(
-        private Agent $agent,
+        private readonly CoreRuntime $core,
         private readonly ConversationView $view,
-        private Session $session,
-        private readonly ?StopSignal $stopSignal = null,
         private readonly ?SessionTitleGeneration $titleGeneration = null,
     ) {
-        $this->agent = $this->session->bindTo($agent);
-        $this->workingIndicator = $this->view->workingIndicator();
-        $this->turnQueue = new TurnQueue();
-        $this->turnRunner = new TurnRunner($this->view);
+        $this->workingIndicator = $view->workingIndicator();
+        $renderer = new TurnEventRenderer($view);
+        $core->subscribe($renderer->consume(...));
     }
 
     public function submitMessage(UserMessage $message): void
     {
         $this->view->emptyComposer();
-        $accepted = $this->turnQueue->accept($message);
-
-        if ($accepted === null) {
+        $idle = !$this->core->isBusy() && $this->runningTurn === null;
+        $this->core->submitMessage($message);
+        if ($idle) {
+            $this->showTurnStarted($message);
+        } else {
             $this->showQueuedMessages();
-
-            return;
         }
-
-        $this->showTurnStarted($accepted);
     }
-
-    /** Synchronize a replaced History without repainting an unchanged conversation. */
     public function synchronizeHistory(): void
     {
-        $history = $this->agent->getChatHistory();
-
+        $history = $this->core->agent()->getChatHistory();
         if ($history->getThreadId() === $this->displayedHistory) {
             return;
         }
-
         $this->view->showHistory($history->getMessages());
         $this->displayedHistory = $history->getThreadId();
     }
-
     public function agent(): Agent
     {
-        return $this->agent;
+        return $this->core->agent();
     }
-
+    public function session(): Session
+    {
+        return $this->core->session();
+    }
     public function isBusy(): bool
     {
-        return $this->turnQueue->isBusy();
+        return $this->core->isBusy();
     }
-
-    public function requestInterruption(): void
-    {
-        if (
-            $this->stopSignal === null
-            || !$this->isBusy()
-            || ($this->runningTurn !== null && $this->runningTurn->isComplete())
-            || $this->responseStopRequested
-        ) {
-            return;
-        }
-
-        $this->stopSignal->request();
-        $this->responseStopRequested = true;
-        $this->view->stopping();
-        $this->view->paintPendingChanges();
-    }
-
     public function supportsResponseStop(): bool
     {
-        return $this->stopSignal !== null;
+        return $this->core->supportsResponseStop();
     }
-
-    /** A requested flag disappears when the StopSignal callback consumes it. */
-    private function responseWasStopped(): bool
-    {
-        return $this->responseStopRequested
-            && $this->stopSignal?->isRequested() === false;
-    }
-
     public function isStopped(): bool
     {
         return $this->stopped;
     }
-
-    /** Replace the answering Agent while retaining the selected conversation. */
     public function useAgent(Agent $agent): void
     {
-        $this->agent = $this->session->bindTo($agent);
+        $this->core->useAgent($agent);
     }
-
-    public function session(): Session
-    {
-        return $this->session;
-    }
-
-    /** Select another conversation without changing the Agent's configuration. */
     public function useSession(Session $session): void
     {
-        $agent = $session->bindTo($this->agent);
-        $this->session = $session;
-        $this->agent = $agent;
+        $this->core->useSession($session);
         $this->displayedHistory = null;
     }
-
+    public function requestInterruption(): void
+    {
+        if ($this->runningTurn?->isComplete() === true || !$this->core->requestInterruption()) {
+            return;
+        }
+        $this->view->stopping();
+        $this->view->paintPendingChanges();
+    }
     public function tick(): bool
     {
         if ($this->stopped) {
             return false;
         }
-
-        $message = $this->turnQueue->takeForExecution();
-
-        if ($message !== null) {
-            // Capture the Agent when execution is scheduled, so this Turn
-            // finishes with that Agent even if another takes over.
-            $agent = $this->agent;
-            $session = $this->session;
-            $this->runningTurn = async(function () use ($agent, $message, $session): void {
-                $completed = $this->turnRunner->run($agent, $message, $this->responseWasStopped(...));
-                if ($completed && !$this->stopped && !$this->responseStopRequested) {
-                    $this->titleGeneration?->schedule($session, $agent);
-                }
-            });
-
+        if ($this->runningTurn !== null) {
+            if (!$this->runningTurn->isComplete()) {
+                $this->workingIndicator->advance(microtime(true));
+                return true;
+            }
+            try {
+                $this->runningTurn->await();
+            } catch (Throwable) { /* Errors have already been rendered through events. */
+            }
+            $this->runningTurn = null;
+            $this->turnPresented = false;
+            $this->workingIndicator->stop();
+            $this->view->ready();
+            $next = $this->core->readyMessage();
+            $this->showQueuedMessages();
+            if ($next === null) {
+                return false;
+            }
+            $this->showTurnStarted($next);
             return true;
         }
-
-        if (!$this->runningTurn instanceof Future) {
+        $ready = $this->core->readyMessage();
+        if ($ready === null) {
             return false;
         }
-
-        if (!$this->runningTurn->isComplete()) {
-            $this->workingIndicator->advance(microtime(true));
-
-            return true;
+        if (!$this->turnPresented) {
+            $this->showQueuedMessages();
+            $this->showTurnStarted($ready);
         }
-
-        try {
-            $this->runningTurn->await();
-        } catch (Throwable) {
-            // Execution errors have already been presented through core events.
-        }
-
-        $this->runningTurn = null;
-        $this->showTurnFinished();
-
-        $next = $this->turnQueue->finishAndAdvance();
-
-        if ($next === null) {
-            return false;
-        }
-
-        $this->showQueuedMessages();
-        $this->showTurnStarted($next);
-
+        $this->runningTurn = async(function (): void {
+            $result = $this->core->executeNext();
+            if ($result?->completed && !$this->stopped && !$result->responseStopRequested) {
+                $this->titleGeneration?->schedule($result->session, $result->agent);
+            }
+        });
         return true;
     }
-
-    /**
-     * Shows the current message and starts the visible Working indicator.
-     *
-     * The queue has already prepared the Turn. Execution is scheduled by
-     * tick(), both for a fresh submission and for a previously queued message.
-     */
     private function showTurnStarted(UserMessage $message): void
     {
-        $this->responseStopRequested = false;
-        $this->stopSignal?->clear();
+        $this->turnPresented = true;
         $this->view->acceptUserMessage($message);
-        $this->view->working($this->stopSignal !== null);
+        $this->view->working($this->core->supportsResponseStop());
         $this->workingIndicator->start(microtime(true));
     }
-
-    private function showTurnFinished(): void
-    {
-        $this->workingIndicator->stop();
-        $this->view->ready();
-    }
-
     private function showQueuedMessages(): void
     {
-        $this->view->showQueuedMessages($this->turnQueue->queuedMessages());
+        $this->view->showQueuedMessages($this->core->queuedMessages());
     }
-
     public function stop(): void
     {
         $this->stopped = true;

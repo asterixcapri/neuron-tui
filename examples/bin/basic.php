@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+use NeuronChatCore\Conversation\ConversationRuntime as CoreRuntime;
+use NeuronChatCore\Session\SessionStore;
+use NeuronChatCore\Storage\InMemoryStorage;
 use NeuronTui\Tui;
 use NeuronTuiDemo\AIProviderFactory;
 use NeuronTuiDemo\DemoAgent;
@@ -14,4 +17,4 @@ require_once __DIR__ . '/../vendor/autoload.php';
 $agent = DemoAgent::make();
 $agent->setAiProvider(AIProviderFactory::create('openai:gpt-5.4-nano'));
 
-Tui::make($agent)->run();
+Tui::make(new CoreRuntime($agent, new SessionStore(new InMemoryStorage(), 'local')))->run();
