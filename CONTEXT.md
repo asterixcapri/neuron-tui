@@ -80,8 +80,9 @@ _Avoid_: Choice option, Picker row, menu item
 
 **Concurrent command**:
 A Command declared safe to execute while an Agent is working, without
-interfering with the state used by that work. The interaction Adapter decides
-whether to admit it.
+interfering with the state used by that work. The core runtime permits only
+Concurrent Commands while busy; the interaction Adapter may further restrict
+admission and presents refusal.
 _Avoid_: Async command, background command, command that runs while working
 
 **Command controls**:
@@ -93,7 +94,8 @@ _Avoid_: Command context, environment, facade, API
 
 **Command Adapter**:
 The realization of Command controls in a particular interaction environment.
-It admits Commands, carries out their requested operations, and interprets
+It presents shared runtime admission and may impose additional restrictions,
+carries out Command operations, and interprets
 their technical outcomes as terminal effects, backend responses, or other
 output appropriate to that environment.
 _Avoid_: Command runner, Command result
@@ -150,3 +152,5 @@ _Avoid_: Round, exchange, request
 The animated line in the History that tells a person the Agent is still busy,
 counting the seconds the turn has taken so far.
 _Avoid_: Spinner, loader, progress bar
+
+Command availability is shared core policy: client-owned Commands preserve first-match identifiers, and ConversationRuntime enforces idle/concurrent admission for invocation. Terminal suggestions use that same policy; the terminal Adapter presents refusal and all Command effects. Selection continuation invokes through the runtime again against current state.

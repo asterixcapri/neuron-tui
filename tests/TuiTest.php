@@ -1369,6 +1369,29 @@ final class TuiTest extends TestCase
         self::assertSame(['/probe'], array_map(static fn(UserMessage $message): ?string => $message->getContent(), (new InputHistory($storage))->entries()));
     }
 
+    public function testSelectionContinuationRechecksAvailabilityAfterHostReservesATurn(): void
+    {
+        $terminal = new VirtualTerminal(rows: 30);
+        $selected = false;
+        $runtime = new CoreRuntime((new Agent())->setAiProvider(new FakeAIProvider(new AssistantMessage('Answer'))));
+        $command = $this->commandThat(static function (CommandAdapterInterface $adapter, string $value) use (&$selected): void {
+            if ($value !== '') {
+                $selected = true;
+                return;
+            }
+            $adapter->requestSelection(new Selection('/probe', 'Choose', [new SelectionOption('selected', 'Selected')]));
+        });
+        EventLoop::queue(static fn() => $terminal->simulateInput("/probe\r"));
+        EventLoop::delay(0.08, static function () use ($runtime, $terminal): void {
+            $runtime->submitMessage(new UserMessage('Reserved by host'));
+            $terminal->simulateInput("\r");
+        });
+        EventLoop::delay(0.16, static fn() => $terminal->simulateInput("\x03"));
+        Tui::make($runtime, $terminal, commands: (new Commands())->addCommand($command))->run();
+        self::assertFalse($selected);
+        self::assertStringContainsString('/probe is refused while the Agent is working', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
+    }
+
     public function testStoppingImmediatelyAfterRequestingSelectionLeavesWithoutPresentingIt(): void
     {
         $terminal = new VirtualTerminal(rows: 30);
