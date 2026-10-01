@@ -13,15 +13,17 @@ binds Storage to an explicit user; reads return null for absent or other-user
 Sessions. Tui resolves local identity from explicit configuration, operating-
 system user or a stable local fallback. A supplied Store retains its existing
 owner. The same revision also supersedes the unconditional replacement of the
-Agent's initial History: startup displays that History unchanged, without
-importing it into SessionStore or selecting a latest Session. A Session returned
-by `SessionStore::create()` or a non-null `SessionStore::read(key)` is itself a
-Chat History, and the Host Application installs it directly when it wants the
-initial conversation to be resumable. Clear starts a managed Session; Resume
-lists only conversations managed by the configured SessionStore. This applies to
-default in-memory SessionStore too. No retention/import API or runtime snapshot
-state is introduced. Normal Session trimming, title rules and the single-run TUI
-lifecycle remain unchanged._
+Agent's initial History: the Neuron AI 4 revision now requires an explicit current
+Session from startup. Tui creates a Session in its configured Store when none is
+supplied; callers reopening a conversation pass both Session and SessionStore.
+Existing Agent messages without an explicit Session are rejected rather than
+silently imported or discarded. Session holds saved messages and metadata;
+SessionMessageStore persists them, while Neuron owns ChatHistory and its active
+model context. Runtime holds the current Session and Agent explicitly. Replacing
+the Agent binds it to that Session; selecting a Session binds the current Agent
+to the selected conversation. Clear and Resume use the latter operation. The
+default Store follows the same lifecycle in memory. Normal Session trimming,
+title rules and the single-run TUI lifecycle remain unchanged._
 
 _The historical decision text follows; apply the scoped supersessions above.
 Command kits have since been removed; the Host Application mounts ClearCommand

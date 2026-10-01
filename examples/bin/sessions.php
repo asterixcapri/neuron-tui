@@ -21,7 +21,7 @@ $sessionStore = new SessionStore(new FileStorage(__DIR__ . '/../.storage'), 'loc
 $agent = DemoAgent::make()->setThreadId(bin2hex(random_bytes(16)));
 $agent->setAiProvider(AIProviderFactory::create('openai:gpt-5.4-nano'));
 // Titles are generated automatically after successful turns and appear in /resume.
-$agent = ($sessionStore->create())->bindTo($agent);
+$session = $sessionStore->create();
 
 $commands = (new Commands())->addCommand([
     new ClearCommand(),
@@ -32,4 +32,5 @@ Tui::make(
     $agent,
     commands: $commands,
     sessionStore: $sessionStore,
+    session: $session,
 )->run();

@@ -12,6 +12,7 @@ use NeuronInteraction\Configuration\ConfigurationStore;
 use NeuronInteraction\Http\StopSignal;
 use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Message\UserMessageProcessors;
+use NeuronInteraction\Session\Session;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Conversation\ConversationInputHandler;
@@ -65,6 +66,7 @@ final class Tui
         ?InputHistory $inputHistory = null,
         ?UserMessageProcessors $userMessageProcessors = null,
         private readonly ?StopSignal $stopSignal = null,
+        private readonly ?Session $session = null,
     ) {
         $this->userMessageProcessors = $userMessageProcessors ?? new UserMessageProcessors();
         $this->commands = $commands ?? new Commands();
@@ -85,8 +87,19 @@ final class Tui
         ?InputHistory $inputHistory = null,
         ?UserMessageProcessors $userMessageProcessors = null,
         ?StopSignal $stopSignal = null,
+        ?Session $session = null,
     ): self {
-        return new self($agent, $terminal, $commands, $sessionStore, $configurationStore, $inputHistory, $userMessageProcessors, $stopSignal);
+        return new self(
+            $agent,
+            $terminal,
+            $commands,
+            $sessionStore,
+            $configurationStore,
+            $inputHistory,
+            $userMessageProcessors,
+            $stopSignal,
+            $session,
+        );
     }
 
     public function setTitle(string $title): self
@@ -136,6 +149,19 @@ final class Tui
         $this->ensureNotStarted();
         $this->started = true;
 
+        $session = $this->session;
+        if ($session === null) {
+            if ($this->agent->getThreadId() !== null && $this->agent->getChatHistory()->getMessages() !== []) {
+                throw new InvalidArgumentException('An Agent with existing messages requires an explicit Session.');
+            }
+            $session = $this->sessionStore->create();
+        } else {
+            $session = $this->sessionStore->read($session->getKey());
+            if ($session === null) {
+                throw new InvalidArgumentException('The selected Session does not belong to this SessionStore.');
+            }
+        }
+
         $terminal = $this->terminal ?? new Terminal();
         $view = new ConversationView(
             $terminal,
@@ -147,7 +173,13 @@ final class Tui
             $this->userMessageProcessors,
         );
         $sessionTitleGeneration = new SessionTitleGeneration();
-        $runtime = $this->runtime = new ConversationRuntime($this->agent, $view, $this->stopSignal, $sessionTitleGeneration, $this->sessionStore);
+        $runtime = $this->runtime = new ConversationRuntime(
+            $this->agent,
+            $view,
+            $session,
+            $this->stopSignal,
+            $sessionTitleGeneration,
+        );
         $input = new ConversationInputHandler(
             $view,
             $this->inputHistory,

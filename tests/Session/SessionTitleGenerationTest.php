@@ -160,7 +160,7 @@ final class SessionTitleGenerationTest extends TestCase
         EventLoop::delay(0.1, static fn () => $terminal->simulateInput("Grazie\r"));
         EventLoop::delay(0.2, static fn () => $terminal->simulateInput("\x03"));
 
-        Tui::make($agent, $terminal, sessionStore: $store)->run();
+        Tui::make($agent, $terminal, sessionStore: $store, session: $session)->run();
 
         self::assertSame('Configurazione Redis', $session->getTitle());
         self::assertSame(2, $requests->count);
@@ -179,7 +179,7 @@ final class SessionTitleGenerationTest extends TestCase
         EventLoop::queue(static fn () => $terminal->simulateInput("A subject\r"));
         EventLoop::delay(0.1, static fn () => $terminal->simulateInput("\x03"));
 
-        Tui::make($agent, $terminal, sessionStore: $store)->run();
+        Tui::make($agent, $terminal, sessionStore: $store, session: $session)->run();
 
         self::assertNull($session->getTitle());
         self::assertSame(1, $requests->count);
@@ -216,7 +216,7 @@ final class SessionTitleGenerationTest extends TestCase
         EventLoop::queue(static fn () => $terminal->simulateInput("A subject\r"));
         EventLoop::delay(0.1, static fn () => $terminal->simulateInput("\x03"));
 
-        Tui::make($agent, $terminal, sessionStore: $store)->run();
+        Tui::make($agent, $terminal, sessionStore: $store, session: $session)->run();
 
         self::assertNull($session->getTitle());
         self::assertSame(0, $requests->count);

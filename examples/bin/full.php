@@ -49,7 +49,7 @@ $httpClient = new StoppableHttpClient(
 
 $agent = DemoAgent::make()->setThreadId(bin2hex(random_bytes(16)));
 $agent->setAiProvider(AIProviderFactory::create($modelId, $httpClient));
-$agent = ($sessionStore->create())->bindTo($agent);
+$session = $sessionStore->create();
 
 $commands = (new Commands())->addCommand([
     new ClearCommand(),
@@ -67,6 +67,7 @@ Tui::make(
     $agent,
     commands: $commands,
     sessionStore: $sessionStore,
+    session: $session,
     configurationStore: $configurationStore,
     inputHistory: $inputHistory,
     userMessageProcessors: $userMessageProcessors,

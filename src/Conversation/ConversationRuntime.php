@@ -8,7 +8,7 @@ use Amp\Future;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronInteraction\Http\StopSignal;
-use NeuronInteraction\Session\SessionStore;
+use NeuronInteraction\Session\Session;
 use NeuronTui\Session\SessionTitleGeneration;
 use NeuronTui\View\ConversationView;
 use NeuronTui\View\WorkingIndicator;
@@ -41,10 +41,11 @@ final class ConversationRuntime
     public function __construct(
         private Agent $agent,
         private readonly ConversationView $view,
+        private Session $session,
         private readonly ?StopSignal $stopSignal = null,
         private readonly ?SessionTitleGeneration $titleGeneration = null,
-        private readonly ?SessionStore $sessionStore = null,
     ) {
+        $this->agent = $this->session->bindTo($agent);
         $this->workingIndicator = $this->view->workingIndicator();
         $this->turnQueue = new TurnQueue();
         $this->turnRunner = new TurnRunner($this->view);
@@ -121,33 +122,24 @@ final class ConversationRuntime
         return $this->stopped;
     }
 
-    /**
-     * Puts another Agent in charge of answering from here on.
-     *
-     * A conversation is nobody's property: the History the Agent leaving was
-     * answering is handed to the one taking over, so what is on the screen is
-     * still what the Agent holds and nothing is said about the change until
-     * the next answer, which comes from elsewhere. A command that knows the
-     * two Agents are not interchangeable installs another History itself.
-     */
-    public function useAgent(Agent $agent, bool $preserveConversation = true): void
+    /** Replace the answering Agent while retaining the selected conversation. */
+    public function useAgent(Agent $agent): void
     {
-        if (!$preserveConversation) {
-            $this->displayedHistory = null;
-            $this->agent = $agent;
-            return;
-        }
-        if ($this->sessionStore !== null) {
-            $agent = $this->sessionStore->transfer($this->agent, $agent);
-        } else {
-            $store = new \NeuronAI\Chat\History\InMemoryMessageStore();
-            $history = $this->agent->getChatHistory();
-            foreach ($history->getMessages() as $message) {
-                $store->append($history->getThreadId(), $message);
-            }
-            $agent = $agent->for($history->getThreadId())->setMessageStore($store);
-        }
+        $this->agent = $this->session->bindTo($agent);
+    }
+
+    public function session(): Session
+    {
+        return $this->session;
+    }
+
+    /** Select another conversation without changing the Agent's configuration. */
+    public function useSession(Session $session): void
+    {
+        $agent = $session->bindTo($this->agent);
+        $this->session = $session;
         $this->agent = $agent;
+        $this->displayedHistory = null;
     }
 
     public function tick(): bool
@@ -162,14 +154,11 @@ final class ConversationRuntime
             // Capture the Agent when execution is scheduled, so this Turn
             // finishes with that Agent even if another takes over.
             $agent = $this->agent;
-            $history = $agent->getChatHistory();
-            $this->runningTurn = async(function () use ($agent, $message, $history): void {
+            $session = $this->session;
+            $this->runningTurn = async(function () use ($agent, $message, $session): void {
                 $completed = $this->turnRunner->run($agent, $message, $this->responseWasStopped(...));
                 if ($completed && !$this->stopped && !$this->responseStopRequested) {
-                    $session = $this->sessionStore?->read($history->getThreadId());
-                    if ($session !== null) {
-                        $this->titleGeneration?->schedule($session, $agent);
-                    }
+                    $this->titleGeneration?->schedule($session, $agent);
                 }
             });
 
