@@ -5,9 +5,8 @@ declare(strict_types=1);
 namespace NeuronTui\View;
 
 use NeuronAI\Tools\ToolCall;
-use NeuronChatCore\History\ToolCallCorrelation;
-use NeuronChatCore\History\ToolData;
 use NeuronTui\History\ToolActivityText;
+use NeuronTui\History\ToolCallCorrelation;
 
 use function count;
 use function microtime;
@@ -40,7 +39,7 @@ final class ToolActivity
     /**
      * Shows a call, and reports where it was shown.
      */
-    public function start(ToolCall|ToolData $tool): int
+    public function start(ToolCall $tool): int
     {
         $this->entries[] = $this->history->addEntry(
             HistoryEntryKind::ToolActivity,
@@ -53,7 +52,7 @@ final class ToolActivity
         return $position;
     }
 
-    public function finish(ToolCall|ToolData $tool): void
+    public function finish(ToolCall $tool): void
     {
         // A result nothing asked for is still worth showing, so it opens the
         // call it should have answered and closes it at once.

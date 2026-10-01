@@ -16,8 +16,9 @@ Command collections remain client-owned. UI effects belong to the Adapter;
 conversation operations delegate to core. Core enforces live execution admission,
 while TUI additionally refuses ordinary Commands from its local turn reservation.
 Selection continuations recheck current availability. Native generators preserve
-Neuron objects and AgentState without a second event vocabulary. Historical
-projection snapshots are independent of live streaming. Host composition, Session
+Neuron objects and AgentState without a second event vocabulary. History
+presentation and display-position correlation belong entirely to the TUI, using
+native Neuron messages and ToolCall without core presentation snapshots. Host composition, Session
 ownership, captured execution context, first-match identifiers, no default Command
 mounting, single-run lifecycle and response-stop limits remain unchanged._
 
