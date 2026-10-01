@@ -18,6 +18,7 @@ use NeuronTui\Tests\Tools\CallbackTool;
 use NeuronTui\View\ConversationView;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
+use RuntimeException;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
@@ -201,6 +202,34 @@ final class TurnRunnerTest extends TestCase
         self::assertStringContainsString('Human-in-the-loop interruptions are not supported.', $display);
         self::assertStringNotContainsString('Empty response.', $display);
         $provider->assertCallCount(1);
+    }
+
+    public function testAStreamFailureRendersTheErrorOnceAfterPartialText(): void
+    {
+        $terminal = new VirtualTerminal(rows: 24);
+        $provider = new class (new AssistantMessage()) extends FakeAIProvider {
+            protected function streamChunks(Message $response): Generator
+            {
+                yield new TextChunk('failed-stream', 'Partial answer.');
+                throw new RuntimeException('Provider failed');
+            }
+        };
+        $view = new ConversationView($terminal, 'Neuron AI', 'Conversation');
+        $turn = new TurnRunner($view);
+        $agent = $this->agentOf($provider);
+        EventLoop::queue(static function () use ($turn, $agent): void {
+            try {
+                $turn->run($agent, new UserMessage('Answer'));
+            } catch (RuntimeException) {
+                // The runtime can release its queue after the error event renders.
+            }
+        });
+        EventLoop::run();
+        $view->paintPendingChanges();
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+        self::assertStringContainsString('Partial answer.', $display);
+        self::assertStringContainsString('RuntimeException: Provider failed', $display);
+        self::assertStringNotContainsString('Empty response.', $display);
     }
 
     private function agentOf(FakeAIProvider $provider): Agent

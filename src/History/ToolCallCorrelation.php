@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace NeuronTui\History;
 
 use NeuronAI\Tools\ToolCall;
+use NeuronChatCore\Conversation\ToolData;
 
 use function array_shift;
 
@@ -27,7 +28,7 @@ final class ToolCallCorrelation
     /** @var array<string, list<int>> */
     private array $positionsByName = [];
 
-    public function registerCall(ToolCall $tool, int $position): void
+    public function registerCall(ToolCall|ToolData $tool, int $position): void
     {
         $callId = $tool->getCallId();
 
@@ -46,7 +47,7 @@ final class ToolCallCorrelation
      * association. Without a call ID, matching consumes the first waiting
      * position for the tool's name. An unmatched result returns null.
      */
-    public function matchResult(ToolCall $tool): ?int
+    public function matchResult(ToolCall|ToolData $tool): ?int
     {
         $callId = $tool->getCallId();
 
