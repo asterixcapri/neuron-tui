@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace NeuronTui\Conversation;
 
 use NeuronAI\Chat\Messages\ContentBlocks\TextContent;
-use NeuronInteraction\Command\Commands;
-use NeuronInteraction\Configuration\ConfigurationStore;
-use NeuronInteraction\InputHistory\InputHistory;
-use NeuronInteraction\Message\UserMessageProcessorInterface;
-use NeuronInteraction\Message\UserMessageProcessors;
-use NeuronInteraction\Session\SessionStore;
+use NeuronChatCore\Command\Commands;
+use NeuronChatCore\Configuration\ConfigurationStore;
+use NeuronChatCore\InputHistory\InputHistory;
+use NeuronChatCore\Message\UserMessageProcessorInterface;
+use NeuronChatCore\Message\UserMessageProcessors;
+use NeuronChatCore\Session\SessionStore;
 use NeuronTui\Command\TuiCommandAdapter;
 use NeuronTui\View\ConversationView;
 use Symfony\Component\Tui\Event\InputEvent;

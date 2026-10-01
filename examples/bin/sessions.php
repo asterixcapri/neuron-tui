@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-use NeuronInteraction\Command\ClearCommand;
-use NeuronInteraction\Command\Commands;
-use NeuronInteraction\Command\ResumeCommand;
-use NeuronInteraction\Session\SessionStore;
-use NeuronInteraction\Storage\FileStorage;
+use NeuronChatCore\Command\ClearCommand;
+use NeuronChatCore\Command\Commands;
+use NeuronChatCore\Command\ResumeCommand;
+use NeuronChatCore\Session\SessionStore;
+use NeuronChatCore\Storage\FileStorage;
 use NeuronTui\Tui;
 use NeuronTuiDemo\AIProviderFactory;
 use NeuronTuiDemo\DemoAgent;

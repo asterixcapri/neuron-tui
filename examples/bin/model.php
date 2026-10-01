@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-use NeuronInteraction\Command\Commands;
-use NeuronInteraction\Configuration\ConfigurationStore;
-use NeuronInteraction\Storage\FileStorage;
+use NeuronChatCore\Command\Commands;
+use NeuronChatCore\Configuration\ConfigurationStore;
+use NeuronChatCore\Storage\FileStorage;
 use NeuronTui\Tui;
 use NeuronTuiDemo\AIProviderFactory;
 use NeuronTuiDemo\DemoAgent;

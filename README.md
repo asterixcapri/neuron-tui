@@ -7,7 +7,7 @@ sessions, add commands, and recall previous inputs—all from the terminal.
 Built with [Symfony TUI](https://github.com/symfony/tui).
 
 Sessions, commands, and input history are powered by
-[Neuron Interaction](https://github.com/asterixcapri/neuron-interaction), so you
+[Neuron Chat Core](https://github.com/asterixcapri/neuron-chat-core), so you
 can use the same features in backend applications too.
 
 Requires PHP 8.4.1+ and an interactive terminal.
@@ -72,9 +72,9 @@ The TUI mounts no Commands by default. Add `/help` to list available commands
 and `/exit` to close the terminal:
 
 ```php
-use NeuronInteraction\Command\Commands;
-use NeuronInteraction\Command\HelpCommand;
-use NeuronInteraction\Command\LeaveCommand;
+use NeuronChatCore\Command\Commands;
+use NeuronChatCore\Command\HelpCommand;
+use NeuronChatCore\Command\LeaveCommand;
 use NeuronTui\Tui;
 
 $commands = (new Commands())->addCommand([
@@ -94,9 +94,9 @@ Implement `CommandInterface` to add your own behavior. This command sends the
 staged Git diff to the Agent for review:
 
 ```php
-use NeuronInteraction\Command\Commands;
-use NeuronInteraction\Command\CommandAdapterInterface;
-use NeuronInteraction\Command\CommandInterface;
+use NeuronChatCore\Command\Commands;
+use NeuronChatCore\Command\CommandAdapterInterface;
+use NeuronChatCore\Command\CommandInterface;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronTui\Tui;
 
@@ -136,7 +136,7 @@ Return from your command after reporting an error if it cannot continue.
 
 While the Agent is responding, ordinary commands are unavailable. Commands that
 can safely run during a response may implement
-`NeuronInteraction\Command\ConcurrentCommandInterface`; Help and Leave already do.
+`NeuronChatCore\Command\ConcurrentCommandInterface`; Help and Leave already do.
 
 ## Sessions
 
@@ -148,11 +148,11 @@ To keep conversations between runs, configure a file-backed `SessionStore` and
 pass an initial Session from it:
 
 ```php
-use NeuronInteraction\Command\ClearCommand;
-use NeuronInteraction\Command\ResumeCommand;
-use NeuronInteraction\Command\Commands;
-use NeuronInteraction\Storage\FileStorage;
-use NeuronInteraction\Session\SessionStore;
+use NeuronChatCore\Command\ClearCommand;
+use NeuronChatCore\Command\ResumeCommand;
+use NeuronChatCore\Command\Commands;
+use NeuronChatCore\Storage\FileStorage;
+use NeuronChatCore\Session\SessionStore;
 use NeuronTui\Tui;
 
 $storage = new FileStorage(__DIR__ . '/.storage');
@@ -195,8 +195,8 @@ Use `ConfigurationStore` to remember application preferences, such as the
 selected model:
 
 ```php
-use NeuronInteraction\Configuration\ConfigurationStore;
-use NeuronInteraction\Storage\FileStorage;
+use NeuronChatCore\Configuration\ConfigurationStore;
+use NeuronChatCore\Storage\FileStorage;
 use NeuronTui\Tui;
 
 $settings = new ConfigurationStore(new FileStorage(__DIR__ . '/.storage'), 'local-user');
@@ -219,8 +219,8 @@ From an empty input, use ↑ and ↓ to recall earlier messages and commands.
 By default, input history lasts for the current run. To keep it between runs:
 
 ```php
-use NeuronInteraction\InputHistory\InputHistory;
-use NeuronInteraction\Storage\FileStorage;
+use NeuronChatCore\InputHistory\InputHistory;
+use NeuronChatCore\Storage\FileStorage;
 use NeuronTui\Tui;
 
 $inputHistory = new InputHistory(new FileStorage(__DIR__ . '/.storage'));
@@ -241,8 +241,8 @@ configure the provider with this client:
 use NeuronAI\HttpClient\Amp\AmpHttpClient;
 use NeuronAI\Providers\OpenAI\Responses\OpenAIResponses;
 use NeuronAI\HttpClient\StoppableHttpClient;
-use NeuronInteraction\Interruption\StopSignal;
-use NeuronInteraction\Storage\InMemoryStorage;
+use NeuronChatCore\Interruption\StopSignal;
+use NeuronChatCore\Storage\InMemoryStorage;
 use NeuronTui\Tui;
 
 use function Amp\delay;
@@ -278,12 +278,12 @@ See [stop.php](examples/bin/stop.php) for the complete example.
 ## User message processors
 
 A user message processor changes what the Agent receives without changing what
-the user sees. Implement `NeuronInteraction\Message\UserMessageProcessorInterface`:
+the user sees. Implement `NeuronChatCore\Message\UserMessageProcessorInterface`:
 `forAgent()` prepares ordinary input before it is sent, and `forDisplay()` adjusts
 messages before they are shown, including resumed History.
 
 ```php
-use NeuronInteraction\Message\UserMessageProcessors;
+use NeuronChatCore\Message\UserMessageProcessors;
 use NeuronTui\Tui;
 
 $processors = (new UserMessageProcessors())->addProcessor([
