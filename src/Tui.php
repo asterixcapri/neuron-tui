@@ -11,7 +11,6 @@ use NeuronChatCore\Command\Commands;
 use NeuronChatCore\Configuration\ConfigurationStore;
 use NeuronChatCore\Conversation\ConversationRuntime as CoreRuntime;
 use NeuronChatCore\InputHistory\InputHistory;
-use NeuronChatCore\Message\UserMessageProcessors;
 use NeuronChatCore\Session\SessionStore;
 use NeuronChatCore\Storage\InMemoryStorage;
 use NeuronTui\Conversation\ConversationInputHandler;
@@ -61,7 +60,6 @@ final class Tui
 
     private bool $started = false;
 
-    private readonly UserMessageProcessors $userMessageProcessors;
 
     public function __construct(
         private readonly CoreRuntime $conversation,
@@ -69,9 +67,7 @@ final class Tui
         ?Commands $commands = null,
         ?ConfigurationStore $configurationStore = null,
         ?InputHistory $inputHistory = null,
-        ?UserMessageProcessors $userMessageProcessors = null,
     ) {
-        $this->userMessageProcessors = $userMessageProcessors ?? new UserMessageProcessors();
         $this->commands = $commands ?? new Commands();
         $this->sessionStore = $this->conversation->sessionStore();
         $this->configurationStore = $configurationStore ?? new ConfigurationStore(new InMemoryStorage(), 'local');
@@ -84,7 +80,6 @@ final class Tui
         ?Commands $commands = null,
         ?ConfigurationStore $configurationStore = null,
         ?InputHistory $inputHistory = null,
-        ?UserMessageProcessors $userMessageProcessors = null,
     ): self {
         return new self(
             $conversation,
@@ -92,7 +87,6 @@ final class Tui
             $commands,
             $configurationStore,
             $inputHistory,
-            $userMessageProcessors,
         );
     }
 
@@ -151,7 +145,7 @@ final class Tui
             $this->commands->all(),
             $this->figlet,
             $this->figletFont,
-            $this->userMessageProcessors,
+            $this->conversation->userMessageProcessors(),
         );
         $sessionTitleGeneration = new SessionTitleGeneration();
         $runtime = new ConversationRuntime(
@@ -166,7 +160,6 @@ final class Tui
             $this->commands,
             $this->sessionStore,
             $this->configurationStore,
-            $this->userMessageProcessors,
         );
         $runtime->synchronizeHistory();
         $view->onSubmit($input->handleSubmit(...));

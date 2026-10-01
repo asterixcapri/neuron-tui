@@ -28,9 +28,8 @@ $userMessageProcessors = (new UserMessageProcessors())->addProcessor([
 ]);
 
 Tui::make(
-    new CoreRuntime($agent, new SessionStore(new InMemoryStorage(), 'local')),
-    inputHistory: $inputHistory,
-    userMessageProcessors: $userMessageProcessors,
+    new CoreRuntime($agent, new SessionStore(new InMemoryStorage(), 'local'), userMessageProcessors: $userMessageProcessors),
+    inputHistory: $inputHistory
 )
     ->setSubtitle('Try: Explain @composer.json')
     ->run();

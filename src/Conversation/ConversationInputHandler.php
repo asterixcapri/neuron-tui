@@ -4,12 +4,9 @@ declare(strict_types=1);
 
 namespace NeuronTui\Conversation;
 
-use NeuronAI\Chat\Messages\ContentBlocks\TextContent;
 use NeuronChatCore\Command\Commands;
 use NeuronChatCore\Configuration\ConfigurationStore;
 use NeuronChatCore\InputHistory\InputHistory;
-use NeuronChatCore\Message\UserMessageProcessorInterface;
-use NeuronChatCore\Message\UserMessageProcessors;
 use NeuronChatCore\Session\SessionStore;
 use NeuronTui\Command\TuiCommandAdapter;
 use NeuronTui\View\ConversationView;
@@ -18,9 +15,6 @@ use Symfony\Component\Tui\Event\SubmitEvent;
 use Symfony\Component\Tui\Input\Key;
 use Symfony\Component\Tui\Input\Keybindings;
 use Throwable;
-
-use function array_all;
-use function trim;
 
 /**
  * Interprets human input and keeps submission, recall, and draft editing together.
@@ -36,7 +30,6 @@ final class ConversationInputHandler
         private readonly Commands $commands,
         private readonly SessionStore $sessionStore,
         private readonly ConfigurationStore $configurationStore,
-        private readonly UserMessageProcessorInterface $userMessageProcessors = new UserMessageProcessors(),
     ) {}
 
     public function handleSubmit(SubmitEvent $event): void
@@ -66,23 +59,13 @@ final class ConversationInputHandler
         }
 
         try {
-            $message = $this->userMessageProcessors->forAgent($original);
-
-            if (trim($message->getContent() ?? '') === '' && array_all(
-                $message->getContentBlocks(),
-                static fn($block): bool => $block instanceof TextContent,
-            )) {
-                $this->view->showError('The prepared user message is empty.');
-
-                return;
-            }
+            $this->runtime->submitUserMessage($original);
         } catch (Throwable $exception) {
             $this->view->showError($exception->getMessage());
 
             return;
         }
 
-        $this->runtime->submitMessage($message);
     }
 
     public function handleDraftChange(): void

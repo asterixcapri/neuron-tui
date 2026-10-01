@@ -65,11 +65,10 @@ $userMessageProcessors = (new UserMessageProcessors())->addProcessor([
 ]);
 
 Tui::make(
-    new CoreRuntime($agent, $sessionStore, session: $session, stopSignal: $stopSignal),
+    new CoreRuntime($agent, $sessionStore, session: $session, stopSignal: $stopSignal, userMessageProcessors: $userMessageProcessors),
     commands: $commands,
     configurationStore: $configurationStore,
-    inputHistory: $inputHistory,
-    userMessageProcessors: $userMessageProcessors,
+    inputHistory: $inputHistory
 )
     ->setFiglet('NeuronTUI')
     ->setTitle('Neuron TUI Demo')

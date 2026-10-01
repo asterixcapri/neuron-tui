@@ -283,6 +283,7 @@ the user sees. Implement `NeuronChatCore\Message\UserMessageProcessorInterface`:
 messages before they are shown, including resumed History.
 
 ```php
+use NeuronChatCore\Conversation\ConversationRuntime as CoreRuntime;
 use NeuronChatCore\Message\UserMessageProcessors;
 use NeuronTui\Tui;
 
@@ -290,12 +291,15 @@ $processors = (new UserMessageProcessors())->addProcessor([
     new FileReferenceProcessor(__DIR__),
 ]);
 
-Tui::make($runtime, userMessageProcessors: $processors)->run();
+$runtime = new CoreRuntime($agent, $sessionStore, userMessageProcessors: $processors);
+Tui::make($runtime)->run();
 ```
 
-Processors prepare messages in registration order and display them in reverse
-order. Saved messages are never changed, and Commands bypass processors. If
-`forAgent()` throws, the TUI shows the error and keeps the draft.
+The core runtime prepares messages once in registration order before accepting
+a Turn or queue entry. The TUI uses that same runtime module to display messages
+and History in reverse order. Saved messages are never changed, and Commands bypass processors. If
+`forAgent()` throws or produces empty text without attachments, the TUI shows
+the error and keeps the draft. Input recall stores the original submitted input.
 
 See [messages.php](examples/bin/messages.php) for the complete example.
 

@@ -77,10 +77,9 @@ final class FileReferenceProcessorTest extends TestCase
         EventLoop::delay(0.15, static fn() => $terminal->simulateInput("\x03"));
 
         Tui::make(
-            new CoreRuntime($agent, new SessionStore(new InMemoryStorage(), 'local')),
+            new CoreRuntime($agent, new SessionStore(new InMemoryStorage(), 'local'), userMessageProcessors: $processors),
             $terminal,
-            inputHistory: $inputHistory,
-            userMessageProcessors: $processors,
+            inputHistory: $inputHistory
         )->run();
 
         self::assertStringContainsString('Demo file content.', $provider->getRecorded()[0]->messages[0]->getContent() ?? '');
