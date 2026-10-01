@@ -26,7 +26,7 @@ final class ConversationInputHandler
     public function __construct(
         private readonly ConversationView $view,
         private readonly InputHistory $inputHistory,
-        private readonly ConversationRuntime $runtime,
+        private readonly ConversationController $controller,
         private readonly Commands $commands,
         private readonly SessionStore $sessionStore,
         private readonly ConfigurationStore $configurationStore,
@@ -34,7 +34,7 @@ final class ConversationInputHandler
 
     public function handleSubmit(SubmitEvent $event): void
     {
-        if ($this->runtime->isStopped()) {
+        if ($this->controller->isStopped()) {
             return;
         }
 
@@ -52,14 +52,14 @@ final class ConversationInputHandler
             $this->commands->run(
                 $submission->name,
                 $submission->value,
-                new TuiCommandAdapter($this->runtime, $this->view, $this->commands, $this->sessionStore, $this->configurationStore),
+                new TuiCommandAdapter($this->controller, $this->view, $this->commands, $this->sessionStore, $this->configurationStore),
             );
 
             return;
         }
 
         try {
-            $this->runtime->submitUserMessage($original);
+            $this->controller->submitUserMessage($original);
         } catch (Throwable $exception) {
             $this->view->showError($exception->getMessage());
 
@@ -86,7 +86,7 @@ final class ConversationInputHandler
 
         if ($keys->matches($event->getData(), 'quit')) {
             $event->stopPropagation();
-            $this->runtime->stop();
+            $this->controller->stop();
 
             return;
         }
@@ -100,11 +100,11 @@ final class ConversationInputHandler
         if (
             $keys->matches($event->getData(), 'interrupt-turn')
             && !$this->view->hasCommandSuggestions()
-            && $this->runtime->isBusy()
-            && $this->runtime->supportsResponseStop()
+            && $this->controller->isBusy()
+            && $this->controller->supportsResponseStop()
         ) {
             $event->stopPropagation();
-            $this->runtime->requestInterruption();
+            $this->controller->requestInterruption();
 
             return;
         }

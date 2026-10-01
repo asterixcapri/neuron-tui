@@ -13,10 +13,11 @@ use NeuronChatCore\Command\CommandAdapterInterface;
 use NeuronChatCore\Command\CommandInterface;
 use NeuronChatCore\Command\Commands;
 use NeuronChatCore\Configuration\ConfigurationStore;
+use NeuronChatCore\Conversation\ConversationRuntime;
 use NeuronChatCore\Session\SessionStore;
 use NeuronChatCore\Storage\InMemoryStorage;
 use NeuronTui\Command\TuiCommandAdapter;
-use NeuronTui\Conversation\ConversationRuntime;
+use NeuronTui\Conversation\ConversationController;
 use NeuronTui\Tests\History\SessionHistory;
 use NeuronTui\View\ConversationView;
 use PHPUnit\Framework\TestCase;
@@ -30,7 +31,7 @@ final class CommandHistoryTest extends TestCase
     private SessionStore $sessionStore;
     private VirtualTerminal $terminal;
     private ConversationView $view;
-    private ConversationRuntime $runtime;
+    private ConversationController $controller;
 
     protected function setUp(): void
     {
@@ -42,8 +43,8 @@ final class CommandHistoryTest extends TestCase
 
         $this->terminal = new VirtualTerminal(rows: 30);
         $this->view = new ConversationView($this->terminal, 'Neuron AI', 'Conversation');
-        $this->runtime = new ConversationRuntime(new \NeuronChatCore\Conversation\ConversationRuntime($agent, $this->sessionStore, session: $session), $this->view);
-        $this->runtime->synchronizeHistory();
+        $this->controller = new ConversationController(new ConversationRuntime($agent, $this->sessionStore, session: $session), $this->view);
+        $this->controller->synchronizeHistory();
     }
 
     public function testCompletionDisplaysTheSelectedSession(): void
@@ -92,33 +93,33 @@ final class CommandHistoryTest extends TestCase
 
     public function testAgentReplacementKeepsTheSessionAndItsArchivedMessages(): void
     {
-        $key = $this->runtime->agent()->getChatHistory()->getThreadId();
+        $key = $this->controller->agent()->getChatHistory()->getThreadId();
         $session = $this->sessionStore->read($key);
         self::assertNotNull($session);
         $session->messageStore()->archive($key, 1);
         SessionHistory::of($session)->addMessage(new UserMessage('Active question'));
 
-        $currentSession = $this->runtime->session();
-        $this->runtime->useAgent(new Agent());
-        self::assertSame($currentSession, $this->runtime->session());
+        $currentSession = $this->controller->session();
+        $this->controller->useAgent(new Agent());
+        self::assertSame($currentSession, $this->controller->session());
 
-        self::assertSame($key, $this->runtime->agent()->getThreadId());
-        self::assertSame(['Active question'], array_map(static fn(Message $message): ?string => $message->getContent(), $this->runtime->agent()->getChatHistory()->getMessages()));
+        self::assertSame($key, $this->controller->agent()->getThreadId());
+        self::assertSame(['Active question'], array_map(static fn(Message $message): ?string => $message->getContent(), $this->controller->agent()->getChatHistory()->getMessages()));
         self::assertSame(['Earlier conversation', 'Active question'], array_map(static fn(Message $message): ?string => $message->getContent(), $session->getMessages()));
-        $this->runtime->agent()->getChatHistory()->addMessage(new AssistantMessage('Replacement answer'));
+        $this->controller->agent()->getChatHistory()->addMessage(new AssistantMessage('Replacement answer'));
         self::assertCount(3, $session->getMessages());
     }
 
     public function testSelectingAForeignSessionLeavesTheConversationUnchanged(): void
     {
         $foreign = (new SessionStore(new InMemoryStorage(), 'other-user'))->create();
-        $before = $this->runtime->agent();
+        $before = $this->controller->agent();
 
         $this->runCommand(static function (CommandAdapterInterface $adapter) use ($foreign): void {
             $adapter->useSession($foreign);
         });
 
-        self::assertSame($before, $this->runtime->agent());
+        self::assertSame($before, $this->controller->agent());
         $display = $this->display();
         self::assertStringContainsString('The selected Session does not belong to this', $display);
         self::assertStringContainsString('Earlier conversation', $display);
@@ -150,7 +151,7 @@ final class CommandHistoryTest extends TestCase
         $commands = (new Commands())->addCommand($command);
         $storage = new InMemoryStorage();
         $commands->run('/probe', '', new TuiCommandAdapter(
-            $this->runtime,
+            $this->controller,
             $this->view,
             $commands,
             $this->sessionStore,

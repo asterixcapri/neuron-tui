@@ -8,7 +8,8 @@ native Neuron output and supported response stop. The user-approved simplificati
 removes core isBusy() and overlap admission: TUI derives interaction state from
 its own preparation, ready stream, running task and pending queue. Hosts coordinate
 external executions; core has no session execution lock.
-The TUI is the terminal frontend: it owns pending original inputs, FIFO progression,
+The TUI is the terminal frontend: its internal ConversationController owns
+pending original inputs, FIFO progression,
 Amp scheduling, stream consumption, presentation and Session title scheduling.
 This matches a React frontend that queues inputs and submits one streaming HTTP
 request at a time. Pending input is prepared when its turn reaches execution

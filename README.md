@@ -360,8 +360,9 @@ Neuron TUI is released under the MIT License.
 
 The TUI is the terminal frontend. It owns the pending-input FIFO, local turn
 reservation, Amp scheduling, command presentation and consumption of native
-Neuron chunks. ConversationRuntime owns preparation, Session/Agent binding and
-one active response stream; it has no queue or custom event protocol. This is
+Neuron chunks through its internal ConversationController. The core
+ConversationRuntime owns preparation, Session/Agent binding and native streaming;
+it has no busy admission, queue or custom event protocol. This is
 the same boundary as a React frontend making sequential streaming POST requests.
 
 Preparation of pending input is deferred until its turn. A rejected queued input

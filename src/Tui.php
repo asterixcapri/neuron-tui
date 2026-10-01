@@ -13,8 +13,8 @@ use NeuronChatCore\Conversation\ConversationRuntime as CoreRuntime;
 use NeuronChatCore\InputHistory\InputHistory;
 use NeuronChatCore\Session\SessionStore;
 use NeuronChatCore\Storage\InMemoryStorage;
+use NeuronTui\Conversation\ConversationController;
 use NeuronTui\Conversation\ConversationInputHandler;
-use NeuronTui\Conversation\ConversationRuntime;
 use NeuronTui\Session\SessionTitleGeneration;
 use NeuronTui\View\ConversationView;
 use RuntimeException;
@@ -148,7 +148,7 @@ final class Tui
             $this->conversation->userMessageProcessors(),
         );
         $sessionTitleGeneration = new SessionTitleGeneration();
-        $runtime = new ConversationRuntime(
+        $controller = new ConversationController(
             $this->conversation,
             $view,
             $sessionTitleGeneration,
@@ -156,16 +156,16 @@ final class Tui
         $input = new ConversationInputHandler(
             $view,
             $this->inputHistory,
-            $runtime,
+            $controller,
             $this->commands,
             $this->sessionStore,
             $this->configurationStore,
         );
-        $runtime->synchronizeHistory();
+        $controller->synchronizeHistory();
         $view->onSubmit($input->handleSubmit(...));
         $view->onDraftChange($input->handleDraftChange(...));
         $view->onInput($input->handleInput(...));
-        $view->onTick($runtime->tick(...));
+        $view->onTick($controller->tick(...));
 
         if (
             $terminal instanceof Terminal

@@ -16,7 +16,7 @@ use NeuronChatCore\Command\SelectionOption;
 use NeuronChatCore\Configuration\ConfigurationStore;
 use NeuronChatCore\Session\Session;
 use NeuronChatCore\Session\SessionStore;
-use NeuronTui\Conversation\ConversationRuntime;
+use NeuronTui\Conversation\ConversationController;
 use NeuronTui\View\ChoiceOption;
 use NeuronTui\View\ConversationView;
 use Revolt\EventLoop;
@@ -33,7 +33,7 @@ use function array_map;
 final class TuiCommandAdapter implements CommandAdapterInterface
 {
     public function __construct(
-        private readonly ConversationRuntime $runtime,
+        private readonly ConversationController $controller,
         private readonly ConversationView $view,
         private readonly Commands $commands,
         private readonly SessionStore $sessionStore,
@@ -42,7 +42,7 @@ final class TuiCommandAdapter implements CommandAdapterInterface
 
     public function admit(CommandInterface $command): bool
     {
-        if ($this->runtime->isBusy() && !$command instanceof ConcurrentCommandInterface) {
+        if ($this->controller->isBusy() && !$command instanceof ConcurrentCommandInterface) {
             $this->view->showError(
                 $command->name()
                     . ' is refused while the Agent is working. '
@@ -59,7 +59,7 @@ final class TuiCommandAdapter implements CommandAdapterInterface
 
     public function afterExecution(CommandExecution $execution): null
     {
-        $this->runtime->synchronizeHistory();
+        $this->controller->synchronizeHistory();
 
         if ($execution->status === 'unknown') {
             $this->view->showUnknownCommand($execution->identifier);
@@ -76,38 +76,38 @@ final class TuiCommandAdapter implements CommandAdapterInterface
 
     public function notify(string $text): void
     {
-        $this->runtime->synchronizeHistory();
+        $this->controller->synchronizeHistory();
 
         $this->view->showNotice($text);
     }
 
     public function warn(string $text): void
     {
-        $this->runtime->synchronizeHistory();
+        $this->controller->synchronizeHistory();
 
         $this->view->showWarning($text);
     }
 
     public function error(string $text): void
     {
-        $this->runtime->synchronizeHistory();
+        $this->controller->synchronizeHistory();
 
         $this->view->showError($text);
     }
 
     public function promptAgent(UserMessage $prompt): void
     {
-        $this->runtime->synchronizeHistory();
+        $this->controller->synchronizeHistory();
 
-        $this->runtime->submitMessage($prompt);
+        $this->controller->submitMessage($prompt);
     }
 
     public function requestSelection(Selection $request): void
     {
         // Presentation happens after this invocation has returned. Its
-        // continuation reads the live runtime through a fresh Adapter.
+        // continuation reads the live controller through a fresh Adapter.
         EventLoop::queue(function () use ($request): void {
-            if ($this->runtime->isStopped()) {
+            if ($this->controller->isStopped()) {
                 return;
             }
 
@@ -129,7 +129,7 @@ final class TuiCommandAdapter implements CommandAdapterInterface
                     $this->commands->run(
                         $request->command,
                         $chosen,
-                        new self($this->runtime, $this->view, $this->commands, $this->sessionStore, $this->configurationStore),
+                        new self($this->controller, $this->view, $this->commands, $this->sessionStore, $this->configurationStore),
                     );
                 }
             } catch (Throwable $exception) {
@@ -140,22 +140,22 @@ final class TuiCommandAdapter implements CommandAdapterInterface
 
     public function agent(): Agent
     {
-        return $this->runtime->agent();
+        return $this->controller->agent();
     }
 
     public function useAgent(Agent $agent): void
     {
-        $this->runtime->useAgent($agent);
+        $this->controller->useAgent($agent);
     }
 
     public function session(): Session
     {
-        return $this->runtime->session();
+        return $this->controller->session();
     }
 
     public function useSession(Session $session): void
     {
-        $this->runtime->useSession($session);
+        $this->controller->useSession($session);
     }
 
     public function commands(): Commands
@@ -175,7 +175,7 @@ final class TuiCommandAdapter implements CommandAdapterInterface
 
     public function stop(): void
     {
-        $this->runtime->stop();
+        $this->controller->stop();
     }
 
     private function showFailure(Throwable $exception): void

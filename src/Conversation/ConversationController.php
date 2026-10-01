@@ -22,7 +22,7 @@ use function array_shift;
 use function microtime;
 
 /** Terminal scheduling and presentation for the host's core runtime. @internal */
-final class ConversationRuntime
+final class ConversationController
 {
     private readonly WorkingIndicator $workingIndicator;
 
