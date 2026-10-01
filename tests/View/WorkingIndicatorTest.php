@@ -13,6 +13,9 @@ use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 use Symfony\Component\Tui\Tui;
 
+use function strpos;
+use function substr_count;
+
 final class WorkingIndicatorTest extends TestCase
 {
     private ?Tui $tui = null;

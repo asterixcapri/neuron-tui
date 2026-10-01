@@ -15,6 +15,16 @@ use Symfony\Component\Tui\Widget\FocusableInterface;
 use Symfony\Component\Tui\Widget\FocusableTrait;
 use Symfony\Component\Tui\Widget\KeybindingsTrait;
 
+use function array_key_last;
+use function array_push;
+use function count;
+use function in_array;
+use function intdiv;
+use function max;
+use function mb_strwidth;
+use function min;
+use function sprintf;
+
 /**
  * A choice list measured in complete, independently wrapped option blocks.
  *
@@ -59,8 +69,7 @@ final class PickerList extends AbstractWidget implements FocusableInterface
         private readonly Closure $typed,
         private readonly Closure $positionChanged,
         private readonly Closure $rowsOutsideList,
-    ) {
-    }
+    ) {}
 
     /**
      * @param list<PickerListItem> $items

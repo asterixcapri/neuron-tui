@@ -15,6 +15,7 @@ use NeuronTui\View\WorkingIndicator;
 use Throwable;
 
 use function Amp\async;
+use function microtime;
 
 /**
  * Coordinates the answering Agent, Turn preparation, execution and presentation.

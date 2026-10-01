@@ -14,6 +14,9 @@ use NeuronTui\View\ConversationView;
 use NeuronTui\View\DisplayableText;
 use NeuronTui\View\WorkingIndicator;
 
+use function microtime;
+use function trim;
+
 /**
  * Executes one Turn of the Agent and presents its stream as it arrives.
  *

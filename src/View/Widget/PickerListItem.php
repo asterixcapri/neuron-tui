@@ -15,6 +15,5 @@ final readonly class PickerListItem
         public string $value,
         public string $label,
         public ?string $detail,
-    ) {
-    }
+    ) {}
 }

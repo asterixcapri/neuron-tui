@@ -7,15 +7,17 @@ namespace NeuronTui\Tests\Http;
 use Closure;
 use NeuronAI\HttpClient\StreamInterface;
 
+use function strlen;
+use function strpos;
+use function substr;
+
 final class FixtureStream implements StreamInterface
 {
     public int $closes = 0;
     private int $offset = 0;
 
     /** @param (Closure(string): void)|null $onRead */
-    public function __construct(private readonly string $body, private readonly ?Closure $onRead = null)
-    {
-    }
+    public function __construct(private readonly string $body, private readonly ?Closure $onRead = null) {}
 
     public function eof(): bool
     {

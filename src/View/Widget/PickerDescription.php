@@ -10,6 +10,10 @@ use Symfony\Component\Tui\Ansi\TextWrapper;
 use Symfony\Component\Tui\Render\RenderContext;
 use Symfony\Component\Tui\Widget\AbstractWidget;
 
+use function array_slice;
+use function count;
+use function max;
+
 /**
  * The optional explanation beneath a Picker title.
  *
@@ -19,9 +23,7 @@ final class PickerDescription extends AbstractWidget
 {
     private const int MAX_LINES = 3;
 
-    public function __construct(private readonly string $text)
-    {
-    }
+    public function __construct(private readonly string $text) {}
 
     /** @return string[] */
     public function render(RenderContext $context): array

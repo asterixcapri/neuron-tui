@@ -15,6 +15,9 @@ use NeuronInteraction\Message\UserMessageProcessors;
 use NeuronTui\View\HistoryEntryKind;
 use NeuronTui\View\MessageTextFormatter;
 
+use function array_values;
+use function count;
+
 /**
  * The Agent's messages as the one ordered stream of entries a person sees.
  *

@@ -20,7 +20,7 @@ $storage = new FileStorage(__DIR__ . '/../.storage');
 $configurationStore = new ConfigurationStore($storage, 'local');
 $modelId = $configurationStore->read('model', 'openai:gpt-5.4-nano');
 
-$agent = DemoAgent::make()->setThreadId(bin2hex(random_bytes(16)));
+$agent = DemoAgent::make()->setThreadId(\bin2hex(\random_bytes(16)));
 $agent->setAiProvider(AIProviderFactory::create($modelId));
 
 $commands = (new Commands())->addCommand(new ModelCommand());

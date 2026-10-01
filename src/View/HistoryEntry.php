@@ -11,6 +11,11 @@ use Symfony\Component\Tui\Widget\AbstractWidget;
 use Symfony\Component\Tui\Widget\MarkdownWidget;
 use Symfony\Component\Tui\Widget\TextWidget;
 
+use function count;
+use function max;
+
+use const PHP_INT_MAX;
+
 /**
  * The handle the History pane hands back for an entry that keeps changing.
  *

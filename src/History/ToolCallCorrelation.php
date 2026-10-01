@@ -6,6 +6,8 @@ namespace NeuronTui\History;
 
 use NeuronAI\Tools\ToolCall;
 
+use function array_shift;
+
 /**
  * Where each tool call was shown, so that its result can find it again.
  *

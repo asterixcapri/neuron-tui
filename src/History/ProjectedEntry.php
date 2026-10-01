@@ -24,6 +24,5 @@ final class ProjectedEntry
     public function __construct(
         public readonly HistoryEntryKind $kind,
         public readonly string $text,
-    ) {
-    }
+    ) {}
 }

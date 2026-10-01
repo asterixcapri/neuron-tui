@@ -6,6 +6,11 @@ namespace NeuronTui\Conversation;
 
 use NeuronAI\Chat\Messages\UserMessage;
 
+use function str_starts_with;
+use function strcspn;
+use function substr;
+use function trim;
+
 /**
  * Reads what a person typed and says what it is.
  *

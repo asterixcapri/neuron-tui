@@ -10,9 +10,11 @@ use NeuronAI\Chat\Enums\SourceType;
 use NeuronAI\Chat\Messages\AssistantMessage;
 use NeuronAI\Chat\Messages\ContentBlocks\FileContent;
 use NeuronAI\Chat\Messages\ContentBlocks\ImageContent;
+use NeuronAI\Chat\Messages\ContentBlocks\TextContent;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
 use NeuronAI\Chat\Messages\UserMessage;
+use NeuronAI\Providers\ProviderResponse;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronInteraction\Command\CommandAdapterInterface;
 use NeuronInteraction\Command\CommandInterface;
@@ -33,6 +35,11 @@ use RuntimeException;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
+use function str_ends_with;
+use function str_starts_with;
+use function strlen;
+use function substr;
+
 final class UserMessageProcessorTest extends TestCase
 {
     private const string IMAGE = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
@@ -50,8 +57,8 @@ final class UserMessageProcessorTest extends TestCase
             new EnvelopeProcessor('C'),
         ]));
 
-        EventLoop::queue(static fn () => $terminal->simulateInput("Hello\r"));
-        EventLoop::delay(0.15, static fn () => $terminal->simulateInput("\x03"));
+        EventLoop::queue(static fn() => $terminal->simulateInput("Hello\r"));
+        EventLoop::delay(0.15, static fn() => $terminal->simulateInput("\x03"));
         $tui->run();
 
         self::assertSame('C[B[A[Hello]]]', $provider->getRecorded()[0]->messages[0]->getContent());
@@ -70,7 +77,7 @@ final class UserMessageProcessorTest extends TestCase
         $agent->getChatHistory()->addMessage(new UserMessage('B[A[Earlier]]'));
         $agent->getChatHistory()->addMessage(new AssistantMessage('B[A[Reply]]'));
         $terminal = new VirtualTerminal(rows: 30);
-        EventLoop::delay(0.05, static fn () => $terminal->simulateInput("\x03"));
+        EventLoop::delay(0.05, static fn() => $terminal->simulateInput("\x03"));
 
         $tui = Tui::make($agent, $terminal, userMessageProcessors: (new UserMessageProcessors())->addProcessor([
             new EnvelopeProcessor('A'),
@@ -104,8 +111,8 @@ final class UserMessageProcessorTest extends TestCase
             }
         };
         $terminal = new VirtualTerminal(rows: 30);
-        EventLoop::queue(static fn () => $terminal->simulateInput("/prepared\r"));
-        EventLoop::delay(0.15, static fn () => $terminal->simulateInput("\x03"));
+        EventLoop::queue(static fn() => $terminal->simulateInput("/prepared\r"));
+        EventLoop::delay(0.15, static fn() => $terminal->simulateInput("\x03"));
 
         Tui::make($agent, $terminal, commands: (new Commands())->addCommand($command), userMessageProcessors: (new UserMessageProcessors())->addProcessor(new EnvelopeProcessor('A')))
             ->run();
@@ -130,8 +137,8 @@ final class UserMessageProcessorTest extends TestCase
             }
         };
         $terminal = new VirtualTerminal(rows: 30);
-        EventLoop::queue(static fn () => $terminal->simulateInput("Keep my draft\r"));
-        EventLoop::delay(0.1, static fn () => $terminal->simulateInput("\x03"));
+        EventLoop::queue(static fn() => $terminal->simulateInput("Keep my draft\r"));
+        EventLoop::delay(0.1, static fn() => $terminal->simulateInput("\x03"));
 
         Tui::make($agent, $terminal, userMessageProcessors: (new UserMessageProcessors())->addProcessor($processor))->run();
 
@@ -143,25 +150,25 @@ final class UserMessageProcessorTest extends TestCase
 
     public function testQueuedMessagesArePreparedOnceAndDisplayedWithoutTheirEnvelope(): void
     {
-        $provider = new class(new AssistantMessage('One.'), new AssistantMessage('Two.')) extends FakeAIProvider {
+        $provider = new class (new AssistantMessage('One.'), new AssistantMessage('Two.')) extends FakeAIProvider {
             protected function streamChunks(Message $response): Generator
             {
                 \Amp\delay(0.15);
                 yield new TextChunk('reply', $response->getContent() ?? '');
 
-                return new \NeuronAI\Providers\ProviderResponse(message: $response);
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $queued = '';
-        EventLoop::queue(static fn () => $terminal->simulateInput("First\r"));
-        EventLoop::delay(0.04, static fn () => $terminal->simulateInput("Second\r"));
+        EventLoop::queue(static fn() => $terminal->simulateInput("First\r"));
+        EventLoop::delay(0.04, static fn() => $terminal->simulateInput("Second\r"));
         EventLoop::delay(0.08, static function () use ($terminal, &$queued): void {
             $queued = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         });
-        EventLoop::delay(0.4, static fn () => $terminal->simulateInput("\x03"));
+        EventLoop::delay(0.4, static fn() => $terminal->simulateInput("\x03"));
 
         Tui::make($agent, $terminal, userMessageProcessors: (new UserMessageProcessors())->addProcessor(new EnvelopeProcessor('A')))->run();
 
@@ -200,13 +207,13 @@ final class UserMessageProcessorTest extends TestCase
             );
             $display = '';
             $tui = Tui::make($agent, $terminal, commands: (new Commands())->addCommand(new ResumeCommand($name)), sessionStore: $store, userMessageProcessors: (new UserMessageProcessors())->addProcessor([$processor, new EnvelopeProcessor('A'), new EnvelopeProcessor('B')]));
-            EventLoop::queue(static fn () => $terminal->simulateInput($name . "\r"));
-            EventLoop::delay(0.05, static fn () => $terminal->simulateInput('Readable'));
+            EventLoop::queue(static fn() => $terminal->simulateInput($name . "\r"));
+            EventLoop::delay(0.05, static fn() => $terminal->simulateInput('Readable'));
             EventLoop::delay(0.08, static function () use ($terminal, &$display): void {
                 $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
                 $terminal->simulateInput("\r");
             });
-            EventLoop::delay(0.1, static fn () => $terminal->simulateInput("\x03"));
+            EventLoop::delay(0.1, static fn() => $terminal->simulateInput("\x03"));
 
             $tui->run();
 
@@ -246,12 +253,12 @@ final class UserMessageProcessorTest extends TestCase
         };
         $terminal = new VirtualTerminal(rows: 30);
         $display = '';
-        EventLoop::queue(static fn () => $terminal->simulateInput("/custom\r"));
+        EventLoop::queue(static fn() => $terminal->simulateInput("/custom\r"));
         EventLoop::delay(0.05, static function () use ($terminal, &$display): void {
             $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
             $terminal->simulateInput("\r");
         });
-        EventLoop::delay(0.1, static fn () => $terminal->simulateInput("\x03"));
+        EventLoop::delay(0.1, static fn() => $terminal->simulateInput("\x03"));
 
         Tui::make((new Agent())->setThreadId('test-thread'), $terminal, commands: (new Commands())->addCommand($command), userMessageProcessors: (new UserMessageProcessors())->addProcessor(new EnvelopeProcessor('A')))
             ->run();
@@ -267,10 +274,8 @@ final class UserMessageProcessorTest extends TestCase
         $first = new UserMessage(new ImageContent(self::IMAGE, SourceType::BASE64, 'image/png'));
         $second = new UserMessage(new ImageContent(self::IMAGE, SourceType::BASE64, 'image/png'));
         $second->addMetadata('original', 'queued attachment');
-        $command = new class($first, $second) implements CommandInterface {
-            public function __construct(private UserMessage $first, private UserMessage $second)
-            {
-            }
+        $command = new class ($first, $second) implements CommandInterface {
+            public function __construct(private UserMessage $first, private UserMessage $second) {}
             public function name(): string
             {
                 return '/photos';
@@ -289,8 +294,8 @@ final class UserMessageProcessorTest extends TestCase
         $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
-        EventLoop::queue(static fn () => $terminal->simulateInput("/photos\r"));
-        EventLoop::delay(0.3, static fn () => $terminal->simulateInput("\x03"));
+        EventLoop::queue(static fn() => $terminal->simulateInput("/photos\r"));
+        EventLoop::delay(0.3, static fn() => $terminal->simulateInput("\x03"));
 
         Tui::make($agent, $terminal, commands: (new Commands())->addCommand($command))->run();
 
@@ -311,8 +316,8 @@ final class UserMessageProcessorTest extends TestCase
         $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
-        EventLoop::queue(static fn () => $terminal->simulateInput("\x1b[A\r"));
-        EventLoop::delay(0.15, static fn () => $terminal->simulateInput("\x03"));
+        EventLoop::queue(static fn() => $terminal->simulateInput("\x1b[A\r"));
+        EventLoop::delay(0.15, static fn() => $terminal->simulateInput("\x03"));
 
         Tui::make($agent, $terminal, inputHistory: $inputs, userMessageProcessors: (new UserMessageProcessors())->addProcessor(new EnvelopeProcessor('A')))->run();
 
@@ -347,8 +352,8 @@ final class UserMessageProcessorTest extends TestCase
         $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
-        EventLoop::queue(static fn () => $terminal->simulateInput("Original request\r"));
-        EventLoop::delay(0.15, static fn () => $terminal->simulateInput("\x03"));
+        EventLoop::queue(static fn() => $terminal->simulateInput("Original request\r"));
+        EventLoop::delay(0.15, static fn() => $terminal->simulateInput("\x03"));
 
         $tui = Tui::make($agent, $terminal, userMessageProcessors: (new UserMessageProcessors())->addProcessor($processor));
         $tui->run();
@@ -365,9 +370,7 @@ final class UserMessageProcessorTest extends TestCase
 
 final readonly class EnvelopeProcessor implements UserMessageProcessorInterface
 {
-    public function __construct(private string $label)
-    {
-    }
+    public function __construct(private string $label) {}
 
     public function forAgent(UserMessage $input): UserMessage
     {
@@ -389,7 +392,7 @@ final readonly class EnvelopeProcessor implements UserMessageProcessorInterface
         $result = clone $original;
         $result->setContents($text);
         foreach ($original->getContentBlocks() as $block) {
-            if (!$block instanceof \NeuronAI\Chat\Messages\ContentBlocks\TextContent) {
+            if (!$block instanceof TextContent) {
                 $result->addContent(clone $block);
             }
         }

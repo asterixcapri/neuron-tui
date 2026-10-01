@@ -6,6 +6,10 @@ namespace NeuronTui\View;
 
 use Symfony\Component\Tui\Widget\Util\StringUtils;
 
+use function mb_strimwidth;
+use function preg_replace;
+use function trim;
+
 /**
  * Makes text Neuron TUI does not control safe to put on a terminal.
  *

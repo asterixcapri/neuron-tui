@@ -8,6 +8,12 @@ use NeuronTui\Tui;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 
+use function class_exists;
+use function file_get_contents;
+use function json_decode;
+
+use const JSON_THROW_ON_ERROR;
+
 final class PackageIdentityTest extends TestCase
 {
     public function testComposerPublishesOnlyTheNeuronTuiIdentity(): void

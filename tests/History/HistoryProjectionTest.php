@@ -25,6 +25,9 @@ use NeuronTui\History\ProjectedEntry;
 use NeuronTui\View\HistoryEntryKind;
 use PHPUnit\Framework\TestCase;
 
+use function array_map;
+use function str_repeat;
+
 final class HistoryProjectionTest extends TestCase
 {
     public function testGenericUserMessageReachesProcessorWithItsDataAndIndependentContents(): void
@@ -367,7 +370,7 @@ final class HistoryProjectionTest extends TestCase
     private static function summarize(array $entries): array
     {
         return array_map(
-            static fn (ProjectedEntry $entry): array => [$entry->kind, $entry->text],
+            static fn(ProjectedEntry $entry): array => [$entry->kind, $entry->text],
             $entries,
         );
     }
@@ -380,7 +383,7 @@ final class HistoryProjectionTest extends TestCase
     private static function kinds(array $entries): array
     {
         return array_map(
-            static fn (ProjectedEntry $entry): HistoryEntryKind => $entry->kind,
+            static fn(ProjectedEntry $entry): HistoryEntryKind => $entry->kind,
             $entries,
         );
     }

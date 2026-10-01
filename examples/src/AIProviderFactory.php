@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronTuiDemo;
 
+use InvalidArgumentException;
 use NeuronAI\HttpClient\Amp\AmpHttpClient;
 use NeuronAI\HttpClient\HttpClientInterface;
 use NeuronAI\Providers\AIProviderInterface;
@@ -11,6 +12,10 @@ use NeuronAI\Providers\Anthropic\Anthropic;
 use NeuronAI\Providers\OpenAI\Responses\OpenAIResponses;
 use NeuronAI\Providers\OpenAILike;
 use RuntimeException;
+
+use function count;
+use function explode;
+use function is_string;
 
 final class AIProviderFactory
 {
@@ -20,7 +25,7 @@ final class AIProviderFactory
         $httpClient ??= new AmpHttpClient();
 
         if (count($parts) !== 2 || $parts[0] === '' || $parts[1] === '') {
-            throw new \InvalidArgumentException('Model ID must use the provider:model format.');
+            throw new InvalidArgumentException('Model ID must use the provider:model format.');
         }
 
         [$provider, $model] = $parts;

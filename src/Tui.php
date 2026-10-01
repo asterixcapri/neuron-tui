@@ -19,8 +19,17 @@ use NeuronTui\Conversation\ConversationInputHandler;
 use NeuronTui\Conversation\ConversationRuntime;
 use NeuronTui\Session\SessionTitleGeneration;
 use NeuronTui\View\ConversationView;
+use RuntimeException;
 use Symfony\Component\Tui\Terminal\Terminal;
 use Symfony\Component\Tui\Terminal\TerminalInterface;
+
+use function implode;
+use function in_array;
+use function sprintf;
+use function stream_isatty;
+
+use const STDIN;
+use const STDOUT;
 
 /**
  * Configures and starts a Conversation TUI.
@@ -202,7 +211,7 @@ final class Tui
                 || !stream_isatty(STDOUT)
             )
         ) {
-            throw new \RuntimeException(
+            throw new RuntimeException(
                 'Neuron TUI requires an interactive TTY.',
             );
         }
