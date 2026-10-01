@@ -9,7 +9,12 @@ $terminal)` and the constructor receive that same runtime. Commands,
 ConfigurationStore, InputHistory and display processors remain optional client
 modules at this stage; SessionStore is obtained from the runtime. Core owns
 immediate Turn reservation, FIFO pending messages, direct sequential execution,
-Agent/Session binding and serializable stream events. Amp Fibers, completion
+Agent/Session binding, serializable stream events and shared Command
+availability. Idle permits mounted Commands; busy (including a reserved Turn)
+permits only Concurrent Commands. Invocation enforces this rule even with a
+permissive Adapter; the terminal Adapter presents refusal and preserves
+additional environment-specific admission. Selection continuation rechecks
+the live state through runtime invocation. Amp Fibers, completion
 polling, terminal ticks, rendering and asynchronous Session title generation
 belong to the TUI. Direct execution requires neither Amp nor a terminal. Pending
 messages have no durable guarantee; response stop retains consumption semantics
@@ -53,8 +58,10 @@ listeners are built once inside `run()`. The instance is frozen when that
 single run starts. `addCommand()` deliberately follows `Agent::addTool()`: it
 accepts one command or an array of commands, validates
 each value as it is added, preserves order and does not reject duplicate names.
-The first command with a repeated name is the one reached; repeated entries may
-remain visible in command suggestions. This duplicate rule supersedes the
+The first command with a repeated name is the one reached; availability and suggestions resolve the
+same first entry. A later concurrent duplicate cannot make an unavailable first
+entry executable. The core ConversationRuntime enforces busy-state admission;
+the terminal Adapter presents refusal and can further restrict admission. This duplicate rule supersedes the
 contrary rule in ADR 0002.
 
 ## Considered options
