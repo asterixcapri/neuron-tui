@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace NeuronTui\View;
 
 use NeuronChatCore\Command\CommandInterface;
-use NeuronChatCore\Command\Commands;
+use NeuronChatCore\Command\ConcurrentCommandInterface;
 use Symfony\Component\Tui\Style\Style;
 use Symfony\Component\Tui\Widget\AbstractWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
@@ -165,9 +165,8 @@ final class CommandSuggestions
         $this->noMatchesMessage = new TextWidget('');
         $this->noMatchesMessage->addStyleClass('suggestions-empty');
         $this->emphasis = new Style(bold: true);
-        $mounted = (new Commands())->addCommand($commands);
-        $this->suggestible = self::suggestible($mounted->available(false));
-        $this->suggestibleWhileWorking = self::suggestible($mounted->available(true));
+        $this->suggestible = self::suggestible($commands, false);
+        $this->suggestibleWhileWorking = self::suggestible($commands, true);
         $this->list = new SelectListWidget([], self::VISIBLE_LINES);
         $this->list->addStyleClass('suggestions-list');
     }
@@ -495,11 +494,20 @@ final class CommandSuggestions
      *     description: string,
      * }>
      */
-    private static function suggestible(array $commands): array
+    private static function suggestible(array $commands, bool $working): array
     {
         $suggestible = [];
+        $seen = [];
 
         foreach ($commands as $command) {
+            $identifier = $command->name();
+            if (isset($seen[$identifier])) {
+                continue;
+            }
+            $seen[$identifier] = true;
+            if ($working && !$command instanceof ConcurrentCommandInterface) {
+                continue;
+            }
             $suggestible[] = [
                 'answersTo' => $command->name(),
                 'name' => DisplayableText::safe($command->name()),

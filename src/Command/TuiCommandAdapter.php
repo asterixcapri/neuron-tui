@@ -10,6 +10,7 @@ use NeuronChatCore\Command\CommandAdapterInterface;
 use NeuronChatCore\Command\CommandExecution;
 use NeuronChatCore\Command\CommandInterface;
 use NeuronChatCore\Command\Commands;
+use NeuronChatCore\Command\ConcurrentCommandInterface;
 use NeuronChatCore\Command\Selection;
 use NeuronChatCore\Command\SelectionOption;
 use NeuronChatCore\Configuration\ConfigurationStore;
@@ -41,7 +42,7 @@ final class TuiCommandAdapter implements CommandAdapterInterface
 
     public function admit(CommandInterface $command): bool
     {
-        if ($this->runtime->isCommandAvailable($command) === false) {
+        if ($this->runtime->isBusy() && !$command instanceof ConcurrentCommandInterface) {
             $this->view->showError(
                 $command->name()
                     . ' is refused while the Agent is working. '
@@ -125,8 +126,7 @@ final class TuiCommandAdapter implements CommandAdapterInterface
                 );
 
                 if ($chosen !== null) {
-                    $this->runtime->runCommand(
-                        $this->commands,
+                    $this->commands->run(
                         $request->command,
                         $chosen,
                         new self($this->runtime, $this->view, $this->commands, $this->sessionStore, $this->configurationStore),

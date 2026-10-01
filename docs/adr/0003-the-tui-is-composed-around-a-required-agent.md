@@ -13,9 +13,12 @@ admission; idle rejection retains the draft and queued rejection never replaces 
 newer draft. The TUI can prepare input through the core before projecting its
 attachments for display, then stream it without repeating preparation.
 Command collections remain client-owned. UI effects belong to the Adapter;
-conversation operations delegate to core. Core enforces live execution admission,
-while TUI additionally refuses ordinary Commands from its local turn reservation.
-Selection continuations recheck current availability. Native generators preserve
+conversation operations delegate to core. Command visibility and admission belong
+entirely to the client: TUI filters suggestions and its Adapter refuses ordinary
+Commands while busy, including its local turn reservation. Selection continuations
+invoke Commands directly with a fresh Adapter. Core has no Command availability
+or dispatch methods; it guards concrete operations such as message execution and
+Session ownership. Native generators preserve
 Neuron objects and AgentState without a second event vocabulary. History
 presentation and display-position correlation belong entirely to the TUI, using
 native Neuron messages and ToolCall without core presentation snapshots. Host composition, Session

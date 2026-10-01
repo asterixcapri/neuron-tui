@@ -49,8 +49,7 @@ final class ConversationInputHandler
         $submission = SubmissionParser::parse($event->getValue());
 
         if ($submission instanceof CommandInput) {
-            $this->runtime->runCommand(
-                $this->commands,
+            $this->commands->run(
                 $submission->name,
                 $submission->value,
                 new TuiCommandAdapter($this->runtime, $this->view, $this->commands, $this->sessionStore, $this->configurationStore),

@@ -9,9 +9,6 @@ use Generator;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Agent\AgentState;
 use NeuronAI\Chat\Messages\UserMessage;
-use NeuronChatCore\Command\CommandAdapterInterface;
-use NeuronChatCore\Command\CommandInterface;
-use NeuronChatCore\Command\Commands;
 use NeuronChatCore\Conversation\ConversationRuntime as CoreRuntime;
 use NeuronChatCore\Session\Session;
 use NeuronTui\Session\SessionTitleGeneration;
@@ -115,19 +112,6 @@ final class ConversationRuntime
     public function isBusy(): bool
     {
         return $this->preparingTurn || $this->readyStream !== null || $this->runningTurn !== null || $this->pendingMessages !== [] || $this->core->isBusy();
-    }
-    public function isCommandAvailable(CommandInterface $command): bool
-    {
-        return Commands::isAvailable($command, $this->isBusy()) && $this->core->isCommandAvailable($command);
-    }
-    /**
-     * @template TOutput
-     * @param CommandAdapterInterface<TOutput> $adapter
-     * @return TOutput|null
-     */
-    public function runCommand(Commands $commands, string $identifier, string $value, CommandAdapterInterface $adapter): mixed
-    {
-        return $commands->run($identifier, $value, $adapter, $this->isCommandAvailable(...));
     }
     public function supportsResponseStop(): bool
     {
