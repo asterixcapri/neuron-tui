@@ -20,7 +20,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 $storage = new InMemoryStorage();
 $stopSignal = new StopSignal($storage, 'demo');
 
-$agent = (new Agent())->setThreadId(\bin2hex(\random_bytes(16)));
+$agent = Agent::make();
 $agent->setAiProvider(AIProviderFactory::create(
     modelId: 'openai:gpt-5.4-nano',
     httpClient: new StoppableHttpClient(

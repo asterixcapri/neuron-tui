@@ -36,14 +36,13 @@ implementation:
 use NeuronAI\Agent\Agent;
 use NeuronTui\Tui;
 
-$agent = Agent::make(workflowId: bin2hex(random_bytes(16)));
+$agent = Agent::make();
 $agent->setAiProvider($provider);
 
 Tui::make($agent)->run();
 ```
 
-The minimal configuration displays the Agent’s existing conversation and accepts
-new messages. Use `Ctrl+C` to exit.
+`Tui` starts a new conversation and accepts messages. Use `Ctrl+C` to exit.
 
 ### Branding
 

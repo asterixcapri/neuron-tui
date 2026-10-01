@@ -43,7 +43,7 @@ final class ModelCommandTest extends TestCase
             $store->write('theme', 'dark');
             $sessions = new SessionStore($storage, 'demo-user');
             $session = $sessions->create();
-            $agent = $session->bindTo(new Agent());
+            $agent = $session->bindTo(Agent::make());
             $agent->setAiProvider(new FakeAIProvider());
             $history = $agent->getChatHistory();
             $history->addMessage(new UserMessage('Keep this conversation'));
@@ -83,7 +83,7 @@ final class ModelCommandTest extends TestCase
     {
         $store = new ConfigurationStore(new InMemoryStorage(), 'demo-user');
         $store->write('model', 'previous');
-        $agent = (new Agent())->setThreadId('test-thread');
+        $agent = Agent::make();
         $provider = new FakeAIProvider();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal();
@@ -103,7 +103,7 @@ final class ModelCommandTest extends TestCase
     {
         $store = new ConfigurationStore(new InMemoryStorage(), 'demo-user');
         $store->write('model', 'previous');
-        $agent = (new Agent())->setThreadId('test-thread');
+        $agent = Agent::make();
         $provider = new FakeAIProvider();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal();
@@ -129,7 +129,7 @@ final class ModelCommandTest extends TestCase
             $storage->method('read')->willReturn(new StoredDocument('stored', ['model' => 'previous'], ['userId' => 'demo-user']));
             $storage->method('write')->willThrowException(new RuntimeException('Preferences unavailable'));
             $store = new ConfigurationStore($storage, 'demo-user');
-            $agent = (new Agent())->setThreadId('test-thread');
+            $agent = Agent::make();
             $terminal = new VirtualTerminal();
             $sessions = new SessionStore(new InMemoryStorage(), 'demo-user');
             $session = $sessions->create();

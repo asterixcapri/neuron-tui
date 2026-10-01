@@ -15,7 +15,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 
 (new Dotenv())->bootEnv(__DIR__ . '/../.env');
 
-$agent = (new Agent())->setThreadId(\bin2hex(\random_bytes(16)));
+$agent = Agent::make();
 $agent->setAiProvider(AIProviderFactory::create('openai:gpt-5.4-nano'));
 
 $inputHistory = new InputHistory(new InMemoryStorage());

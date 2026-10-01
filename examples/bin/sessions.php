@@ -18,7 +18,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 
 $sessionStore = new SessionStore(new FileStorage(__DIR__ . '/../.storage'), 'local');
 
-$agent = DemoAgent::make()->setThreadId(\bin2hex(\random_bytes(16)));
+$agent = DemoAgent::make();
 $agent->setAiProvider(AIProviderFactory::create('openai:gpt-5.4-nano'));
 // Titles are generated automatically after successful turns and appear in /resume.
 $session = $sessionStore->create();

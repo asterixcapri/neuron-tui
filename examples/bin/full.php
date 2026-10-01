@@ -47,7 +47,7 @@ $httpClient = new StoppableHttpClient(
     ),
 );
 
-$agent = DemoAgent::make()->setThreadId(\bin2hex(\random_bytes(16)));
+$agent = DemoAgent::make();
 $agent->setAiProvider(AIProviderFactory::create($modelId, $httpClient));
 $session = $sessionStore->create();
 
