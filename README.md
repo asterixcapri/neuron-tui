@@ -295,8 +295,8 @@ $runtime = new CoreRuntime($agent, $sessionStore, userMessageProcessors: $proces
 Tui::make($runtime)->run();
 ```
 
-The core runtime prepares messages once in registration order before accepting
-a Turn or queue entry. The TUI uses that same runtime module to display messages
+The TUI queues original inputs and asks the core to prepare each message once
+when it reaches execution admission. The TUI uses that same processing module to display messages
 and History in reverse order. Saved messages are never changed, and Commands bypass processors. If
 `forAgent()` throws or produces empty text without attachments, the TUI shows
 the error and keeps the draft. Input recall stores the original submitted input.
@@ -355,3 +355,16 @@ and makes no network requests.
 ## License
 
 Neuron TUI is released under the MIT License.
+
+## Execution and pending messages
+
+The TUI is the terminal frontend. It owns the pending-input FIFO, local turn
+reservation, Amp scheduling, command presentation and consumption of native
+Neuron chunks. ConversationRuntime owns preparation, Session/Agent binding and
+one active response stream; it has no queue or custom event protocol. This is
+the same boundary as a React frontend making sequential streaming POST requests.
+
+Preparation of pending input is deferred until its turn. A rejected queued input
+is reported and restored to an empty composer; a newer draft is preserved and
+the original remains in Input history. Errors and supported response stops
+advance the queue without retries, preserving terminal behavior.

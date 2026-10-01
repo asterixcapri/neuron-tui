@@ -1,30 +1,25 @@
 # The TUI is composed around a host-supplied conversation runtime
 
-_Conversation Runtime extraction supersedes the required Agent entry point and
-TUI execution ownership below. The Host Application still constructs and
-configures the concrete Agent, providers, tools and modules, then constructs
-`NeuronChatCore\Conversation\ConversationRuntime` with its SessionStore,
-optional initial Session, EventPublisher and StopSignal. `Tui::make($runtime,
-$terminal)` and the constructor receive that same runtime. Commands,
-ConfigurationStore, InputHistory and display processors remain optional client
-modules at this stage; SessionStore is obtained from the runtime. Core owns
-immediate Turn reservation, FIFO pending messages, direct sequential execution,
-Agent/Session binding, serializable stream events and shared Command
-availability. Idle permits mounted Commands; busy (including a reserved Turn)
-permits only Concurrent Commands. Invocation enforces this rule even with a
-permissive Adapter; the terminal Adapter presents refusal and preserves
-additional environment-specific admission. Selection continuation rechecks
-the live state through runtime invocation. Amp Fibers, completion
-polling, terminal ticks, rendering and asynchronous Session title generation
-belong to the TUI. Direct execution requires neither Amp nor a terminal. Pending
-messages have no durable guarantee; response stop retains consumption semantics
-and does not cancel tools. Session ownership is validated by re-reading in the
-supplied Store. Existing Agent messages still require an explicit Session. A
-running Turn retains its captured Agent and Session. Host composition, no
-automatic Command mounting, first-match duplicates and single-run lifecycle are
-retained. Historical decisions below remain as context and are superseded only
-within this scope._
-
+_The native-stream revision supersedes the extraction's core FIFO and custom
+EventPublisher protocol. The Host Application still supplies a configured Agent
+and constructs `NeuronChatCore\Conversation\ConversationRuntime`; `Tui::make()`
+receives that runtime. Core owns message preparation, Agent/Session binding,
+one active stream per runtime, native Neuron output and supported response stop.
+The TUI is the terminal frontend: it owns pending original inputs, FIFO progression,
+Amp scheduling, stream consumption, presentation and Session title scheduling.
+This matches a React frontend that queues inputs and submits one streaming HTTP
+request at a time. Pending input is prepared when its turn reaches execution
+admission; idle rejection retains the draft and queued rejection never replaces a
+newer draft. The TUI can prepare input through the core before projecting its
+attachments for display, then stream it without repeating preparation.
+Command collections remain client-owned. UI effects belong to the Adapter;
+conversation operations delegate to core. Core enforces live execution admission,
+while TUI additionally refuses ordinary Commands from its local turn reservation.
+Selection continuations recheck current availability. Native generators preserve
+Neuron objects and AgentState without a second event vocabulary. Historical
+projection snapshots are independent of live streaming. Host composition, Session
+ownership, captured execution context, first-match identifiers, no default Command
+mounting, single-run lifecycle and response-stop limits remain unchanged._
 
 _The Refine Interaction composition revision supersedes the TUI-owned mounting
 and rejection of module constructor composition below. The required Agent and

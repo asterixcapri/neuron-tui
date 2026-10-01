@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace NeuronTui\Conversation;
 
 use Amp\Future;
+use Generator;
 use NeuronAI\Agent\Agent;
+use NeuronAI\Agent\AgentState;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronChatCore\Command\CommandAdapterInterface;
 use NeuronChatCore\Command\CommandInterface;
@@ -18,6 +20,8 @@ use NeuronTui\View\WorkingIndicator;
 use Throwable;
 
 use function Amp\async;
+use function array_map;
+use function array_shift;
 use function microtime;
 
 /** Terminal scheduling and presentation for the host's core runtime. @internal */
@@ -27,7 +31,12 @@ final class ConversationRuntime
     /** @var Future<mixed>|null */
     private ?Future $runningTurn = null;
     private bool $stopped = false;
-    private bool $turnPresented = false;
+    private bool $preparingTurn = false;
+    private readonly TurnRenderer $renderer;
+    /** @var Generator<int, object, mixed, AgentState>|null */
+    private ?Generator $readyStream = null;
+    /** @var list<PendingMessage> */
+    private array $pendingMessages = [];
     private ?string $displayedHistory = null;
 
     public function __construct(
@@ -36,32 +45,56 @@ final class ConversationRuntime
         private readonly ?SessionTitleGeneration $titleGeneration = null,
     ) {
         $this->workingIndicator = $view->workingIndicator();
-        $renderer = new TurnEventRenderer($view);
-        $core->subscribe($renderer->consume(...));
+        $this->renderer = new TurnRenderer($view);
     }
 
     public function submitUserMessage(UserMessage $message): void
     {
-        $idle = !$this->core->isBusy() && $this->runningTurn === null;
-        $this->core->submitMessage($message);
-        $this->presentAcceptedMessage($idle);
+        $this->enqueue(new PendingMessage(clone $message, true));
     }
+
+    /** Command-generated prompts bypass human-input preparation. */
     public function submitMessage(UserMessage $message): void
     {
-        $idle = !$this->core->isBusy() && $this->runningTurn === null;
-        $this->core->submitPrompt($message);
-        $this->presentAcceptedMessage($idle);
+        $this->enqueue(new PendingMessage(clone $message, false));
     }
-    private function presentAcceptedMessage(bool $idle): void
+
+    private function enqueue(PendingMessage $pending): void
     {
-        $this->view->emptyComposer();
-        $ready = $this->core->readyMessage();
-        if ($idle && $ready !== null) {
-            $this->showTurnStarted($ready);
+        if (!$this->isBusy()) {
+            // Idle preparation is synchronous: rejection leaves the draft intact.
+            $this->prepareTurn($pending);
         } else {
+            $this->pendingMessages[] = $pending;
             $this->showQueuedMessages();
         }
+        $this->view->emptyComposer();
     }
+
+    private function prepareTurn(PendingMessage $pending): void
+    {
+        $this->preparingTurn = true;
+        try {
+            $prepared = $pending->userInput
+                ? $this->core->prepareMessage($pending->message)
+                : $pending->message;
+            $stream = $this->core->submitPrompt($prepared);
+            $this->view->acceptUserMessage($prepared);
+            $this->readyStream = $stream;
+            $this->view->working($this->core->supportsResponseStop());
+            $this->workingIndicator->start(microtime(true));
+        } finally {
+            $this->preparingTurn = false;
+        }
+    }
+
+    private function displayMessage(PendingMessage $pending): UserMessage
+    {
+        return $pending->userInput
+            ? $pending->message
+            : $this->core->userMessageProcessors()->forDisplay($pending->message);
+    }
+
     public function synchronizeHistory(): void
     {
         $history = $this->core->agent()->getChatHistory();
@@ -81,11 +114,11 @@ final class ConversationRuntime
     }
     public function isBusy(): bool
     {
-        return $this->core->isBusy();
+        return $this->preparingTurn || $this->readyStream !== null || $this->runningTurn !== null || $this->pendingMessages !== [] || $this->core->isBusy();
     }
     public function isCommandAvailable(CommandInterface $command): bool
     {
-        return $this->core->isCommandAvailable($command);
+        return Commands::isAvailable($command, $this->isBusy()) && $this->core->isCommandAvailable($command);
     }
     /**
      * @template TOutput
@@ -94,7 +127,7 @@ final class ConversationRuntime
      */
     public function runCommand(Commands $commands, string $identifier, string $value, CommandAdapterInterface $adapter): mixed
     {
-        return $this->core->runCommand($commands, $identifier, $value, $adapter);
+        return $commands->run($identifier, $value, $adapter, $this->isCommandAvailable(...));
     }
     public function supportsResponseStop(): bool
     {
@@ -133,47 +166,53 @@ final class ConversationRuntime
             }
             try {
                 $this->runningTurn->await();
-            } catch (Throwable) { /* Errors have already been rendered through events. */
+            } catch (Throwable) { /* The renderer already presented the execution error. */
             }
             $this->runningTurn = null;
-            $this->turnPresented = false;
             $this->workingIndicator->stop();
             $this->view->ready();
-            $next = $this->core->readyMessage();
-            $this->showQueuedMessages();
-            if ($next === null) {
-                return false;
-            }
-            $this->showTurnStarted($next);
-            return true;
+            return $this->prepareNextTurn();
         }
-        $ready = $this->core->readyMessage();
-        if ($ready === null) {
-            return false;
+        if ($this->readyStream === null) {
+            return !$this->preparingTurn && !$this->core->isBusy() && $this->prepareNextTurn();
         }
-        if (!$this->turnPresented) {
-            $this->showQueuedMessages();
-            $this->showTurnStarted($ready);
-        }
-        $this->runningTurn = async(function (): void {
-            $result = $this->core->executeNext();
-            if ($result?->completed && !$this->stopped && !$result->responseStopRequested) {
-                $this->titleGeneration?->schedule($result->session, $result->agent);
+        $stream = $this->readyStream;
+        $this->readyStream = null;
+        $this->runningTurn = async(function () use ($stream): void {
+            $agent = $this->core->agent();
+            $session = $this->core->session();
+            $completed = $this->renderer->run($stream, $this->core->responseWasStopped(...));
+            if ($completed && !$this->stopped && !$this->core->responseStopRequested()) {
+                $this->titleGeneration?->schedule($session, $agent);
             }
         });
         return true;
     }
-    private function showTurnStarted(UserMessage $message): void
+
+    private function prepareNextTurn(): bool
     {
-        $this->turnPresented = true;
-        $this->view->acceptUserMessage($message);
-        $this->view->working($this->core->supportsResponseStop());
-        $this->workingIndicator->start(microtime(true));
+        while ($this->pendingMessages !== []) {
+            $pending = array_shift($this->pendingMessages);
+            $this->showQueuedMessages();
+            try {
+                $this->prepareTurn($pending);
+                return true;
+            } catch (Throwable $error) {
+                $this->view->showError($error->getMessage());
+                // Never replace a newer draft. Original input is also in recall history.
+                if ($this->view->isComposerEmpty()) {
+                    $this->view->recallInput($pending->message);
+                }
+            }
+        }
+        return false;
     }
+
     private function showQueuedMessages(): void
     {
-        $this->view->showQueuedMessages($this->core->queuedMessages());
+        $this->view->showQueuedMessages(array_map($this->displayMessage(...), $this->pendingMessages), prepared: false);
     }
+
     public function stop(): void
     {
         $this->stopped = true;

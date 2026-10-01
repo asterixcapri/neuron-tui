@@ -170,7 +170,6 @@ final class UserMessageProcessorTest extends TestCase
         Tui::make($runtime, $terminal, inputHistory: $inputs)->run();
         self::assertSame([], $provider->getRecorded());
         self::assertFalse($runtime->isBusy());
-        self::assertSame([], $runtime->queuedMessages());
         self::assertSame('Keep original draft', $inputs->older(new UserMessage(''))?->getContent());
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('The prepared user message is empty.', $display);

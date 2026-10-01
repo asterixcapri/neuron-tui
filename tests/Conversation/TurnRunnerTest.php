@@ -220,7 +220,7 @@ final class TurnRunnerTest extends TestCase
             try {
                 $turn->run($agent, new UserMessage('Answer'));
             } catch (RuntimeException) {
-                // The runtime can release its queue after the error event renders.
+                // The client can advance its queue after rendering the native stream error.
             }
         });
         EventLoop::run();
@@ -228,6 +228,36 @@ final class TurnRunnerTest extends TestCase
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('Partial answer.', $display);
         self::assertStringContainsString('RuntimeException: Provider failed', $display);
+        self::assertStringNotContainsString('Empty response.', $display);
+    }
+
+    public function testConsumedStopBeforeTextStillPresentsStoppedAndPropagatesFailure(): void
+    {
+        $terminal = new VirtualTerminal(rows: 24);
+        $provider = new class (new AssistantMessage()) extends FakeAIProvider {
+            protected function streamChunks(Message $response): Generator
+            {
+                yield from [];
+                throw new RuntimeException('Stopped before text');
+            }
+        };
+        $view = new ConversationView($terminal, 'Neuron AI', 'Conversation');
+        $turn = new TurnRunner($view);
+        $agent = $this->agentOf($provider);
+        $failure = null;
+        EventLoop::queue(static function () use ($turn, $agent, &$failure): void {
+            try {
+                $turn->run($agent, new UserMessage('Answer'), static fn(): bool => true);
+            } catch (RuntimeException $error) {
+                $failure = $error;
+            }
+        });
+        EventLoop::run();
+        $view->paintPendingChanges();
+        self::assertInstanceOf(RuntimeException::class, $failure);
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+        self::assertStringContainsString('Stopped', $display);
+        self::assertStringContainsString('RuntimeException: Stopped before text', $display);
         self::assertStringNotContainsString('Empty response.', $display);
     }
 

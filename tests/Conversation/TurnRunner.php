@@ -7,12 +7,10 @@ namespace NeuronTui\Tests\Conversation;
 use Closure;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\Messages\UserMessage;
-use NeuronChatCore\Conversation\InProcessEventPublisher;
-use NeuronChatCore\Conversation\TurnStream;
-use NeuronTui\Conversation\TurnEventRenderer;
+use NeuronTui\Conversation\TurnRenderer;
 use NeuronTui\View\ConversationView;
 
-/** Connects core stream events to terminal presentation. @internal */
+/** Connects native Neuron streaming to terminal presentation. @internal */
 final class TurnRunner
 {
     public function __construct(private readonly ConversationView $view) {}
@@ -20,10 +18,6 @@ final class TurnRunner
     /** @param (Closure(): bool)|null $responseWasStopped */
     public function run(Agent $agent, UserMessage $message, ?Closure $responseWasStopped = null): bool
     {
-        $publisher = new InProcessEventPublisher();
-        $renderer = new TurnEventRenderer($this->view);
-        $publisher->subscribe($renderer->consume(...));
-
-        return (new TurnStream($publisher))->run($agent, $message, $responseWasStopped);
+        return (new TurnRenderer($this->view))->run($agent->stream($message), $responseWasStopped);
     }
 }

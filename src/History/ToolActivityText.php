@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace NeuronTui\History;
 
 use NeuronAI\Tools\ToolCall;
-use NeuronChatCore\Conversation\ToolData;
+use NeuronChatCore\History\ToolData;
 use NeuronTui\View\DisplayableText;
 
 use function json_encode;

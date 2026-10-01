@@ -127,13 +127,13 @@ this is not the Picker, whatever the two look like.
 _Avoid_: Picker, menu, autocomplete, palette, command palette
 
 **Conversation runtime**:
-The conversation coordinator shared by interaction environments. It holds the
-current Agent and Session, accepts messages and executes one Turn at a time.
+The shared execution component holding the current Agent and Session and
+producing a response stream for one submitted message.
 _Avoid_: TUI, event loop, Agent
 
 **Pending messages**:
-Accepted messages waiting in order behind the current Turn. They are retained
-only for the lifetime of the conversation runtime.
+Original inputs held by the TUI until it submits them for execution. They are
+not yet prepared or saved in the Session.
 _Avoid_: Saved History, durable queue
 
 **Response stop**:
@@ -152,5 +152,3 @@ _Avoid_: Round, exchange, request
 The animated line in the History that tells a person the Agent is still busy,
 counting the seconds the turn has taken so far.
 _Avoid_: Spinner, loader, progress bar
-
-Command availability is shared core policy: client-owned Commands preserve first-match identifiers, and ConversationRuntime enforces idle/concurrent admission for invocation. Terminal suggestions use that same policy; the terminal Adapter presents refusal and all Command effects. Selection continuation invokes through the runtime again against current state.

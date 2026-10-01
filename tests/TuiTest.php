@@ -88,7 +88,7 @@ use const STDIN;
 
 final class TuiTest extends TestCase
 {
-    public function testUsesHostRuntimeAndRendersMessagesAcceptedBeforeStartup(): void
+    public function testUsesHostRuntimeAndOwnsThePendingInputQueue(): void
     {
         $terminal = new VirtualTerminal(rows: 40);
         $agent = (new Agent())->setAiProvider(new FakeAIProvider(
@@ -96,8 +96,7 @@ final class TuiTest extends TestCase
             new AssistantMessage('Second answer'),
         ));
         $runtime = new CoreRuntime($agent);
-        $runtime->submitMessage(new UserMessage('First accepted'));
-        $runtime->submitMessage(new UserMessage('Second accepted'));
+        EventLoop::queue(static fn() => $terminal->simulateInput("First accepted\rSecond accepted\r"));
         EventLoop::delay(0.3, static fn() => $terminal->simulateInput("\x03"));
         Tui::make($runtime, $terminal)->run();
         self::assertFalse($runtime->isBusy());
@@ -1369,10 +1368,11 @@ final class TuiTest extends TestCase
         self::assertSame(['/probe'], array_map(static fn(UserMessage $message): ?string => $message->getContent(), (new InputHistory($storage))->entries()));
     }
 
-    public function testSelectionContinuationRechecksAvailabilityAfterHostReservesATurn(): void
+    public function testSelectionContinuationRechecksAvailabilityDuringAHostStream(): void
     {
         $terminal = new VirtualTerminal(rows: 30);
         $selected = false;
+        $hostStream = null;
         $runtime = new CoreRuntime((new Agent())->setAiProvider(new FakeAIProvider(new AssistantMessage('Answer'))));
         $command = $this->commandThat(static function (CommandAdapterInterface $adapter, string $value) use (&$selected): void {
             if ($value !== '') {
@@ -1382,12 +1382,14 @@ final class TuiTest extends TestCase
             $adapter->requestSelection(new Selection('/probe', 'Choose', [new SelectionOption('selected', 'Selected')]));
         });
         EventLoop::queue(static fn() => $terminal->simulateInput("/probe\r"));
-        EventLoop::delay(0.08, static function () use ($runtime, $terminal): void {
-            $runtime->submitMessage(new UserMessage('Reserved by host'));
+        EventLoop::delay(0.08, static function () use ($runtime, $terminal, &$hostStream): void {
+            $hostStream = $runtime->submitMessage(new UserMessage('Started by host'));
+            $hostStream->rewind();
             $terminal->simulateInput("\r");
         });
         EventLoop::delay(0.16, static fn() => $terminal->simulateInput("\x03"));
         Tui::make($runtime, $terminal, commands: (new Commands())->addCommand($command))->run();
+        unset($hostStream);
         self::assertFalse($selected);
         self::assertStringContainsString('/probe is refused while the Agent is working', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
     }

@@ -501,7 +501,7 @@ final class ConversationView
     /**
      * @param list<UserMessage> $messages
      */
-    public function showQueuedMessages(array $messages): void
+    public function showQueuedMessages(array $messages, bool $prepared = true): void
     {
         $this->queuedMessages->clear();
 
@@ -511,7 +511,7 @@ final class ConversationView
             ];
 
             foreach ($messages as $message) {
-                $message = DisplayableText::safe($this->messagePreview($message));
+                $message = DisplayableText::safe($prepared ? $this->messagePreview($message) : MessageTextFormatter::format($message));
                 $lines[] = '  ↳ ' . str_replace(
                     "\n",
                     "\n    ",

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace NeuronTui\View;
 
 use NeuronAI\Tools\ToolCall;
-use NeuronChatCore\Conversation\ToolData;
 use NeuronChatCore\History\ToolCallCorrelation;
+use NeuronChatCore\History\ToolData;
 use NeuronTui\History\ToolActivityText;
 
 use function count;
