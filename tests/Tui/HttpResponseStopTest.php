@@ -11,7 +11,7 @@ use NeuronAI\HttpClient\StoppableHttpClient;
 use NeuronAI\Providers\OpenAI\OpenAI;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Command\HelpCommand;
-use NeuronInteraction\Http\StopSignal;
+use NeuronInteraction\Interruption\StopSignal;
 use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Tests\Http\FixtureHttpClient;
 use NeuronTui\Tests\Http\FixtureStream;

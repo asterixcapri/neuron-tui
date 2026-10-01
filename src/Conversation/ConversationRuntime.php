@@ -7,7 +7,7 @@ namespace NeuronTui\Conversation;
 use Amp\Future;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\Messages\UserMessage;
-use NeuronInteraction\Http\StopSignal;
+use NeuronInteraction\Interruption\StopSignal;
 use NeuronInteraction\Session\Session;
 use NeuronTui\Session\SessionTitleGeneration;
 use NeuronTui\View\ConversationView;

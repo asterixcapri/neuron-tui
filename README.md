@@ -242,7 +242,7 @@ configure the provider with this client:
 use NeuronAI\HttpClient\Amp\AmpHttpClient;
 use NeuronAI\Providers\OpenAI\Responses\OpenAIResponses;
 use NeuronAI\HttpClient\StoppableHttpClient;
-use NeuronInteraction\Http\StopSignal;
+use NeuronInteraction\Interruption\StopSignal;
 use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Tui;
 
