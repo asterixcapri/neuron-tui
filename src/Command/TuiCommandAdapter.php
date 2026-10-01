@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronTui\Command;
 
+use InvalidArgumentException;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronInteraction\Command\CommandAdapterInterface;
@@ -14,6 +15,7 @@ use NeuronInteraction\Command\ConcurrentCommandInterface;
 use NeuronInteraction\Command\Selection;
 use NeuronInteraction\Command\SelectionOption;
 use NeuronInteraction\Configuration\ConfigurationStore;
+use NeuronInteraction\Session\Session;
 use NeuronInteraction\Session\SessionStore;
 use NeuronTui\Conversation\ConversationRuntime;
 use NeuronTui\View\ChoiceOption;
@@ -141,9 +143,23 @@ final class TuiCommandAdapter implements CommandAdapterInterface
         return $this->runtime->agent();
     }
 
-    public function useAgent(Agent $agent, bool $preserveConversation = true): void
+    public function useAgent(Agent $agent): void
     {
-        $this->runtime->useAgent($agent, $preserveConversation);
+        $this->runtime->useAgent($agent);
+    }
+
+    public function session(): Session
+    {
+        return $this->runtime->session();
+    }
+
+    public function useSession(Session $session): void
+    {
+        $selected = $this->sessionStore->read($session->getKey());
+        if ($selected === null) {
+            throw new InvalidArgumentException('The selected Session does not belong to this SessionStore.');
+        }
+        $this->runtime->useSession($selected);
     }
 
     public function commands(): Commands

@@ -14,8 +14,8 @@ Branding, no automatic mounting, first-match duplicates and single-run behavior
 remain unchanged._
 
 _ADR-0005 previously superseded History and SessionStore ownership. Its revision
-notice now records the restored Host Application choice of initial History and
-optional module composition. The historical decision text follows; apply these
+notice now records optional module composition and the Neuron AI 4 revision:
+the Host Application selects an initial Session, or Tui creates one in its Store. The historical decision text follows; apply these
 scoped supersessions._
 
 Neuron TUI follows Neuron AI's fluent construction style without copying the

@@ -28,8 +28,8 @@ _Avoid_: Command, CLI application
 
 **History**:
 The sequence of messages owned by the Agent and represented by the TUI,
-including messages that predate the TUI startup. A History may exist independently
-of SessionStore and have its own persistence.
+including messages that predate the TUI startup. In the Conversation TUI, it is
+the active context of the current Session.
 _Avoid_: Transcript, TUI log
 
 **Input history**:
@@ -99,8 +99,8 @@ output appropriate to that environment.
 _Avoid_: Command runner, Command result
 
 **Session**:
-One conversation owned by a user, identified by a key and held as the Agent's
-History, that can outlive the TUI process and be reopened by another Agent.
+One conversation owned by a user and identified by a key, with its saved messages
+and metadata, that can outlive the TUI process and be reopened by another Agent.
 Its title and last-used time help the person recognize it.
 _Avoid_: Chat, thread
 

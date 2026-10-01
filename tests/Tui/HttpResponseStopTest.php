@@ -6,6 +6,7 @@ namespace NeuronTui\Tests\Tui;
 
 use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\Messages\Message;
+use NeuronAI\HttpClient\HttpRequest;
 use NeuronAI\HttpClient\StoppableHttpClient;
 use NeuronAI\Providers\OpenAI\OpenAI;
 use NeuronInteraction\Command\Commands;
@@ -44,12 +45,13 @@ final class HttpResponseStopTest extends TestCase
         EventLoop::delay(0.18, static fn () => $terminal->simulateInput("!\r"));
         EventLoop::delay(0.3, static fn () => $terminal->simulateInput("\x03"));
 
-        (new Tui($agent, $terminal, stopSignal: $stopSignal))->run();
+        $tui = new Tui($agent, $terminal, stopSignal: $stopSignal);
+        $tui->run();
 
-        self::assertSame($history->getThreadId(), $agent->getChatHistory()->getThreadId());
-        self::assertSame(['First', 'Partial', 'Second', 'Second answer', 'Third', 'Third answer', 'Draf!t', 'Draft answer'], array_map(static fn (Message $message): ?string => $message->getContent(), $agent->getChatHistory()->getMessages()));
-        self::assertSame('stopped', $agent->getChatHistory()->getMessages()[1]->getMetadata('stop_reason'));
-        self::assertCount(4, $client->requests);
+        self::assertNotSame($history->getThreadId(), $tui->agent()->getChatHistory()->getThreadId());
+        self::assertSame(['First', 'Partial', 'Second', 'Second answer', 'Third', 'Third answer', 'Draf!t', 'Draft answer'], array_map(static fn (Message $message): ?string => $message->getContent(), $tui->agent()->getChatHistory()->getMessages()));
+        self::assertSame('stopped', $tui->agent()->getChatHistory()->getMessages()[1]->getMetadata('stop_reason'));
+        self::assertCount(4, array_filter($client->requests, static fn (HttpRequest $request): bool => is_array($request->body) && ($request->body['stream'] ?? false) === true));
         self::assertSame(1, $first->closes);
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('Stopped', $display);
@@ -72,11 +74,12 @@ final class HttpResponseStopTest extends TestCase
         EventLoop::queue(static fn () => $terminal->simulateInput("Question\r"));
         EventLoop::delay(0.15, static fn () => $terminal->simulateInput("\x03"));
 
-        Tui::make($agent, $terminal, (new Commands())->addCommand(new HelpCommand()), stopSignal: $stopSignal)->run();
+        $tui = Tui::make($agent, $terminal, (new Commands())->addCommand(new HelpCommand()), stopSignal: $stopSignal);
+        $tui->run();
 
         self::assertSame(0, $stream->closes);
         self::assertStringNotContainsString('Stop requested', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
-        self::assertCount(2, $agent->getChatHistory()->getMessages());
+        self::assertCount(2, $tui->agent()->getChatHistory()->getMessages());
     }
 
     public function testTransportFailureRemainsAnErrorAndTheNextTurnCanRun(): void
@@ -94,13 +97,14 @@ final class HttpResponseStopTest extends TestCase
         EventLoop::queue(static fn () => $terminal->simulateInput("Question\r"));
         EventLoop::delay(0.18, static fn () => $terminal->simulateInput("\x03"));
 
-        Tui::make($agent, $terminal, stopSignal: $stopSignal)->run();
+        $tui = Tui::make($agent, $terminal, stopSignal: $stopSignal);
+        $tui->run();
 
-        self::assertSame(['Next', 'Next answer'], array_map(static fn (Message $message): ?string => $message->getContent(), $agent->getChatHistory()->getMessages()));
+        self::assertSame(['Next', 'Next answer'], array_map(static fn (Message $message): ?string => $message->getContent(), $tui->agent()->getChatHistory()->getMessages()));
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('RuntimeException: Transport failed', $display);
         self::assertStringNotContainsString('Stopped', $display);
-        self::assertCount(2, $client->requests);
+        self::assertCount(2, array_filter($client->requests, static fn (HttpRequest $request): bool => is_array($request->body) && ($request->body['stream'] ?? false) === true));
     }
 
     private function agent(FixtureHttpClient $client, StopSignal $stopSignal): Agent

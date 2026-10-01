@@ -146,7 +146,7 @@ In the session list, type to filter, use the arrow keys to move, Enter to select
 and Escape to cancel.
 
 To keep conversations between runs, configure a file-backed `SessionStore` and
-start the Agent with a Session from it:
+pass an initial Session from it:
 
 ```php
 use NeuronInteraction\Command\ClearCommand;
@@ -159,7 +159,7 @@ use NeuronTui\Tui;
 $storage = new FileStorage(__DIR__ . '/.storage');
 $sessionStore = new SessionStore($storage, 'local-user');
 
-$agent = $sessionStore->create()->bindTo($agent);
+$session = $sessionStore->create();
 
 $commands = (new Commands())->addCommand([
     new ClearCommand(),
@@ -170,13 +170,25 @@ Tui::make(
     $agent,
     commands: $commands,
     sessionStore: $sessionStore,
+    session: $session,
 )->run();
 ```
 
 Use a user identifier appropriate to your application in place of `local-user`.
 By default, Sessions last only for the current run. Session selection can replace
 the Agent instance; use `$tui->agent()` to retrieve the currently selected Agent.
-Always retain the Agent copy returned by `Session::bindTo()`.
+
+Every TUI conversation belongs to its SessionStore from startup. Without `session`,
+TUI creates an empty Session in the supplied Store, or in its default in-memory
+Store. To reopen a conversation, pass `session: $sessionStore->read($key)` after
+checking that it exists. Supply the matching `sessionStore` together with the
+Session. An Agent that already contains messages requires an explicit Session;
+that Session determines the conversation displayed and continued by TUI.
+
+Commands use `useAgent($agent)` to change capabilities while keeping the current
+Session, and `useSession($session)` to select another conversation while keeping
+the Agent's configuration. Clear creates a new Session; Resume selects a saved
+one. Both operate through the same Store.
 
 ## Configuration
 
