@@ -6,6 +6,7 @@ namespace NeuronTui\Conversation;
 
 use NeuronChatCore\Conversation\ConversationEvent;
 use NeuronChatCore\Conversation\EventType;
+use NeuronChatCore\Conversation\TurnOutcome;
 use NeuronTui\View\ConversationView;
 use NeuronTui\View\DisplayableText;
 use NeuronTui\View\ToolActivity;
@@ -75,12 +76,12 @@ final class TurnEventRenderer
         if ($event->type !== EventType::TurnEnded) {
             return;
         }
-        if ($event->outcome === 'approval_paused') {
+        if ($event->outcome === TurnOutcome::ApprovalPaused) {
             $this->view->showError('Human-in-the-loop interruptions are not supported.');
-        } elseif ($event->outcome === 'stopped') {
+        } elseif ($event->outcome === TurnOutcome::Stopped) {
             $working->stop();
             $this->view->showResponseStopped();
-        } elseif ($event->outcome === 'completed' && trim(DisplayableText::safe($this->responseText)) === '' && !($this->toolActivity?->hasActivity() ?? false)) {
+        } elseif ($event->outcome === TurnOutcome::Completed && trim(DisplayableText::safe($this->responseText)) === '' && !($this->toolActivity?->hasActivity() ?? false)) {
             $working->stop();
             $this->view->showEmptyResponse();
         }
