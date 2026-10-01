@@ -19,7 +19,7 @@ The `0.9.x` branch supports Neuron AI 4. The `0.8.x` branch supports Neuron AI 3
 Run this command in your application's directory:
 
 ```bash
-composer require asterixcapri/neuron-tui:^0.9@dev
+composer require asterixcapri/neuron-tui
 ```
 
 Composer also installs Neuron Interaction and the other required dependencies.

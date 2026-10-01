@@ -6,8 +6,8 @@
     "require": {
         "php": "^8.4.1",
         "amphp/http-client": "^5.3",
-        "asterixcapri/neuron-interaction": "^0.9@dev",
-        "asterixcapri/neuron-tui": "^0.9@dev",
+        "asterixcapri/neuron-interaction": "^0.9",
+        "asterixcapri/neuron-tui": "^0.9",
         "neuron-core/neuron-ai": "^4.0",
         "symfony/dotenv": "^8.1"
     },
