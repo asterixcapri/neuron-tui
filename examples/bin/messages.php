@@ -3,8 +3,10 @@
 declare(strict_types=1);
 
 use NeuronAI\Agent\Agent;
+use NeuronChatCore\Conversation\ConversationRuntime as CoreRuntime;
 use NeuronChatCore\InputHistory\InputHistory;
 use NeuronChatCore\Message\UserMessageProcessors;
+use NeuronChatCore\Session\SessionStore;
 use NeuronChatCore\Storage\InMemoryStorage;
 use NeuronTui\Tui;
 use NeuronTuiDemo\AIProviderFactory;
@@ -26,7 +28,7 @@ $userMessageProcessors = (new UserMessageProcessors())->addProcessor([
 ]);
 
 Tui::make(
-    $agent,
+    new CoreRuntime($agent, new SessionStore(new InMemoryStorage(), 'local')),
     inputHistory: $inputHistory,
     userMessageProcessors: $userMessageProcessors,
 )

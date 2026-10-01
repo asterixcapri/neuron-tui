@@ -7,7 +7,7 @@ Agent.
 
 **Neuron TUI**:
 The reusable terminal Adapter through which a person converses with an Agent
-supplied by a Host Application.
+configured by a Host Application through its conversation runtime.
 _Avoid_: Neuron CLI, executable, command
 
 **Agent**:
@@ -17,8 +17,8 @@ Agents, but Neuron TUI sees only the Agent it converses with.
 _Avoid_: Bot, model
 
 **Host Application**:
-The application that configures the Agent and starts the terminal
-interaction.
+The application that configures the Agent, composes the conversation runtime
+and starts the interaction.
 _Avoid_: Neuron TUI, library
 
 **Conversation TUI**:
@@ -123,6 +123,22 @@ a slash, each under the line that describes it. The selected name can be
 completed for further writing or taken immediately; nothing is suspended, so
 this is not the Picker, whatever the two look like.
 _Avoid_: Picker, menu, autocomplete, palette, command palette
+
+**Conversation runtime**:
+The conversation coordinator shared by interaction environments. It holds the
+current Agent and Session, accepts messages and executes one Turn at a time.
+_Avoid_: TUI, event loop, Agent
+
+**Pending messages**:
+Accepted messages waiting in order behind the current Turn. They are retained
+only for the lifetime of the conversation runtime.
+_Avoid_: Saved History, durable queue
+
+**Response stop**:
+A request to interrupt the model's streamed response when its HTTP callback
+consumes the signal. It does not promise cancellation of tools or the entire
+Turn.
+_Avoid_: Tool cancellation, client close
 
 **Turn**:
 One stretch of the conversation, from the moment a person's message is taken

@@ -6,8 +6,8 @@ namespace NeuronTui\View;
 
 use NeuronAI\Tools\ToolCall;
 use NeuronChatCore\Conversation\ToolData;
+use NeuronChatCore\History\ToolCallCorrelation;
 use NeuronTui\History\ToolActivityText;
-use NeuronTui\History\ToolCallCorrelation;
 
 use function count;
 use function microtime;

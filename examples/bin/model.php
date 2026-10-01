@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 use NeuronChatCore\Command\Commands;
 use NeuronChatCore\Configuration\ConfigurationStore;
+use NeuronChatCore\Conversation\ConversationRuntime as CoreRuntime;
+use NeuronChatCore\Session\SessionStore;
 use NeuronChatCore\Storage\FileStorage;
+use NeuronChatCore\Storage\InMemoryStorage;
 use NeuronTui\Tui;
 use NeuronTuiDemo\AIProviderFactory;
 use NeuronTuiDemo\DemoAgent;
@@ -26,7 +29,7 @@ $agent->setAiProvider(AIProviderFactory::create($modelId));
 $commands = (new Commands())->addCommand(new ModelCommand());
 
 Tui::make(
-    $agent,
+    new CoreRuntime($agent, new SessionStore(new InMemoryStorage(), 'local')),
     commands: $commands,
     configurationStore: $configurationStore,
 )->run();

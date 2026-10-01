@@ -28,18 +28,21 @@ Composer also installs Neuron Interaction and the other required dependencies.
 
 ## Usage
 
-Configure the Agent in your application, then pass it to `Tui`. Here,
+Configure the Agent in your application, compose a core conversation runtime,
+then pass that runtime to `Tui`. Here,
 `$provider` is your configured `NeuronAI\Providers\AIProviderInterface`
 implementation:
 
 ```php
 use NeuronAI\Agent\Agent;
+use NeuronChatCore\Conversation\ConversationRuntime;
 use NeuronTui\Tui;
 
 $agent = Agent::make();
 $agent->setAiProvider($provider);
+$runtime = new ConversationRuntime($agent);
 
-Tui::make($agent)->run();
+Tui::make($runtime)->run();
 ```
 
 `Tui` starts a new conversation and accepts messages. Use `Ctrl+C` to exit.
@@ -52,7 +55,7 @@ be supplied when the terminal should identify a particular Agent or product:
 ```php
 use NeuronTui\Tui;
 
-Tui::make($agent)
+Tui::make($runtime)
     ->setTitle('Research Agent')
     ->setSubtitle('Ask about the knowledge base')
     ->setFiglet('Research', 'slant')
@@ -82,7 +85,7 @@ $commands = (new Commands())->addCommand([
     new LeaveCommand(),
 ]);
 
-Tui::make($agent, commands: $commands)->run();
+Tui::make($runtime, commands: $commands)->run();
 ```
 
 Each standard command accepts a custom slash-prefixed name: `new LeaveCommand('/quit')`
@@ -127,7 +130,7 @@ final class ReviewCommand implements CommandInterface
     }
 }
 
-Tui::make($agent, commands: (new Commands())->addCommand(new ReviewCommand()))->run();
+Tui::make($runtime, commands: (new Commands())->addCommand(new ReviewCommand()))->run();
 ```
 
 Commands communicate through `notify()`, `warn()` and `error()`. Neuron TUI
@@ -166,10 +169,8 @@ $commands = (new Commands())->addCommand([
 ]);
 
 Tui::make(
-    $agent,
+    new \NeuronChatCore\Conversation\ConversationRuntime($agent, $sessionStore, session: $session),
     commands: $commands,
-    sessionStore: $sessionStore,
-    session: $session,
 )->run();
 ```
 
@@ -177,11 +178,10 @@ Use a user identifier appropriate to your application in place of `local-user`.
 By default, Sessions last only for the current run. Session selection can replace
 the Agent instance; use `$tui->agent()` to retrieve the currently selected Agent.
 
-Every TUI conversation belongs to its SessionStore from startup. Without `session`,
-TUI creates an empty Session in the supplied Store, or in its default in-memory
-Store. To reopen a conversation, pass `session: $sessionStore->read($key)` after
-checking that it exists. Supply the matching `sessionStore` together with the
-Session. An Agent that already contains messages requires an explicit Session;
+Every runtime conversation belongs to its SessionStore from construction.
+Without `session`, the runtime creates an empty Session in the supplied Store,
+or in its default in-memory Store. To reopen a conversation, pass `session: $sessionStore->read($key)` after
+checking that it exists. Pass the matching SessionStore and Session to the runtime. An Agent that already contains messages requires an explicit Session;
 that Session determines the conversation displayed and continued by TUI.
 
 Commands use `useAgent($agent)` to change capabilities while keeping the current
@@ -203,7 +203,7 @@ $settings = new ConfigurationStore(new FileStorage(__DIR__ . '/.storage'), 'loca
 $model = $settings->read('model', 'openai:gpt-5.4-nano');
 $settings->write('model', 'openai:gpt-5.4-mini');
 
-Tui::make($agent, configurationStore: $settings)->run();
+Tui::make($runtime, configurationStore: $settings)->run();
 ```
 
 The fallback determines the expected type: use `read('retries', 3)` for an
@@ -225,10 +225,10 @@ use NeuronTui\Tui;
 
 $inputHistory = new InputHistory(new FileStorage(__DIR__ . '/.storage'));
 
-Tui::make($agent, inputHistory: $inputHistory)->run();
+Tui::make($runtime, inputHistory: $inputHistory)->run();
 ```
 
-You can pass `inputHistory`, `sessionStore`, `configurationStore` and `commands`
+You can pass `inputHistory`, `configurationStore` and `commands`
 together in the same `Tui::make()` call.
 
 ## Stop a response
@@ -265,7 +265,7 @@ $agent->setAiProvider(new OpenAIResponses(
     httpClient: $client,
 ));
 
-Tui::make($agent, stopSignal: $stopSignal)
+Tui::make(new \NeuronChatCore\Conversation\ConversationRuntime($agent, stopSignal: $stopSignal))
     ->run();
 ```
 
@@ -290,7 +290,7 @@ $processors = (new UserMessageProcessors())->addProcessor([
     new FileReferenceProcessor(__DIR__),
 ]);
 
-Tui::make($agent, userMessageProcessors: $processors)->run();
+Tui::make($runtime, userMessageProcessors: $processors)->run();
 ```
 
 Processors prepare messages in registration order and display them in reverse

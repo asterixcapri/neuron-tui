@@ -9,10 +9,9 @@ use LogicException;
 use NeuronAI\Agent\Agent;
 use NeuronChatCore\Command\Commands;
 use NeuronChatCore\Configuration\ConfigurationStore;
+use NeuronChatCore\Conversation\ConversationRuntime as CoreRuntime;
 use NeuronChatCore\InputHistory\InputHistory;
-use NeuronChatCore\Interruption\StopSignal;
 use NeuronChatCore\Message\UserMessageProcessors;
-use NeuronChatCore\Session\Session;
 use NeuronChatCore\Session\SessionStore;
 use NeuronChatCore\Storage\InMemoryStorage;
 use NeuronTui\Conversation\ConversationInputHandler;
@@ -62,52 +61,38 @@ final class Tui
 
     private bool $started = false;
 
-    private ?ConversationRuntime $runtime = null;
-
     private readonly UserMessageProcessors $userMessageProcessors;
 
     public function __construct(
-        private readonly Agent $agent,
+        private readonly CoreRuntime $conversation,
         private readonly ?TerminalInterface $terminal = null,
         ?Commands $commands = null,
-        ?SessionStore $sessionStore = null,
         ?ConfigurationStore $configurationStore = null,
         ?InputHistory $inputHistory = null,
         ?UserMessageProcessors $userMessageProcessors = null,
-        private readonly ?StopSignal $stopSignal = null,
-        private readonly ?Session $session = null,
     ) {
         $this->userMessageProcessors = $userMessageProcessors ?? new UserMessageProcessors();
         $this->commands = $commands ?? new Commands();
-        $this->sessionStore = $sessionStore ?? new SessionStore(
-            new InMemoryStorage(),
-            'local',
-        );
+        $this->sessionStore = $this->conversation->sessionStore();
         $this->configurationStore = $configurationStore ?? new ConfigurationStore(new InMemoryStorage(), 'local');
         $this->inputHistory = $inputHistory ?? new InputHistory(new InMemoryStorage());
     }
 
     public static function make(
-        Agent $agent,
+        CoreRuntime $conversation,
         ?TerminalInterface $terminal = null,
         ?Commands $commands = null,
-        ?SessionStore $sessionStore = null,
         ?ConfigurationStore $configurationStore = null,
         ?InputHistory $inputHistory = null,
         ?UserMessageProcessors $userMessageProcessors = null,
-        ?StopSignal $stopSignal = null,
-        ?Session $session = null,
     ): self {
         return new self(
-            $agent,
+            $conversation,
             $terminal,
             $commands,
-            $sessionStore,
             $configurationStore,
             $inputHistory,
             $userMessageProcessors,
-            $stopSignal,
-            $session,
         );
     }
 
@@ -150,26 +135,13 @@ final class Tui
     /** The Agent currently answering, including a copy bound to a selected Session. */
     public function agent(): Agent
     {
-        return $this->runtime?->agent() ?? $this->agent;
+        return $this->conversation->agent();
     }
 
     public function run(): void
     {
         $this->ensureNotStarted();
         $this->started = true;
-
-        $session = $this->session;
-        if ($session === null) {
-            if ($this->agent->getThreadId() !== null && $this->agent->getChatHistory()->getMessages() !== []) {
-                throw new InvalidArgumentException('An Agent with existing messages requires an explicit Session.');
-            }
-            $session = $this->sessionStore->create();
-        } else {
-            $session = $this->sessionStore->read($session->getKey());
-            if ($session === null) {
-                throw new InvalidArgumentException('The selected Session does not belong to this SessionStore.');
-            }
-        }
 
         $terminal = $this->terminal ?? new Terminal();
         $view = new ConversationView(
@@ -182,11 +154,9 @@ final class Tui
             $this->userMessageProcessors,
         );
         $sessionTitleGeneration = new SessionTitleGeneration();
-        $runtime = $this->runtime = new ConversationRuntime(
-            $this->agent,
+        $runtime = new ConversationRuntime(
+            $this->conversation,
             $view,
-            $session,
-            $this->stopSignal,
             $sessionTitleGeneration,
         );
         $input = new ConversationInputHandler(

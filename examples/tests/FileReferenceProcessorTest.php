@@ -11,9 +11,11 @@ use NeuronAI\Chat\Messages\ContentBlocks\FileContent;
 use NeuronAI\Chat\Messages\ContentBlocks\TextContent;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Testing\FakeAIProvider;
+use NeuronChatCore\Conversation\ConversationRuntime as CoreRuntime;
 use NeuronChatCore\InputHistory\InputHistory;
 use NeuronChatCore\Message\UserMessageFactory;
 use NeuronChatCore\Message\UserMessageProcessors;
+use NeuronChatCore\Session\SessionStore;
 use NeuronChatCore\Storage\InMemoryStorage;
 use NeuronTui\Tui;
 use NeuronTuiDemo\FileReferenceProcessor;
@@ -75,7 +77,7 @@ final class FileReferenceProcessorTest extends TestCase
         EventLoop::delay(0.15, static fn() => $terminal->simulateInput("\x03"));
 
         Tui::make(
-            $agent,
+            new CoreRuntime($agent, new SessionStore(new InMemoryStorage(), 'local')),
             $terminal,
             inputHistory: $inputHistory,
             userMessageProcessors: $processors,

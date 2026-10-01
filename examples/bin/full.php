@@ -10,6 +10,7 @@ use NeuronChatCore\Command\HelpCommand;
 use NeuronChatCore\Command\LeaveCommand;
 use NeuronChatCore\Command\ResumeCommand;
 use NeuronChatCore\Configuration\ConfigurationStore;
+use NeuronChatCore\Conversation\ConversationRuntime as CoreRuntime;
 use NeuronChatCore\InputHistory\InputHistory;
 use NeuronChatCore\Interruption\StopSignal;
 use NeuronChatCore\Message\UserMessageProcessors;
@@ -64,14 +65,11 @@ $userMessageProcessors = (new UserMessageProcessors())->addProcessor([
 ]);
 
 Tui::make(
-    $agent,
+    new CoreRuntime($agent, $sessionStore, session: $session, stopSignal: $stopSignal),
     commands: $commands,
-    sessionStore: $sessionStore,
-    session: $session,
     configurationStore: $configurationStore,
     inputHistory: $inputHistory,
     userMessageProcessors: $userMessageProcessors,
-    stopSignal: $stopSignal,
 )
     ->setFiglet('NeuronTUI')
     ->setTitle('Neuron TUI Demo')

@@ -2,13 +2,14 @@
 
 declare(strict_types=1);
 
-namespace NeuronTui\Conversation;
+namespace NeuronTui\Tests\Conversation;
 
 use Closure;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronChatCore\Conversation\InProcessEventPublisher;
 use NeuronChatCore\Conversation\TurnStream;
+use NeuronTui\Conversation\TurnEventRenderer;
 use NeuronTui\View\ConversationView;
 
 /** Connects core stream events to terminal presentation. @internal */

@@ -1,4 +1,25 @@
-# The TUI is composed around a required Agent
+# The TUI is composed around a host-supplied conversation runtime
+
+_Conversation Runtime extraction supersedes the required Agent entry point and
+TUI execution ownership below. The Host Application still constructs and
+configures the concrete Agent, providers, tools and modules, then constructs
+`NeuronChatCore\Conversation\ConversationRuntime` with its SessionStore,
+optional initial Session, EventPublisher and StopSignal. `Tui::make($runtime,
+$terminal)` and the constructor receive that same runtime. Commands,
+ConfigurationStore, InputHistory and display processors remain optional client
+modules at this stage; SessionStore is obtained from the runtime. Core owns
+immediate Turn reservation, FIFO pending messages, direct sequential execution,
+Agent/Session binding and serializable stream events. Amp Fibers, completion
+polling, terminal ticks, rendering and asynchronous Session title generation
+belong to the TUI. Direct execution requires neither Amp nor a terminal. Pending
+messages have no durable guarantee; response stop retains consumption semantics
+and does not cancel tools. Session ownership is validated by re-reading in the
+supplied Store. Existing Agent messages still require an explicit Session. A
+running Turn retains its captured Agent and Session. Host composition, no
+automatic Command mounting, first-match duplicates and single-run lifecycle are
+retained. Historical decisions below remain as context and are superseded only
+within this scope._
+
 
 _The Refine Interaction composition revision supersedes the TUI-owned mounting
 and rejection of module constructor composition below. The required Agent and

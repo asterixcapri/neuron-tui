@@ -42,7 +42,7 @@ final class CommandHistoryTest extends TestCase
 
         $this->terminal = new VirtualTerminal(rows: 30);
         $this->view = new ConversationView($this->terminal, 'Neuron AI', 'Conversation');
-        $this->runtime = new ConversationRuntime($agent, $this->view, $session);
+        $this->runtime = new ConversationRuntime(new \NeuronChatCore\Conversation\ConversationRuntime($agent, $this->sessionStore, session: $session), $this->view);
         $this->runtime->synchronizeHistory();
     }
 
