@@ -6,147 +6,51 @@ namespace NeuronTui\History;
 
 use NeuronAI\Chat\Enums\MessageRole;
 use NeuronAI\Chat\Messages\Message;
-use NeuronAI\Chat\Messages\ToolCallMessage;
-use NeuronAI\Chat\Messages\ToolResultMessage;
-use NeuronAI\Tools\ToolCall;
-use NeuronChatCore\Message\UserMessageFactory;
+use NeuronChatCore\History\HistoryProjection as NeutralHistoryProjection;
+use NeuronChatCore\History\MessageEntry;
+use NeuronChatCore\History\ToolEntry;
 use NeuronChatCore\Message\UserMessageProcessorInterface;
 use NeuronChatCore\Message\UserMessageProcessors;
 use NeuronTui\View\HistoryEntryKind;
 use NeuronTui\View\MessageTextFormatter;
 
-use function array_values;
-use function count;
-
-/**
- * The Agent's messages as the one ordered stream of entries a person sees.
- *
- * Defines historical presentation rules: which messages are excluded, what
- * replaces attachment payloads, and where a tool's result belongs relative
- * to its call. A result may arrive out of order, or never arrive at all.
- * The Agent owns the History; Session metadata is independent of this
- * terminal projection, and View owns the mutable widgets and rendering.
- *
- * The projection is a snapshot that can be built at any moment: opening the
- * TUI, starting a new Session, or returning to one.
- *
- * @internal
- */
+/** Terminal formatting of the core's neutral History snapshot. @internal */
 final class HistoryProjection
 {
-    /**
-     * Presentation fallback for unavailable historical timing, rather than
-     * a measured duration.
-     */
-    private const float FALLBACK_DURATION_SECONDS = 0.0;
-
-    private readonly ToolCallCorrelation $correlation;
-
-    /**
-     * Entries in the order a person reads them, each one still reachable by
-     * its position so that a result can complete the call it belongs to.
-     *
-     * @var array<int, ProjectedEntry>
-     */
+    /** @var list<ProjectedEntry> */
     private array $entries = [];
 
     /** @param array<Message> $messages */
     public function __construct(
         array $messages,
-        private readonly UserMessageProcessorInterface $userMessageProcessor = new UserMessageProcessors(),
+        UserMessageProcessorInterface $userMessageProcessor = new UserMessageProcessors(),
     ) {
-        $this->correlation = new ToolCallCorrelation();
-
-        foreach ($messages as $message) {
-            $this->projectMessage($message);
+        $projection = new NeutralHistoryProjection($messages, $userMessageProcessor);
+        foreach ($projection->entries() as $entry) {
+            if ($entry instanceof MessageEntry) {
+                $text = MessageTextFormatter::format($entry->message);
+                if ($text !== '') {
+                    $this->entries[] = new ProjectedEntry(
+                        $entry->role === MessageRole::USER
+                            ? HistoryEntryKind::UserMessage
+                            : HistoryEntryKind::AssistantMessage,
+                        $text,
+                    );
+                }
+            } elseif ($entry instanceof ToolEntry) {
+                $this->entries[] = new ProjectedEntry(
+                    HistoryEntryKind::ToolActivity,
+                    $entry->completed
+                        ? ToolActivityText::completed($entry->tool, 0.0)
+                        : ToolActivityText::pending($entry->tool),
+                );
+            }
         }
     }
 
     /** @return list<ProjectedEntry> */
     public function entries(): array
     {
-        return array_values($this->entries);
-    }
-
-    private function projectMessage(Message $message): void
-    {
-        $role = $message->getRole();
-
-        if (
-            $role !== MessageRole::USER->value
-            && $role !== MessageRole::ASSISTANT->value
-        ) {
-            return;
-        }
-
-        if ($message instanceof ToolCallMessage) {
-            $this->appendMessage(HistoryEntryKind::AssistantMessage, $message);
-
-            foreach ($message->getToolCalls() as $tool) {
-                $this->appendToolCall($tool);
-            }
-
-            return;
-        }
-
-        if ($message instanceof ToolResultMessage) {
-            foreach ($message->getToolCalls() as $tool) {
-                $this->applyToolResult($tool);
-            }
-
-            return;
-        }
-
-        $this->appendMessage(
-            $role === MessageRole::USER->value
-                ? HistoryEntryKind::UserMessage
-                : HistoryEntryKind::AssistantMessage,
-            $message,
-        );
-    }
-
-    private function appendMessage(HistoryEntryKind $kind, Message $message): void
-    {
-        $text = $this->messageText($message, $kind);
-
-        if ($text === '') {
-            return;
-        }
-
-        $this->entries[] = new ProjectedEntry($kind, $text);
-    }
-
-    private function appendToolCall(ToolCall $tool): int
-    {
-        $this->entries[] = new ProjectedEntry(
-            HistoryEntryKind::ToolActivity,
-            ToolActivityText::pending($tool),
-        );
-        $position = count($this->entries) - 1;
-        $this->correlation->registerCall($tool, $position);
-
-        return $position;
-    }
-
-    private function applyToolResult(ToolCall $tool): void
-    {
-        // A result that finds no call of its own is still worth showing, so
-        // it opens the call it should have answered and closes it at once.
-        $position = $this->correlation->matchResult($tool)
-            ?? $this->appendToolCall($tool);
-
-        $this->entries[$position] = new ProjectedEntry(
-            HistoryEntryKind::ToolActivity,
-            ToolActivityText::completed($tool, self::FALLBACK_DURATION_SECONDS),
-        );
-    }
-
-    private function messageText(Message $message, HistoryEntryKind $kind): string
-    {
-        if ($kind === HistoryEntryKind::UserMessage) {
-            $message = $this->userMessageProcessor->forDisplay(UserMessageFactory::fromMessage($message));
-        }
-
-        return MessageTextFormatter::format($message);
+        return $this->entries;
     }
 }
