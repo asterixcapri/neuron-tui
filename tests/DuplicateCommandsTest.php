@@ -10,7 +10,7 @@ use NeuronChatCore\Command\CommandAdapterInterface;
 use NeuronChatCore\Command\CommandInterface;
 use NeuronChatCore\Command\Commands;
 use NeuronChatCore\Command\HelpCommand;
-use NeuronChatCore\Conversation\ConversationRuntime as CoreRuntime;
+use NeuronChatCore\Conversation\ConversationRuntime;
 use NeuronChatCore\Session\SessionStore;
 use NeuronChatCore\Storage\InMemoryStorage;
 use NeuronTui\Tui;
@@ -72,7 +72,7 @@ final class DuplicateCommandsTest extends TestCase
                 static fn() => $terminal->simulateInput("/clear\r"),
             );
 
-            (new Tui(new CoreRuntime((new Agent())->setThreadId('test-thread'), new SessionStore(new InMemoryStorage(), 'local')), $terminal, commands: $add(new Commands(), $first, $second)))->run();
+            (new Tui(new ConversationRuntime((new Agent())->setThreadId('test-thread'), new SessionStore(new InMemoryStorage(), 'local')), $terminal, commands: $add(new Commands(), $first, $second)))->run();
 
             self::assertSame(['first'], $ran, $form);
         }
@@ -137,7 +137,7 @@ final class DuplicateCommandsTest extends TestCase
             ->addCommand([$commands[3], $commands[4]])
             ->addCommand([$commands[5], $commands[6]])
             ->addCommand(new HelpCommand());
-        (new Tui(new CoreRuntime((new Agent())->setThreadId('test-thread'), new SessionStore(new InMemoryStorage(), 'local')), $terminal, commands: $mounted))->run();
+        (new Tui(new ConversationRuntime((new Agent())->setThreadId('test-thread'), new SessionStore(new InMemoryStorage(), 'local')), $terminal, commands: $mounted))->run();
 
         self::assertIsString($suggestions);
         self::assertStringContainsString($descriptions[0], $suggestions);

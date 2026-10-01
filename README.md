@@ -279,11 +279,12 @@ See [stop.php](examples/bin/stop.php) for the complete example.
 
 A user message processor changes what the Agent receives without changing what
 the user sees. Implement `NeuronChatCore\Message\UserMessageProcessorInterface`:
-`forAgent()` prepares ordinary input before it is sent, and `forDisplay()` adjusts
-messages before they are shown, including resumed History.
+`forAgent()` prepares submitted messages before they are sent. Live human input
+is shown immediately as written. `forDisplay()` projects resumed History and
+Command-generated prompt previews.
 
 ```php
-use NeuronChatCore\Conversation\ConversationRuntime as CoreRuntime;
+use NeuronChatCore\Conversation\ConversationRuntime;
 use NeuronChatCore\Message\UserMessageProcessors;
 use NeuronTui\Tui;
 
@@ -291,15 +292,18 @@ $processors = (new UserMessageProcessors())->addProcessor([
     new FileReferenceProcessor(__DIR__),
 ]);
 
-$runtime = new CoreRuntime($agent, $sessionStore, userMessageProcessors: $processors);
+$runtime = new ConversationRuntime($agent, $sessionStore, userMessageProcessors: $processors);
 Tui::make($runtime)->run();
 ```
 
-The TUI queues original inputs and asks the core to prepare each message once
-when it reaches execution admission. The TUI uses that same processing module to display messages
-and History in reverse order. Saved messages are never changed, and Commands bypass processors. If
-`forAgent()` throws or produces empty text without attachments, the TUI shows
-the error and keeps the draft. Input recall stores the original submitted input.
+The TUI shows original input immediately, clears the composer and queues it.
+When its turn starts, `submitMessage()` applies preparation once and returns the
+native stream. Command-generated prompts use the same submission API; processors
+preserve recognized expanded content. Saved messages are never changed by display
+projection. If preparation fails, the original remains visible with an error and
+returns to an empty composer without replacing a newer draft. Input recall stores
+the original submitted input. Reloaded messages use `forDisplay()` on the saved
+Agent History, so transformed content or attachments can have a different preview.
 
 See [messages.php](examples/bin/messages.php) for the complete example.
 

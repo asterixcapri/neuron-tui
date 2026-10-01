@@ -9,7 +9,7 @@ use Generator;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Agent\AgentState;
 use NeuronAI\Chat\Messages\UserMessage;
-use NeuronChatCore\Conversation\ConversationRuntime as CoreRuntime;
+use NeuronChatCore\Conversation\ConversationRuntime;
 use NeuronChatCore\Session\Session;
 use NeuronTui\Session\SessionTitleGeneration;
 use NeuronTui\View\ConversationView;
@@ -44,7 +44,7 @@ final class ConversationController
     private ?string $displayedHistory = null;
 
     public function __construct(
-        private readonly CoreRuntime $core,
+        private readonly ConversationRuntime $runtime,
         private readonly ConversationView $view,
         private readonly ?SessionTitleGeneration $titleGeneration = null,
     ) {
@@ -57,7 +57,7 @@ final class ConversationController
         $this->enqueue(new PendingMessage(clone $message, true));
     }
 
-    /** Command-generated prompts bypass human-input preparation. */
+    /** Accept a command-generated prompt; its live preview uses display projection. */
     public function submitMessage(UserMessage $message): void
     {
         $this->enqueue(new PendingMessage(clone $message, false));
@@ -65,15 +65,9 @@ final class ConversationController
 
     private function enqueue(PendingMessage $pending): void
     {
-        if (!$this->isBusy()) {
-            // Idle preparation is synchronous: rejection leaves the draft intact.
-            $this->prepareTurn($pending);
-        } else {
-            $this->pendingMessages[] = $pending;
-            $this->showQueuedMessages();
-        }
-
+        $this->pendingMessages[] = $pending;
         $this->view->emptyComposer();
+        $this->showQueuedMessages();
     }
 
     private function prepareTurn(PendingMessage $pending): void
@@ -81,13 +75,11 @@ final class ConversationController
         $this->preparingTurn = true;
 
         try {
-            $prepared = $pending->userInput
-                ? $this->core->prepareMessage($pending->message)
-                : $pending->message;
-            $stream = $this->core->submitPrompt($prepared);
-            $this->view->acceptUserMessage($prepared);
+            $this->view->acceptUserMessage($this->displayMessage($pending));
+            $this->view->paintPendingChanges();
+            $stream = $this->runtime->submitMessage($pending->message);
             $this->readyStream = $stream;
-            $this->view->working($this->core->supportsResponseStop());
+            $this->view->working($this->runtime->supportsResponseStop());
             $this->workingIndicator->start(microtime(true));
         } finally {
             $this->preparingTurn = false;
@@ -98,12 +90,12 @@ final class ConversationController
     {
         return $pending->userInput
             ? $pending->message
-            : $this->core->userMessageProcessors()->forDisplay($pending->message);
+            : $this->runtime->userMessageProcessors()->forDisplay($pending->message);
     }
 
     public function synchronizeHistory(): void
     {
-        $history = $this->core->agent()->getChatHistory();
+        $history = $this->runtime->agent()->getChatHistory();
 
         if ($history->getThreadId() === $this->displayedHistory) {
             return;
@@ -115,12 +107,12 @@ final class ConversationController
 
     public function agent(): Agent
     {
-        return $this->core->agent();
+        return $this->runtime->agent();
     }
 
     public function session(): Session
     {
-        return $this->core->session();
+        return $this->runtime->session();
     }
 
     public function isBusy(): bool
@@ -133,7 +125,7 @@ final class ConversationController
 
     public function supportsResponseStop(): bool
     {
-        return $this->core->supportsResponseStop();
+        return $this->runtime->supportsResponseStop();
     }
 
     public function isStopped(): bool
@@ -143,12 +135,12 @@ final class ConversationController
 
     public function useAgent(Agent $agent): void
     {
-        $this->core->useAgent($agent);
+        $this->runtime->useAgent($agent);
     }
 
     public function useSession(Session $session): void
     {
-        $this->core->useSession($session);
+        $this->runtime->useSession($session);
         $this->displayedHistory = null;
     }
 
@@ -157,7 +149,7 @@ final class ConversationController
         if (
             $this->runningTurn === null
             || $this->runningTurn->isComplete()
-            || !$this->core->requestInterruption()
+            || !$this->runtime->requestInterruption()
         ) {
             return;
         }
@@ -199,10 +191,10 @@ final class ConversationController
         $stream = $this->readyStream;
         $this->readyStream = null;
         $this->runningTurn = async(function () use ($stream): void {
-            $agent = $this->core->agent();
-            $session = $this->core->session();
-            $completed = $this->renderer->run($stream, $this->core->responseWasStopped(...));
-            if ($completed && !$this->stopped && !$this->core->responseStopRequested()) {
+            $agent = $this->runtime->agent();
+            $session = $this->runtime->session();
+            $completed = $this->renderer->run($stream, $this->runtime->responseWasStopped(...));
+            if ($completed && !$this->stopped && !$this->runtime->responseStopRequested()) {
                 $this->titleGeneration?->schedule($session, $agent);
             }
         });

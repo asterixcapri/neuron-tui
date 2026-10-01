@@ -396,7 +396,7 @@ final class ConversationView
     {
         $this->history->addEntry(
             HistoryEntryKind::UserMessage,
-            $this->messagePreview($contents),
+            MessageTextFormatter::format($contents),
         );
     }
 

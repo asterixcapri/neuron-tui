@@ -22,7 +22,7 @@ use NeuronChatCore\Command\Commands;
 use NeuronChatCore\Command\ResumeCommand;
 use NeuronChatCore\Command\Selection;
 use NeuronChatCore\Command\SelectionOption;
-use NeuronChatCore\Conversation\ConversationRuntime as CoreRuntime;
+use NeuronChatCore\Conversation\ConversationRuntime;
 use NeuronChatCore\InputHistory\InputHistory;
 use NeuronChatCore\Message\UserMessageProcessorInterface;
 use NeuronChatCore\Message\UserMessageProcessors;
@@ -45,6 +45,32 @@ final class UserMessageProcessorTest extends TestCase
 {
     private const string IMAGE = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
 
+    public function testOriginalMessageIsPaintedBeforePreparationWithoutDisplayProcessing(): void
+    {
+        $terminal = new VirtualTerminal(rows: 30);
+        $provider = new FakeAIProvider(new AssistantMessage('Reply.'));
+        $processor = $this->createMock(UserMessageProcessorInterface::class);
+        $processor->expects(self::never())->method('forDisplay');
+        $processor->expects(self::once())->method('forAgent')->willReturnCallback(
+            static function (UserMessage $message) use ($terminal, $provider): UserMessage {
+                self::assertStringContainsString('❯ Original request', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
+                self::assertSame([], $provider->getRecorded());
+                $prepared = clone $message;
+                $prepared->setContents('Private instructions');
+
+                return $prepared;
+            },
+        );
+        $runtime = new ConversationRuntime((new Agent())->setAiProvider($provider), userMessageProcessors: $processor);
+        EventLoop::queue(static fn() => $terminal->simulateInput("Original request\r"));
+        EventLoop::delay(0.15, static fn() => $terminal->simulateInput("\x03"));
+
+        Tui::make($runtime, $terminal)->run();
+
+        self::assertSame('Private instructions', $provider->getRecorded()[0]->messages[0]->getContent());
+        self::assertStringNotContainsString('Private instructions', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
+    }
+
     public function testSingleAndArrayRegistrationsComposeWithoutChangingInputHistory(): void
     {
         $provider = new FakeAIProvider(new AssistantMessage('Reply.'));
@@ -52,7 +78,7 @@ final class UserMessageProcessorTest extends TestCase
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $inputHistory = new InputHistory(new InMemoryStorage());
-        $tui = Tui::make(new CoreRuntime($agent, new SessionStore(new InMemoryStorage(), 'local'), userMessageProcessors: (new UserMessageProcessors())->addProcessor([
+        $tui = Tui::make(new ConversationRuntime($agent, new SessionStore(new InMemoryStorage(), 'local'), userMessageProcessors: (new UserMessageProcessors())->addProcessor([
             new EnvelopeProcessor('A'),
             new EnvelopeProcessor('B'),
             new EnvelopeProcessor('C'),
@@ -80,7 +106,7 @@ final class UserMessageProcessorTest extends TestCase
         $terminal = new VirtualTerminal(rows: 30);
         EventLoop::delay(0.05, static fn() => $terminal->simulateInput("\x03"));
 
-        $tui = Tui::make(new CoreRuntime($agent, $store, session: $session, userMessageProcessors: (new UserMessageProcessors())->addProcessor([
+        $tui = Tui::make(new ConversationRuntime($agent, $store, session: $session, userMessageProcessors: (new UserMessageProcessors())->addProcessor([
             new EnvelopeProcessor('A'),
             new EnvelopeProcessor('B'),
         ])), $terminal);
@@ -92,7 +118,7 @@ final class UserMessageProcessorTest extends TestCase
         self::assertSame('B[A[Earlier]]', $tui->agent()->getChatHistory()->getMessages()[0]->getContent());
     }
 
-    public function testCommandsBypassPreparationIncludingThePromptsTheyProduce(): void
+    public function testCommandPromptsUseTheSameSubmissionAndDisplayTheirPreview(): void
     {
         $provider = new FakeAIProvider(new AssistantMessage('Done.'));
         $agent = (new Agent())->setThreadId('test-thread');
@@ -108,14 +134,14 @@ final class UserMessageProcessorTest extends TestCase
             }
             public function run(CommandAdapterInterface $adapter, string $value): void
             {
-                $adapter->promptAgent(new UserMessage('A[Command prompt]'));
+                $adapter->promptAgent(new UserMessage('Command prompt'));
             }
         };
         $terminal = new VirtualTerminal(rows: 30);
         EventLoop::queue(static fn() => $terminal->simulateInput("/prepared\r"));
         EventLoop::delay(0.15, static fn() => $terminal->simulateInput("\x03"));
 
-        Tui::make(new CoreRuntime($agent, new SessionStore(new InMemoryStorage(), 'local'), userMessageProcessors: (new UserMessageProcessors())->addProcessor(new EnvelopeProcessor('A'))), $terminal, commands: (new Commands())->addCommand($command))
+        Tui::make(new ConversationRuntime($agent, new SessionStore(new InMemoryStorage(), 'local'), userMessageProcessors: (new UserMessageProcessors())->addProcessor(new EnvelopeProcessor('A'))), $terminal, commands: (new Commands())->addCommand($command))
             ->run();
 
         self::assertSame('A[Command prompt]', $provider->getRecorded()[0]->messages[0]->getContent());
@@ -141,7 +167,7 @@ final class UserMessageProcessorTest extends TestCase
         EventLoop::queue(static fn() => $terminal->simulateInput("Keep my draft\r"));
         EventLoop::delay(0.1, static fn() => $terminal->simulateInput("\x03"));
 
-        Tui::make(new CoreRuntime($agent, new SessionStore(new InMemoryStorage(), 'local'), userMessageProcessors: (new UserMessageProcessors())->addProcessor($processor)), $terminal)->run();
+        Tui::make(new ConversationRuntime($agent, new SessionStore(new InMemoryStorage(), 'local'), userMessageProcessors: (new UserMessageProcessors())->addProcessor($processor)), $terminal)->run();
 
         self::assertSame([], $provider->getRecorded());
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -162,7 +188,7 @@ final class UserMessageProcessorTest extends TestCase
             }
         };
         $provider = new FakeAIProvider();
-        $runtime = new CoreRuntime((new Agent())->setAiProvider($provider), userMessageProcessors: $processor);
+        $runtime = new ConversationRuntime((new Agent())->setAiProvider($provider), userMessageProcessors: $processor);
         $inputs = new InputHistory(new InMemoryStorage());
         $terminal = new VirtualTerminal(rows: 30);
         EventLoop::queue(static fn() => $terminal->simulateInput("Keep original draft\r"));
@@ -197,7 +223,7 @@ final class UserMessageProcessorTest extends TestCase
         });
         EventLoop::delay(0.4, static fn() => $terminal->simulateInput("\x03"));
 
-        Tui::make(new CoreRuntime($agent, new SessionStore(new InMemoryStorage(), 'local'), userMessageProcessors: (new UserMessageProcessors())->addProcessor(new EnvelopeProcessor('A'))), $terminal)->run();
+        Tui::make(new ConversationRuntime($agent, new SessionStore(new InMemoryStorage(), 'local'), userMessageProcessors: (new UserMessageProcessors())->addProcessor(new EnvelopeProcessor('A'))), $terminal)->run();
 
         self::assertStringContainsString('↳ Second', $queued);
         self::assertStringNotContainsString('A[Second]', $queued);
@@ -233,7 +259,7 @@ final class UserMessageProcessorTest extends TestCase
                 },
             );
             $display = '';
-            $tui = Tui::make(new CoreRuntime($agent, $store, userMessageProcessors: (new UserMessageProcessors())->addProcessor([$processor, new EnvelopeProcessor('A'), new EnvelopeProcessor('B')])), $terminal, commands: (new Commands())->addCommand(new ResumeCommand($name)));
+            $tui = Tui::make(new ConversationRuntime($agent, $store, userMessageProcessors: (new UserMessageProcessors())->addProcessor([$processor, new EnvelopeProcessor('A'), new EnvelopeProcessor('B')])), $terminal, commands: (new Commands())->addCommand(new ResumeCommand($name)));
             EventLoop::queue(static fn() => $terminal->simulateInput($name . "\r"));
             EventLoop::delay(0.05, static fn() => $terminal->simulateInput('Readable'));
             EventLoop::delay(0.08, static function () use ($terminal, &$display): void {
@@ -287,7 +313,7 @@ final class UserMessageProcessorTest extends TestCase
         });
         EventLoop::delay(0.1, static fn() => $terminal->simulateInput("\x03"));
 
-        Tui::make(new CoreRuntime((new Agent())->setThreadId('test-thread'), new SessionStore(new InMemoryStorage(), 'local'), userMessageProcessors: (new UserMessageProcessors())->addProcessor(new EnvelopeProcessor('A'))), $terminal, commands: (new Commands())->addCommand($command))
+        Tui::make(new ConversationRuntime((new Agent())->setThreadId('test-thread'), new SessionStore(new InMemoryStorage(), 'local'), userMessageProcessors: (new UserMessageProcessors())->addProcessor(new EnvelopeProcessor('A'))), $terminal, commands: (new Commands())->addCommand($command))
             ->run();
 
         self::assertStringContainsString('Readable label', $display);
@@ -324,7 +350,7 @@ final class UserMessageProcessorTest extends TestCase
         EventLoop::queue(static fn() => $terminal->simulateInput("/photos\r"));
         EventLoop::delay(0.3, static fn() => $terminal->simulateInput("\x03"));
 
-        Tui::make(new CoreRuntime($agent, new SessionStore(new InMemoryStorage(), 'local')), $terminal, commands: (new Commands())->addCommand($command))->run();
+        Tui::make(new ConversationRuntime($agent, new SessionStore(new InMemoryStorage(), 'local')), $terminal, commands: (new Commands())->addCommand($command))->run();
 
         self::assertCount(2, $provider->getRecorded());
         self::assertEquals($first, $provider->getRecorded()[0]->messages[0]);
@@ -346,7 +372,7 @@ final class UserMessageProcessorTest extends TestCase
         EventLoop::queue(static fn() => $terminal->simulateInput("\x1b[A\r"));
         EventLoop::delay(0.15, static fn() => $terminal->simulateInput("\x03"));
 
-        Tui::make(new CoreRuntime($agent, new SessionStore(new InMemoryStorage(), 'local'), userMessageProcessors: (new UserMessageProcessors())->addProcessor(new EnvelopeProcessor('A'))), $terminal, inputHistory: $inputs)->run();
+        Tui::make(new ConversationRuntime($agent, new SessionStore(new InMemoryStorage(), 'local'), userMessageProcessors: (new UserMessageProcessors())->addProcessor(new EnvelopeProcessor('A'))), $terminal, inputHistory: $inputs)->run();
 
         $sent = $provider->getRecorded()[0]->messages[0];
         self::assertSame('A[Original]', $sent->getContent());
@@ -356,7 +382,7 @@ final class UserMessageProcessorTest extends TestCase
         self::assertStringContainsString('[Image]', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
     }
 
-    public function testPreparationAndDisplayCanTransformAttachmentsWithoutChangingHistory(): void
+    public function testLiveInputStaysOriginalAndReloadProjectsPreparedAttachments(): void
     {
         $processor = new class implements UserMessageProcessorInterface {
             public function forAgent(UserMessage $message): UserMessage
@@ -382,14 +408,28 @@ final class UserMessageProcessorTest extends TestCase
         EventLoop::queue(static fn() => $terminal->simulateInput("Original request\r"));
         EventLoop::delay(0.15, static fn() => $terminal->simulateInput("\x03"));
 
-        $tui = Tui::make(new CoreRuntime($agent, new SessionStore(new InMemoryStorage(), 'local'), userMessageProcessors: (new UserMessageProcessors())->addProcessor($processor)), $terminal);
+        $store = new SessionStore(new InMemoryStorage(), 'local');
+        $runtime = new ConversationRuntime($agent, $store, userMessageProcessors: $processor);
+        $tui = Tui::make($runtime, $terminal);
         $tui->run();
 
         $saved = $tui->agent()->getChatHistory()->getMessages()[0];
         self::assertSame('Original request', $saved->getContent());
         self::assertCount(2, $saved->getContentBlocks());
         self::assertInstanceOf(FileContent::class, $saved->getContentBlocks()[1]);
-        self::assertStringContainsString('❯ Message with attachment', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+        self::assertStringContainsString('❯ Original request', $display);
+        self::assertStringNotContainsString('Message with attachment', $display);
+        self::assertStringNotContainsString('[File: report.pdf]', $display);
+
+        $reopened = new VirtualTerminal(rows: 30);
+        EventLoop::delay(0.05, static fn() => $reopened->simulateInput("\x03"));
+        Tui::make(new ConversationRuntime(new Agent(), $store, session: $runtime->session(), userMessageProcessors: $processor), $reopened)->run();
+
+        self::assertStringContainsString('❯ Message with attachment', AnsiUtils::stripAnsiCodes($reopened->getOutput()));
+        $restored = $store->read($runtime->session()->getKey());
+        self::assertNotNull($restored);
+        self::assertCount(2, $restored->getMessages()[0]->getContentBlocks());
     }
 
 

@@ -11,7 +11,7 @@ use NeuronAI\HttpClient\StoppableHttpClient;
 use NeuronAI\Providers\OpenAI\OpenAI;
 use NeuronChatCore\Command\Commands;
 use NeuronChatCore\Command\HelpCommand;
-use NeuronChatCore\Conversation\ConversationRuntime as CoreRuntime;
+use NeuronChatCore\Conversation\ConversationRuntime;
 use NeuronChatCore\Interruption\StopSignal;
 use NeuronChatCore\Session\SessionStore;
 use NeuronChatCore\Storage\InMemoryStorage;
@@ -54,7 +54,7 @@ final class HttpResponseStopTest extends TestCase
         EventLoop::delay(0.18, static fn() => $terminal->simulateInput("!\r"));
         EventLoop::delay(0.3, static fn() => $terminal->simulateInput("\x03"));
 
-        $tui = new Tui(new CoreRuntime($agent, new SessionStore(new InMemoryStorage(), 'local'), stopSignal: $stopSignal), $terminal);
+        $tui = new Tui(new ConversationRuntime($agent, new SessionStore(new InMemoryStorage(), 'local'), stopSignal: $stopSignal), $terminal);
         $tui->run();
 
         self::assertNotSame($history->getThreadId(), $tui->agent()->getChatHistory()->getThreadId());
@@ -83,7 +83,7 @@ final class HttpResponseStopTest extends TestCase
         EventLoop::queue(static fn() => $terminal->simulateInput("Question\r"));
         EventLoop::delay(0.15, static fn() => $terminal->simulateInput("\x03"));
 
-        $tui = Tui::make(new CoreRuntime($agent, new SessionStore(new InMemoryStorage(), 'local'), stopSignal: $stopSignal), $terminal, (new Commands())->addCommand(new HelpCommand()));
+        $tui = Tui::make(new ConversationRuntime($agent, new SessionStore(new InMemoryStorage(), 'local'), stopSignal: $stopSignal), $terminal, (new Commands())->addCommand(new HelpCommand()));
         $tui->run();
 
         self::assertSame(0, $stream->closes);
@@ -106,7 +106,7 @@ final class HttpResponseStopTest extends TestCase
         EventLoop::queue(static fn() => $terminal->simulateInput("Question\r"));
         EventLoop::delay(0.18, static fn() => $terminal->simulateInput("\x03"));
 
-        $tui = Tui::make(new CoreRuntime($agent, new SessionStore(new InMemoryStorage(), 'local'), stopSignal: $stopSignal), $terminal);
+        $tui = Tui::make(new ConversationRuntime($agent, new SessionStore(new InMemoryStorage(), 'local'), stopSignal: $stopSignal), $terminal);
         $tui->run();
 
         self::assertSame(['Next', 'Next answer'], array_map(static fn(Message $message): ?string => $message->getContent(), $tui->agent()->getChatHistory()->getMessages()));

@@ -5,7 +5,7 @@ declare(strict_types=1);
 use NeuronChatCore\Command\ClearCommand;
 use NeuronChatCore\Command\Commands;
 use NeuronChatCore\Command\ResumeCommand;
-use NeuronChatCore\Conversation\ConversationRuntime as CoreRuntime;
+use NeuronChatCore\Conversation\ConversationRuntime;
 use NeuronChatCore\Session\SessionStore;
 use NeuronChatCore\Storage\FileStorage;
 use NeuronTui\Tui;
@@ -30,6 +30,6 @@ $commands = (new Commands())->addCommand([
 ]);
 
 Tui::make(
-    new CoreRuntime($agent, $sessionStore, session: $session),
+    new ConversationRuntime($agent, $sessionStore, session: $session),
     commands: $commands,
 )->run();

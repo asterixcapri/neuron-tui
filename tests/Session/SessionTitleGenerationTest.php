@@ -12,7 +12,7 @@ use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Providers\ProviderResponse;
 use NeuronAI\Testing\FakeAIProvider;
-use NeuronChatCore\Conversation\ConversationRuntime as CoreRuntime;
+use NeuronChatCore\Conversation\ConversationRuntime;
 use NeuronChatCore\Session\SessionStore;
 use NeuronChatCore\Storage\InMemoryStorage;
 use NeuronTui\Session\SessionTitleGeneration;
@@ -163,7 +163,7 @@ final class SessionTitleGenerationTest extends TestCase
         EventLoop::delay(0.1, static fn() => $terminal->simulateInput("Grazie\r"));
         EventLoop::delay(0.2, static fn() => $terminal->simulateInput("\x03"));
 
-        Tui::make(new CoreRuntime($agent, $store, session: $session), $terminal)->run();
+        Tui::make(new ConversationRuntime($agent, $store, session: $session), $terminal)->run();
 
         self::assertSame('Configurazione Redis', $session->getTitle());
         self::assertSame(2, $requests->count);
@@ -182,7 +182,7 @@ final class SessionTitleGenerationTest extends TestCase
         EventLoop::queue(static fn() => $terminal->simulateInput("A subject\r"));
         EventLoop::delay(0.1, static fn() => $terminal->simulateInput("\x03"));
 
-        Tui::make(new CoreRuntime($agent, $store, session: $session), $terminal)->run();
+        Tui::make(new ConversationRuntime($agent, $store, session: $session), $terminal)->run();
 
         self::assertNull($session->getTitle());
         self::assertSame(1, $requests->count);
@@ -219,7 +219,7 @@ final class SessionTitleGenerationTest extends TestCase
         EventLoop::queue(static fn() => $terminal->simulateInput("A subject\r"));
         EventLoop::delay(0.1, static fn() => $terminal->simulateInput("\x03"));
 
-        Tui::make(new CoreRuntime($agent, $store, session: $session), $terminal)->run();
+        Tui::make(new ConversationRuntime($agent, $store, session: $session), $terminal)->run();
 
         self::assertNull($session->getTitle());
         self::assertSame(0, $requests->count);

@@ -13,9 +13,12 @@ pending original inputs, FIFO progression,
 Amp scheduling, stream consumption, presentation and Session title scheduling.
 This matches a React frontend that queues inputs and submits one streaming HTTP
 request at a time. Pending input is prepared when its turn reaches execution
-admission; idle rejection retains the draft and queued rejection never replaces a
-newer draft. The TUI can prepare input through the core before projecting its
-attachments for display, then stream it without repeating preparation.
+admission. Live input is shown immediately as submitted; rejection reports an
+error and restores input only to an empty composer, preserving a newer draft.
+submitMessage() is the sole submission API for both human input and Command
+prompts. Preparation is internal, and processors preserve recognized expanded
+content. forDisplay() projects saved History and Command-generated prompt previews,
+while live human input is never projected.
 Command collections remain client-owned. UI effects belong to the Adapter;
 conversation operations delegate to core. Command visibility and admission belong
 entirely to the client: TUI filters suggestions and its Adapter refuses ordinary

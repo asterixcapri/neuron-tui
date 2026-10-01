@@ -9,7 +9,7 @@ use LogicException;
 use NeuronAI\Agent\Agent;
 use NeuronChatCore\Command\Commands;
 use NeuronChatCore\Configuration\ConfigurationStore;
-use NeuronChatCore\Conversation\ConversationRuntime as CoreRuntime;
+use NeuronChatCore\Conversation\ConversationRuntime;
 use NeuronChatCore\InputHistory\InputHistory;
 use NeuronChatCore\Session\SessionStore;
 use NeuronChatCore\Storage\InMemoryStorage;
@@ -62,27 +62,27 @@ final class Tui
 
 
     public function __construct(
-        private readonly CoreRuntime $conversation,
+        private readonly ConversationRuntime $runtime,
         private readonly ?TerminalInterface $terminal = null,
         ?Commands $commands = null,
         ?ConfigurationStore $configurationStore = null,
         ?InputHistory $inputHistory = null,
     ) {
         $this->commands = $commands ?? new Commands();
-        $this->sessionStore = $this->conversation->sessionStore();
+        $this->sessionStore = $this->runtime->sessionStore();
         $this->configurationStore = $configurationStore ?? new ConfigurationStore(new InMemoryStorage(), 'local');
         $this->inputHistory = $inputHistory ?? new InputHistory(new InMemoryStorage());
     }
 
     public static function make(
-        CoreRuntime $conversation,
+        ConversationRuntime $runtime,
         ?TerminalInterface $terminal = null,
         ?Commands $commands = null,
         ?ConfigurationStore $configurationStore = null,
         ?InputHistory $inputHistory = null,
     ): self {
         return new self(
-            $conversation,
+            $runtime,
             $terminal,
             $commands,
             $configurationStore,
@@ -129,7 +129,7 @@ final class Tui
     /** The Agent currently answering, including a copy bound to a selected Session. */
     public function agent(): Agent
     {
-        return $this->conversation->agent();
+        return $this->runtime->agent();
     }
 
     public function run(): void
@@ -145,11 +145,11 @@ final class Tui
             $this->commands->all(),
             $this->figlet,
             $this->figletFont,
-            $this->conversation->userMessageProcessors(),
+            $this->runtime->userMessageProcessors(),
         );
         $sessionTitleGeneration = new SessionTitleGeneration();
         $controller = new ConversationController(
-            $this->conversation,
+            $this->runtime,
             $view,
             $sessionTitleGeneration,
         );
