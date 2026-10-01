@@ -99,7 +99,6 @@ final class TuiTest extends TestCase
         EventLoop::queue(static fn() => $terminal->simulateInput("First accepted\rSecond accepted\r"));
         EventLoop::delay(0.3, static fn() => $terminal->simulateInput("\x03"));
         Tui::make($runtime, $terminal)->run();
-        self::assertFalse($runtime->isBusy());
         self::assertCount(4, $runtime->agent()->getChatHistory()->getMessages());
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('First accepted', $display);
@@ -1368,28 +1367,31 @@ final class TuiTest extends TestCase
         self::assertSame(['/probe'], array_map(static fn(UserMessage $message): ?string => $message->getContent(), (new InputHistory($storage))->entries()));
     }
 
-    public function testSelectionContinuationRechecksAvailabilityDuringAHostStream(): void
+    public function testSelectionContinuationRechecksTheTuisOwnExecutionState(): void
     {
         $terminal = new VirtualTerminal(rows: 30);
         $selected = false;
-        $hostStream = null;
-        $runtime = new CoreRuntime((new Agent())->setAiProvider(new FakeAIProvider(new AssistantMessage('Answer'))));
+        $provider = new class (new AssistantMessage('Answer')) extends FakeAIProvider {
+            protected function streamChunks(Message $response): Generator
+            {
+                \Amp\delay(0.4);
+                yield new TextChunk('slow-stream', 'Answer');
+                return new ProviderResponse(message: $response);
+            }
+        };
+        $runtime = new CoreRuntime((new Agent())->setAiProvider($provider));
         $command = $this->commandThat(static function (CommandAdapterInterface $adapter, string $value) use (&$selected): void {
             if ($value !== '') {
                 $selected = true;
                 return;
             }
             $adapter->requestSelection(new Selection('/probe', 'Choose', [new SelectionOption('selected', 'Selected')]));
+            $adapter->promptAgent(new UserMessage('Started by TUI'));
         });
         EventLoop::queue(static fn() => $terminal->simulateInput("/probe\r"));
-        EventLoop::delay(0.08, static function () use ($runtime, $terminal, &$hostStream): void {
-            $hostStream = $runtime->submitMessage(new UserMessage('Started by host'));
-            $hostStream->rewind();
-            $terminal->simulateInput("\r");
-        });
+        EventLoop::delay(0.08, static fn() => $terminal->simulateInput("\r"));
         EventLoop::delay(0.16, static fn() => $terminal->simulateInput("\x03"));
         Tui::make($runtime, $terminal, commands: (new Commands())->addCommand($command))->run();
-        unset($hostStream);
         self::assertFalse($selected);
         self::assertStringContainsString('/probe is refused while the Agent is working', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
     }

@@ -111,7 +111,7 @@ final class ConversationRuntime
     }
     public function isBusy(): bool
     {
-        return $this->preparingTurn || $this->readyStream !== null || $this->runningTurn !== null || $this->pendingMessages !== [] || $this->core->isBusy();
+        return $this->preparingTurn || $this->readyStream !== null || $this->runningTurn !== null || $this->pendingMessages !== [];
     }
     public function supportsResponseStop(): bool
     {
@@ -132,7 +132,7 @@ final class ConversationRuntime
     }
     public function requestInterruption(): void
     {
-        if ($this->runningTurn?->isComplete() === true || !$this->core->requestInterruption()) {
+        if ($this->runningTurn === null || $this->runningTurn->isComplete() || !$this->core->requestInterruption()) {
             return;
         }
         $this->view->stopping();
@@ -158,7 +158,7 @@ final class ConversationRuntime
             return $this->prepareNextTurn();
         }
         if ($this->readyStream === null) {
-            return !$this->preparingTurn && !$this->core->isBusy() && $this->prepareNextTurn();
+            return !$this->preparingTurn && $this->prepareNextTurn();
         }
         $stream = $this->readyStream;
         $this->readyStream = null;

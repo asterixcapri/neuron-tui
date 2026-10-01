@@ -71,7 +71,6 @@ final class MessageQueueTest extends TestCase
         self::assertCount(2, $provider->getRecorded());
         self::assertSame('Next', $provider->getRecorded()[1]->messages[2]->getContent());
         self::assertSame(['First', 'Invalid', 'Next'], array_map(static fn(UserMessage $message) => $message->getContent(), $inputs->entries()));
-        self::assertFalse($runtime->isBusy());
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('↳ Invalid', $display);
         self::assertStringContainsString('Invalid queued input', $display);
@@ -109,7 +108,6 @@ final class MessageQueueTest extends TestCase
         EventLoop::delay(0.25, static fn() => $terminal->simulateInput("\x03"));
         Tui::make($runtime, $terminal)->run();
         self::assertCount(1, $provider->getRecorded());
-        self::assertFalse($runtime->isBusy());
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('Preparation failed', $display);
         self::assertStringContainsString('❯ Recover me', $display);

@@ -4,7 +4,10 @@ _The native-stream revision supersedes the extraction's core FIFO and custom
 EventPublisher protocol. The Host Application still supplies a configured Agent
 and constructs `NeuronChatCore\Conversation\ConversationRuntime`; `Tui::make()`
 receives that runtime. Core owns message preparation, Agent/Session binding,
-one active stream per runtime, native Neuron output and supported response stop.
+native Neuron output and supported response stop. The user-approved simplification
+removes core isBusy() and overlap admission: TUI derives interaction state from
+its own preparation, ready stream, running task and pending queue. Hosts coordinate
+external executions; core has no session execution lock.
 The TUI is the terminal frontend: it owns pending original inputs, FIFO progression,
 Amp scheduling, stream consumption, presentation and Session title scheduling.
 This matches a React frontend that queues inputs and submits one streaming HTTP
@@ -17,8 +20,8 @@ conversation operations delegate to core. Command visibility and admission belon
 entirely to the client: TUI filters suggestions and its Adapter refuses ordinary
 Commands while busy, including its local turn reservation. Selection continuations
 invoke Commands directly with a fresh Adapter. Core has no Command availability
-or dispatch methods; it guards concrete operations such as message execution and
-Session ownership. Native generators preserve
+or dispatch methods; it validates Session ownership. TUI requests response stop
+only for its own active task; the core writes StopSignal without busy admission. Native generators preserve
 Neuron objects and AgentState without a second event vocabulary. History
 presentation and display-position correlation belong entirely to the TUI, using
 native Neuron messages and ToolCall without core presentation snapshots. Host composition, Session
@@ -59,8 +62,8 @@ accepts one command or an array of commands, validates
 each value as it is added, preserves order and does not reject duplicate names.
 The first command with a repeated name is the one reached; availability and suggestions resolve the
 same first entry. A later concurrent duplicate cannot make an unavailable first
-entry executable. The core ConversationRuntime enforces busy-state admission;
-the terminal Adapter presents refusal and can further restrict admission. This duplicate rule supersedes the
+entry executable. The terminal Adapter owns busy-state admission and presents
+refusal; core ConversationRuntime exposes no busy state. This duplicate rule supersedes the
 contrary rule in ADR 0002.
 
 ## Considered options
