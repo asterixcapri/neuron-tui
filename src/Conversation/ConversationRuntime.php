@@ -178,8 +178,8 @@ final class ConversationRuntime
 
         try {
             $this->runningTurn->await();
-        } catch (Throwable $exception) {
-            $this->showFailure($exception);
+        } catch (Throwable) {
+            // Execution errors have already been presented through core events.
         }
 
         $this->runningTurn = null;
@@ -210,16 +210,6 @@ final class ConversationRuntime
         $this->view->acceptUserMessage($message);
         $this->view->working($this->stopSignal !== null);
         $this->workingIndicator->start(microtime(true));
-    }
-
-    /**
-     * Shows what went wrong without the stack that says where.
-     */
-    private function showFailure(Throwable $exception): void
-    {
-        $this->view->showError(
-            $exception::class . ': ' . $exception->getMessage(),
-        );
     }
 
     private function showTurnFinished(): void

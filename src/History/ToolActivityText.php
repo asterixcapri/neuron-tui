@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace NeuronTui\History;
 
 use NeuronAI\Tools\ToolCall;
+use NeuronChatCore\Conversation\ToolData;
 use NeuronTui\View\DisplayableText;
 
 use function json_encode;
@@ -30,7 +31,7 @@ final class ToolActivityText
     /**
      * A call whose result has not come back.
      */
-    public static function pending(ToolCall $tool): string
+    public static function pending(ToolCall|ToolData $tool): string
     {
         return self::callText($tool) . "\n  ⎿ Running…";
     }
@@ -40,7 +41,7 @@ final class ToolActivityText
      * historical timing is unavailable.
      */
     public static function completed(
-        ToolCall $tool,
+        ToolCall|ToolData $tool,
         float $elapsedSeconds,
     ): string {
         return self::callText($tool)
@@ -50,7 +51,7 @@ final class ToolActivityText
             . self::duration($elapsedSeconds);
     }
 
-    private static function callText(ToolCall $tool): string
+    private static function callText(ToolCall|ToolData $tool): string
     {
         $encodedInputs = json_encode(
             $tool->getInputs(),
