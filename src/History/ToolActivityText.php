@@ -7,6 +7,12 @@ namespace NeuronTui\History;
 use NeuronAI\Tools\ToolCall;
 use NeuronTui\View\DisplayableText;
 
+use function json_encode;
+use function round;
+
+use const JSON_UNESCAPED_SLASHES;
+use const JSON_UNESCAPED_UNICODE;
+
 /**
  * How a tool call and its result are told to a person.
  *

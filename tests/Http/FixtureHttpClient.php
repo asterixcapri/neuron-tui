@@ -10,6 +10,8 @@ use NeuronAI\HttpClient\HttpResponse;
 use NeuronAI\HttpClient\StreamInterface;
 use RuntimeException;
 
+use function array_shift;
+
 final class FixtureHttpClient implements HttpClientInterface
 {
     /** @var list<HttpRequest> */
@@ -22,9 +24,7 @@ final class FixtureHttpClient implements HttpClientInterface
     public float $timeout = 60.0;
 
     /** @param list<StreamInterface> $streams */
-    public function __construct(private array $streams)
-    {
-    }
+    public function __construct(private array $streams) {}
 
     public function request(HttpRequest $request): HttpResponse
     {

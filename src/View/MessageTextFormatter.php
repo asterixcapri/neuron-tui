@@ -12,6 +12,10 @@ use NeuronAI\Chat\Messages\ContentBlocks\TextContent;
 use NeuronAI\Chat\Messages\ContentBlocks\VideoContent;
 use NeuronAI\Chat\Messages\Message;
 
+use function basename;
+use function implode;
+use function str_replace;
+
 /** Formats one message for terminal presentation without changing it. */
 final readonly class MessageTextFormatter
 {

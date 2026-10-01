@@ -20,7 +20,7 @@ final class CallbackTool extends Tool
     public function __construct(string $name)
     {
         $this->name = $name;
-        $this->callback = static fn (): string => '';
+        $this->callback = static fn(): string => '';
     }
 
     /** @param callable(): string $callback */

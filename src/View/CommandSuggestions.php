@@ -12,6 +12,18 @@ use Symfony\Component\Tui\Widget\ContainerWidget;
 use Symfony\Component\Tui\Widget\SelectListWidget;
 use Symfony\Component\Tui\Widget\TextWidget;
 
+use function array_filter;
+use function array_values;
+use function count;
+use function mb_stripos;
+use function mb_strlen;
+use function mb_strtolower;
+use function mb_substr;
+use function preg_match;
+use function str_starts_with;
+use function strlen;
+use function substr;
+
 /**
  * The mounted commands shown while a name is written after a slash.
  *
@@ -159,7 +171,7 @@ final class CommandSuggestions
         $this->suggestibleWhileWorking = self::suggestible(array_values(
             array_filter(
                 $commands,
-                static fn (CommandInterface $command): bool => $command instanceof ConcurrentCommandInterface,
+                static fn(CommandInterface $command): bool => $command instanceof ConcurrentCommandInterface,
             ),
         ));
         $this->list = new SelectListWidget([], self::VISIBLE_LINES);

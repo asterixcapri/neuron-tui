@@ -10,6 +10,7 @@ use NeuronAI\Chat\Messages\AssistantMessage;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
 use NeuronAI\Chat\Messages\UserMessage;
+use NeuronAI\Providers\ProviderResponse;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronInteraction\Command\ClearCommand;
 use NeuronInteraction\Command\CommandAdapterInterface;
@@ -29,11 +30,23 @@ use Revolt\EventLoop;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
+use function array_map;
+use function bin2hex;
+use function getcwd;
+use function glob;
+use function is_dir;
+use function random_bytes;
+use function rmdir;
+use function scandir;
+use function str_repeat;
+use function sys_get_temp_dir;
+use function unlink;
+
 final class InputHistoryTest extends TestCase
 {
     public function testCommandsAreRecordedBeforeTheyAreDispatched(): void
     {
-        $provider = new class(
+        $provider = new class (
             new AssistantMessage('A slow answer.'),
         ) extends FakeAIProvider {
             protected function streamChunks(Message $response): Generator
@@ -41,14 +54,14 @@ final class InputHistoryTest extends TestCase
                 \Amp\delay(0.3);
                 yield new TextChunk('slow-stream', 'A slow answer.');
 
-                return new \NeuronAI\Providers\ProviderResponse(message: $response);
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $storage = new InMemoryStorage();
         $terminal = new VirtualTerminal(rows: 24);
-        $command = new class() implements CommandInterface {
+        $command = new class implements CommandInterface {
             /** @var list<string> */
             public array $arguments = [];
 
@@ -70,11 +83,11 @@ final class InputHistoryTest extends TestCase
         };
 
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("/probe accepted\r"),
+            static fn() => $terminal->simulateInput("/probe accepted\r"),
         );
         EventLoop::delay(
             0.03,
-            static fn () => $terminal->simulateInput("/unknown\r"),
+            static fn() => $terminal->simulateInput("/unknown\r"),
         );
         EventLoop::delay(
             0.06,
@@ -85,7 +98,7 @@ final class InputHistoryTest extends TestCase
         );
         EventLoop::delay(
             0.1,
-            static fn () => $terminal->simulateInput("/probe refused\r"),
+            static fn() => $terminal->simulateInput("/probe refused\r"),
         );
         EventLoop::delay(
             0.42,
@@ -97,7 +110,7 @@ final class InputHistoryTest extends TestCase
         );
         EventLoop::delay(
             0.5,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui($agent, $terminal, sessionStore: new SessionStore($storage, 'test-user'), inputHistory: new InputHistory($storage), commands: (new Commands())->addCommand($command)))
@@ -112,13 +125,13 @@ final class InputHistoryTest extends TestCase
                 '/probe refused',
                 '/probe accepted recalled',
             ],
-            array_map(static fn (UserMessage $message): ?string => $message->getContent(), (new InputHistory($storage))->entries()),
+            array_map(static fn(UserMessage $message): ?string => $message->getContent(), (new InputHistory($storage))->entries()),
         );
     }
 
     public function testAQueuedMessageIsRecallableWhileItRemainsQueued(): void
     {
-        $provider = new class(
+        $provider = new class (
             new AssistantMessage('First answer.'),
             new AssistantMessage('Second answer.'),
         ) extends FakeAIProvider {
@@ -137,7 +150,7 @@ final class InputHistoryTest extends TestCase
                     $response->getContent() ?? '',
                 );
 
-                return new \NeuronAI\Providers\ProviderResponse(message: $response);
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = (new Agent())->setThreadId('test-thread');
@@ -147,11 +160,11 @@ final class InputHistoryTest extends TestCase
         $whileQueued = null;
 
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("First question\r"),
+            static fn() => $terminal->simulateInput("First question\r"),
         );
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("Second question\r"),
+            static fn() => $terminal->simulateInput("Second question\r"),
         );
         EventLoop::delay(
             0.08,
@@ -179,7 +192,7 @@ final class InputHistoryTest extends TestCase
         );
         self::assertSame(
             ['First question', 'Second question'],
-            array_map(static fn (UserMessage $message): ?string => $message->getContent(), (new InputHistory($storage))->entries()),
+            array_map(static fn(UserMessage $message): ?string => $message->getContent(), (new InputHistory($storage))->entries()),
         );
         self::assertCount(1, $provider->getRecorded());
     }
@@ -198,13 +211,13 @@ final class InputHistoryTest extends TestCase
         $terminal = new VirtualTerminal(rows: 24);
 
         EventLoop::queue(
-            static fn () => $terminal->simulateInput(
+            static fn() => $terminal->simulateInput(
                 "Remember across clear\r",
             ),
         );
         EventLoop::delay(
             0.3,
-            static fn () => $terminal->simulateInput("/clear\r"),
+            static fn() => $terminal->simulateInput("/clear\r"),
         );
         EventLoop::delay(
             0.4,
@@ -217,7 +230,7 @@ final class InputHistoryTest extends TestCase
         );
         EventLoop::delay(
             0.75,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui($agent, $terminal, sessionStore: $sessionStore, inputHistory: new InputHistory($storage), commands: (new Commands())->addCommand(new ClearCommand())))
@@ -244,11 +257,11 @@ final class InputHistoryTest extends TestCase
         $terminal = new VirtualTerminal(rows: 24);
 
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("/resume\r"),
+            static fn() => $terminal->simulateInput("/resume\r"),
         );
         EventLoop::delay(
             0.08,
-            static fn () => $terminal->simulateInput("\r"),
+            static fn() => $terminal->simulateInput("\r"),
         );
         EventLoop::delay(
             0.16,
@@ -261,7 +274,7 @@ final class InputHistoryTest extends TestCase
         );
         EventLoop::delay(
             0.4,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui($agent, $terminal, sessionStore: new SessionStore($storage, 'test-user'), inputHistory: new InputHistory($storage), commands: (new Commands())->addCommand(new ResumeCommand())))
@@ -285,13 +298,13 @@ final class InputHistoryTest extends TestCase
         $firstTerminal = new VirtualTerminal(rows: 24);
 
         EventLoop::queue(
-            static fn () => $firstTerminal->simulateInput(
+            static fn() => $firstTerminal->simulateInput(
                 "Remember between TUIs\r",
             ),
         );
         EventLoop::delay(
             0.2,
-            static fn () => $firstTerminal->simulateInput("\x03"),
+            static fn() => $firstTerminal->simulateInput("\x03"),
         );
         (new Tui($firstAgent, $firstTerminal, sessionStore: new SessionStore($storage, 'test-user'), inputHistory: new InputHistory($storage)))->run();
 
@@ -308,7 +321,7 @@ final class InputHistoryTest extends TestCase
         });
         EventLoop::delay(
             0.2,
-            static fn () => $secondTerminal->simulateInput("\x03"),
+            static fn() => $secondTerminal->simulateInput("\x03"),
         );
         (new Tui($secondAgent, $secondTerminal, sessionStore: new SessionStore($storage, 'test-user'), inputHistory: new InputHistory($storage)))->run();
 
@@ -333,13 +346,13 @@ final class InputHistoryTest extends TestCase
             $firstTerminal = new VirtualTerminal(rows: 24);
 
             EventLoop::queue(
-                static fn () => $firstTerminal->simulateInput(
+                static fn() => $firstTerminal->simulateInput(
                     "Remember after recreation\r",
                 ),
             );
             EventLoop::delay(
                 0.2,
-                static fn () => $firstTerminal->simulateInput("\x03"),
+                static fn() => $firstTerminal->simulateInput("\x03"),
             );
             (new Tui($firstAgent, $firstTerminal, sessionStore: new SessionStore(new FileStorage($directory), 'test-user'), inputHistory: new InputHistory(new FileStorage($directory))))
                 ->run();
@@ -357,7 +370,7 @@ final class InputHistoryTest extends TestCase
             });
             EventLoop::delay(
                 0.2,
-                static fn () => $secondTerminal->simulateInput("\x03"),
+                static fn() => $secondTerminal->simulateInput("\x03"),
             );
             (new Tui($secondAgent, $secondTerminal, sessionStore: new SessionStore(new FileStorage($directory), 'test-user'), inputHistory: new InputHistory(new FileStorage($directory))))
                 ->run();
@@ -395,7 +408,7 @@ final class InputHistoryTest extends TestCase
         $terminal = new VirtualTerminal(rows: 24);
 
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("Kept in memory\r"),
+            static fn() => $terminal->simulateInput("Kept in memory\r"),
         );
         EventLoop::delay(
             0.3,
@@ -406,7 +419,7 @@ final class InputHistoryTest extends TestCase
         );
         EventLoop::delay(
             0.65,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui($agent, $terminal))->run();
@@ -429,7 +442,7 @@ final class InputHistoryTest extends TestCase
         $terminal = new VirtualTerminal(rows: 24);
 
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("  Remember me  \r"),
+            static fn() => $terminal->simulateInput("  Remember me  \r"),
         );
         EventLoop::delay(
             0.12,
@@ -441,14 +454,14 @@ final class InputHistoryTest extends TestCase
         );
         EventLoop::delay(
             0.35,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui($agent, $terminal, sessionStore: new SessionStore($storage, 'test-user'), inputHistory: new InputHistory($storage)))->run();
 
         self::assertSame(
             ['  Remember me  ', '  Remember me  again'],
-            array_map(static fn (UserMessage $message): ?string => $message->getContent(), (new InputHistory($storage))->entries()),
+            array_map(static fn(UserMessage $message): ?string => $message->getContent(), (new InputHistory($storage))->entries()),
         );
     }
 
@@ -468,7 +481,7 @@ final class InputHistoryTest extends TestCase
         );
         EventLoop::delay(
             0.2,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui($agent, $terminal, sessionStore: new SessionStore($storage, 'test-user'), inputHistory: new InputHistory($storage)))->run();
@@ -495,7 +508,7 @@ final class InputHistoryTest extends TestCase
         });
         EventLoop::delay(
             0.2,
-            static fn () => $fixture->terminal->simulateInput("\x03"),
+            static fn() => $fixture->terminal->simulateInput("\x03"),
         );
 
         (new Tui($fixture->agent, $fixture->terminal, sessionStore: new SessionStore($fixture->storage, 'test-user'), inputHistory: new InputHistory($fixture->storage)))
@@ -523,7 +536,7 @@ final class InputHistoryTest extends TestCase
         });
         EventLoop::delay(
             0.2,
-            static fn () => $fixture->terminal->simulateInput("\x03"),
+            static fn() => $fixture->terminal->simulateInput("\x03"),
         );
 
         (new Tui($fixture->agent, $fixture->terminal, sessionStore: new SessionStore($fixture->storage, 'test-user'), inputHistory: new InputHistory($fixture->storage)))
@@ -535,7 +548,7 @@ final class InputHistoryTest extends TestCase
         );
         self::assertSame(
             ['older', 'newest', 'prefix-newest-edited'],
-            array_map(static fn (UserMessage $message): ?string => $message->getContent(), (new InputHistory($fixture->storage))->entries()),
+            array_map(static fn(UserMessage $message): ?string => $message->getContent(), (new InputHistory($fixture->storage))->entries()),
         );
     }
 
@@ -551,7 +564,7 @@ final class InputHistoryTest extends TestCase
         });
         EventLoop::delay(
             0.2,
-            static fn () => $fixture->terminal->simulateInput("\x03"),
+            static fn() => $fixture->terminal->simulateInput("\x03"),
         );
 
         (new Tui($fixture->agent, $fixture->terminal, sessionStore: new SessionStore($fixture->storage, 'test-user'), inputHistory: new InputHistory($fixture->storage)))
@@ -578,7 +591,7 @@ final class InputHistoryTest extends TestCase
         });
         EventLoop::delay(
             0.2,
-            static fn () => $fixture->terminal->simulateInput("\x03"),
+            static fn() => $fixture->terminal->simulateInput("\x03"),
         );
 
         (new Tui($fixture->agent, $fixture->terminal, sessionStore: new SessionStore($fixture->storage, 'test-user'), inputHistory: new InputHistory($fixture->storage)))
@@ -605,7 +618,7 @@ final class InputHistoryTest extends TestCase
         });
         EventLoop::delay(
             0.2,
-            static fn () => $fixture->terminal->simulateInput("\x03"),
+            static fn() => $fixture->terminal->simulateInput("\x03"),
         );
 
         (new Tui($fixture->agent, $fixture->terminal, sessionStore: new SessionStore($fixture->storage, 'test-user'), inputHistory: new InputHistory($fixture->storage)))
@@ -665,7 +678,7 @@ final class InputHistoryTest extends TestCase
         $storage = new InMemoryStorage();
         (new InputHistory($storage))->record(new UserMessage('stored input'));
         $terminal = new VirtualTerminal(rows: 24);
-        $command = new class() implements CommandInterface {
+        $command = new class implements CommandInterface {
             public ?string $chosen = null;
 
             public function name(): string
@@ -695,15 +708,15 @@ final class InputHistoryTest extends TestCase
         };
 
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("/choose\r"),
+            static fn() => $terminal->simulateInput("/choose\r"),
         );
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("\x1b[A\r"),
+            static fn() => $terminal->simulateInput("\x1b[A\r"),
         );
         EventLoop::delay(
             0.1,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui($agent, $terminal, sessionStore: new SessionStore($storage, 'test-user'), inputHistory: new InputHistory($storage), commands: (new Commands())->addCommand($command)))
@@ -724,7 +737,7 @@ final class InputHistoryTest extends TestCase
         });
         EventLoop::delay(
             0.2,
-            static fn () => $fixture->terminal->simulateInput("\x03"),
+            static fn() => $fixture->terminal->simulateInput("\x03"),
         );
 
         (new Tui($fixture->agent, $fixture->terminal, sessionStore: new SessionStore($fixture->storage, 'test-user'), inputHistory: new InputHistory($fixture->storage)))
@@ -745,7 +758,7 @@ final class InputHistoryTest extends TestCase
         $edited = null;
 
         EventLoop::queue(
-            static fn () => $fixture->terminal->simulateInput("\x1b[A"),
+            static fn() => $fixture->terminal->simulateInput("\x1b[A"),
         );
         EventLoop::delay(
             0.06,
@@ -844,12 +857,11 @@ final class InputHistoryTest extends TestCase
         string $name,
         string $description,
     ): CommandInterface {
-        return new class($name, $description) implements CommandInterface {
+        return new class ($name, $description) implements CommandInterface {
             public function __construct(
                 private readonly string $commandName,
                 private readonly string $description,
-            ) {
-            }
+            ) {}
 
             public function name(): string
             {
@@ -862,9 +874,7 @@ final class InputHistoryTest extends TestCase
             }
 
             /** @param CommandAdapterInterface<mixed> $adapter */
-            public function run(CommandAdapterInterface $adapter, string $value): void
-            {
-            }
+            public function run(CommandAdapterInterface $adapter, string $value): void {}
         };
     }
 }

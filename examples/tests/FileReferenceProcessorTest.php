@@ -24,6 +24,11 @@ use RuntimeException;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
+use function json_decode;
+use function json_encode;
+
+use const JSON_THROW_ON_ERROR;
+
 final class FileReferenceProcessorTest extends TestCase
 {
     public function testFileContentsAreHiddenAfterPersistenceWithoutLosingAttachmentsOrMetadata(): void
@@ -66,8 +71,8 @@ final class FileReferenceProcessorTest extends TestCase
             new FileReferenceProcessor(__DIR__ . '/fixtures'),
         ]);
 
-        EventLoop::queue(static fn () => $terminal->simulateInput("Explain @report.txt\r"));
-        EventLoop::delay(0.15, static fn () => $terminal->simulateInput("\x03"));
+        EventLoop::queue(static fn() => $terminal->simulateInput("Explain @report.txt\r"));
+        EventLoop::delay(0.15, static fn() => $terminal->simulateInput("\x03"));
 
         Tui::make(
             $agent,

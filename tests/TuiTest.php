@@ -7,6 +7,7 @@ namespace NeuronTui\Tests;
 use Closure;
 use Generator;
 use InvalidArgumentException;
+use LogicException;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\Enums\MessageRole;
 use NeuronAI\Chat\Enums\SourceType;
@@ -22,6 +23,7 @@ use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
 use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Chat\Messages\UserMessage;
+use NeuronAI\Providers\ProviderResponse;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Testing\RequestRecord;
 use NeuronAI\Tools\ToolCall;
@@ -46,9 +48,42 @@ use NeuronTui\Tests\Tools\CallbackTool;
 use NeuronTui\Tui;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
+use RuntimeException;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Terminal\TerminalInterface;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
+
+use function array_filter;
+use function array_find_key;
+use function array_map;
+use function array_search;
+use function array_slice;
+use function array_values;
+use function bin2hex;
+use function explode;
+use function getcwd;
+use function glob;
+use function implode;
+use function is_dir;
+use function mb_strpos;
+use function preg_split;
+use function random_bytes;
+use function range;
+use function rmdir;
+use function scandir;
+use function str_contains;
+use function str_repeat;
+use function str_replace;
+use function str_starts_with;
+use function stream_isatty;
+use function strpos;
+use function strrpos;
+use function substr_count;
+use function sys_get_temp_dir;
+use function trim;
+use function unlink;
+
+use const STDIN;
 
 final class TuiTest extends TestCase
 {
@@ -57,14 +92,14 @@ final class TuiTest extends TestCase
         $fromConstructor = new VirtualTerminal();
         EventLoop::delay(
             0.05,
-            static fn () => $fromConstructor->simulateInput("\x03"),
+            static fn() => $fromConstructor->simulateInput("\x03"),
         );
         (new Tui((new Agent())->setThreadId('test-thread'), $fromConstructor))->run();
 
         $fromMake = new VirtualTerminal();
         EventLoop::delay(
             0.05,
-            static fn () => $fromMake->simulateInput("\x03"),
+            static fn() => $fromMake->simulateInput("\x03"),
         );
         Tui::make((new Agent())->setThreadId('test-thread'), $fromMake)->run();
 
@@ -85,7 +120,7 @@ final class TuiTest extends TestCase
 
         EventLoop::delay(
             0.05,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
         $tui->run();
 
@@ -104,13 +139,13 @@ final class TuiTest extends TestCase
             0.05,
             static function () use ($tui, $terminal, &$failures): void {
                 foreach ([
-                    static fn () => $tui->setTitle('Late'),
-                    static fn () => $tui->setSubtitle('Late'),
-                    static fn () => $tui->setFiglet('Late'),
+                    static fn() => $tui->setTitle('Late'),
+                    static fn() => $tui->setSubtitle('Late'),
+                    static fn() => $tui->setFiglet('Late'),
                 ] as $mutation) {
                     try {
                         $mutation();
-                    } catch (\LogicException $exception) {
+                    } catch (LogicException $exception) {
                         $failures[] = $exception->getMessage();
                     }
                 }
@@ -127,7 +162,7 @@ final class TuiTest extends TestCase
             'A TUI instance can only be configured and run once.',
         ], $failures);
 
-        $this->expectException(\LogicException::class);
+        $this->expectException(LogicException::class);
         $this->expectExceptionMessage(
             'A TUI instance can only be configured and run once.',
         );
@@ -139,7 +174,7 @@ final class TuiTest extends TestCase
         $terminal = new VirtualTerminal();
         EventLoop::delay(
             0.05,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui((new Agent())->setThreadId('test-thread'), $terminal))
@@ -165,7 +200,7 @@ final class TuiTest extends TestCase
         $terminal = new VirtualTerminal();
         EventLoop::delay(
             0.05,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         Tui::make((new Agent())->setThreadId('test-thread'), $terminal)
@@ -181,7 +216,7 @@ final class TuiTest extends TestCase
         self::assertIsArray($lines);
         $titleLine = array_find_key(
             $lines,
-            static fn (string $line): bool => str_contains(
+            static fn(string $line): bool => str_contains(
                 $line,
                 '✦ Neuron AI',
             ),
@@ -209,7 +244,7 @@ final class TuiTest extends TestCase
         $terminal = new VirtualTerminal();
         EventLoop::delay(
             0.05,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui((new Agent())->setThreadId('test-thread'), terminal: $terminal))->run();
@@ -264,7 +299,7 @@ final class TuiTest extends TestCase
         $terminal = new VirtualTerminal(rows: 60);
         EventLoop::delay(
             0.1,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui($agent, terminal: $terminal, sessionStore: $sessionStore, session: $history))->run();
@@ -296,19 +331,19 @@ final class TuiTest extends TestCase
         $intermediateDisplay = null;
         $finalChunk = <<<'MARKDOWN'
 
-- **done**
+            - **done**
 
-[Documentation](https://example.test)
+            [Documentation](https://example.test)
 
-| State | Value |
-| --- | --- |
-| stream | complete |
+            | State | Value |
+            | --- | --- |
+            | stream | complete |
 
-```php
-code();
-```
-MARKDOWN;
-        $provider = new class(
+            ```php
+            code();
+            ```
+            MARKDOWN;
+        $provider = new class (
             new AssistantMessage(
                 "## Result\n\nmiddle\n" . $finalChunk,
             ),
@@ -321,9 +356,9 @@ MARKDOWN;
                 parent::__construct($response);
             }
 
-            public function chat(Message ...$messages): \NeuronAI\Providers\ProviderResponse
+            public function chat(Message ...$messages): ProviderResponse
             {
-                throw new \LogicException('Neuron TUI must stream responses.');
+                throw new LogicException('Neuron TUI must stream responses.');
             }
 
             protected function streamChunks(Message $response): Generator
@@ -337,7 +372,7 @@ MARKDOWN;
                     $this->finalChunk,
                 );
 
-                return new \NeuronAI\Providers\ProviderResponse(message: $response);
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = (new Agent())->setThreadId('test-thread');
@@ -364,7 +399,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.6,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui($agent, terminal: $terminal))->run();
@@ -404,7 +439,7 @@ MARKDOWN;
                 $terminal->getOutput(),
             );
         };
-        $provider = new class(
+        $provider = new class (
             new AssistantMessage('Done.'),
             $probe,
         ) extends FakeAIProvider {
@@ -425,7 +460,7 @@ MARKDOWN;
         $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         EventLoop::queue(
-            static fn () => $terminal->simulateInput('Pending text'),
+            static fn() => $terminal->simulateInput('Pending text'),
         );
         EventLoop::delay(
             0.04,
@@ -436,7 +471,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.15,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui($agent, terminal: $terminal))->run();
@@ -485,7 +520,7 @@ MARKDOWN;
                 $terminal->getOutput(),
             );
         };
-        $provider = new class(
+        $provider = new class (
             new AssistantMessage('first chunk second chunk'),
             $probe,
         ) extends FakeAIProvider {
@@ -505,17 +540,17 @@ MARKDOWN;
                     ' second chunk',
                 );
 
-                return new \NeuronAI\Providers\ProviderResponse(message: $response);
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("Stream it\r"),
+            static fn() => $terminal->simulateInput("Stream it\r"),
         );
         EventLoop::delay(
             0.15,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui($agent, terminal: $terminal))->run();
@@ -533,7 +568,7 @@ MARKDOWN;
 
     public function testInlineWorkingIndicatorAnimatesBeforeFirstChunk(): void
     {
-        $provider = new class(
+        $provider = new class (
             new AssistantMessage('Response started.'),
         ) extends FakeAIProvider {
             protected function streamChunks(Message $response): Generator
@@ -544,7 +579,7 @@ MARKDOWN;
                     'Response started.',
                 );
 
-                return new \NeuronAI\Providers\ProviderResponse(message: $response);
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = (new Agent())->setThreadId('test-thread');
@@ -552,11 +587,11 @@ MARKDOWN;
         $terminal = new VirtualTerminal();
         $animatedDisplay = null;
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("Wait for it\r"),
+            static fn() => $terminal->simulateInput("Wait for it\r"),
         );
         EventLoop::delay(
             0.06,
-            static fn () => $terminal->clearOutput(),
+            static fn() => $terminal->clearOutput(),
         );
         EventLoop::delay(
             0.22,
@@ -571,7 +606,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.4,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui($agent, terminal: $terminal))->run();
@@ -589,7 +624,7 @@ MARKDOWN;
 
     public function testWorkingIndicatorRemainsVisibleBetweenTextChunks(): void
     {
-        $provider = new class(
+        $provider = new class (
             new AssistantMessage('First. Second.'),
         ) extends FakeAIProvider {
             protected function streamChunks(Message $response): Generator
@@ -598,7 +633,7 @@ MARKDOWN;
                 \Amp\delay(0.3);
                 yield new TextChunk('paused-stream', ' Second.');
 
-                return new \NeuronAI\Providers\ProviderResponse(message: $response);
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = (new Agent())->setThreadId('test-thread');
@@ -606,11 +641,11 @@ MARKDOWN;
         $terminal = new VirtualTerminal();
         $displayDuringPause = null;
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("Keep working\r"),
+            static fn() => $terminal->simulateInput("Keep working\r"),
         );
         EventLoop::delay(
             0.06,
-            static fn () => $terminal->clearOutput(),
+            static fn() => $terminal->clearOutput(),
         );
         EventLoop::delay(
             0.2,
@@ -625,7 +660,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.45,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui($agent, terminal: $terminal))->run();
@@ -641,11 +676,11 @@ MARKDOWN;
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal();
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("Hello\r"),
+            static fn() => $terminal->simulateInput("Hello\r"),
         );
         EventLoop::delay(
             0.15,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui($agent, terminal: $terminal))->run();
@@ -656,24 +691,24 @@ MARKDOWN;
 
     public function testWhitespaceTextChunksStillCountAsAnEmptyResponse(): void
     {
-        $provider = new class(new AssistantMessage()) extends FakeAIProvider {
+        $provider = new class (new AssistantMessage()) extends FakeAIProvider {
             protected function streamChunks(Message $response): Generator
             {
                 yield new TextChunk('empty-stream', '');
                 yield new TextChunk('empty-stream', " \n\t ");
 
-                return new \NeuronAI\Providers\ProviderResponse(message: $response);
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal();
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("Hello\r"),
+            static fn() => $terminal->simulateInput("Hello\r"),
         );
         EventLoop::delay(
             0.15,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui($agent, terminal: $terminal))->run();
@@ -685,7 +720,7 @@ MARKDOWN;
     public function testComposerQueuesAnotherMessageWhileWorking(): void
     {
         $queuedDisplay = null;
-        $provider = new class(
+        $provider = new class (
             new AssistantMessage('First answer.'),
             new AssistantMessage('Second answer.'),
         ) extends FakeAIProvider {
@@ -704,18 +739,18 @@ MARKDOWN;
                     $response->getContent() ?? '',
                 );
 
-                return new \NeuronAI\Providers\ProviderResponse(message: $response);
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("First question\r"),
+            static fn() => $terminal->simulateInput("First question\r"),
         );
         EventLoop::delay(
             0.05,
-            static fn () => $terminal->simulateInput("Second question\r"),
+            static fn() => $terminal->simulateInput("Second question\r"),
         );
         EventLoop::delay(
             0.12,
@@ -730,7 +765,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.4,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui($agent, terminal: $terminal))->run();
@@ -751,10 +786,10 @@ MARKDOWN;
     public function testAgentFailureIsShownWithoutRewritingHistory(): void
     {
         $sessionStore = new SessionStore(new InMemoryStorage(), 'test-user');
-        $provider = new class() extends FakeAIProvider {
+        $provider = new class extends FakeAIProvider {
             public function stream(Message ...$messages): Generator
             {
-                throw new \RuntimeException('The request timed out.');
+                throw new RuntimeException('The request timed out.');
             }
         };
         $history = $sessionStore->create();
@@ -765,15 +800,15 @@ MARKDOWN;
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("Try this\r"),
+            static fn() => $terminal->simulateInput("Try this\r"),
         );
         EventLoop::delay(
             0.1,
-            static fn () => $terminal->simulateInput('Draft after failure'),
+            static fn() => $terminal->simulateInput('Draft after failure'),
         );
         EventLoop::delay(
             0.2,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui($agent, terminal: $terminal, sessionStore: $sessionStore, session: $history))->run();
@@ -791,7 +826,7 @@ MARKDOWN;
                 ['assistant', 'Earlier answer.'],
             ],
             array_map(
-                static fn (Message $message): array => [
+                static fn(Message $message): array => [
                     $message->getRole(),
                     $message->getContent(),
                 ],
@@ -837,7 +872,7 @@ MARKDOWN;
         $terminal = new VirtualTerminal(columns: 160, rows: 40);
         EventLoop::delay(
             0.1,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui($agent, terminal: $terminal, sessionStore: $sessionStore, session: $history))->run();
@@ -867,10 +902,10 @@ MARKDOWN;
         $lookup = (new CallbackTool('lookup'))
             ->setCallId('lookup-call')
             ->setInputs(['q' => 'alpha'])
-            ->setCallable(static fn (): string => "alpha\tresult");
+            ->setCallable(static fn(): string => "alpha\tresult");
         $fallback = (new CallbackTool('fallback'))
             ->setInputs(['q' => 'beta'])
-            ->setCallable(static fn (): string => 'beta result');
+            ->setCallable(static fn(): string => 'beta result');
         $provider = new FakeAIProvider(
             new ToolCallMessage(tools: [$lookup->call(), $fallback->call()]),
             new AssistantMessage('Both tools completed.'),
@@ -880,11 +915,11 @@ MARKDOWN;
         $agent->addTool([$lookup, $fallback]);
         $terminal = new VirtualTerminal(rows: 32);
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("Run tools\r"),
+            static fn() => $terminal->simulateInput("Run tools\r"),
         );
         EventLoop::delay(
             0.2,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui($agent, terminal: $terminal))->run();
@@ -930,11 +965,11 @@ MARKDOWN;
         $agent->setAiProvider($provider);
         $agent->addTool([$tool]);
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("Run tool\r"),
+            static fn() => $terminal->simulateInput("Run tool\r"),
         );
         EventLoop::delay(
             0.2,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui($agent, terminal: $terminal))->run();
@@ -975,11 +1010,11 @@ MARKDOWN;
         $agent->setAiProvider($provider);
         $agent->addTool([$tool]);
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("Write file\r"),
+            static fn() => $terminal->simulateInput("Write file\r"),
         );
         EventLoop::delay(
             0.06,
-            static fn () => $terminal->clearOutput(),
+            static fn() => $terminal->clearOutput(),
         );
         EventLoop::delay(
             0.2,
@@ -994,7 +1029,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.45,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui($agent, terminal: $terminal))->run();
@@ -1015,7 +1050,7 @@ MARKDOWN;
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal();
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("/unknown\r"),
+            static fn() => $terminal->simulateInput("/unknown\r"),
         );
         EventLoop::delay(
             0.06,
@@ -1040,7 +1075,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.14,
-            static fn () => $terminal->simulateInput("/exit\r"),
+            static fn() => $terminal->simulateInput("/exit\r"),
         );
         EventLoop::delay(
             0.3,
@@ -1072,7 +1107,7 @@ MARKDOWN;
 
     public function testACommandFollowedByArgumentsIsStillThatCommand(): void
     {
-        $storage = new \NeuronInteraction\Storage\InMemoryStorage();
+        $storage = new InMemoryStorage();
         $afterResume = null;
         $resumedContent = null;
         $afterClear = null;
@@ -1089,11 +1124,11 @@ MARKDOWN;
             commands: (new Commands())->addCommand(self::sessionCommands()),
         ));
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("/clear now\r"),
+            static fn() => $terminal->simulateInput("/clear now\r"),
         );
         EventLoop::delay(
             0.06,
-            static fn () => $terminal->simulateInput("A question\r"),
+            static fn() => $terminal->simulateInput("A question\r"),
         );
         EventLoop::delay(
             0.2,
@@ -1172,11 +1207,11 @@ MARKDOWN;
             },
         );
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("/probe two words\r"),
+            static fn() => $terminal->simulateInput("/probe two words\r"),
         );
         EventLoop::delay(
             0.2,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui(
@@ -1207,11 +1242,11 @@ MARKDOWN;
             },
         );
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("/probe\r"),
+            static fn() => $terminal->simulateInput("/probe\r"),
         );
         EventLoop::delay(
             0.2,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui(
@@ -1237,18 +1272,18 @@ MARKDOWN;
         $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
-        $storage = new \NeuronInteraction\Storage\InMemoryStorage();
+        $storage = new InMemoryStorage();
         $command = $this->commandThat(
             static function (CommandAdapterInterface $adapter, string $value): void {
                 $adapter->promptAgent(new UserMessage('Review ' . $value . '.'));
             },
         );
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("/probe this diff\r"),
+            static fn() => $terminal->simulateInput("/probe this diff\r"),
         );
         EventLoop::delay(
             0.4,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui(
@@ -1269,14 +1304,14 @@ MARKDOWN;
         );
         self::assertSame(
             ['/probe this diff'],
-            array_map(static fn (UserMessage $message): ?string => $message->getContent(), (new InputHistory($storage))->entries()),
+            array_map(static fn(UserMessage $message): ?string => $message->getContent(), (new InputHistory($storage))->entries()),
         );
     }
 
     public function testSelectionReturnsBeforeThePersonChoosesAndResumesTheCommand(): void
     {
         $terminal = new VirtualTerminal(rows: 30);
-        $storage = new \NeuronInteraction\Storage\InMemoryStorage();
+        $storage = new InMemoryStorage();
         $events = [];
         $beforeChoice = null;
         $command = $this->commandThat(
@@ -1294,12 +1329,12 @@ MARKDOWN;
                 $events[] = 'first invocation finished';
             },
         );
-        EventLoop::queue(static fn () => $terminal->simulateInput("/probe\r"));
+        EventLoop::queue(static fn() => $terminal->simulateInput("/probe\r"));
         EventLoop::delay(0.08, static function () use ($terminal, &$events, &$beforeChoice): void {
             $beforeChoice = $events;
             $terminal->simulateInput("\r");
         });
-        EventLoop::delay(0.16, static fn () => $terminal->simulateInput("\x03"));
+        EventLoop::delay(0.16, static fn() => $terminal->simulateInput("\x03"));
 
         Tui::make(
             (new Agent())->setThreadId('test-thread'),
@@ -1312,7 +1347,7 @@ MARKDOWN;
         self::assertSame(['first invocation finished'], $beforeChoice);
         self::assertSame(['first invocation finished', 'stable-value'], $events);
         self::assertStringContainsString('Request submitted.', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
-        self::assertSame(['/probe'], array_map(static fn (UserMessage $message): ?string => $message->getContent(), (new InputHistory($storage))->entries()));
+        self::assertSame(['/probe'], array_map(static fn(UserMessage $message): ?string => $message->getContent(), (new InputHistory($storage))->entries()));
     }
 
     public function testStoppingImmediatelyAfterRequestingSelectionLeavesWithoutPresentingIt(): void
@@ -1335,7 +1370,7 @@ MARKDOWN;
             },
             '/apply',
         );
-        EventLoop::queue(static fn () => $terminal->simulateInput("/choose\r"));
+        EventLoop::queue(static fn() => $terminal->simulateInput("/choose\r"));
         $fallback = EventLoop::delay(0.3, static function () use ($terminal, &$forcedExit): void {
             $forcedExit = true;
             $terminal->simulateInput("\x03");
@@ -1397,7 +1432,7 @@ MARKDOWN;
                 $observedArguments = $value;
                 $adapter->useSession($resultingHistory);
 
-                throw new \RuntimeException('Selected command failed.');
+                throw new RuntimeException('Selected command failed.');
             },
             '/apply',
         );
@@ -1418,7 +1453,7 @@ MARKDOWN;
             $terminal->clearOutput();
             $terminal->simulateInput("\r");
         });
-        EventLoop::delay(0.16, static fn () => $terminal->simulateInput("\x03"));
+        EventLoop::delay(0.16, static fn() => $terminal->simulateInput("\x03"));
 
         $tui->run();
 
@@ -1429,7 +1464,7 @@ MARKDOWN;
         self::assertSame($resultingHistory->getKey(), $tui->agent()->getChatHistory()->getThreadId());
         self::assertSame(
             ['Resulting conversation.', 'Resulting answer.'],
-            array_map(static fn (Message $message): mixed => $message->getContent(), $resultingHistory->getMessages()),
+            array_map(static fn(Message $message): mixed => $message->getContent(), $resultingHistory->getMessages()),
         );
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('Resulting conversation.', $display);
@@ -1437,7 +1472,7 @@ MARKDOWN;
         self::assertStringContainsString('RuntimeException: Selected command failed.', $display);
         self::assertStringNotContainsString('Original conversation.', $display);
         self::assertStringNotContainsString('Replacement conversation.', $display);
-        self::assertSame(['/choose', '/replace'], array_map(static fn (UserMessage $message): ?string => $message->getContent(), $inputHistory->entries()));
+        self::assertSame(['/choose', '/replace'], array_map(static fn(UserMessage $message): ?string => $message->getContent(), $inputHistory->entries()));
     }
 
     public function testSelectedCommandIsReadmittedAfterItsRequesterStartsAnAgentTurn(): void
@@ -1445,13 +1480,13 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 30);
         $inputHistory = new InputHistory(new InMemoryStorage());
         $selected = false;
-        $provider = new class(new AssistantMessage('A slow answer.')) extends FakeAIProvider {
+        $provider = new class (new AssistantMessage('A slow answer.')) extends FakeAIProvider {
             protected function streamChunks(Message $response): Generator
             {
                 \Amp\delay(0.3);
                 yield new TextChunk('selection-stream', 'A slow answer.');
 
-                return new \NeuronAI\Providers\ProviderResponse(message: $response);
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = (new Agent())->setThreadId('test-thread');
@@ -1471,9 +1506,9 @@ MARKDOWN;
             },
             '/apply',
         );
-        EventLoop::queue(static fn () => $terminal->simulateInput("/choose\r"));
-        EventLoop::delay(0.08, static fn () => $terminal->simulateInput("\r"));
-        EventLoop::delay(0.4, static fn () => $terminal->simulateInput("\x03"));
+        EventLoop::queue(static fn() => $terminal->simulateInput("/choose\r"));
+        EventLoop::delay(0.08, static fn() => $terminal->simulateInput("\r"));
+        EventLoop::delay(0.4, static fn() => $terminal->simulateInput("\x03"));
 
         Tui::make(
             $agent,
@@ -1489,7 +1524,7 @@ MARKDOWN;
         );
         $provider->assertCallCount(1);
         self::assertSame('Generated request.', $provider->getRecorded()[0]->messages[0]->getContent());
-        self::assertSame(['/choose'], array_map(static fn (UserMessage $message): ?string => $message->getContent(), $inputHistory->entries()));
+        self::assertSame(['/choose'], array_map(static fn(UserMessage $message): ?string => $message->getContent(), $inputHistory->entries()));
     }
 
     public function testACommandReachesTheAgentToChangeProviderInstructionsAndTools(): void
@@ -1511,15 +1546,15 @@ MARKDOWN;
             },
         );
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("/probe\r"),
+            static fn() => $terminal->simulateInput("/probe\r"),
         );
         EventLoop::delay(
             0.1,
-            static fn () => $terminal->simulateInput("A question\r"),
+            static fn() => $terminal->simulateInput("A question\r"),
         );
         EventLoop::delay(
             0.4,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui(
@@ -1555,19 +1590,19 @@ MARKDOWN;
             },
         );
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("A question\r"),
+            static fn() => $terminal->simulateInput("A question\r"),
         );
         EventLoop::delay(
             0.3,
-            static fn () => $terminal->simulateInput("/probe\r"),
+            static fn() => $terminal->simulateInput("/probe\r"),
         );
         EventLoop::delay(
             0.4,
-            static fn () => $terminal->simulateInput("Another question\r"),
+            static fn() => $terminal->simulateInput("Another question\r"),
         );
         EventLoop::delay(
             0.7,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui(
@@ -1587,7 +1622,7 @@ MARKDOWN;
         self::assertSame(
             ['A question', 'The old one.', 'Another question'],
             array_map(
-                static fn (Message $message): mixed => $message->getContent(),
+                static fn(Message $message): mixed => $message->getContent(),
                 $carried,
             ),
         );
@@ -1620,19 +1655,19 @@ MARKDOWN;
             sessionStore: $sessionStore,
         ));
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("A question\r"),
+            static fn() => $terminal->simulateInput("A question\r"),
         );
         EventLoop::delay(
             0.3,
-            static fn () => $terminal->simulateInput("/probe\r"),
+            static fn() => $terminal->simulateInput("/probe\r"),
         );
         EventLoop::delay(
             0.4,
-            static fn () => $terminal->simulateInput("Another question\r"),
+            static fn() => $terminal->simulateInput("Another question\r"),
         );
         EventLoop::delay(
             0.7,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         $tui->run();
@@ -1644,7 +1679,7 @@ MARKDOWN;
         self::assertSame(
             ['Another question'],
             array_map(
-                static fn (Message $message): mixed => $message->getContent(),
+                static fn(Message $message): mixed => $message->getContent(),
                 $carried,
             ),
         );
@@ -1663,7 +1698,7 @@ MARKDOWN;
             '/quit',
         );
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("/quit\r"),
+            static fn() => $terminal->simulateInput("/quit\r"),
         );
         EventLoop::delay(
             0.3,
@@ -1690,19 +1725,19 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
             static function (CommandAdapterInterface $adapter, string $value): void {
-                throw new \RuntimeException('The command broke.');
+                throw new RuntimeException('The command broke.');
             },
         );
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("/probe\r"),
+            static fn() => $terminal->simulateInput("/probe\r"),
         );
         EventLoop::delay(
             0.15,
-            static fn () => $terminal->simulateInput("A question\r"),
+            static fn() => $terminal->simulateInput("A question\r"),
         );
         EventLoop::delay(
             0.45,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui(
@@ -1736,7 +1771,7 @@ MARKDOWN;
             static function (CommandAdapterInterface $adapter, string $value) use ($replacementSession): void {
                 $adapter->useSession($replacementSession);
 
-                throw new \RuntimeException('The command broke.');
+                throw new RuntimeException('The command broke.');
             },
         );
         $tui = (new Tui(
@@ -1747,11 +1782,11 @@ MARKDOWN;
             session: $initialSession,
         ));
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("/probe\r"),
+            static fn() => $terminal->simulateInput("/probe\r"),
         );
         EventLoop::delay(
             0.2,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         $tui->run();
@@ -1775,7 +1810,7 @@ MARKDOWN;
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("/clear\r"),
+            static fn() => $terminal->simulateInput("/clear\r"),
         );
         EventLoop::delay(
             0.08,
@@ -1854,7 +1889,7 @@ MARKDOWN;
             session: $initialSession,
         ));
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("/clear\r"),
+            static fn() => $terminal->simulateInput("/clear\r"),
         );
         EventLoop::delay(
             0.08,
@@ -1915,15 +1950,14 @@ MARKDOWN;
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
-            static function (CommandAdapterInterface $adapter, string $value): void {
-            },
+            static function (CommandAdapterInterface $adapter, string $value): void {},
         );
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("/help\r"),
+            static fn() => $terminal->simulateInput("/help\r"),
         );
         EventLoop::delay(
             0.2,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui(
@@ -1963,11 +1997,11 @@ MARKDOWN;
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("/help\r"),
+            static fn() => $terminal->simulateInput("/help\r"),
         );
         EventLoop::delay(
             0.2,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui(
@@ -2007,7 +2041,7 @@ MARKDOWN;
             sessionStore: $sessionStore,
         ));
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("A question\r"),
+            static fn() => $terminal->simulateInput("A question\r"),
         );
         EventLoop::delay(
             0.25,
@@ -2018,7 +2052,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.4,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         $tui->run();
@@ -2045,15 +2079,15 @@ MARKDOWN;
             },
         );
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("A question\r"),
+            static fn() => $terminal->simulateInput("A question\r"),
         );
         EventLoop::delay(
             0.25,
-            static fn () => $terminal->simulateInput("/probe\r"),
+            static fn() => $terminal->simulateInput("/probe\r"),
         );
         EventLoop::delay(
             0.4,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui(
@@ -2073,7 +2107,7 @@ MARKDOWN;
     {
         $refusedDisplay = null;
         $ran = false;
-        $provider = new class(
+        $provider = new class (
             new AssistantMessage('A slow answer.'),
         ) extends FakeAIProvider {
             protected function streamChunks(Message $response): Generator
@@ -2081,7 +2115,7 @@ MARKDOWN;
                 \Amp\delay(0.4);
                 yield new TextChunk('slow-stream', 'A slow answer.');
 
-                return new \NeuronAI\Providers\ProviderResponse(message: $response);
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = (new Agent())->setThreadId('test-thread');
@@ -2097,11 +2131,11 @@ MARKDOWN;
             '/help',
         );
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("A question\r"),
+            static fn() => $terminal->simulateInput("A question\r"),
         );
         EventLoop::delay(
             0.06,
-            static fn () => $terminal->simulateInput("/help\r"),
+            static fn() => $terminal->simulateInput("/help\r"),
         );
         EventLoop::delay(
             0.12,
@@ -2134,7 +2168,7 @@ MARKDOWN;
     public function testHelpAliasIsCarriedOutMidTurn(): void
     {
         $midTurnDisplay = null;
-        $provider = new class(
+        $provider = new class (
             new AssistantMessage('A slow answer.'),
         ) extends FakeAIProvider {
             protected function streamChunks(Message $response): Generator
@@ -2142,7 +2176,7 @@ MARKDOWN;
                 \Amp\delay(0.5);
                 yield new TextChunk('slow-stream', 'A slow answer.');
 
-                return new \NeuronAI\Providers\ProviderResponse(message: $response);
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = (new Agent())->setThreadId('test-thread');
@@ -2150,11 +2184,11 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 24);
         $command = new HelpCommand('/probe');
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("A question\r"),
+            static fn() => $terminal->simulateInput("A question\r"),
         );
         EventLoop::delay(
             0.06,
-            static fn () => $terminal->simulateInput("/probe\r"),
+            static fn() => $terminal->simulateInput("/probe\r"),
         );
         EventLoop::delay(
             0.12,
@@ -2166,7 +2200,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.9,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui(
@@ -2193,7 +2227,7 @@ MARKDOWN;
     public function testCustomConcurrentCommandIsCarriedOutMidTurn(): void
     {
         $midTurnDisplay = null;
-        $provider = new class(
+        $provider = new class (
             new AssistantMessage('A slow answer.'),
         ) extends FakeAIProvider {
             protected function streamChunks(Message $response): Generator
@@ -2201,7 +2235,7 @@ MARKDOWN;
                 \Amp\delay(0.5);
                 yield new TextChunk('slow-stream', 'A slow answer.');
 
-                return new \NeuronAI\Providers\ProviderResponse(message: $response);
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = (new Agent())->setThreadId('test-thread');
@@ -2209,11 +2243,11 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->concurrentCommand();
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("A question\r"),
+            static fn() => $terminal->simulateInput("A question\r"),
         );
         EventLoop::delay(
             0.06,
-            static fn () => $terminal->simulateInput("/probe\r"),
+            static fn() => $terminal->simulateInput("/probe\r"),
         );
         EventLoop::delay(
             0.12,
@@ -2225,7 +2259,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.9,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui(
@@ -2257,7 +2291,7 @@ MARKDOWN;
     {
         $forcedExit = false;
         $midTurnDisplay = null;
-        $provider = new class(
+        $provider = new class (
             new AssistantMessage('A slow answer.'),
         ) extends FakeAIProvider {
             protected function streamChunks(Message $response): Generator
@@ -2265,18 +2299,18 @@ MARKDOWN;
                 \Amp\delay(0.5);
                 yield new TextChunk('slow-stream', 'A slow answer.');
 
-                return new \NeuronAI\Providers\ProviderResponse(message: $response);
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 24);
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("A question\r"),
+            static fn() => $terminal->simulateInput("A question\r"),
         );
         EventLoop::delay(
             0.06,
-            static fn () => $terminal->simulateInput("/help\r"),
+            static fn() => $terminal->simulateInput("/help\r"),
         );
         EventLoop::delay(
             0.12,
@@ -2317,7 +2351,7 @@ MARKDOWN;
     {
         $forcedExit = false;
         $midTurnDisplay = null;
-        $provider = new class(
+        $provider = new class (
             new AssistantMessage('A slow answer.'),
         ) extends FakeAIProvider {
             public int $started = 0;
@@ -2331,22 +2365,22 @@ MARKDOWN;
                 $this->completed = true;
                 yield new TextChunk('slow-stream', 'A slow answer.');
 
-                return new \NeuronAI\Providers\ProviderResponse(message: $response);
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 24);
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("A question\r"),
+            static fn() => $terminal->simulateInput("A question\r"),
         );
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("Queued question\r"),
+            static fn() => $terminal->simulateInput("Queued question\r"),
         );
         EventLoop::delay(
             0.06,
-            static fn () => $terminal->simulateInput("/guide\r"),
+            static fn() => $terminal->simulateInput("/guide\r"),
         );
         EventLoop::delay(
             0.12,
@@ -2416,7 +2450,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("/probe\r"),
+            static fn() => $terminal->simulateInput("/probe\r"),
         );
         EventLoop::delay(
             0.1,
@@ -2430,11 +2464,11 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.16,
-            static fn () => $terminal->simulateInput("\r"),
+            static fn() => $terminal->simulateInput("\r"),
         );
         EventLoop::delay(
             0.26,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui(
@@ -2492,7 +2526,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("/probe\r"),
+            static fn() => $terminal->simulateInput("/probe\r"),
         );
         EventLoop::delay(
             0.1,
@@ -2522,7 +2556,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.3,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui(
@@ -2548,7 +2582,7 @@ MARKDOWN;
         $initialLines = explode("\n", str_replace("\r", '', $initialDisplay));
         $headingLine = array_find_key(
             $initialLines,
-            static fn (string $line): bool => str_contains($line, 'Models (1 of 2)'),
+            static fn(string $line): bool => str_contains($line, 'Models (1 of 2)'),
         );
         self::assertIsInt($headingLine);
         self::assertMatchesRegularExpression(
@@ -2592,7 +2626,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("/probe\r"),
+            static fn() => $terminal->simulateInput("/probe\r"),
         );
         EventLoop::delay(
             0.1,
@@ -2628,7 +2662,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.3,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui(
@@ -2641,11 +2675,11 @@ MARKDOWN;
         $withoutLines = explode("\n", str_replace("\r", '', $withoutDescription));
         $headingLine = array_find_key(
             $withoutLines,
-            static fn (string $line): bool => str_contains($line, 'First choice'),
+            static fn(string $line): bool => str_contains($line, 'First choice'),
         );
         $optionLine = array_find_key(
             $withoutLines,
-            static fn (string $line): bool => str_contains($line, 'First option'),
+            static fn(string $line): bool => str_contains($line, 'First option'),
         );
         self::assertIsInt($headingLine);
         self::assertIsInt($optionLine);
@@ -2687,7 +2721,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("/probe\r"),
+            static fn() => $terminal->simulateInput("/probe\r"),
         );
         EventLoop::delay(
             0.1,
@@ -2698,7 +2732,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.2,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui(
@@ -2725,21 +2759,21 @@ MARKDOWN;
         $lines = explode("\n", $display);
         $label = array_values(array_filter(
             $lines,
-            static fn (string $line): bool => str_contains(
+            static fn(string $line): bool => str_contains(
                 $line,
                 'A selected label',
             ),
         ))[0];
         $labelContinuation = array_values(array_filter(
             $lines,
-            static fn (string $line): bool => str_contains(
+            static fn(string $line): bool => str_contains(
                 $line,
                 'break and enough',
             ),
         ))[0];
         $detail = array_values(array_filter(
             $lines,
-            static fn (string $line): bool => str_contains(
+            static fn(string $line): bool => str_contains(
                 $line,
                 'A lighter detail',
             ),
@@ -2814,7 +2848,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("/probe\r"),
+            static fn() => $terminal->simulateInput("/probe\r"),
         );
         EventLoop::delay(
             0.1,
@@ -2834,7 +2868,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.26,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui(
@@ -2889,7 +2923,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("/probe\r"),
+            static fn() => $terminal->simulateInput("/probe\r"),
         );
         EventLoop::delay(
             0.1,
@@ -2931,7 +2965,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.38,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui(
@@ -3004,7 +3038,7 @@ MARKDOWN;
 
                 $chosen = $value;
                 $adapter->requestSelection(new Selection('/probe', 'Reopened', array_map(
-                    static fn (SelectionOption $option): SelectionOption => new SelectionOption(
+                    static fn(SelectionOption $option): SelectionOption => new SelectionOption(
                         'done:' . $option->value,
                         $option->label,
                         $option->description,
@@ -3015,7 +3049,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("/probe\r"),
+            static fn() => $terminal->simulateInput("/probe\r"),
         );
         EventLoop::delay(
             0.1,
@@ -3073,7 +3107,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.51,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui(
@@ -3149,7 +3183,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("/probe\r"),
+            static fn() => $terminal->simulateInput("/probe\r"),
         );
         EventLoop::delay(
             0.1,
@@ -3167,7 +3201,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.26,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui(
@@ -3214,11 +3248,11 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("/probe\r"),
+            static fn() => $terminal->simulateInput("/probe\r"),
         );
         EventLoop::delay(
             0.1,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui(
@@ -3261,7 +3295,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("/probe\r"),
+            static fn() => $terminal->simulateInput("/probe\r"),
         );
         EventLoop::delay(
             0.1,
@@ -3281,7 +3315,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.26,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui(
@@ -3342,7 +3376,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("/probe\r"),
+            static fn() => $terminal->simulateInput("/probe\r"),
         );
         EventLoop::delay(
             0.1,
@@ -3375,7 +3409,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.32,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui(
@@ -3430,7 +3464,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("/probe\r"),
+            static fn() => $terminal->simulateInput("/probe\r"),
         );
         EventLoop::delay(
             0.1,
@@ -3442,7 +3476,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.17,
-            static fn () => $terminal->simulateResize(38, 32),
+            static fn() => $terminal->simulateResize(38, 32),
         );
         EventLoop::delay(
             0.2,
@@ -3455,7 +3489,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.3,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui(
@@ -3518,7 +3552,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("/probe\r"),
+            static fn() => $terminal->simulateInput("/probe\r"),
         );
         EventLoop::delay(
             0.1,
@@ -3539,7 +3573,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.2,
-            static fn () => $terminal->simulateResize(80, 30),
+            static fn() => $terminal->simulateResize(80, 30),
         );
         EventLoop::delay(
             0.23,
@@ -3565,7 +3599,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.33,
-            static fn () => $terminal->simulateInput("/probe reopen\r"),
+            static fn() => $terminal->simulateInput("/probe reopen\r"),
         );
         EventLoop::delay(
             0.37,
@@ -3578,7 +3612,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.46,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui(
@@ -3630,11 +3664,11 @@ MARKDOWN;
         $display = null;
         EventLoop::delay(
             0.05,
-            static fn () => $terminal->simulateInput('/'),
+            static fn() => $terminal->simulateInput('/'),
         );
         EventLoop::delay(
             0.1,
-            static fn () => self::forceRepaint($terminal),
+            static fn() => self::forceRepaint($terminal),
         );
         EventLoop::delay(
             0.15,
@@ -3679,11 +3713,11 @@ MARKDOWN;
         $display = null;
         EventLoop::delay(
             0.05,
-            static fn () => $terminal->simulateInput('/hel'),
+            static fn() => $terminal->simulateInput('/hel'),
         );
         EventLoop::delay(
             0.1,
-            static fn () => self::forceRepaint($terminal),
+            static fn() => self::forceRepaint($terminal),
         );
         EventLoop::delay(
             0.15,
@@ -3737,8 +3771,7 @@ MARKDOWN;
 
         for ($place = 0; $place < 10; ++$place) {
             $commands[] = $this->commandThat(
-                static function (CommandAdapterInterface $adapter, string $value): void {
-                },
+                static function (CommandAdapterInterface $adapter, string $value): void {},
                 '/cmd' . $place,
             );
         }
@@ -3746,11 +3779,11 @@ MARKDOWN;
         $display = null;
         EventLoop::delay(
             0.05,
-            static fn () => $terminal->simulateInput('/'),
+            static fn() => $terminal->simulateInput('/'),
         );
         EventLoop::delay(
             0.1,
-            static fn () => self::forceRepaint($terminal),
+            static fn() => self::forceRepaint($terminal),
         );
         EventLoop::delay(
             0.15,
@@ -3787,11 +3820,11 @@ MARKDOWN;
         $afterBackspace = null;
         EventLoop::delay(
             0.05,
-            static fn () => $terminal->simulateInput('/'),
+            static fn() => $terminal->simulateInput('/'),
         );
         EventLoop::delay(
             0.1,
-            static fn () => self::forceRepaint($terminal),
+            static fn() => self::forceRepaint($terminal),
         );
         EventLoop::delay(
             0.15,
@@ -3802,7 +3835,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.2,
-            static fn () => self::forceRepaint($terminal),
+            static fn() => self::forceRepaint($terminal),
         );
         EventLoop::delay(
             0.25,
@@ -3920,11 +3953,11 @@ MARKDOWN;
         $display = null;
         EventLoop::delay(
             0.05,
-            static fn () => $terminal->simulateInput('ask /help about it'),
+            static fn() => $terminal->simulateInput('ask /help about it'),
         );
         EventLoop::delay(
             0.1,
-            static fn () => self::forceRepaint($terminal),
+            static fn() => self::forceRepaint($terminal),
         );
         EventLoop::delay(
             0.15,
@@ -3957,11 +3990,11 @@ MARKDOWN;
         $display = null;
         EventLoop::delay(
             0.05,
-            static fn () => $terminal->simulateInput('/'),
+            static fn() => $terminal->simulateInput('/'),
         );
         EventLoop::delay(
             0.1,
-            static fn () => self::forceRepaint($terminal),
+            static fn() => self::forceRepaint($terminal),
         );
         EventLoop::delay(
             0.15,
@@ -4275,14 +4308,14 @@ MARKDOWN;
         foreach ($typed as $keys) {
             EventLoop::delay(
                 $moment,
-                static fn () => $terminal->simulateInput($keys),
+                static fn() => $terminal->simulateInput($keys),
             );
             $moment += 0.05;
         }
 
         EventLoop::delay(
             $moment,
-            static fn () => self::forceRepaint($terminal),
+            static fn() => self::forceRepaint($terminal),
         );
         EventLoop::delay(
             $moment + 0.05,
@@ -4309,12 +4342,11 @@ MARKDOWN;
         string $name,
         string $description,
     ): CommandInterface {
-        return new class($name, $description) implements CommandInterface {
+        return new class ($name, $description) implements CommandInterface {
             public function __construct(
                 private readonly string $commandName,
                 private readonly string $description,
-            ) {
-            }
+            ) {}
 
             public function name(): string
             {
@@ -4329,8 +4361,7 @@ MARKDOWN;
             public function run(
                 CommandAdapterInterface $adapter,
                 string $value,
-            ): void {
-            }
+            ): void {}
         };
     }
 
@@ -4343,7 +4374,7 @@ MARKDOWN;
     {
         $midTurnDisplay = null;
         $readyDisplay = null;
-        $provider = new class(
+        $provider = new class (
             new AssistantMessage('A slow answer.'),
         ) extends FakeAIProvider {
             protected function streamChunks(Message $response): Generator
@@ -4351,7 +4382,7 @@ MARKDOWN;
                 \Amp\delay(0.5);
                 yield new TextChunk('slow-stream', 'A slow answer.');
 
-                return new \NeuronAI\Providers\ProviderResponse(message: $response);
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = (new Agent())->setThreadId('test-thread');
@@ -4359,21 +4390,20 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 30);
         $concurrent = $this->concurrentCommand('/pulse');
         $refused = $this->commandThat(
-            static function (CommandAdapterInterface $adapter, string $value): void {
-            },
+            static function (CommandAdapterInterface $adapter, string $value): void {},
             '/probe',
         );
         EventLoop::delay(
             0.03,
-            static fn () => $terminal->simulateInput("A question\r"),
+            static fn() => $terminal->simulateInput("A question\r"),
         );
         EventLoop::delay(
             0.1,
-            static fn () => $terminal->simulateInput('/'),
+            static fn() => $terminal->simulateInput('/'),
         );
         EventLoop::delay(
             0.15,
-            static fn () => self::forceRepaint($terminal),
+            static fn() => self::forceRepaint($terminal),
         );
         EventLoop::delay(
             0.2,
@@ -4386,7 +4416,7 @@ MARKDOWN;
         // The answer is in by now, and the name is still being written.
         EventLoop::delay(
             0.8,
-            static fn () => self::forceRepaint($terminal),
+            static fn() => self::forceRepaint($terminal),
         );
         EventLoop::delay(
             0.85,
@@ -4419,7 +4449,7 @@ MARKDOWN;
     public function testWhileTheAgentWorksNothingMatchesWithoutACommandThatRunsThen(): void
     {
         $midTurnDisplay = null;
-        $provider = new class(
+        $provider = new class (
             new AssistantMessage('A slow answer.'),
         ) extends FakeAIProvider {
             protected function streamChunks(Message $response): Generator
@@ -4427,28 +4457,27 @@ MARKDOWN;
                 \Amp\delay(0.5);
                 yield new TextChunk('slow-stream', 'A slow answer.');
 
-                return new \NeuronAI\Providers\ProviderResponse(message: $response);
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $refused = $this->commandThat(
-            static function (CommandAdapterInterface $adapter, string $value): void {
-            },
+            static function (CommandAdapterInterface $adapter, string $value): void {},
             '/probe',
         );
         EventLoop::delay(
             0.03,
-            static fn () => $terminal->simulateInput("A question\r"),
+            static fn() => $terminal->simulateInput("A question\r"),
         );
         EventLoop::delay(
             0.1,
-            static fn () => $terminal->simulateInput('/'),
+            static fn() => $terminal->simulateInput('/'),
         );
         EventLoop::delay(
             0.15,
-            static fn () => self::forceRepaint($terminal),
+            static fn() => self::forceRepaint($terminal),
         );
         EventLoop::delay(
             0.2,
@@ -4460,7 +4489,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.9,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui(
@@ -4500,15 +4529,15 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("/probe\r"),
+            static fn() => $terminal->simulateInput("/probe\r"),
         );
         EventLoop::delay(
             0.1,
-            static fn () => $terminal->simulateInput('/'),
+            static fn() => $terminal->simulateInput('/'),
         );
         EventLoop::delay(
             0.15,
-            static fn () => self::forceRepaint($terminal),
+            static fn() => self::forceRepaint($terminal),
         );
         EventLoop::delay(
             0.2,
@@ -4624,19 +4653,19 @@ MARKDOWN;
         $completed = null;
         EventLoop::delay(
             0.05,
-            static fn () => $terminal->simulateInput('/al'),
+            static fn() => $terminal->simulateInput('/al'),
         );
         EventLoop::delay(
             0.1,
-            static fn () => $terminal->simulateInput("\x1b[B"),
+            static fn() => $terminal->simulateInput("\x1b[B"),
         );
         EventLoop::delay(
             0.15,
-            static fn () => $terminal->simulateInput("\t"),
+            static fn() => $terminal->simulateInput("\t"),
         );
         EventLoop::delay(
             0.2,
-            static fn () => self::forceRepaint($terminal),
+            static fn() => self::forceRepaint($terminal),
         );
         EventLoop::delay(
             0.25,
@@ -4647,7 +4676,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.3,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui(
@@ -4680,19 +4709,19 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 30);
         EventLoop::delay(
             0.05,
-            static fn () => $terminal->simulateInput('/zz'),
+            static fn() => $terminal->simulateInput('/zz'),
         );
         EventLoop::delay(
             0.1,
-            static fn () => $terminal->simulateInput("\t"),
+            static fn() => $terminal->simulateInput("\t"),
         );
         EventLoop::delay(
             0.15,
-            static fn () => $terminal->simulateInput("\r"),
+            static fn() => $terminal->simulateInput("\r"),
         );
         EventLoop::delay(
             0.3,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui(
@@ -4723,25 +4752,25 @@ MARKDOWN;
         $terminal = new VirtualTerminal(rows: 30);
         EventLoop::delay(
             0.05,
-            static fn () => $terminal->simulateInput('hello'),
+            static fn() => $terminal->simulateInput('hello'),
         );
         EventLoop::delay(
             0.1,
-            static fn () => $terminal->simulateInput("\t"),
+            static fn() => $terminal->simulateInput("\t"),
         );
         EventLoop::delay(
             0.15,
-            static fn () => $terminal->simulateInput("\r"),
+            static fn() => $terminal->simulateInput("\r"),
         );
         EventLoop::delay(
             0.3,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui($agent, terminal: $terminal))->run();
 
         $provider->assertSent(
-            static fn (RequestRecord $request): bool
+            static fn(RequestRecord $request): bool
                 => (string) $request->messages[0]->getContent() === 'hello',
         );
     }
@@ -4758,15 +4787,15 @@ MARKDOWN;
         $emptied = null;
         EventLoop::delay(
             0.05,
-            static fn () => $terminal->simulateInput('/hel'),
+            static fn() => $terminal->simulateInput('/hel'),
         );
         EventLoop::delay(
             0.1,
-            static fn () => $terminal->simulateInput("\x1b"),
+            static fn() => $terminal->simulateInput("\x1b"),
         );
         EventLoop::delay(
             0.15,
-            static fn () => self::forceRepaint($terminal),
+            static fn() => self::forceRepaint($terminal),
         );
         EventLoop::delay(
             0.2,
@@ -4777,7 +4806,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.25,
-            static fn () => self::forceRepaint($terminal),
+            static fn() => self::forceRepaint($terminal),
         );
         EventLoop::delay(
             0.3,
@@ -4884,11 +4913,11 @@ MARKDOWN;
         ));
         EventLoop::delay(
             0.05,
-            static fn () => $terminal->simulateInput('/'),
+            static fn() => $terminal->simulateInput('/'),
         );
         EventLoop::delay(
             0.1,
-            static fn () => self::forceRepaint($terminal),
+            static fn() => self::forceRepaint($terminal),
         );
         EventLoop::delay(
             0.15,
@@ -4899,7 +4928,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.2,
-            static fn () => self::forceRepaint($terminal),
+            static fn() => self::forceRepaint($terminal),
         );
         EventLoop::delay(
             0.25,
@@ -4924,10 +4953,8 @@ MARKDOWN;
 
     private function concurrentCommand(string $name = '/probe'): ConcurrentCommandInterface
     {
-        return new class($name) implements ConcurrentCommandInterface {
-            public function __construct(private readonly string $identifier)
-            {
-            }
+        return new class ($name) implements ConcurrentCommandInterface {
+            public function __construct(private readonly string $identifier) {}
 
             public function name(): string
             {
@@ -4957,15 +4984,14 @@ MARKDOWN;
         Closure $run,
         string $name = '/probe',
     ): CommandInterface {
-        return new class($run, $name) implements CommandInterface {
+        return new class ($run, $name) implements CommandInterface {
             /**
              * @param Closure(CommandAdapterInterface<mixed>, string): void $run
              */
             public function __construct(
                 private readonly Closure $run,
                 private readonly string $commandName,
-            ) {
-            }
+            ) {}
 
             public function name(): string
             {
@@ -5024,19 +5050,19 @@ MARKDOWN;
         ));
         EventLoop::delay(
             0.03,
-            static fn () => $terminal->simulateInput("/clear\r"),
+            static fn() => $terminal->simulateInput("/clear\r"),
         );
         EventLoop::delay(
             0.09,
-            static fn () => $terminal->simulateInput("A question\r"),
+            static fn() => $terminal->simulateInput("A question\r"),
         );
         EventLoop::delay(
             0.3,
-            static fn () => $terminal->simulateInput("/clear\r"),
+            static fn() => $terminal->simulateInput("/clear\r"),
         );
         EventLoop::delay(
             0.38,
-            static fn () => $terminal->simulateInput("/resume\r"),
+            static fn() => $terminal->simulateInput("/resume\r"),
         );
         EventLoop::delay(
             0.46,
@@ -5050,7 +5076,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.6,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         $tui->run();
@@ -5064,7 +5090,7 @@ MARKDOWN;
         self::assertSame(
             ['A question', 'An answer.'],
             array_map(
-                static fn (Message $message): string => (string) $message
+                static fn(Message $message): string => (string) $message
                     ->getContent(),
                 $tui->agent()->getChatHistory()->getMessages(),
             ),
@@ -5107,11 +5133,11 @@ MARKDOWN;
             ]),
         ));
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("/probe\r"),
+            static fn() => $terminal->simulateInput("/probe\r"),
         );
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("/clear\r"),
+            static fn() => $terminal->simulateInput("/clear\r"),
         );
         EventLoop::delay(
             0.09,
@@ -5168,19 +5194,19 @@ MARKDOWN;
         ));
         EventLoop::delay(
             0.03,
-            static fn () => $terminal->simulateInput("/clear\r"),
+            static fn() => $terminal->simulateInput("/clear\r"),
         );
         EventLoop::delay(
             0.08,
-            static fn () => $terminal->simulateInput("A question\r"),
+            static fn() => $terminal->simulateInput("A question\r"),
         );
         EventLoop::delay(
             0.25,
-            static fn () => $terminal->simulateInput("/clear\r"),
+            static fn() => $terminal->simulateInput("/clear\r"),
         );
         EventLoop::delay(
             0.35,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         $tui->run();
@@ -5194,7 +5220,7 @@ MARKDOWN;
         self::assertSame(
             ['A question', 'An answer.'],
             array_map(
-                static fn (Message $message): string => (string) $message
+                static fn(Message $message): string => (string) $message
                     ->getContent(),
                 $reopened->getMessages(),
             ),
@@ -5206,7 +5232,7 @@ MARKDOWN;
         self::assertSame(
             [null, null],
             array_map(
-                static fn (SessionSummary $session): ?string => $session->title,
+                static fn(SessionSummary $session): ?string => $session->title,
                 $sessionStore->summaries(),
             ),
         );
@@ -5216,7 +5242,7 @@ MARKDOWN;
     {
         $forcedExit = false;
         $refusedDisplay = null;
-        $provider = new class(
+        $provider = new class (
             new AssistantMessage('A slow answer.'),
         ) extends FakeAIProvider {
             protected function streamChunks(Message $response): Generator
@@ -5224,7 +5250,7 @@ MARKDOWN;
                 \Amp\delay(0.5);
                 yield new TextChunk('slow-stream', 'A slow answer.');
 
-                return new \NeuronAI\Providers\ProviderResponse(message: $response);
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = (new Agent())->setThreadId('test-thread');
@@ -5249,15 +5275,15 @@ MARKDOWN;
             ]),
         ));
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("/probe\r"),
+            static fn() => $terminal->simulateInput("/probe\r"),
         );
         EventLoop::delay(
             0.02,
-            static fn () => $terminal->simulateInput("A question\r"),
+            static fn() => $terminal->simulateInput("A question\r"),
         );
         EventLoop::delay(
             0.06,
-            static fn () => $terminal->simulateInput("/clear\r"),
+            static fn() => $terminal->simulateInput("/clear\r"),
         );
         EventLoop::delay(
             0.12,
@@ -5319,7 +5345,7 @@ MARKDOWN;
         ));
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("/resume\r"),
+            static fn() => $terminal->simulateInput("/resume\r"),
         );
         EventLoop::delay(
             0.1,
@@ -5333,11 +5359,11 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.16,
-            static fn () => $terminal->simulateInput("A follow-up\r"),
+            static fn() => $terminal->simulateInput("A follow-up\r"),
         );
         EventLoop::delay(
             0.4,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         $tui->run();
@@ -5358,14 +5384,14 @@ MARKDOWN;
         self::assertSame(
             ['The earlier subject', 'The earlier answer.'],
             array_map(
-                static fn (Message $message): string => (string) $message
+                static fn(Message $message): string => (string) $message
                     ->getContent(),
                 array_slice($tui->agent()->getChatHistory()->getMessages(), 0, 2),
             ),
         );
         $provider->assertSent(
-            static fn (RequestRecord $request): bool => array_map(
-                static fn (Message $message): string => $message->getRole(),
+            static fn(RequestRecord $request): bool => array_map(
+                static fn(Message $message): string => $message->getRole(),
                 $request->messages,
             ) === ['user', 'assistant', 'user']
                 && (string) $request->messages[0]->getContent()
@@ -5408,7 +5434,7 @@ MARKDOWN;
             ));
             EventLoop::delay(
                 0.04,
-                static fn () => $terminal->simulateInput("/resume\r"),
+                static fn() => $terminal->simulateInput("/resume\r"),
             );
             EventLoop::delay(
                 0.1,
@@ -5422,7 +5448,7 @@ MARKDOWN;
             );
             EventLoop::delay(
                 0.16,
-                static fn () => $terminal->simulateInput("\x03"),
+                static fn() => $terminal->simulateInput("\x03"),
             );
 
             $tui->run();
@@ -5439,7 +5465,7 @@ MARKDOWN;
             self::assertSame(
                 ['The stored subject', 'The stored answer.'],
                 array_map(
-                    static fn (Message $message): string => (string) $message
+                    static fn(Message $message): string => (string) $message
                         ->getContent(),
                     $tui->agent()->getChatHistory()->getMessages(),
                 ),
@@ -5494,15 +5520,15 @@ MARKDOWN;
         ));
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("/resume\r"),
+            static fn() => $terminal->simulateInput("/resume\r"),
         );
         EventLoop::delay(
             0.1,
-            static fn () => $terminal->simulateInput("\x1b"),
+            static fn() => $terminal->simulateInput("\x1b"),
         );
         EventLoop::delay(
             0.16,
-            static fn () => $terminal->simulateInput("/resume\r"),
+            static fn() => $terminal->simulateInput("/resume\r"),
         );
         EventLoop::delay(
             0.22,
@@ -5513,7 +5539,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.4,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         $tui->run();
@@ -5525,7 +5551,7 @@ MARKDOWN;
         self::assertSame(
             ['The earlier subject'],
             array_map(
-                static fn (Message $message): string => (string) $message
+                static fn(Message $message): string => (string) $message
                     ->getContent(),
                 $tui->agent()->getChatHistory()->getMessages(),
             ),
@@ -5559,7 +5585,7 @@ MARKDOWN;
         ));
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("/resume\r"),
+            static fn() => $terminal->simulateInput("/resume\r"),
         );
         EventLoop::delay(
             0.1,
@@ -5573,7 +5599,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.2,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         $tui->run();
@@ -5589,7 +5615,7 @@ MARKDOWN;
         self::assertSame(
             [$title],
             array_map(
-                static fn (Message $message): string => (string) $message
+                static fn(Message $message): string => (string) $message
                     ->getContent(),
                 $tui->agent()->getChatHistory()->getMessages(),
             ),
@@ -5623,11 +5649,11 @@ MARKDOWN;
             ]),
         ));
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("/probe\r"),
+            static fn() => $terminal->simulateInput("/probe\r"),
         );
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("/resume\r"),
+            static fn() => $terminal->simulateInput("/resume\r"),
         );
         EventLoop::delay(
             0.1,
@@ -5650,7 +5676,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.26,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         $tui->run();
@@ -5681,11 +5707,11 @@ MARKDOWN;
         ));
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("/resume\r"),
+            static fn() => $terminal->simulateInput("/resume\r"),
         );
         EventLoop::delay(
             0.12,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         $tui->run();
@@ -5725,7 +5751,7 @@ MARKDOWN;
         ));
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("/resume\r"),
+            static fn() => $terminal->simulateInput("/resume\r"),
         );
         EventLoop::delay(
             0.1,
@@ -5745,7 +5771,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.26,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         $tui->run();
@@ -5756,7 +5782,7 @@ MARKDOWN;
         self::assertSame(
             ['Beta subject'],
             array_map(
-                static fn (Message $message): string => (string) $message
+                static fn(Message $message): string => (string) $message
                     ->getContent(),
                 $tui->agent()->getChatHistory()->getMessages(),
             ),
@@ -5783,19 +5809,19 @@ MARKDOWN;
         ));
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("/resume\r"),
+            static fn() => $terminal->simulateInput("/resume\r"),
         );
         EventLoop::delay(
             0.1,
-            static fn () => $terminal->simulateInput("\x1b[B"),
+            static fn() => $terminal->simulateInput("\x1b[B"),
         );
         EventLoop::delay(
             0.16,
-            static fn () => $terminal->simulateInput("\r"),
+            static fn() => $terminal->simulateInput("\r"),
         );
         EventLoop::delay(
             0.26,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         $tui->run();
@@ -5806,7 +5832,7 @@ MARKDOWN;
         self::assertSame(
             ['The older subject'],
             array_map(
-                static fn (Message $message): string => (string) $message
+                static fn(Message $message): string => (string) $message
                     ->getContent(),
                 $tui->agent()->getChatHistory()->getMessages(),
             ),
@@ -5816,7 +5842,7 @@ MARKDOWN;
     public function testResumeIsRefusedWhileTheAgentIsWorking(): void
     {
         $refusedDisplay = null;
-        $provider = new class(
+        $provider = new class (
             new AssistantMessage('A slow answer.'),
         ) extends FakeAIProvider {
             protected function streamChunks(Message $response): Generator
@@ -5824,7 +5850,7 @@ MARKDOWN;
                 \Amp\delay(0.4);
                 yield new TextChunk('slow-stream', 'A slow answer.');
 
-                return new \NeuronAI\Providers\ProviderResponse(message: $response);
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = (new Agent())->setThreadId('test-thread');
@@ -5843,11 +5869,11 @@ MARKDOWN;
             commands: (new Commands())->addCommand(self::sessionCommands()),
         ));
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("A question\r"),
+            static fn() => $terminal->simulateInput("A question\r"),
         );
         EventLoop::delay(
             0.06,
-            static fn () => $terminal->simulateInput("/resume\r"),
+            static fn() => $terminal->simulateInput("/resume\r"),
         );
         EventLoop::delay(
             0.12,
@@ -5903,7 +5929,7 @@ MARKDOWN;
         ));
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("/resume\r"),
+            static fn() => $terminal->simulateInput("/resume\r"),
         );
         EventLoop::delay(
             0.1,
@@ -5966,7 +5992,7 @@ MARKDOWN;
         self::assertSame(
             ['The earlier subject'],
             array_map(
-                static fn (SessionSummary $session): ?string => $session->title,
+                static fn(SessionSummary $session): ?string => $session->title,
                 $sessionStore->summaries(),
             ),
         );
@@ -5996,7 +6022,7 @@ MARKDOWN;
         ));
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("/clear\r"),
+            static fn() => $terminal->simulateInput("/clear\r"),
         );
         EventLoop::delay(
             0.1,
@@ -6069,7 +6095,7 @@ MARKDOWN;
         ));
         EventLoop::delay(
             0.04,
-            static fn () => $terminal->simulateInput("/resume\r"),
+            static fn() => $terminal->simulateInput("/resume\r"),
         );
         EventLoop::delay(
             0.1,
@@ -6143,7 +6169,7 @@ MARKDOWN;
         $latestDisplay = null;
         $tui = (new Tui($agent, terminal: $terminal, commands: (new Commands())->addCommand($restore), sessionStore: $sessionStore));
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("/probe\r"),
+            static fn() => $terminal->simulateInput("/probe\r"),
         );
         EventLoop::delay(
             0.04,
@@ -6188,18 +6214,18 @@ MARKDOWN;
     public function testStreamKeepsReadingPositionWhileScrolledUp(): void
     {
         $first = implode("\n", array_map(
-            static fn (int $line): string => "- anchor {$line}",
+            static fn(int $line): string => "- anchor {$line}",
             range(1, 12),
         ));
         $second = implode("\n", array_map(
-            static fn (int $line): string => "- anchor {$line}",
+            static fn(int $line): string => "- anchor {$line}",
             range(13, 18),
         ));
         $third = implode("\n", array_map(
-            static fn (int $line): string => "- anchor {$line}",
+            static fn(int $line): string => "- anchor {$line}",
             range(19, 24),
         ));
-        $provider = new class(
+        $provider = new class (
             new AssistantMessage("{$first}\n{$second}\n{$third}"),
             $first,
             $second,
@@ -6228,7 +6254,7 @@ MARKDOWN;
                     "\n" . $this->third,
                 );
 
-                return new \NeuronAI\Providers\ProviderResponse(message: $response);
+                return new ProviderResponse(message: $response);
             }
         };
         $agent = (new Agent())->setThreadId('test-thread');
@@ -6238,7 +6264,7 @@ MARKDOWN;
         $beforeGrowth = null;
         $afterGrowth = null;
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("Long answer\r"),
+            static fn() => $terminal->simulateInput("Long answer\r"),
         );
         EventLoop::delay(
             0.07,
@@ -6269,7 +6295,7 @@ MARKDOWN;
         );
         EventLoop::delay(
             0.4,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui($agent, terminal: $terminal))->run();
@@ -6296,15 +6322,15 @@ MARKDOWN;
         $agent->addTool($tool->requireApproval());
         $terminal = new VirtualTerminal(rows: 28);
         EventLoop::queue(
-            static fn () => $terminal->simulateInput("Publish now\r"),
+            static fn() => $terminal->simulateInput("Publish now\r"),
         );
         EventLoop::delay(
             0.1,
-            static fn () => $terminal->simulateInput('Draft after interruption'),
+            static fn() => $terminal->simulateInput('Draft after interruption'),
         );
         EventLoop::delay(
             0.2,
-            static fn () => $terminal->simulateInput("\x03"),
+            static fn() => $terminal->simulateInput("\x03"),
         );
 
         (new Tui($agent, terminal: $terminal))->run();
@@ -6324,7 +6350,7 @@ MARKDOWN;
 
     public function testTerminalStartupFailurePropagatesToHostApplication(): void
     {
-        $this->expectException(\LogicException::class);
+        $this->expectException(LogicException::class);
         $this->expectExceptionMessage('Terminal could not initialize.');
 
         (new Tui((new Agent())->setThreadId('test-thread'), terminal: new FailingTerminal()))->run();
@@ -6336,7 +6362,7 @@ MARKDOWN;
             self::markTestSkipped('This process has an interactive TTY.');
         }
 
-        $this->expectException(\RuntimeException::class);
+        $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage(
             'Neuron TUI requires an interactive TTY.',
         );
@@ -6364,16 +6390,12 @@ final class FailingTerminal implements TerminalInterface
         callable $onResize,
         callable $onKittyProtocolActivated,
     ): void {
-        throw new \LogicException('Terminal could not initialize.');
+        throw new LogicException('Terminal could not initialize.');
     }
 
-    public function stop(): void
-    {
-    }
+    public function stop(): void {}
 
-    public function write(string $data): void
-    {
-    }
+    public function write(string $data): void {}
 
     public function getColumns(): int
     {
@@ -6390,37 +6412,21 @@ final class FailingTerminal implements TerminalInterface
         return false;
     }
 
-    public function moveBy(int $lines): void
-    {
-    }
+    public function moveBy(int $lines): void {}
 
-    public function hideCursor(): void
-    {
-    }
+    public function hideCursor(): void {}
 
-    public function showCursor(): void
-    {
-    }
+    public function showCursor(): void {}
 
-    public function clearLine(): void
-    {
-    }
+    public function clearLine(): void {}
 
-    public function clearFromCursor(): void
-    {
-    }
+    public function clearFromCursor(): void {}
 
-    public function clearScreen(): void
-    {
-    }
+    public function clearScreen(): void {}
 
-    public function setTitle(string $title): void
-    {
-    }
+    public function setTitle(string $title): void {}
 
-    public function bell(): void
-    {
-    }
+    public function bell(): void {}
 
     public function isVirtual(): bool
     {

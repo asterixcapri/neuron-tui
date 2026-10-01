@@ -23,6 +23,8 @@ use NeuronTui\View\ConversationView;
 use Revolt\EventLoop;
 use Throwable;
 
+use function array_map;
+
 /**
  * Terminal behavior before, during, and after one Command invocation.
  *
@@ -37,8 +39,7 @@ final class TuiCommandAdapter implements CommandAdapterInterface
         private readonly Commands $commands,
         private readonly SessionStore $sessionStore,
         private readonly ConfigurationStore $configurationStore,
-    ) {
-    }
+    ) {}
 
     public function admit(CommandInterface $command): bool
     {
@@ -115,7 +116,7 @@ final class TuiCommandAdapter implements CommandAdapterInterface
                 $chosen = $this->view->choose(
                     $request->prompt,
                     array_map(
-                        fn (SelectionOption $option): ChoiceOption => new ChoiceOption(
+                        fn(SelectionOption $option): ChoiceOption => new ChoiceOption(
                             $option->value,
                             $option->label,
                             $option->description,

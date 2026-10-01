@@ -10,6 +10,7 @@ use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\Messages\AssistantMessage;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\UserMessage;
+use NeuronAI\Providers\ProviderResponse;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\InMemoryStorage;
@@ -23,6 +24,7 @@ use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
 use function Amp\delay;
+use function array_shift;
 
 final class SessionTitleGenerationTest extends TestCase
 {
@@ -155,10 +157,10 @@ final class SessionTitleGenerationTest extends TestCase
         $agent = $this->agent($requests);
         $agent = ($session)->bindTo($agent);
         $terminal = new VirtualTerminal();
-        EventLoop::queue(static fn () => $terminal->simulateInput("ciao\r"));
-        EventLoop::delay(0.05, static fn () => $terminal->simulateInput("Configuriamo Redis\r"));
-        EventLoop::delay(0.1, static fn () => $terminal->simulateInput("Grazie\r"));
-        EventLoop::delay(0.2, static fn () => $terminal->simulateInput("\x03"));
+        EventLoop::queue(static fn() => $terminal->simulateInput("ciao\r"));
+        EventLoop::delay(0.05, static fn() => $terminal->simulateInput("Configuriamo Redis\r"));
+        EventLoop::delay(0.1, static fn() => $terminal->simulateInput("Grazie\r"));
+        EventLoop::delay(0.2, static fn() => $terminal->simulateInput("\x03"));
 
         Tui::make($agent, $terminal, sessionStore: $store, session: $session)->run();
 
@@ -176,8 +178,8 @@ final class SessionTitleGenerationTest extends TestCase
         $agent = $this->agent($requests);
         $agent = ($session)->bindTo($agent);
         $terminal = new VirtualTerminal();
-        EventLoop::queue(static fn () => $terminal->simulateInput("A subject\r"));
-        EventLoop::delay(0.1, static fn () => $terminal->simulateInput("\x03"));
+        EventLoop::queue(static fn() => $terminal->simulateInput("A subject\r"));
+        EventLoop::delay(0.1, static fn() => $terminal->simulateInput("\x03"));
 
         Tui::make($agent, $terminal, sessionStore: $store, session: $session)->run();
 
@@ -213,8 +215,8 @@ final class SessionTitleGenerationTest extends TestCase
         $agent = $this->agent($requests);
         $agent = ($session)->bindTo($agent);
         $terminal = new VirtualTerminal();
-        EventLoop::queue(static fn () => $terminal->simulateInput("A subject\r"));
-        EventLoop::delay(0.1, static fn () => $terminal->simulateInput("\x03"));
+        EventLoop::queue(static fn() => $terminal->simulateInput("A subject\r"));
+        EventLoop::delay(0.1, static fn() => $terminal->simulateInput("\x03"));
 
         Tui::make($agent, $terminal, sessionStore: $store, session: $session)->run();
 
@@ -224,7 +226,7 @@ final class SessionTitleGenerationTest extends TestCase
 
     private function agent(TitleRequests $requests): Agent
     {
-        $provider = new class($requests) extends FakeAIProvider {
+        $provider = new class ($requests) extends FakeAIProvider {
             public function __construct(private readonly TitleRequests $requests)
             {
                 parent::__construct(new AssistantMessage('Ciao!'), new AssistantMessage('Redis setup'), new AssistantMessage('Done'));
@@ -239,7 +241,7 @@ final class SessionTitleGenerationTest extends TestCase
                 return yield from parent::stream(...$messages);
             }
 
-            public function structured(array|Message $messages, string $class, array $response_schema): \NeuronAI\Providers\ProviderResponse
+            public function structured(array|Message $messages, string $class, array $response_schema): ProviderResponse
             {
                 ++$this->requests->count;
                 $response = array_shift($this->requests->responses);
@@ -247,7 +249,7 @@ final class SessionTitleGenerationTest extends TestCase
                     throw new RuntimeException('Title provider unavailable.');
                 }
 
-                return new \NeuronAI\Providers\ProviderResponse(message: new AssistantMessage($response));
+                return new ProviderResponse(message: new AssistantMessage($response));
             }
         };
 
@@ -265,7 +267,5 @@ final class TitleRequests
     public bool $failTurn = false;
 
     /** @param list<string> $responses */
-    public function __construct(public array $responses)
-    {
-    }
+    public function __construct(public array $responses) {}
 }

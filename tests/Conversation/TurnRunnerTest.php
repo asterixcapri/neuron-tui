@@ -11,6 +11,7 @@ use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
 use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\UserMessage;
+use NeuronAI\Providers\ProviderResponse;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronTui\Conversation\TurnRunner;
 use NeuronTui\Tests\Tools\CallbackTool;
@@ -25,7 +26,7 @@ final class TurnRunnerTest extends TestCase
     public function testTheAnsweredTextIsPaintedIntoTheConversation(): void
     {
         $terminal = new VirtualTerminal(rows: 24);
-        $provider = new class(
+        $provider = new class (
             new AssistantMessage('Forty-two.'),
         ) extends FakeAIProvider {
             protected function streamChunks(Message $response): Generator
@@ -33,7 +34,7 @@ final class TurnRunnerTest extends TestCase
                 yield new TextChunk('turn-stream', 'Forty');
                 yield new TextChunk('turn-stream', '-two.');
 
-                return new \NeuronAI\Providers\ProviderResponse(message: $response);
+                return new ProviderResponse(message: $response);
             }
         };
 
@@ -66,11 +67,11 @@ final class TurnRunnerTest extends TestCase
         $lookup = (new CallbackTool('lookup'))
             ->setCallId('lookup-call')
             ->setInputs([])
-            ->setCallable(static fn (): string => 'Found the record.');
+            ->setCallable(static fn(): string => 'Found the record.');
         $check = (new CallbackTool('check'))
             ->setCallId('check-call')
             ->setInputs([])
-            ->setCallable(static fn (): string => 'Record verified.');
+            ->setCallable(static fn(): string => 'Record verified.');
         $provider = new FakeAIProvider(
             new ToolCallMessage('Finding the record.', [$lookup->call()]),
             new ToolCallMessage('Found it; checking the record.', [$check->call()]),
@@ -89,13 +90,13 @@ final class TurnRunnerTest extends TestCase
     public function testAnAnswerOfWhitespaceAloneIsStillEmpty(): void
     {
         $terminal = new VirtualTerminal(rows: 24);
-        $provider = new class(new AssistantMessage()) extends FakeAIProvider {
+        $provider = new class (new AssistantMessage()) extends FakeAIProvider {
             protected function streamChunks(Message $response): Generator
             {
                 yield new TextChunk('blank-stream', '');
                 yield new TextChunk('blank-stream', " \n\t ");
 
-                return new \NeuronAI\Providers\ProviderResponse(message: $response);
+                return new ProviderResponse(message: $response);
             }
         };
 
@@ -110,7 +111,7 @@ final class TurnRunnerTest extends TestCase
         $tool = (new CallbackTool('lookup'))
             ->setCallId('lookup-call')
             ->setInputs(['q' => 'alpha'])
-            ->setCallable(static fn (): string => 'alpha result');
+            ->setCallable(static fn(): string => 'alpha result');
         $provider = new FakeAIProvider(
             new ToolCallMessage(tools: [$tool->call()]),
             new AssistantMessage(),
@@ -129,8 +130,8 @@ final class TurnRunnerTest extends TestCase
         $tool = (new CallbackTool('lookup'))
             ->setCallId('lookup-call')
             ->setInputs(['q' => 'alpha'])
-            ->setCallable(static fn (): string => 'alpha result');
-        $provider = new class(
+            ->setCallable(static fn(): string => 'alpha result');
+        $provider = new class (
             new ToolCallMessage(tools: [$tool->call()]),
             new AssistantMessage('Found it.'),
         ) extends FakeAIProvider {
@@ -139,12 +140,12 @@ final class TurnRunnerTest extends TestCase
                 if ($response instanceof ToolCallMessage) {
                     yield new TextChunk('empty-before-tool', '');
 
-                    return new \NeuronAI\Providers\ProviderResponse(message: $response);
+                    return new ProviderResponse(message: $response);
                 }
 
                 yield from parent::streamChunks($response);
 
-                return new \NeuronAI\Providers\ProviderResponse(message: $response);
+                return new ProviderResponse(message: $response);
             }
         };
 
@@ -228,7 +229,7 @@ final class TurnRunnerTest extends TestCase
         $turn = new TurnRunner($view);
 
         EventLoop::queue(
-            static fn () => $turn->run($agent, new UserMessage($message)),
+            static fn() => $turn->run($agent, new UserMessage($message)),
         );
         EventLoop::run();
 

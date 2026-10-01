@@ -12,9 +12,7 @@ use NeuronInteraction\Command\SelectionOption;
 
 final readonly class ModelCommand implements CommandInterface
 {
-    public function __construct(private ?HttpClientInterface $httpClient = null)
-    {
-    }
+    public function __construct(private ?HttpClientInterface $httpClient = null) {}
 
     public function name(): string
     {

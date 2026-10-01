@@ -19,6 +19,9 @@ use Symfony\Component\Tui\Input\Key;
 use Symfony\Component\Tui\Input\Keybindings;
 use Throwable;
 
+use function array_all;
+use function trim;
+
 /**
  * Interprets human input and keeps submission, recall, and draft editing together.
  *
@@ -34,8 +37,7 @@ final class ConversationInputHandler
         private readonly SessionStore $sessionStore,
         private readonly ConfigurationStore $configurationStore,
         private readonly UserMessageProcessorInterface $userMessageProcessors = new UserMessageProcessors(),
-    ) {
-    }
+    ) {}
 
     public function handleSubmit(SubmitEvent $event): void
     {
@@ -68,7 +70,7 @@ final class ConversationInputHandler
 
             if (trim($message->getContent() ?? '') === '' && array_all(
                 $message->getContentBlocks(),
-                static fn ($block): bool => $block instanceof TextContent,
+                static fn($block): bool => $block instanceof TextContent,
             )) {
                 $this->view->showError('The prepared user message is empty.');
 

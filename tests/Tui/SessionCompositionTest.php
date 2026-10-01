@@ -7,6 +7,7 @@ namespace NeuronTui\Tests\Tui;
 use Closure;
 use InvalidArgumentException;
 use NeuronAI\Agent\Agent;
+use NeuronAI\Chat\History\ChatHistory;
 use NeuronAI\Chat\Messages\AssistantMessage;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Testing\FakeAIProvider;
@@ -30,6 +31,16 @@ use Revolt\EventLoop;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
+use function array_map;
+use function bin2hex;
+use function count;
+use function glob;
+use function is_dir;
+use function random_bytes;
+use function rmdir;
+use function sys_get_temp_dir;
+use function unlink;
+
 final class SessionCompositionTest extends TestCase
 {
     public function testManagedConversationsAndLaterTurnsCanBeClearedAndResumed(): void
@@ -51,8 +62,8 @@ final class SessionCompositionTest extends TestCase
             $originalKey = null;
             $afterClear = null;
             $tui = Tui::make($agent, $terminal, (new Commands())->addCommand([new ClearCommand(), new ResumeCommand(), $inspect]), $store, session: $session);
-            EventLoop::queue(static fn () => $terminal->simulateInput("Later question\r"));
-            EventLoop::delay(0.12, static fn () => $terminal->simulateInput("/inspect\r"));
+            EventLoop::queue(static fn() => $terminal->simulateInput("Later question\r"));
+            EventLoop::delay(0.12, static fn() => $terminal->simulateInput("/inspect\r"));
             EventLoop::delay(0.15, static function () use ($tui, $terminal, &$beforeClear, &$originalKey): void {
                 $beforeClear = $tui->agent()->getChatHistory()->getMessages();
                 $originalKey = $tui->agent()->getThreadId();
@@ -62,8 +73,8 @@ final class SessionCompositionTest extends TestCase
                 $afterClear = $tui->agent()->getChatHistory()->getMessages();
                 $terminal->simulateInput("/resume\r");
             });
-            EventLoop::delay(0.23, static fn () => $terminal->simulateInput("\r"));
-            EventLoop::delay(0.29, static fn () => $terminal->simulateInput("\x03"));
+            EventLoop::delay(0.23, static fn() => $terminal->simulateInput("\r"));
+            EventLoop::delay(0.29, static fn() => $terminal->simulateInput("\x03"));
 
             $tui->run();
 
@@ -87,7 +98,7 @@ final class SessionCompositionTest extends TestCase
         SessionHistory::of($earlier)->addMessage(new UserMessage('Stored subject'));
         $terminal = new VirtualTerminal();
         $tui = Tui::make(new Agent(), $terminal, sessionStore: $store);
-        EventLoop::delay(0.05, static fn () => $terminal->simulateInput("\x03"));
+        EventLoop::delay(0.05, static fn() => $terminal->simulateInput("\x03"));
 
         $tui->run();
 
@@ -104,8 +115,8 @@ final class SessionCompositionTest extends TestCase
             foreach ([false, true] as $supplyInputs) {
                 $terminal = new VirtualTerminal();
                 $inputs = $supplyInputs ? new InputHistory(new InMemoryStorage()) : null;
-                EventLoop::queue(static fn () => $terminal->simulateInput("/help\r"));
-                EventLoop::delay(0.06, static fn () => $terminal->simulateInput("\x03"));
+                EventLoop::queue(static fn() => $terminal->simulateInput("/help\r"));
+                EventLoop::delay(0.06, static fn() => $terminal->simulateInput("\x03"));
 
                 (new Tui(
                     (new Agent())->setThreadId('test-thread'),
@@ -114,9 +125,9 @@ final class SessionCompositionTest extends TestCase
                     inputHistory: $inputs,
                 ))->run();
 
-                self::assertStringContainsString('Unknown Command: /help', \Symfony\Component\Tui\Ansi\AnsiUtils::stripAnsiCodes($terminal->getOutput()));
+                self::assertStringContainsString('Unknown Command: /help', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
                 if ($inputs !== null) {
-                    self::assertSame(['/help'], array_map(static fn (UserMessage $message): ?string => $message->getContent(), $inputs->entries()));
+                    self::assertSame(['/help'], array_map(static fn(UserMessage $message): ?string => $message->getContent(), $inputs->entries()));
                 }
             }
         }
@@ -133,7 +144,7 @@ final class SessionCompositionTest extends TestCase
                     static function (CommandAdapterInterface $adapter) use (&$received): void {
                         $received[] = [$adapter->commands(), $adapter->sessionStore()];
                         if (count($received) === 1) {
-                            SessionHistory::of($adapter->sessionStore()->create())->addMessage(new \NeuronAI\Chat\Messages\UserMessage('Kept by this module'));
+                            SessionHistory::of($adapter->sessionStore()->create())->addMessage(new UserMessage('Kept by this module'));
                         } else {
                             self::assertCount(1, $adapter->sessionStore()->summaries());
                         }
@@ -143,10 +154,10 @@ final class SessionCompositionTest extends TestCase
                 $terminal = new VirtualTerminal();
                 $tui = Tui::make((new Agent())->setThreadId('test-thread'), $terminal, $commands, $sessionStore, inputHistory: $inputs);
                 $commands->addCommand($command);
-                EventLoop::queue(static fn () => $terminal->simulateInput("/inspect\r"));
-                EventLoop::delay(0.04, static fn () => $terminal->simulateInput("\x1b[A\r"));
-                EventLoop::delay(0.08, static fn () => $terminal->simulateInput("\x1b[A"));
-                EventLoop::delay(0.12, static fn () => $terminal->simulateInput("\x03"));
+                EventLoop::queue(static fn() => $terminal->simulateInput("/inspect\r"));
+                EventLoop::delay(0.04, static fn() => $terminal->simulateInput("\x1b[A\r"));
+                EventLoop::delay(0.08, static fn() => $terminal->simulateInput("\x1b[A"));
+                EventLoop::delay(0.12, static fn() => $terminal->simulateInput("\x03"));
 
                 $tui->run();
 
@@ -157,7 +168,7 @@ final class SessionCompositionTest extends TestCase
                     self::assertSame($sessionStore, $received[0][1]);
                 }
                 if ($inputs !== null) {
-                    self::assertSame(['/inspect'], array_map(static fn (UserMessage $message): ?string => $message->getContent(), $inputs->entries()));
+                    self::assertSame(['/inspect'], array_map(static fn(UserMessage $message): ?string => $message->getContent(), $inputs->entries()));
                     self::assertTrue($inputs->isNavigating());
                 }
             }
@@ -191,9 +202,9 @@ final class SessionCompositionTest extends TestCase
                 },
             );
             $terminal = new VirtualTerminal();
-            EventLoop::queue(static fn () => $terminal->simulateInput("/inspect\r"));
-            EventLoop::delay(0.04, static fn () => $terminal->simulateInput("\r"));
-            $timeout = EventLoop::delay(0.15, static fn () => $terminal->simulateInput("\x03"));
+            EventLoop::queue(static fn() => $terminal->simulateInput("/inspect\r"));
+            EventLoop::delay(0.04, static fn() => $terminal->simulateInput("\r"));
+            $timeout = EventLoop::delay(0.15, static fn() => $terminal->simulateInput("\x03"));
 
             Tui::make((new Agent())->setThreadId('test-thread'), $terminal, (new Commands())->addCommand($command), configurationStore: $store)->run();
             EventLoop::cancel($timeout);
@@ -236,7 +247,7 @@ final class SessionCompositionTest extends TestCase
         $agent = $history->bindTo(new Agent());
         $terminal = new VirtualTerminal();
         $tui = Tui::make($agent, $terminal, sessionStore: $store, session: $session);
-        EventLoop::delay(0.05, static fn () => $terminal->simulateInput("\x03"));
+        EventLoop::delay(0.05, static fn() => $terminal->simulateInput("\x03"));
 
         $tui->run();
 
@@ -277,7 +288,7 @@ final class SessionCompositionTest extends TestCase
                 $adapter->stop();
             },
         );
-        EventLoop::queue(static fn () => $terminal->simulateInput("/inspect\r"));
+        EventLoop::queue(static fn() => $terminal->simulateInput("/inspect\r"));
 
         Tui::make((new Agent())->setThreadId('test-thread'), $terminal, (new Commands())->addCommand($command))->run();
 
@@ -297,7 +308,7 @@ final class SessionCompositionTest extends TestCase
                 $adapter->stop();
             },
         );
-        EventLoop::queue(static fn () => $terminal->simulateInput("/inspect\r"));
+        EventLoop::queue(static fn() => $terminal->simulateInput("/inspect\r"));
 
         (new Tui(
             (new Agent())->setThreadId('test-thread'),
@@ -328,8 +339,8 @@ final class SessionCompositionTest extends TestCase
             $cleared = null;
             $picker = null;
             $tui = Tui::make($agent, $terminal, (new Commands())->addCommand([new ClearCommand(), new ResumeCommand()]), $sessionStore, session: $initial);
-            EventLoop::queue(static fn () => $terminal->simulateInput("Alice subject\r"));
-            EventLoop::delay(0.15, static fn () => $terminal->simulateInput("/clear\r"));
+            EventLoop::queue(static fn() => $terminal->simulateInput("Alice subject\r"));
+            EventLoop::delay(0.15, static fn() => $terminal->simulateInput("/clear\r"));
             EventLoop::delay(0.19, static function () use ($tui, $terminal, &$cleared): void {
                 $cleared = $tui->agent()->getChatHistory();
                 $terminal->simulateInput("/resume\r");
@@ -338,11 +349,11 @@ final class SessionCompositionTest extends TestCase
                 $picker = AnsiUtils::stripAnsiCodes($terminal->getOutput());
                 $terminal->simulateInput("\r");
             });
-            EventLoop::delay(0.29, static fn () => $terminal->simulateInput("\x03"));
+            EventLoop::delay(0.29, static fn() => $terminal->simulateInput("\x03"));
 
             $tui->run();
 
-            self::assertInstanceOf(\NeuronAI\Chat\History\ChatHistory::class, $cleared);
+            self::assertInstanceOf(ChatHistory::class, $cleared);
             $clearedSession = $sessionStore->read($cleared->getThreadId());
             self::assertNotNull($clearedSession);
             self::assertSame('alice', $clearedSession->getUserId());
@@ -386,13 +397,13 @@ final class SessionCompositionTest extends TestCase
         $agent = ($initial)->bindTo($agent);
         $terminal = new VirtualTerminal();
         $tui = Tui::make($agent, $terminal, (new Commands())->addCommand(new ResumeCommand()), $sessionStore, session: $initial);
-        EventLoop::queue(static fn () => $terminal->simulateInput("/resume\r"));
-        EventLoop::delay(0.03, static fn () => $terminal->simulateInput("\x1b[B"));
+        EventLoop::queue(static fn() => $terminal->simulateInput("/resume\r"));
+        EventLoop::delay(0.03, static fn() => $terminal->simulateInput("\x1b[B"));
         EventLoop::delay(0.05, static function () use ($sessionStore, $earlier, $terminal): void {
             $sessionStore->delete($earlier->getKey());
             $terminal->simulateInput("\r");
         });
-        EventLoop::delay(0.1, static fn () => $terminal->simulateInput("\x03"));
+        EventLoop::delay(0.1, static fn() => $terminal->simulateInput("\x03"));
 
         $tui->run();
 
@@ -409,11 +420,9 @@ final class SessionCompositionTest extends TestCase
      */
     private function commandThat(Closure $run): CommandInterface
     {
-        return new class($run) implements CommandInterface {
+        return new class ($run) implements CommandInterface {
             /** @param Closure(CommandAdapterInterface<mixed>): void $run */
-            public function __construct(private readonly Closure $run)
-            {
-            }
+            public function __construct(private readonly Closure $run) {}
 
             public function name(): string
             {

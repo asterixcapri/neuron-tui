@@ -8,6 +8,9 @@ use NeuronAI\Tools\ToolCall;
 use NeuronTui\History\ToolActivityText;
 use NeuronTui\History\ToolCallCorrelation;
 
+use function count;
+use function microtime;
+
 /**
  * Paints one group of tool calls and results as they happen.
  *

@@ -27,6 +27,11 @@ use Symfony\Component\Tui\Tui;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 use Symfony\Component\Tui\Widget\TextWidget;
 
+use function array_is_list;
+use function implode;
+use function in_array;
+use function str_replace;
+
 /**
  * Owns the visual state and terminal rendering of a Conversation TUI.
  *
@@ -34,14 +39,14 @@ use Symfony\Component\Tui\Widget\TextWidget;
  */
 final class ConversationView
 {
-    private const string READY_STATUS =
-        'ready · Enter sends · Shift+Enter adds a line · Ctrl+C exits';
+    private const string READY_STATUS
+        = 'ready · Enter sends · Shift+Enter adds a line · Ctrl+C exits';
 
-    private const string WORKING_STATUS =
-        'Enter queues · Shift+Enter adds a line';
+    private const string WORKING_STATUS
+        = 'Enter queues · Shift+Enter adds a line';
 
-    private const string SUGGESTING_STATUS =
-        'suggesting · ↑↓ moves · Tab completes · Enter runs';
+    private const string SUGGESTING_STATUS
+        = 'suggesting · ↑↓ moves · Tab completes · Enter runs';
 
     /**
      * Where the keys the suggestions answer are listened for: before the
@@ -180,7 +185,7 @@ final class ConversationView
     public function onDraftChange(Closure $listener): void
     {
         $this->editor->onChange(
-            static fn (ChangeEvent $event) => $listener(),
+            static fn(ChangeEvent $event) => $listener(),
         );
     }
 

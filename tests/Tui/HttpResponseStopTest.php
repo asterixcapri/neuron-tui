@@ -23,6 +23,13 @@ use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
 use function Amp\delay;
+use function array_filter;
+use function array_map;
+use function is_array;
+use function json_encode;
+use function str_contains;
+
+use const JSON_THROW_ON_ERROR;
 
 final class HttpResponseStopTest extends TestCase
 {
@@ -41,17 +48,17 @@ final class HttpResponseStopTest extends TestCase
         $client = new FixtureHttpClient([$first, new FixtureStream($this->body('Second answer')), new FixtureStream($this->body('Third answer')), new FixtureStream($this->body('Draft answer'))]);
         $agent = $this->agent($client, $stopSignal);
         $history = $agent->getChatHistory();
-        EventLoop::queue(static fn () => $terminal->simulateInput("First\r"));
-        EventLoop::delay(0.18, static fn () => $terminal->simulateInput("!\r"));
-        EventLoop::delay(0.3, static fn () => $terminal->simulateInput("\x03"));
+        EventLoop::queue(static fn() => $terminal->simulateInput("First\r"));
+        EventLoop::delay(0.18, static fn() => $terminal->simulateInput("!\r"));
+        EventLoop::delay(0.3, static fn() => $terminal->simulateInput("\x03"));
 
         $tui = new Tui($agent, $terminal, stopSignal: $stopSignal);
         $tui->run();
 
         self::assertNotSame($history->getThreadId(), $tui->agent()->getChatHistory()->getThreadId());
-        self::assertSame(['First', 'Partial', 'Second', 'Second answer', 'Third', 'Third answer', 'Draf!t', 'Draft answer'], array_map(static fn (Message $message): ?string => $message->getContent(), $tui->agent()->getChatHistory()->getMessages()));
+        self::assertSame(['First', 'Partial', 'Second', 'Second answer', 'Third', 'Third answer', 'Draf!t', 'Draft answer'], array_map(static fn(Message $message): ?string => $message->getContent(), $tui->agent()->getChatHistory()->getMessages()));
         self::assertSame('stopped', $tui->agent()->getChatHistory()->getMessages()[1]->getMetadata('stop_reason'));
-        self::assertCount(4, array_filter($client->requests, static fn (HttpRequest $request): bool => is_array($request->body) && ($request->body['stream'] ?? false) === true));
+        self::assertCount(4, array_filter($client->requests, static fn(HttpRequest $request): bool => is_array($request->body) && ($request->body['stream'] ?? false) === true));
         self::assertSame(1, $first->closes);
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('Stopped', $display);
@@ -71,8 +78,8 @@ final class HttpResponseStopTest extends TestCase
             }
         });
         $agent = $this->agent(new FixtureHttpClient([$stream]), $stopSignal);
-        EventLoop::queue(static fn () => $terminal->simulateInput("Question\r"));
-        EventLoop::delay(0.15, static fn () => $terminal->simulateInput("\x03"));
+        EventLoop::queue(static fn() => $terminal->simulateInput("Question\r"));
+        EventLoop::delay(0.15, static fn() => $terminal->simulateInput("\x03"));
 
         $tui = Tui::make($agent, $terminal, (new Commands())->addCommand(new HelpCommand()), stopSignal: $stopSignal);
         $tui->run();
@@ -94,17 +101,17 @@ final class HttpResponseStopTest extends TestCase
         });
         $client = new FixtureHttpClient([$stream, new FixtureStream($this->body('Next answer'))]);
         $agent = $this->agent($client, $stopSignal);
-        EventLoop::queue(static fn () => $terminal->simulateInput("Question\r"));
-        EventLoop::delay(0.18, static fn () => $terminal->simulateInput("\x03"));
+        EventLoop::queue(static fn() => $terminal->simulateInput("Question\r"));
+        EventLoop::delay(0.18, static fn() => $terminal->simulateInput("\x03"));
 
         $tui = Tui::make($agent, $terminal, stopSignal: $stopSignal);
         $tui->run();
 
-        self::assertSame(['Next', 'Next answer'], array_map(static fn (Message $message): ?string => $message->getContent(), $tui->agent()->getChatHistory()->getMessages()));
+        self::assertSame(['Next', 'Next answer'], array_map(static fn(Message $message): ?string => $message->getContent(), $tui->agent()->getChatHistory()->getMessages()));
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('RuntimeException: Transport failed', $display);
         self::assertStringNotContainsString('Stopped', $display);
-        self::assertCount(2, array_filter($client->requests, static fn (HttpRequest $request): bool => is_array($request->body) && ($request->body['stream'] ?? false) === true));
+        self::assertCount(2, array_filter($client->requests, static fn(HttpRequest $request): bool => is_array($request->body) && ($request->body['stream'] ?? false) === true));
     }
 
     private function agent(FixtureHttpClient $client, StopSignal $stopSignal): Agent

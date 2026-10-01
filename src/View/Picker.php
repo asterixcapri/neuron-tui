@@ -12,6 +12,15 @@ use Symfony\Component\Tui\Render\RenderContext;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 use Symfony\Component\Tui\Widget\TextWidget;
 
+use function array_filter;
+use function array_values;
+use function count;
+use function max;
+use function mb_stripos;
+use function mb_substr;
+use function preg_match;
+use function sprintf;
+
 /**
  * The list a person moves through while the TUI is in the Picker.
  *
@@ -28,8 +37,8 @@ final class Picker
     /** Header, root separation and the smallest still-visible History pane. */
     private const int CONVERSATION_ROWS_ABOVE_PICKER = 7;
 
-    private const string INSTRUCTIONS =
-        '↑↓ move · Enter chooses · Escape cancels';
+    private const string INSTRUCTIONS
+        = '↑↓ move · Enter chooses · Escape cancels';
 
     /**
      * What a handle starts with, so that it is a name of the picker's own
@@ -227,7 +236,7 @@ final class Picker
         $this->filter = $filter;
         $matching = array_values(array_filter(
             $this->items,
-            static fn (PickerListItem $line): bool => self::contains(
+            static fn(PickerListItem $line): bool => self::contains(
                 $line->label,
                 $filter,
             ) || (

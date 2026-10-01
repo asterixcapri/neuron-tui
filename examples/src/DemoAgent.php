@@ -10,6 +10,10 @@ use NeuronAI\Tools\Toolkits\FileSystem\FileSystemToolkit;
 use NeuronAI\Tools\Toolkits\FileSystem\GlobPathTool;
 use NeuronAI\Tools\Toolkits\Jina\JinaToolkit;
 
+use function is_string;
+
+use const PHP_INT_MAX;
+
 final class DemoAgent extends Agent
 {
     public function __construct()

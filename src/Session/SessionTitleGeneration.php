@@ -11,6 +11,9 @@ use NeuronInteraction\Session\SessionTitleGenerator;
 use Throwable;
 
 use function Amp\async;
+use function filter_var;
+
+use const FILTER_VALIDATE_INT;
 
 /** @internal Generates a title after successful turns within a per-Session attempt limit. */
 final class SessionTitleGeneration

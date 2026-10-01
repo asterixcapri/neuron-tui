@@ -23,6 +23,8 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
+use function array_map;
+
 final class CommandHistoryTest extends TestCase
 {
     private SessionStore $sessionStore;
@@ -67,8 +69,7 @@ final class CommandHistoryTest extends TestCase
             $adapter->warn('A warning remains');
             $adapter->error('An expected error remains');
         });
-        $this->runCommand(static function (CommandAdapterInterface $adapter): void {
-        });
+        $this->runCommand(static function (CommandAdapterInterface $adapter): void {});
 
         $display = $this->display();
         self::assertStringContainsString('Session changed', $display);
@@ -102,8 +103,8 @@ final class CommandHistoryTest extends TestCase
         self::assertSame($currentSession, $this->runtime->session());
 
         self::assertSame($key, $this->runtime->agent()->getThreadId());
-        self::assertSame(['Active question'], array_map(static fn (Message $message): ?string => $message->getContent(), $this->runtime->agent()->getChatHistory()->getMessages()));
-        self::assertSame(['Earlier conversation', 'Active question'], array_map(static fn (Message $message): ?string => $message->getContent(), $session->getMessages()));
+        self::assertSame(['Active question'], array_map(static fn(Message $message): ?string => $message->getContent(), $this->runtime->agent()->getChatHistory()->getMessages()));
+        self::assertSame(['Earlier conversation', 'Active question'], array_map(static fn(Message $message): ?string => $message->getContent(), $session->getMessages()));
         $this->runtime->agent()->getChatHistory()->addMessage(new AssistantMessage('Replacement answer'));
         self::assertCount(3, $session->getMessages());
     }
@@ -126,11 +127,9 @@ final class CommandHistoryTest extends TestCase
     /** @param Closure(CommandAdapterInterface<null>): void $run */
     private function runCommand(Closure $run): void
     {
-        $command = new class($run) implements CommandInterface {
+        $command = new class ($run) implements CommandInterface {
             /** @param Closure(CommandAdapterInterface<null>): void $run */
-            public function __construct(private readonly Closure $run)
-            {
-            }
+            public function __construct(private readonly Closure $run) {}
 
             public function name(): string
             {

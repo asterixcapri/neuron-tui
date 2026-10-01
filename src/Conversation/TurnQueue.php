@@ -6,6 +6,8 @@ namespace NeuronTui\Conversation;
 
 use NeuronAI\Chat\Messages\UserMessage;
 
+use function array_shift;
+
 /**
  * What becomes of a message written while the Agent is still answering.
  *

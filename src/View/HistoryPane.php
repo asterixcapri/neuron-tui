@@ -10,6 +10,12 @@ use Symfony\Component\Tui\Widget\ContainerWidget;
 use Symfony\Component\Tui\Widget\MarkdownWidget;
 use Symfony\Component\Tui\Widget\TextWidget;
 
+use function array_filter;
+use function array_values;
+use function count;
+use function max;
+use function mb_strwidth;
+
 /**
  * Owns the painted History: its entries, their heights and the reading
  * position.
@@ -129,7 +135,7 @@ final class HistoryPane
     {
         $remaining = array_values(array_filter(
             $this->entries,
-            static fn (HistoryEntry $painted): bool => $painted !== $entry,
+            static fn(HistoryEntry $painted): bool => $painted !== $entry,
         ));
 
         if (count($remaining) === count($this->entries)) {

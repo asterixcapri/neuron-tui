@@ -8,6 +8,9 @@ use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\History\ChatHistory;
 use NeuronAI\Chat\History\InMemoryMessageStore;
 
+use function bin2hex;
+use function random_bytes;
+
 /** A seeded conversation sharing its store with a test agent. */
 class SeededHistory extends ChatHistory
 {

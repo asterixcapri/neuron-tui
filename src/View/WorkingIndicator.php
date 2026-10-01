@@ -6,6 +6,11 @@ namespace NeuronTui\View;
 
 use Closure;
 
+use function count;
+use function floor;
+use function implode;
+use function intdiv;
+
 /**
  * The animation that tells a person the Agent is still busy.
  *
@@ -32,9 +37,7 @@ final class WorkingIndicator
 
     private ?HistoryEntry $line = null;
 
-    public function __construct(private readonly HistoryPane $history)
-    {
-    }
+    public function __construct(private readonly HistoryPane $history) {}
 
     /**
      * Shows the indicator, counting from the moment given.

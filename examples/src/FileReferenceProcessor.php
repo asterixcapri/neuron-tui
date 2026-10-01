@@ -10,6 +10,16 @@ use NeuronAI\Chat\Messages\UserMessage;
 use NeuronInteraction\Message\UserMessageProcessorInterface;
 use RuntimeException;
 
+use function array_unique;
+use function file_get_contents;
+use function is_dir;
+use function is_file;
+use function is_string;
+use function preg_match;
+use function preg_match_all;
+use function realpath;
+use function str_starts_with;
+
 /** Expands @file references for the Agent without displaying the added contents. */
 final readonly class FileReferenceProcessor implements UserMessageProcessorInterface
 {

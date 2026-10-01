@@ -301,8 +301,8 @@ final class ConversationViewTest extends TestCase
         );
 
         foreach ([
-            static fn () => new ChoiceOption('haiku', "\x00\x07"),
-            static fn () => new ChoiceOption(
+            static fn() => new ChoiceOption('haiku', "\x00\x07"),
+            static fn() => new ChoiceOption(
                 'haiku',
                 'Claude Haiku',
                 "\x00\x07",

@@ -10,6 +10,9 @@ use Symfony\Component\Tui\Event\ChangeEvent;
 use Symfony\Component\Tui\Render\RenderContext;
 use Symfony\Component\Tui\Widget\EditorWidget;
 
+use function array_slice;
+use function substr_count;
+
 /**
  * @internal
  */

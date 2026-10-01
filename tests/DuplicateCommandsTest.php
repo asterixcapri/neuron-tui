@@ -16,6 +16,9 @@ use Revolt\EventLoop;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
+use function array_map;
+use function strpos;
+
 final class DuplicateCommandsTest extends TestCase
 {
     public function testTheFirstDuplicateRunsForEveryWayCommandsCanBeAdded(): void
@@ -24,12 +27,12 @@ final class DuplicateCommandsTest extends TestCase
          * @var array<string, Closure(Commands, CommandInterface, CommandInterface): Commands>
          */
         $mount = [
-            'separate calls' => static fn (
+            'separate calls' => static fn(
                 Commands $commands,
                 CommandInterface $first,
                 CommandInterface $second,
             ): Commands => $commands->addCommand($first)->addCommand($second),
-            'one array' => static fn (
+            'one array' => static fn(
                 Commands $commands,
                 CommandInterface $first,
                 CommandInterface $second,
@@ -62,7 +65,7 @@ final class DuplicateCommandsTest extends TestCase
             );
             $terminal = new VirtualTerminal();
             EventLoop::queue(
-                static fn () => $terminal->simulateInput("/clear\r"),
+                static fn() => $terminal->simulateInput("/clear\r"),
             );
 
             (new Tui((new Agent())->setThreadId('test-thread'), $terminal, commands: $add(new Commands(), $first, $second)))->run();
@@ -83,7 +86,7 @@ final class DuplicateCommandsTest extends TestCase
             'Second member of the final array.',
         ];
         $commands = array_map(
-            static fn (string $description): CommandInterface => self::command(
+            static fn(string $description): CommandInterface => self::command(
                 '/clear',
                 $description,
             ),
@@ -95,7 +98,7 @@ final class DuplicateCommandsTest extends TestCase
 
         EventLoop::delay(
             0.05,
-            static fn () => $terminal->simulateInput('/clear'),
+            static fn() => $terminal->simulateInput('/clear'),
         );
         EventLoop::delay(
             0.1,
@@ -150,7 +153,7 @@ final class DuplicateCommandsTest extends TestCase
         string $description,
         ?Closure $run = null,
     ): CommandInterface {
-        return new class($name, $description, $run) implements CommandInterface {
+        return new class ($name, $description, $run) implements CommandInterface {
             /**
              * @param Closure(CommandAdapterInterface<mixed>, string): void|null $run
              */
@@ -158,8 +161,7 @@ final class DuplicateCommandsTest extends TestCase
                 private readonly string $commandName,
                 private readonly string $description,
                 private readonly ?Closure $run,
-            ) {
-            }
+            ) {}
 
             public function name(): string
             {

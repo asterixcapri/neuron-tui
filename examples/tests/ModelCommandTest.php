@@ -49,14 +49,14 @@ final class ModelCommandTest extends TestCase
             $history->addMessage(new UserMessage('Keep this conversation'));
             $terminal = new VirtualTerminal();
             $beforeSelection = null;
-            EventLoop::queue(static fn () => $terminal->simulateInput($selection ? "/model\r" : "/model {$model}\r"));
+            EventLoop::queue(static fn() => $terminal->simulateInput($selection ? "/model\r" : "/model {$model}\r"));
             if ($selection) {
                 EventLoop::delay(0.04, static function () use ($terminal, $store, &$beforeSelection): void {
                     $beforeSelection = $store->entries();
                     $terminal->simulateInput("\r");
                 });
             }
-            EventLoop::delay(0.08, static fn () => $terminal->simulateInput("\x03"));
+            EventLoop::delay(0.08, static fn() => $terminal->simulateInput("\x03"));
 
             $tui = Tui::make($agent, $terminal, (new Commands())->addCommand(new ModelCommand()), configurationStore: $store, sessionStore: $sessions, session: $session);
             $tui->run();
@@ -87,9 +87,9 @@ final class ModelCommandTest extends TestCase
         $provider = new FakeAIProvider();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal();
-        EventLoop::queue(static fn () => $terminal->simulateInput("/model\r"));
-        EventLoop::delay(0.04, static fn () => $terminal->simulateInput("\x1b"));
-        EventLoop::delay(0.08, static fn () => $terminal->simulateInput("\x03"));
+        EventLoop::queue(static fn() => $terminal->simulateInput("/model\r"));
+        EventLoop::delay(0.04, static fn() => $terminal->simulateInput("\x1b"));
+        EventLoop::delay(0.08, static fn() => $terminal->simulateInput("\x03"));
 
         $tui = Tui::make($agent, $terminal, (new Commands())->addCommand(new ModelCommand()), configurationStore: $store);
         $tui->run();
@@ -107,8 +107,8 @@ final class ModelCommandTest extends TestCase
         $provider = new FakeAIProvider();
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal();
-        EventLoop::queue(static fn () => $terminal->simulateInput("/model unknown:model\r"));
-        EventLoop::delay(0.08, static fn () => $terminal->simulateInput("\x03"));
+        EventLoop::queue(static fn() => $terminal->simulateInput("/model unknown:model\r"));
+        EventLoop::delay(0.08, static fn() => $terminal->simulateInput("\x03"));
 
         $tui = Tui::make($agent, $terminal, (new Commands())->addCommand(new ModelCommand()), configurationStore: $store);
         $tui->run();
@@ -133,8 +133,8 @@ final class ModelCommandTest extends TestCase
             $terminal = new VirtualTerminal();
             $sessions = new SessionStore(new InMemoryStorage(), 'demo-user');
             $session = $sessions->create();
-            EventLoop::queue(static fn () => $terminal->simulateInput("/model openai:gpt-5.4-nano\r"));
-            EventLoop::delay(0.08, static fn () => $terminal->simulateInput("\x03"));
+            EventLoop::queue(static fn() => $terminal->simulateInput("/model openai:gpt-5.4-nano\r"));
+            EventLoop::delay(0.08, static fn() => $terminal->simulateInput("\x03"));
 
             $tui = Tui::make($agent, $terminal, (new Commands())->addCommand(new ModelCommand()), configurationStore: $store, sessionStore: $sessions, session: $session);
             $tui->run();
