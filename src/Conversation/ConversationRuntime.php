@@ -25,15 +25,22 @@ use function microtime;
 final class ConversationRuntime
 {
     private readonly WorkingIndicator $workingIndicator;
+
     /** @var Future<mixed>|null */
     private ?Future $runningTurn = null;
+
     private bool $stopped = false;
+
     private bool $preparingTurn = false;
+
     private readonly TurnRenderer $renderer;
+
     /** @var Generator<int, object, mixed, AgentState>|null */
     private ?Generator $readyStream = null;
+
     /** @var list<PendingMessage> */
     private array $pendingMessages = [];
+
     private ?string $displayedHistory = null;
 
     public function __construct(
@@ -65,12 +72,14 @@ final class ConversationRuntime
             $this->pendingMessages[] = $pending;
             $this->showQueuedMessages();
         }
+
         $this->view->emptyComposer();
     }
 
     private function prepareTurn(PendingMessage $pending): void
     {
         $this->preparingTurn = true;
+
         try {
             $prepared = $pending->userInput
                 ? $this->core->prepareMessage($pending->message)
@@ -95,71 +104,98 @@ final class ConversationRuntime
     public function synchronizeHistory(): void
     {
         $history = $this->core->agent()->getChatHistory();
+
         if ($history->getThreadId() === $this->displayedHistory) {
             return;
         }
+
         $this->view->showHistory($history->getMessages());
         $this->displayedHistory = $history->getThreadId();
     }
+
     public function agent(): Agent
     {
         return $this->core->agent();
     }
+
     public function session(): Session
     {
         return $this->core->session();
     }
+
     public function isBusy(): bool
     {
-        return $this->preparingTurn || $this->readyStream !== null || $this->runningTurn !== null || $this->pendingMessages !== [];
+        return $this->preparingTurn
+            || $this->readyStream !== null
+            || $this->runningTurn !== null
+            || $this->pendingMessages !== [];
     }
+
     public function supportsResponseStop(): bool
     {
         return $this->core->supportsResponseStop();
     }
+
     public function isStopped(): bool
     {
         return $this->stopped;
     }
+
     public function useAgent(Agent $agent): void
     {
         $this->core->useAgent($agent);
     }
+
     public function useSession(Session $session): void
     {
         $this->core->useSession($session);
         $this->displayedHistory = null;
     }
+
     public function requestInterruption(): void
     {
-        if ($this->runningTurn === null || $this->runningTurn->isComplete() || !$this->core->requestInterruption()) {
+        if (
+            $this->runningTurn === null
+            || $this->runningTurn->isComplete()
+            || !$this->core->requestInterruption()
+        ) {
             return;
         }
+
         $this->view->stopping();
         $this->view->paintPendingChanges();
     }
+
     public function tick(): bool
     {
         if ($this->stopped) {
             return false;
         }
+
         if ($this->runningTurn !== null) {
             if (!$this->runningTurn->isComplete()) {
                 $this->workingIndicator->advance(microtime(true));
+
                 return true;
             }
+
             try {
                 $this->runningTurn->await();
-            } catch (Throwable) { /* The renderer already presented the execution error. */
+            } catch (Throwable) {
+                /* The renderer already presented the execution error. */
             }
+
             $this->runningTurn = null;
             $this->workingIndicator->stop();
             $this->view->ready();
+
             return $this->prepareNextTurn();
         }
+
         if ($this->readyStream === null) {
             return !$this->preparingTurn && $this->prepareNextTurn();
         }
+
         $stream = $this->readyStream;
         $this->readyStream = null;
         $this->runningTurn = async(function () use ($stream): void {
@@ -170,6 +206,7 @@ final class ConversationRuntime
                 $this->titleGeneration?->schedule($session, $agent);
             }
         });
+
         return true;
     }
 
@@ -178,8 +215,10 @@ final class ConversationRuntime
         while ($this->pendingMessages !== []) {
             $pending = array_shift($this->pendingMessages);
             $this->showQueuedMessages();
+
             try {
                 $this->prepareTurn($pending);
+
                 return true;
             } catch (Throwable $error) {
                 $this->view->showError($error->getMessage());
@@ -189,6 +228,7 @@ final class ConversationRuntime
                 }
             }
         }
+
         return false;
     }
 
