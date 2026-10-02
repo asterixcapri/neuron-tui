@@ -56,8 +56,6 @@ final class Tui
 
     private SessionStore $sessionStore;
 
-    private bool $sessionStoreConfigured = false;
-
     private ?Session $session = null;
 
     private ?StopSignal $stopSignal = null;
@@ -93,7 +91,6 @@ final class Tui
     {
         $this->ensureNotStarted();
         $this->sessionStore = $sessionStore;
-        $this->sessionStoreConfigured = true;
 
         return $this;
     }
@@ -194,10 +191,6 @@ final class Tui
     {
         $this->ensureNotStarted();
         $this->started = true;
-
-        if ($this->session !== null && !$this->sessionStoreConfigured) {
-            throw new InvalidArgumentException('An initial Session requires an explicit SessionStore.');
-        }
 
         $terminal = $this->terminal ?? new Terminal();
         if (

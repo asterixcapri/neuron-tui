@@ -99,7 +99,7 @@ final class SessionCompositionTest extends TestCase
         }
     }
 
-    public function testAnInitialSessionRequiresAnExplicitStoreAtStartup(): void
+    public function testStartupRejectsAnExternalSessionWithTheDefaultStore(): void
     {
         $store = new SessionStore(new InMemoryStorage(), 'alice');
         $session = $store->create();
@@ -108,7 +108,7 @@ final class SessionCompositionTest extends TestCase
             ->setTerminal(new VirtualTerminal());
 
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('An initial Session requires an explicit SessionStore.');
+        $this->expectExceptionMessage('The selected Session does not belong to this SessionStore.');
         $tui->run();
     }
 
@@ -398,6 +398,19 @@ final class SessionCompositionTest extends TestCase
         Tui::make(new Agent())
             ->setSessionStore(new SessionStore($storage, 'alice'))
             ->setSession($foreign)
+            ->setTerminal(new VirtualTerminal())
+            ->run();
+    }
+
+    public function testStartupRejectsASessionAbsentFromTheSuppliedStore(): void
+    {
+        $session = (new SessionStore(new InMemoryStorage(), 'alice'))->create();
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('The selected Session does not belong to this SessionStore.');
+
+        Tui::make(new Agent())
+            ->setSessionStore(new SessionStore(new InMemoryStorage(), 'alice'))
+            ->setSession($session)
             ->setTerminal(new VirtualTerminal())
             ->run();
     }

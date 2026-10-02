@@ -195,7 +195,8 @@ Tui::make($agent)
     ->run();
 ```
 
-The initial Session must belong to the supplied SessionStore. `setSession()`
+At startup, Conversation reloads the initial Session by its key from the supplied
+SessionStore and rejects it if the Store cannot read it. `setSession()`
 without `setSessionStore()` is rejected at startup; the two setters can be called
 in either order before `run()`. An Agent that already
 contains messages requires an explicit initial Session; that Session determines
