@@ -12,9 +12,9 @@ use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Providers\ProviderResponse;
 use NeuronAI\Testing\FakeAIProvider;
-use NeuronInteraction\Conversation;
 use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Message\UserMessageProcessorInterface;
+use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Tui;
 use PHPUnit\Framework\TestCase;
@@ -58,7 +58,9 @@ final class MessageQueueTest extends TestCase
         };
         $inputs = new InputHistory(new InMemoryStorage());
         $terminal = new VirtualTerminal(rows: 40);
-        $conversation = new Conversation((new Agent())->setAiProvider($provider), userMessageProcessors: $processor);
+        $tui = Tui::make((new Agent())->setAiProvider($provider))
+            ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
+            ->setUserMessageProcessors($processor);
         EventLoop::queue(static fn() => $terminal->simulateInput("First\r"));
         EventLoop::delay(0.03, static fn() => $terminal->simulateInput("Invalid\rNext\rNewer draft"));
         $beforeCompletion = null;
@@ -66,7 +68,10 @@ final class MessageQueueTest extends TestCase
             $beforeCompletion = $processor->prepared;
         });
         EventLoop::delay(0.4, static fn() => $terminal->simulateInput("\x03"));
-        Tui::make($conversation, $terminal, inputHistory: $inputs)->run();
+        $tui
+            ->setTerminal($terminal)
+            ->setInputHistory($inputs)
+            ->run();
 
         self::assertSame(['First'], $beforeCompletion);
         self::assertSame(['First', 'Invalid', 'Next'], $processor->prepared);
@@ -94,11 +99,14 @@ final class MessageQueueTest extends TestCase
             }
         };
         $terminal = new VirtualTerminal(rows: 40);
-        $conversation = new Conversation((new Agent())->setAiProvider($provider));
+        $tui = Tui::make((new Agent())->setAiProvider($provider))
+            ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'));
         EventLoop::queue(static fn() => $terminal->simulateInput("First\rNext\r"));
         EventLoop::delay(0.3, static fn() => $terminal->simulateInput("\x03"));
 
-        Tui::make($conversation, $terminal)->run();
+        $tui
+            ->setTerminal($terminal)
+            ->run();
 
         self::assertCount(2, $provider->getRecorded());
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -132,11 +140,15 @@ final class MessageQueueTest extends TestCase
             }
         };
         $terminal = new VirtualTerminal(rows: 30);
-        $conversation = new Conversation((new Agent())->setAiProvider($provider), userMessageProcessors: $processor);
+        $tui = Tui::make((new Agent())->setAiProvider($provider))
+            ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
+            ->setUserMessageProcessors($processor);
         EventLoop::queue(static fn() => $terminal->simulateInput("First\r"));
         EventLoop::delay(0.03, static fn() => $terminal->simulateInput("Recover me\r"));
         EventLoop::delay(0.25, static fn() => $terminal->simulateInput("\x03"));
-        Tui::make($conversation, $terminal)->run();
+        $tui
+            ->setTerminal($terminal)
+            ->run();
         self::assertCount(1, $provider->getRecorded());
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('Preparation failed', $display);

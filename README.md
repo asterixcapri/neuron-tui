@@ -28,21 +28,19 @@ Composer also installs Neuron Interaction and the other required dependencies.
 
 ## Usage
 
-Configure the Agent in your application, compose a core Conversation,
-then pass that Conversation to `Tui`. Here,
+Configure the Agent in your application, then pass it to `Tui`. The TUI creates its Conversation when `run()` starts. Here,
 `$provider` is your configured `NeuronAI\Providers\AIProviderInterface`
 implementation:
 
 ```php
 use NeuronAI\Agent\Agent;
-use NeuronInteraction\Conversation;
 use NeuronTui\Tui;
 
 $agent = Agent::make();
 $agent->setAiProvider($provider);
-$conversation = new Conversation($agent);
 
-Tui::make($conversation)->run();
+Tui::make($agent)
+    ->run();
 ```
 
 `Tui` starts a new conversation and accepts messages. Use `Ctrl+C` to exit.
@@ -55,7 +53,7 @@ be supplied when the terminal should identify a particular Agent or product:
 ```php
 use NeuronTui\Tui;
 
-Tui::make($conversation)
+Tui::make($agent)
     ->setTitle('Research Agent')
     ->setSubtitle('Ask about the knowledge base')
     ->setFiglet('Research', 'slant')
@@ -85,7 +83,9 @@ $commands = (new Commands())->addCommand([
     new LeaveCommand(),
 ]);
 
-Tui::make($conversation, commands: $commands)->run();
+Tui::make($agent)
+    ->setCommands($commands)
+    ->run();
 ```
 
 Each standard command accepts a custom slash-prefixed name: `new LeaveCommand('/quit')`
@@ -130,7 +130,9 @@ final class ReviewCommand implements CommandInterface
     }
 }
 
-Tui::make($conversation, commands: (new Commands())->addCommand(new ReviewCommand()))->run();
+Tui::make($agent)
+    ->setCommands((new Commands())->addCommand(new ReviewCommand()))
+    ->run();
 ```
 
 Commands communicate through `notify()`, `warn()` and `error()`. Neuron TUI
@@ -147,8 +149,7 @@ Use `/clear` to start a new conversation and `/resume` to return to a saved one.
 In the session list, type to filter, use the arrow keys to move, Enter to select
 and Escape to cancel.
 
-To keep conversations between runs, configure a file-backed `SessionStore` and
-pass an initial Session from it:
+To keep conversations between runs, supply a file-backed `SessionStore`:
 
 ```php
 use NeuronInteraction\Command\ClearCommand;
@@ -161,29 +162,50 @@ use NeuronTui\Tui;
 $storage = new FileStorage(__DIR__ . '/.storage');
 $sessionStore = new SessionStore($storage, 'local-user');
 
-$session = $sessionStore->create();
-
 $commands = (new Commands())->addCommand([
     new ClearCommand(),
     new ResumeCommand()
 ]);
 
-Tui::make(
-    new \NeuronInteraction\Conversation($agent, $sessionStore, session: $session),
-    commands: $commands,
-)->run();
+Tui::make($agent)
+    ->setSessionStore($sessionStore)
+    ->setCommands($commands)
+    ->run();
 ```
 
 Use a user identifier appropriate to your application in place of `local-user`.
-By default, Sessions last only for the current run. Session selection can replace
-the Agent instance; keep a reference to the Conversation and use
-`$conversation->agent()` to retrieve the currently selected Agent.
+SessionStore is optional. Without `setSessionStore()`, each TUI uses its own
+in-memory Store with the local owner. Supply a persistent Store to keep sessions
+between runs. An explicit initial Session requires an explicit SessionStore.
 
-Every Conversation belongs to its SessionStore from construction.
-Without `session`, the Conversation creates an empty Session in the supplied Store,
-or in its default in-memory Store. To reopen a conversation, pass `session: $sessionStore->read($key)` after
-checking that it exists. Pass the matching SessionStore and Session to the Conversation. An Agent that already contains messages requires an explicit Session;
-that Session determines the conversation displayed and continued by TUI.
+Without `setSession()`, `run()` creates an empty Session in the configured or
+default Store.
+To reopen a conversation, read and validate the initial Session before starting:
+
+```php
+$session = $sessionStore->read($key);
+if ($session === null) {
+    throw new InvalidArgumentException('The requested session does not exist.');
+}
+
+Tui::make($agent)
+    ->setSessionStore($sessionStore)
+    ->setSession($session)
+    ->setCommands($commands)
+    ->run();
+```
+
+The initial Session must belong to the supplied SessionStore. `setSession()`
+without `setSessionStore()` is rejected at startup; the two setters can be called
+in either order before `run()`. An Agent that already
+contains messages requires an explicit initial Session; that Session determines
+the conversation displayed and continued by TUI. Configuring the TUI creates no
+Session and does not bind the Agent. Startup validates and creates the Conversation
+before entering the terminal event loop.
+
+Session selection can replace the Agent instance. Commands retrieve the currently
+selected Agent through `$adapter->agent()`; the host does not receive the internal
+Conversation or an Agent accessor on Tui.
 
 Commands use `useAgent($agent)` to change capabilities while keeping the current
 Session, and `useSession($session)` to select another conversation while keeping
@@ -204,7 +226,10 @@ $settings = new ConfigurationStore(new FileStorage(__DIR__ . '/.storage'), 'loca
 $model = $settings->read('model', 'openai:gpt-5.4-nano');
 $settings->write('model', 'openai:gpt-5.4-mini');
 
-Tui::make($conversation, configurationStore: $settings)->run();
+Tui::make($agent)
+    ->setSessionStore($sessionStore)
+    ->setConfigurationStore($settings)
+    ->run();
 ```
 
 The fallback determines the expected type: use `read('retries', 3)` for an
@@ -226,11 +251,16 @@ use NeuronTui\Tui;
 
 $inputHistory = new InputHistory(new FileStorage(__DIR__ . '/.storage'));
 
-Tui::make($conversation, inputHistory: $inputHistory)->run();
+Tui::make($agent)
+    ->setSessionStore($sessionStore)
+    ->setInputHistory($inputHistory)
+    ->run();
 ```
 
-You can pass `inputHistory`, `configurationStore` and `commands`
-together in the same `Tui::make()` call.
+Configure input history, settings and commands with `setInputHistory()`,
+`setConfigurationStore()` and `setCommands()` before `run()`. Omitted input history
+and settings use independent in-memory storage. Every setter is fluent and rejects
+changes once startup begins; each TUI instance can run only once.
 
 ## Stop a response
 
@@ -266,7 +296,9 @@ $agent->setAiProvider(new OpenAIResponses(
     httpClient: $client,
 ));
 
-Tui::make(new \NeuronInteraction\Conversation($agent, stopSignal: $stopSignal))
+Tui::make($agent)
+    ->setSessionStore($sessionStore)
+    ->setStopSignal($stopSignal)
     ->run();
 ```
 
@@ -285,7 +317,6 @@ display. Implement `NeuronInteraction\Message\UserMessageProcessorInterface`:
 including live input, queued messages, Command prompts, and resumed History.
 
 ```php
-use NeuronInteraction\Conversation;
 use NeuronInteraction\Message\UserMessageProcessors;
 use NeuronTui\Tui;
 
@@ -293,8 +324,10 @@ $processors = (new UserMessageProcessors())->addProcessor([
     new FileReferenceProcessor(__DIR__),
 ]);
 
-$conversation = new Conversation($agent, $sessionStore, userMessageProcessors: $processors);
-Tui::make($conversation)->run();
+Tui::make($agent)
+    ->setSessionStore($sessionStore)
+    ->setUserMessageProcessors($processors)
+    ->run();
 ```
 
 The TUI shows the display projection immediately, clears the composer and queues

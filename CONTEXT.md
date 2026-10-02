@@ -7,7 +7,7 @@ Agent.
 
 **Neuron TUI**:
 The reusable terminal Adapter through which a person converses with an Agent
-configured by a Host Application through its Conversation.
+configured by a Host Application. It manages the active Conversation.
 _Avoid_: Neuron CLI, executable, command
 
 **Agent**:
@@ -17,8 +17,9 @@ Agents, but Neuron TUI sees only the Agent it converses with.
 _Avoid_: Bot, model
 
 **Host Application**:
-The application that configures the Agent, composes the Conversation
-and starts the interaction.
+The application that configures the Agent and terminal interaction, and starts
+the terminal Adapter. It may supply its own session persistence and interaction
+dependencies.
 _Avoid_: Neuron TUI, library
 
 **Conversation TUI**:

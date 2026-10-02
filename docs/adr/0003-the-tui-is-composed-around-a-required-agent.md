@@ -1,4 +1,20 @@
-# The TUI is composed around a host-supplied Conversation
+# The TUI owns its Conversation
+
+_2026-10-02 — Fluent composition revision supersedes host-supplied Conversation
+composition. The Host Application passes a configured Agent to Tui and supplies
+optional dependencies, including SessionStore, through fluent setters
+before run. Tui constructs its Conversation once startup begins, after checking
+the terminal. An optional initial Session is selected directly; otherwise the
+Conversation creates a new Session in the configured Store, or in an independent
+in-memory Store when none is supplied. Selecting an initial Session requires an
+explicit Store; Session and Store setters may be called in either order before
+startup. Configuration creates
+no temporary Session. This keeps execution and session-switching operations out
+of the host's TUI setup interface without adding a separate configuration object.
+Conversation retains its constructor-based composition and operational methods
+for other adapters, with a required SessionStore. The revisions below are
+historical; turn scheduling, command admission and response-stop behavior are
+preserved._
 
 _2026-10-02 — Naming revision: the core class
 `NeuronInteraction\Conversation\ConversationRuntime` becomes
