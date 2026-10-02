@@ -6,7 +6,6 @@ namespace NeuronTui;
 
 use InvalidArgumentException;
 use LogicException;
-use NeuronAI\Agent\Agent;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Configuration\ConfigurationStore;
 use NeuronInteraction\Conversation;
@@ -120,12 +119,6 @@ final class Tui
         $this->figletFont = $font;
 
         return $this;
-    }
-
-    /** The Agent currently answering, including a copy bound to a selected Session. */
-    public function agent(): Agent
-    {
-        return $this->conversation->agent();
     }
 
     public function run(): void

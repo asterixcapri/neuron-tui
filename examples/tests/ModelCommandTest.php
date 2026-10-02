@@ -59,7 +59,8 @@ final class ModelCommandTest extends TestCase
             }
             EventLoop::delay(0.08, static fn() => $terminal->simulateInput("\x03"));
 
-            $tui = Tui::make(new Conversation($agent, $sessions, session: $session), $terminal, (new Commands())->addCommand(new ModelCommand()), configurationStore: $store);
+            $conversation = new Conversation($agent, $sessions, session: $session);
+            $tui = Tui::make($conversation, $terminal, (new Commands())->addCommand(new ModelCommand()), configurationStore: $store);
             $tui->run();
 
             self::assertSame($model, (new ConfigurationStore($storage, 'demo-user'))->read('model'));
@@ -67,8 +68,8 @@ final class ModelCommandTest extends TestCase
             if ($selection) {
                 self::assertSame(['theme' => 'dark'], $beforeSelection);
             }
-            self::assertInstanceOf(OpenAIResponses::class, $tui->agent()->getProvider());
-            self::assertSame($history->getThreadId(), $tui->agent()->getChatHistory()->getThreadId());
+            self::assertInstanceOf(OpenAIResponses::class, $conversation->agent()->getProvider());
+            self::assertSame($history->getThreadId(), $conversation->agent()->getChatHistory()->getThreadId());
             self::assertSame('Keep this conversation', $history->getMessages()[0]->getContent());
             self::assertStringContainsString("Model changed to {$model}.", AnsiUtils::stripAnsiCodes($terminal->getOutput()));
         } finally {
@@ -92,11 +93,12 @@ final class ModelCommandTest extends TestCase
         EventLoop::delay(0.04, static fn() => $terminal->simulateInput("\x1b"));
         EventLoop::delay(0.08, static fn() => $terminal->simulateInput("\x03"));
 
-        $tui = Tui::make(new Conversation($agent, new SessionStore(new InMemoryStorage(), 'local')), $terminal, (new Commands())->addCommand(new ModelCommand()), configurationStore: $store);
+        $conversation = new Conversation($agent, new SessionStore(new InMemoryStorage(), 'local'));
+        $tui = Tui::make($conversation, $terminal, (new Commands())->addCommand(new ModelCommand()), configurationStore: $store);
         $tui->run();
 
         self::assertSame(['model' => 'previous'], $store->entries());
-        self::assertSame($provider, $tui->agent()->getProvider());
+        self::assertSame($provider, $conversation->agent()->getProvider());
         self::assertStringNotContainsString('Model changed to', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
     }
 
@@ -111,11 +113,12 @@ final class ModelCommandTest extends TestCase
         EventLoop::queue(static fn() => $terminal->simulateInput("/model unknown:model\r"));
         EventLoop::delay(0.08, static fn() => $terminal->simulateInput("\x03"));
 
-        $tui = Tui::make(new Conversation($agent, new SessionStore(new InMemoryStorage(), 'local')), $terminal, (new Commands())->addCommand(new ModelCommand()), configurationStore: $store);
+        $conversation = new Conversation($agent, new SessionStore(new InMemoryStorage(), 'local'));
+        $tui = Tui::make($conversation, $terminal, (new Commands())->addCommand(new ModelCommand()), configurationStore: $store);
         $tui->run();
 
         self::assertSame('previous', $store->read('model'));
-        self::assertSame($provider, $tui->agent()->getProvider());
+        self::assertSame($provider, $conversation->agent()->getProvider());
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('Unknown provider: unknown.', $display);
         self::assertStringNotContainsString('Model changed to', $display);
@@ -137,11 +140,12 @@ final class ModelCommandTest extends TestCase
             EventLoop::queue(static fn() => $terminal->simulateInput("/model openai:gpt-5.4-nano\r"));
             EventLoop::delay(0.08, static fn() => $terminal->simulateInput("\x03"));
 
-            $tui = Tui::make(new Conversation($agent, $sessions, session: $session), $terminal, (new Commands())->addCommand(new ModelCommand()), configurationStore: $store);
+            $conversation = new Conversation($agent, $sessions, session: $session);
+            $tui = Tui::make($conversation, $terminal, (new Commands())->addCommand(new ModelCommand()), configurationStore: $store);
             $tui->run();
 
             self::assertSame('previous', $store->read('model'));
-            self::assertSame($session->getKey(), $tui->agent()->getThreadId());
+            self::assertSame($session->getKey(), $conversation->agent()->getThreadId());
             $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
             self::assertStringContainsString('Preferences unavailable', $display);
             self::assertStringNotContainsString('Model changed to', $display);

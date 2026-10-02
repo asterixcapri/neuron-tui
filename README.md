@@ -176,7 +176,8 @@ Tui::make(
 
 Use a user identifier appropriate to your application in place of `local-user`.
 By default, Sessions last only for the current run. Session selection can replace
-the Agent instance; use `$tui->agent()` to retrieve the currently selected Agent.
+the Agent instance; keep a reference to the Conversation and use
+`$conversation->agent()` to retrieve the currently selected Agent.
 
 Every Conversation belongs to its SessionStore from construction.
 Without `session`, the Conversation creates an empty Session in the supplied Store,

@@ -54,12 +54,13 @@ final class HttpResponseStopTest extends TestCase
         EventLoop::delay(0.18, static fn() => $terminal->simulateInput("!\r"));
         EventLoop::delay(0.3, static fn() => $terminal->simulateInput("\x03"));
 
-        $tui = new Tui(new Conversation($agent, new SessionStore(new InMemoryStorage(), 'local'), stopSignal: $stopSignal), $terminal);
+        $conversation = new Conversation($agent, new SessionStore(new InMemoryStorage(), 'local'), stopSignal: $stopSignal);
+        $tui = new Tui($conversation, $terminal);
         $tui->run();
 
-        self::assertNotSame($history->getThreadId(), $tui->agent()->getChatHistory()->getThreadId());
-        self::assertSame(['First', 'Partial', 'Second', 'Second answer', 'Third', 'Third answer', 'Draf!t', 'Draft answer'], array_map(static fn(Message $message): ?string => $message->getContent(), $tui->agent()->getChatHistory()->getMessages()));
-        self::assertSame('stopped', $tui->agent()->getChatHistory()->getMessages()[1]->getMetadata('stop_reason'));
+        self::assertNotSame($history->getThreadId(), $conversation->agent()->getChatHistory()->getThreadId());
+        self::assertSame(['First', 'Partial', 'Second', 'Second answer', 'Third', 'Third answer', 'Draf!t', 'Draft answer'], array_map(static fn(Message $message): ?string => $message->getContent(), $conversation->agent()->getChatHistory()->getMessages()));
+        self::assertSame('stopped', $conversation->agent()->getChatHistory()->getMessages()[1]->getMetadata('stop_reason'));
         self::assertCount(4, array_filter($client->requests, static fn(HttpRequest $request): bool => is_array($request->body) && ($request->body['stream'] ?? false) === true));
         self::assertSame(1, $first->closes);
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -83,12 +84,13 @@ final class HttpResponseStopTest extends TestCase
         EventLoop::queue(static fn() => $terminal->simulateInput("Question\r"));
         EventLoop::delay(0.15, static fn() => $terminal->simulateInput("\x03"));
 
-        $tui = Tui::make(new Conversation($agent, new SessionStore(new InMemoryStorage(), 'local'), stopSignal: $stopSignal), $terminal, (new Commands())->addCommand(new HelpCommand()));
+        $conversation = new Conversation($agent, new SessionStore(new InMemoryStorage(), 'local'), stopSignal: $stopSignal);
+        $tui = Tui::make($conversation, $terminal, (new Commands())->addCommand(new HelpCommand()));
         $tui->run();
 
         self::assertSame(0, $stream->closes);
         self::assertStringNotContainsString('Stop requested', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
-        self::assertCount(2, $tui->agent()->getChatHistory()->getMessages());
+        self::assertCount(2, $conversation->agent()->getChatHistory()->getMessages());
     }
 
     public function testTransportFailureRemainsAnErrorAndTheNextTurnCanRun(): void
@@ -106,10 +108,11 @@ final class HttpResponseStopTest extends TestCase
         EventLoop::queue(static fn() => $terminal->simulateInput("Question\r"));
         EventLoop::delay(0.18, static fn() => $terminal->simulateInput("\x03"));
 
-        $tui = Tui::make(new Conversation($agent, new SessionStore(new InMemoryStorage(), 'local'), stopSignal: $stopSignal), $terminal);
+        $conversation = new Conversation($agent, new SessionStore(new InMemoryStorage(), 'local'), stopSignal: $stopSignal);
+        $tui = Tui::make($conversation, $terminal);
         $tui->run();
 
-        self::assertSame(['Next', 'Next answer'], array_map(static fn(Message $message): ?string => $message->getContent(), $tui->agent()->getChatHistory()->getMessages()));
+        self::assertSame(['Next', 'Next answer'], array_map(static fn(Message $message): ?string => $message->getContent(), $conversation->agent()->getChatHistory()->getMessages()));
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('RuntimeException: Transport failed', $display);
         self::assertStringNotContainsString('Stopped', $display);

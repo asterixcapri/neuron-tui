@@ -62,16 +62,17 @@ final class SessionCompositionTest extends TestCase
             $beforeClear = null;
             $originalKey = null;
             $afterClear = null;
-            $tui = Tui::make(new Conversation($agent, $store, session: $session), $terminal, (new Commands())->addCommand([new ClearCommand(), new ResumeCommand(), $inspect]));
+            $conversation = new Conversation($agent, $store, session: $session);
+            $tui = Tui::make($conversation, $terminal, (new Commands())->addCommand([new ClearCommand(), new ResumeCommand(), $inspect]));
             EventLoop::queue(static fn() => $terminal->simulateInput("Later question\r"));
             EventLoop::delay(0.12, static fn() => $terminal->simulateInput("/inspect\r"));
-            EventLoop::delay(0.15, static function () use ($tui, $terminal, &$beforeClear, &$originalKey): void {
-                $beforeClear = $tui->agent()->getChatHistory()->getMessages();
-                $originalKey = $tui->agent()->getThreadId();
+            EventLoop::delay(0.15, static function () use ($conversation, $terminal, &$beforeClear, &$originalKey): void {
+                $beforeClear = $conversation->agent()->getChatHistory()->getMessages();
+                $originalKey = $conversation->agent()->getThreadId();
                 $terminal->simulateInput("/clear\r");
             });
-            EventLoop::delay(0.19, static function () use ($tui, $terminal, &$afterClear): void {
-                $afterClear = $tui->agent()->getChatHistory()->getMessages();
+            EventLoop::delay(0.19, static function () use ($conversation, $terminal, &$afterClear): void {
+                $afterClear = $conversation->agent()->getChatHistory()->getMessages();
                 $terminal->simulateInput("/resume\r");
             });
             EventLoop::delay(0.23, static fn() => $terminal->simulateInput("\r"));
@@ -82,8 +83,8 @@ final class SessionCompositionTest extends TestCase
             self::assertIsArray($beforeClear);
             self::assertCount($composition === 'preselected' ? 4 : 2, $beforeClear);
             self::assertSame([], $afterClear);
-            self::assertEquals($beforeClear, $tui->agent()->getChatHistory()->getMessages());
-            self::assertSame($originalKey, $tui->agent()->getThreadId());
+            self::assertEquals($beforeClear, $conversation->agent()->getChatHistory()->getMessages());
+            self::assertSame($originalKey, $conversation->agent()->getThreadId());
             self::assertIsString($originalKey);
             self::assertInstanceOf(SessionStore::class, $currentStore);
             $stored = $currentStore->read($originalKey);
@@ -98,14 +99,15 @@ final class SessionCompositionTest extends TestCase
         $earlier = $store->create();
         SessionHistory::of($earlier)->addMessage(new UserMessage('Stored subject'));
         $terminal = new VirtualTerminal();
-        $tui = Tui::make(new Conversation(new Agent(), $store), $terminal);
+        $conversation = new Conversation(new Agent(), $store);
+        $tui = Tui::make($conversation, $terminal);
         EventLoop::delay(0.05, static fn() => $terminal->simulateInput("\x03"));
 
         $tui->run();
 
-        self::assertNotSame($earlier->getKey(), $tui->agent()->getThreadId());
-        self::assertSame([], $tui->agent()->getChatHistory()->getMessages());
-        self::assertNotNull($store->read($tui->agent()->getChatHistory()->getThreadId()));
+        self::assertNotSame($earlier->getKey(), $conversation->agent()->getThreadId());
+        self::assertSame([], $conversation->agent()->getChatHistory()->getMessages());
+        self::assertNotNull($store->read($conversation->agent()->getChatHistory()->getThreadId()));
         self::assertCount(1, $store->summaries());
         self::assertStringNotContainsString('Stored subject', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
     }
@@ -246,13 +248,14 @@ final class SessionCompositionTest extends TestCase
         $history->addMessage(new UserMessage('External conversation'));
         $agent = $history->bindTo(new Agent());
         $terminal = new VirtualTerminal();
-        $tui = Tui::make(new Conversation($agent, $store, session: $session), $terminal);
+        $conversation = new Conversation($agent, $store, session: $session);
+        $tui = Tui::make($conversation, $terminal);
         EventLoop::delay(0.05, static fn() => $terminal->simulateInput("\x03"));
 
         $tui->run();
 
-        self::assertSame($session->getKey(), $tui->agent()->getThreadId());
-        self::assertEquals($session->getMessages(), $tui->agent()->getChatHistory()->getMessages());
+        self::assertSame($session->getKey(), $conversation->agent()->getThreadId());
+        self::assertEquals($session->getMessages(), $conversation->agent()->getChatHistory()->getMessages());
         self::assertSame($history->getThreadId(), $agent->getThreadId());
         self::assertCount(1, $session->getMessages());
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -337,11 +340,12 @@ final class SessionCompositionTest extends TestCase
             $terminal = new VirtualTerminal(rows: 30);
             $cleared = null;
             $picker = null;
-            $tui = Tui::make(new Conversation($agent, $sessionStore, session: $initial), $terminal, (new Commands())->addCommand([new ClearCommand(), new ResumeCommand()]));
+            $conversation = new Conversation($agent, $sessionStore, session: $initial);
+            $tui = Tui::make($conversation, $terminal, (new Commands())->addCommand([new ClearCommand(), new ResumeCommand()]));
             EventLoop::queue(static fn() => $terminal->simulateInput("Alice subject\r"));
             EventLoop::delay(0.15, static fn() => $terminal->simulateInput("/clear\r"));
-            EventLoop::delay(0.19, static function () use ($tui, $terminal, &$cleared): void {
-                $cleared = $tui->agent()->getChatHistory();
+            EventLoop::delay(0.19, static function () use ($conversation, $terminal, &$cleared): void {
+                $cleared = $conversation->agent()->getChatHistory();
                 $terminal->simulateInput("/resume\r");
             });
             EventLoop::delay(0.23, static function () use ($terminal, &$picker): void {
@@ -361,13 +365,13 @@ final class SessionCompositionTest extends TestCase
             self::assertIsString($picker);
             self::assertStringContainsString('Alice subject', $picker);
             self::assertStringNotContainsString('Private Bob subject', $picker);
-            self::assertNotNull($sessionStore->read($tui->agent()->getChatHistory()->getThreadId()));
-            self::assertSame($initial->getKey(), $tui->agent()->getChatHistory()->getThreadId());
+            self::assertNotNull($sessionStore->read($conversation->agent()->getChatHistory()->getThreadId()));
+            self::assertSame($initial->getKey(), $conversation->agent()->getChatHistory()->getThreadId());
             $reopened = (new SessionStore(new FileStorage($directory), 'alice'))->read($initial->getKey());
             self::assertNotNull($reopened);
             self::assertCount(2, $reopened->getMessages());
             self::assertSame('Persisted Alice answer', $reopened->getMessages()[1]->getContent());
-            self::assertEquals($reopened->getMessages(), $tui->agent()->getChatHistory()->getMessages());
+            self::assertEquals($reopened->getMessages(), $conversation->agent()->getChatHistory()->getMessages());
             self::assertNull($sessionStore->read($foreign->getKey()));
             self::assertNotNull((new SessionStore(new FileStorage($directory), 'bob'))->read($foreign->getKey()));
             $provider->assertCallCount(1);
@@ -395,7 +399,8 @@ final class SessionCompositionTest extends TestCase
         $agent = (new Agent())->setThreadId('test-thread');
         $agent = ($initial)->bindTo($agent);
         $terminal = new VirtualTerminal();
-        $tui = Tui::make(new Conversation($agent, $sessionStore, session: $initial), $terminal, (new Commands())->addCommand(new ResumeCommand()));
+        $conversation = new Conversation($agent, $sessionStore, session: $initial);
+        $tui = Tui::make($conversation, $terminal, (new Commands())->addCommand(new ResumeCommand()));
         EventLoop::queue(static fn() => $terminal->simulateInput("/resume\r"));
         EventLoop::delay(0.03, static fn() => $terminal->simulateInput("\x1b[B"));
         EventLoop::delay(0.05, static function () use ($sessionStore, $earlier, $terminal): void {
@@ -406,7 +411,7 @@ final class SessionCompositionTest extends TestCase
 
         $tui->run();
 
-        self::assertSame($initial->getKey(), $tui->agent()->getChatHistory()->getThreadId());
+        self::assertSame($initial->getKey(), $conversation->agent()->getChatHistory()->getThreadId());
         self::assertStringContainsString(
             'No Session is named by that key.',
             AnsiUtils::stripAnsiCodes($terminal->getOutput()),
