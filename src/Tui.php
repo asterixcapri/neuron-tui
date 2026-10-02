@@ -193,13 +193,9 @@ final class Tui
         $this->started = true;
 
         $terminal = $this->terminal ?? new Terminal();
-        if (
-            $terminal instanceof Terminal
-            && (
-                !stream_isatty(STDIN)
-                || !stream_isatty(STDOUT)
-            )
-        ) {
+        $hasInteractiveTty = stream_isatty(STDIN) && stream_isatty(STDOUT);
+
+        if ($terminal instanceof Terminal && !$hasInteractiveTty) {
             throw new RuntimeException(
                 'Neuron TUI requires an interactive TTY.',
             );
