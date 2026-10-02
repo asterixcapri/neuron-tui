@@ -10,6 +10,7 @@ use NeuronAI\Chat\Enums\SourceType;
 use NeuronAI\Chat\Messages\AssistantMessage;
 use NeuronAI\Chat\Messages\ContentBlocks\FileContent;
 use NeuronAI\Chat\Messages\UserMessage;
+use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Command\HelpCommand;
 use NeuronTui\View\ChoiceOption;
 use NeuronTui\View\ConversationView;
@@ -61,7 +62,12 @@ final class ConversationViewTest extends TestCase
     {
         foreach (["\t", "\r"] as $completionKey) {
             $terminal = new VirtualTerminal(columns: 100, rows: 24);
-            $view = new ConversationView($terminal, 'Neuron AI', 'Conversation', [new HelpCommand()]);
+            $view = new ConversationView(
+                $terminal,
+                'Neuron AI',
+                'Conversation',
+                (new Commands())->addCommand(new HelpCommand()),
+            );
             $submitted = [];
             $view->onSubmit(static function (SubmitEvent $event) use (&$submitted): void {
                 $submitted[] = $event->getValue();
