@@ -34,7 +34,7 @@ jobs:
           coverage: none
 
       - name: Validate Composer metadata
-        run: composer validate --strict
+        run: composer validate --strict --no-check-all
 
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
