@@ -22,88 +22,111 @@ use function trim;
 final class TurnRenderer
 {
     private ?ToolActivity $toolActivity = null;
-    private string $responseText = '';
+    private bool $hasVisibleText = false;
     private string $pendingText = '';
     private ?string $messageId = null;
 
     public function __construct(private readonly ConversationView $view) {}
 
     /**
+     * Errors are presented and rethrown; false means a stopped or interrupted response.
+     *
      * @param Generator<int, object, mixed, AgentState> $stream
      * @param (Closure(): bool)|null $responseWasStopped
      */
     public function run(Generator $stream, ?Closure $responseWasStopped = null): bool
     {
-        $this->responseText = '';
+        $this->hasVisibleText = false;
         $this->pendingText = '';
         $this->messageId = null;
-        $this->toolActivity = $this->view->beginAgentResponse();
+        $this->toolActivity = null;
+
         try {
+            $this->toolActivity = $this->view->beginAgentResponse();
             foreach ($stream as $chunk) {
                 $this->consume($chunk);
             }
+
+            if ($responseWasStopped?->__invoke() ?? false) {
+                $this->showStoppedResponse();
+
+                return false;
+            }
+            if ($stream->getReturn()->isInterrupted()) {
+                $this->view->showError('Human-in-the-loop interruptions are not supported.');
+
+                return false;
+            }
+            if (!$this->hasVisibleText && !($this->toolActivity?->hasActivity() ?? false)) {
+                $this->view->workingIndicator()->stop();
+                $this->view->showEmptyResponse();
+            }
+
+            return true;
         } catch (Throwable $error) {
             $this->view->showError($error::class . ': ' . $error->getMessage());
             if ($responseWasStopped?->__invoke() ?? false) {
-                $this->view->workingIndicator()->stop();
-                $this->view->showResponseStopped();
+                $this->showStoppedResponse();
             }
+
             throw $error;
         }
+    }
 
-        $working = $this->view->workingIndicator();
-        if ($responseWasStopped?->__invoke() ?? false) {
-            $working->stop();
-            $this->view->showResponseStopped();
-            return false;
-        }
-        if ($stream->getReturn()->isInterrupted()) {
-            $this->view->showError('Human-in-the-loop interruptions are not supported.');
-            return false;
-        }
-        if (trim(DisplayableText::safe($this->responseText)) === '' && !($this->toolActivity?->hasActivity() ?? false)) {
-            $working->stop();
-            $this->view->showEmptyResponse();
-        }
-        return true;
+    private function showStoppedResponse(): void
+    {
+        $this->view->workingIndicator()->stop();
+        $this->view->showResponseStopped();
     }
 
     private function consume(object $chunk): void
     {
-        $working = $this->view->workingIndicator();
         if ($chunk instanceof ToolCallChunk) {
+            $this->consumeToolCall($chunk);
+        } elseif ($chunk instanceof ToolResultChunk) {
+            $this->consumeToolResult($chunk);
+        } elseif ($chunk instanceof TextChunk) {
+            $this->consumeText($chunk);
+        }
+    }
+
+    private function consumeToolCall(ToolCallChunk $chunk): void
+    {
+        $this->view->endAgentMessage();
+        $this->pendingText = '';
+        $this->messageId = null;
+        $this->view->workingIndicator()->whilePaused(microtime(true), function () use ($chunk): void {
+            $this->toolActivity?->start($chunk->tool);
+        });
+        $this->view->paintPendingChanges();
+    }
+
+    private function consumeToolResult(ToolResultChunk $chunk): void
+    {
+        $this->view->workingIndicator()->whilePaused(microtime(true), function () use ($chunk): void {
+            $this->toolActivity?->finish($chunk->tool);
+        });
+        $this->view->paintPendingChanges();
+    }
+
+    private function consumeText(TextChunk $chunk): void
+    {
+        if ($this->messageId !== null && $chunk->messageId !== $this->messageId) {
             $this->view->endAgentMessage();
             $this->pendingText = '';
-            $this->messageId = null;
-            $working->whilePaused(microtime(true), function () use ($chunk): void {
-                $this->toolActivity?->start($chunk->tool);
-            });
-            $this->view->paintPendingChanges();
+        }
+        $this->messageId = $chunk->messageId;
+        $this->pendingText .= $chunk->content;
+        if (trim(DisplayableText::safe($this->pendingText)) === '') {
             return;
         }
-        if ($chunk instanceof ToolResultChunk) {
-            $working->whilePaused(microtime(true), function () use ($chunk): void {
-                $this->toolActivity?->finish($chunk->tool);
-            });
-            $this->view->paintPendingChanges();
-            return;
-        }
-        if ($chunk instanceof TextChunk) {
-            if ($this->messageId !== null && $chunk->messageId !== $this->messageId) {
-                $this->view->endAgentMessage();
-                $this->pendingText = '';
-            }
-            $this->messageId = $chunk->messageId;
-            $this->responseText .= $chunk->content;
-            $this->pendingText .= $chunk->content;
-            if (trim(DisplayableText::safe($this->pendingText)) !== '') {
-                $text = $this->pendingText;
-                $this->pendingText = '';
-                $working->whilePaused(microtime(true), function () use ($text): void {
-                    $this->view->appendAgentText($text);
-                });
-                $this->view->paintPendingChanges();
-            }
-        }
+
+        $text = $this->pendingText;
+        $this->pendingText = '';
+        $this->hasVisibleText = true;
+        $this->view->workingIndicator()->whilePaused(microtime(true), function () use ($text): void {
+            $this->view->appendAgentText($text);
+        });
+        $this->view->paintPendingChanges();
     }
 }
