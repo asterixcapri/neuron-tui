@@ -11,7 +11,7 @@ use NeuronAI\Agent\AgentState;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronInteraction\Conversation;
 use NeuronInteraction\Session\Session;
-use NeuronTui\Session\SessionTitleGeneration;
+use NeuronInteraction\Session\SessionTitleGenerator;
 use NeuronTui\View\ConversationView;
 use NeuronTui\View\WorkingIndicator;
 use Throwable;
@@ -43,10 +43,12 @@ final class TurnScheduler
 
     private ?string $displayedHistory = null;
 
+    /** @var array<string, true> */
+    private array $runningTitles = [];
+
     public function __construct(
         private readonly Conversation $conversation,
         private readonly ConversationView $view,
-        private readonly ?SessionTitleGeneration $titleGeneration = null,
     ) {
         $this->workingIndicator = $view->workingIndicator();
         $this->renderer = new TurnRenderer($view);
@@ -204,7 +206,27 @@ final class TurnScheduler
             }
 
             if ($completed && !$this->stopped && !$this->conversation->responseStopRequested()) {
-                $this->titleGeneration?->schedule($session, $agent);
+                $this->scheduleSessionTitle($session, $agent);
+            }
+        });
+    }
+
+    private function scheduleSessionTitle(Session $session, Agent $agent): void
+    {
+        $key = $session->getKey();
+        if (isset($this->runningTitles[$key])) {
+            return;
+        }
+
+        $this->runningTitles[$key] = true;
+        async(function () use ($session, $key, $agent): void {
+            try {
+                $provider = clone $agent->getProvider();
+                (new SessionTitleGenerator($provider, $session))->generate();
+            } catch (Throwable) {
+                // Optional title generation must not interrupt the conversation.
+            } finally {
+                unset($this->runningTitles[$key]);
             }
         });
     }

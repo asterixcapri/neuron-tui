@@ -18,7 +18,6 @@ use NeuronInteraction\Session\Session;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Input\InputHandler;
-use NeuronTui\Session\SessionTitleGeneration;
 use NeuronTui\Turn\TurnScheduler;
 use NeuronTui\View\ConversationView;
 use RuntimeException;
@@ -215,11 +214,9 @@ final class Tui
             $this->figletFont,
             $this->userMessageProcessors,
         );
-        $sessionTitleGeneration = new SessionTitleGeneration();
         $scheduler = new TurnScheduler(
             $conversation,
             $view,
-            $sessionTitleGeneration,
         );
         $input = new InputHandler(
             $view,
