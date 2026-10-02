@@ -10,7 +10,7 @@ use InvalidArgumentException;
 use LogicException;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\UserMessage;
-use NeuronInteraction\Command\CommandInterface;
+use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Message\UserMessageProcessorInterface;
 use NeuronInteraction\Message\UserMessageProcessors;
 use NeuronTui\History\HistoryProjection;
@@ -110,16 +110,11 @@ final class ConversationView
      */
     private bool $leaving = false;
 
-    /**
-     * @param list<CommandInterface> $commands
-     *     the mounted commands, in the order the Host Application named
-     *     them, which are what the Command suggestions have to offer
-     */
     public function __construct(
         TerminalInterface $terminal,
         string $title,
         string $subtitle,
-        array $commands = [],
+        Commands $commands = new Commands(),
         ?string $figlet = null,
         string $figletFont = 'standard',
         UserMessageProcessorInterface $userMessageProcessors = new UserMessageProcessors(),
@@ -155,7 +150,7 @@ final class ConversationView
             $this->closePicker(...),
             $this->cancelChoice(...),
         );
-        $this->suggestions = new CommandSuggestions($commands);
+        $this->suggestions = new CommandSuggestions($commands->all());
         $this->suggestionKeybindings = new Keybindings([
             'suggestion-previous' => [Key::UP],
             'suggestion-next' => [Key::DOWN],

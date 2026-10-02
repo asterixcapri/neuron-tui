@@ -216,7 +216,7 @@ final class Tui
             $terminal,
             $this->title,
             $this->subtitle,
-            $this->commands->all(),
+            $this->commands,
             $this->figlet,
             $this->figletFont,
             $this->userMessageProcessors,
