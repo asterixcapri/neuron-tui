@@ -21,10 +21,12 @@ use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
 use RuntimeException;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
+use Symfony\Component\Tui\Terminal\ScreenBuffer;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
 use function Amp\delay;
 use function array_map;
+use function substr_count;
 
 final class MessageQueueTest extends TestCase
 {
@@ -76,6 +78,34 @@ final class MessageQueueTest extends TestCase
         self::assertStringContainsString('Invalid queued input', $display);
         self::assertStringContainsString('Next reply', $display);
         self::assertStringContainsString('❯ Newer draft', $display);
+    }
+
+    public function testStreamingFailureIsReportedOnceAndTheNextQueuedMessageRuns(): void
+    {
+        $provider = new class (new AssistantMessage('Fail'), new AssistantMessage('Next reply')) extends FakeAIProvider {
+            protected function streamChunks(Message $response): Generator
+            {
+                delay(0.05);
+                if ($response->getContent() === 'Fail') {
+                    throw new RuntimeException('Streaming failed');
+                }
+                yield new TextChunk('reply', $response->getContent() ?? '');
+                return new ProviderResponse(message: $response);
+            }
+        };
+        $terminal = new VirtualTerminal(rows: 40);
+        $conversation = new Conversation((new Agent())->setAiProvider($provider));
+        EventLoop::queue(static fn() => $terminal->simulateInput("First\rNext\r"));
+        EventLoop::delay(0.3, static fn() => $terminal->simulateInput("\x03"));
+
+        Tui::make($conversation, $terminal)->run();
+
+        self::assertCount(2, $provider->getRecorded());
+        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
+        $screen = new ScreenBuffer($terminal->getColumns(), $terminal->getRows());
+        $screen->write($terminal->getOutput());
+        self::assertSame(1, substr_count($screen->getScreen(), 'RuntimeException: Streaming failed'));
+        self::assertStringContainsString('Next reply', $display);
     }
 
     public function testRejectedQueuedInputReturnsToAnEmptyComposer(): void

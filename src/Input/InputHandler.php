@@ -60,7 +60,7 @@ final class InputHandler
         }
 
         try {
-            $this->scheduler->submitUserMessage($original);
+            $this->scheduler->enqueueMessage($original);
         } catch (Throwable $exception) {
             $this->view->showError($exception->getMessage());
 
