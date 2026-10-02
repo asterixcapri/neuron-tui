@@ -88,18 +88,19 @@ final class UserMessageProcessorTest extends TestCase
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $inputHistory = new InputHistory(new InMemoryStorage());
-        $tui = Tui::make(new Conversation($agent, new SessionStore(new InMemoryStorage(), 'local'), userMessageProcessors: (new UserMessageProcessors())->addProcessor([
+        $conversation = new Conversation($agent, new SessionStore(new InMemoryStorage(), 'local'), userMessageProcessors: (new UserMessageProcessors())->addProcessor([
             new EnvelopeProcessor('A'),
             new EnvelopeProcessor('B'),
             new EnvelopeProcessor('C'),
-        ])), $terminal, inputHistory: $inputHistory);
+        ]));
+        $tui = Tui::make($conversation, $terminal, inputHistory: $inputHistory);
 
         EventLoop::queue(static fn() => $terminal->simulateInput("Hello\r"));
         EventLoop::delay(0.15, static fn() => $terminal->simulateInput("\x03"));
         $tui->run();
 
         self::assertSame('C[B[A[Hello]]]', $provider->getRecorded()[0]->messages[0]->getContent());
-        self::assertSame('C[B[A[Hello]]]', $tui->agent()->getChatHistory()->getMessages()[0]->getContent());
+        self::assertSame('C[B[A[Hello]]]', $conversation->agent()->getChatHistory()->getMessages()[0]->getContent());
         self::assertSame('Hello', $inputHistory->older()?->getContent());
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('❯ Hello', $display);
@@ -116,16 +117,17 @@ final class UserMessageProcessorTest extends TestCase
         $terminal = new VirtualTerminal(rows: 30);
         EventLoop::delay(0.05, static fn() => $terminal->simulateInput("\x03"));
 
-        $tui = Tui::make(new Conversation($agent, $store, session: $session, userMessageProcessors: (new UserMessageProcessors())->addProcessor([
+        $conversation = new Conversation($agent, $store, session: $session, userMessageProcessors: (new UserMessageProcessors())->addProcessor([
             new EnvelopeProcessor('A'),
             new EnvelopeProcessor('B'),
-        ])), $terminal);
+        ]));
+        $tui = Tui::make($conversation, $terminal);
         $tui->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('❯ Earlier', $display);
         self::assertStringContainsString('B[A[Reply]]', $display);
-        self::assertSame('B[A[Earlier]]', $tui->agent()->getChatHistory()->getMessages()[0]->getContent());
+        self::assertSame('B[A[Earlier]]', $conversation->agent()->getChatHistory()->getMessages()[0]->getContent());
     }
 
     public function testCommandPromptsUseTheSameSubmissionAndDisplayTheirPreview(): void
@@ -269,7 +271,8 @@ final class UserMessageProcessorTest extends TestCase
                 },
             );
             $display = '';
-            $tui = Tui::make(new Conversation($agent, $store, userMessageProcessors: (new UserMessageProcessors())->addProcessor([$processor, new EnvelopeProcessor('A'), new EnvelopeProcessor('B')])), $terminal, commands: (new Commands())->addCommand(new ResumeCommand($name)));
+            $conversation = new Conversation($agent, $store, userMessageProcessors: (new UserMessageProcessors())->addProcessor([$processor, new EnvelopeProcessor('A'), new EnvelopeProcessor('B')]));
+            $tui = Tui::make($conversation, $terminal, commands: (new Commands())->addCommand(new ResumeCommand($name)));
             EventLoop::queue(static fn() => $terminal->simulateInput($name . "\r"));
             EventLoop::delay(0.05, static fn() => $terminal->simulateInput('Readable'));
             EventLoop::delay(0.08, static function () use ($terminal, &$display): void {
@@ -282,7 +285,7 @@ final class UserMessageProcessorTest extends TestCase
 
             self::assertStringContainsString('Readable session', $display);
             self::assertStringNotContainsString('stored-payload', $display);
-            self::assertSame('B[A[stored-payload]]', $tui->agent()->getChatHistory()->getMessages()[0]->getContent());
+            self::assertSame('B[A[stored-payload]]', $conversation->agent()->getChatHistory()->getMessages()[0]->getContent());
             self::assertSame('B[A[stored-payload]]', $store->read($session->getKey())?->getMessages()[0]->getContent());
         }
     }
@@ -426,7 +429,7 @@ final class UserMessageProcessorTest extends TestCase
         $tui = Tui::make($conversation, $terminal);
         $tui->run();
 
-        $saved = $tui->agent()->getChatHistory()->getMessages()[0];
+        $saved = $conversation->agent()->getChatHistory()->getMessages()[0];
         self::assertSame('Original request', $saved->getContent());
         self::assertCount(2, $saved->getContentBlocks());
         self::assertInstanceOf(FileContent::class, $saved->getContentBlocks()[1]);

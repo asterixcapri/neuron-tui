@@ -1136,8 +1136,9 @@ final class TuiTest extends TestCase
         $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
+        $conversation = new Conversation($agent, new SessionStore($storage, 'test-user'));
         $tui = (new Tui(
-            new Conversation($agent, new SessionStore($storage, 'test-user')),
+            $conversation,
             terminal: $terminal,
             inputHistory: new InputHistory($storage),
             commands: (new Commands())->addCommand(self::sessionCommands()),
@@ -1159,11 +1160,11 @@ final class TuiTest extends TestCase
         );
         EventLoop::delay(
             0.3,
-            static function () use (&$afterResume, &$resumedContent, $terminal, $tui): void {
+            static function () use (&$afterResume, &$resumedContent, $terminal, $conversation): void {
                 $afterResume = AnsiUtils::stripAnsiCodes(
                     $terminal->getOutput(),
                 );
-                $resumedContent = $tui->agent()->getChatHistory()->getMessages()[0]->getContent();
+                $resumedContent = $conversation->agent()->getChatHistory()->getMessages()[0]->getContent();
                 $terminal->clearOutput();
                 $terminal->simulateInput("/clear now\r");
             },
@@ -1483,8 +1484,9 @@ final class TuiTest extends TestCase
             '/apply',
         );
         // Both submissions finish before deferred Picker presentation starts.
+        $conversation = new Conversation($agent, $sessionStore, session: $originalHistory);
         $tui = Tui::make(
-            new Conversation($agent, $sessionStore, session: $originalHistory),
+            $conversation,
             $terminal,
             commands: (new Commands())->addCommand([$requester, $replacement, $target]),
             inputHistory: $inputHistory,
@@ -1505,7 +1507,7 @@ final class TuiTest extends TestCase
         self::assertSame($replacementHistory->getKey(), $observedAgent->getThreadId());
         self::assertSame('  /chosen value  ', $observedArguments);
         self::assertSame($originalHistory->getKey(), $agent->getChatHistory()->getThreadId());
-        self::assertSame($resultingHistory->getKey(), $tui->agent()->getChatHistory()->getThreadId());
+        self::assertSame($resultingHistory->getKey(), $conversation->agent()->getChatHistory()->getThreadId());
         self::assertSame(
             ['Resulting conversation.', 'Resulting answer.'],
             array_map(static fn(Message $message): mixed => $message->getContent(), $resultingHistory->getMessages()),
@@ -1919,8 +1921,9 @@ final class TuiTest extends TestCase
         ], $sessionStore);
         $agent = $initialSession->bindTo($agent);
         $terminal = new VirtualTerminal(rows: 24);
+        $conversation = new Conversation($agent, $sessionStore, session: $initialSession);
         $tui = (new Tui(
-            new Conversation($agent, $sessionStore, session: $initialSession),
+            $conversation,
             terminal: $terminal,
             commands: (new Commands())->addCommand([
                 new ClearCommand('/wipe'),
@@ -1974,7 +1977,7 @@ final class TuiTest extends TestCase
             'Earlier question.',
             $wipedDisplay,
         );
-        self::assertSame([], $tui->agent()->getChatHistory()->getMessages());
+        self::assertSame([], $conversation->agent()->getChatHistory()->getMessages());
         // `/quit` behaves as `/exit` always did.
         self::assertFalse($forcedExit);
     }
@@ -5081,8 +5084,9 @@ final class TuiTest extends TestCase
         $workingDirectory = getcwd();
         self::assertIsString($workingDirectory);
         $before = scandir($workingDirectory);
+        $conversation = new Conversation($agent, new SessionStore(new InMemoryStorage(), 'local'));
         $tui = (new Tui(
-            new Conversation($agent, new SessionStore(new InMemoryStorage(), 'local')),
+            $conversation,
             terminal: $terminal,
             commands: (new Commands())->addCommand(self::sessionCommands()),
         ));
@@ -5130,7 +5134,7 @@ final class TuiTest extends TestCase
             array_map(
                 static fn(Message $message): string => (string) $message
                     ->getContent(),
-                $tui->agent()->getChatHistory()->getMessages(),
+                $conversation->agent()->getChatHistory()->getMessages(),
             ),
         );
         // The directory the old default invented is named because it is the
@@ -5160,8 +5164,9 @@ final class TuiTest extends TestCase
         );
         $terminal = new VirtualTerminal(rows: 24);
         $clearedDisplay = null;
+        $conversation = new Conversation($agent, $sessionStore);
         $tui = (new Tui(
-            new Conversation($agent, $sessionStore),
+            $conversation,
             terminal: $terminal,
             inputHistory: new InputHistory($storage),
             commands: (new Commands())->addCommand([
@@ -5206,7 +5211,7 @@ final class TuiTest extends TestCase
             $clearedDisplay,
         );
         self::assertStringNotContainsString('/clear', $clearedDisplay);
-        self::assertSame([], $tui->agent()->getChatHistory()->getMessages());
+        self::assertSame([], $conversation->agent()->getChatHistory()->getMessages());
         self::assertNotNull($earlier);
         self::assertCount(2, $earlier->getMessages());
         $listed = $sessionStore->summaries();
@@ -5222,8 +5227,9 @@ final class TuiTest extends TestCase
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
         $terminal = new VirtualTerminal(rows: 24);
+        $conversation = new Conversation($agent, new SessionStore($storage, 'test-user'));
         $tui = (new Tui(
-            new Conversation($agent, new SessionStore($storage, 'test-user')),
+            $conversation,
             terminal: $terminal,
             inputHistory: new InputHistory($storage),
             commands: (new Commands())->addCommand(self::sessionCommands()),
@@ -5261,10 +5267,10 @@ final class TuiTest extends TestCase
                 $reopened->getMessages(),
             ),
         );
-        self::assertSame([], $tui->agent()->getChatHistory()->getMessages());
+        self::assertSame([], $conversation->agent()->getChatHistory()->getMessages());
         // The Session the Agent was left holding is the newer one SessionStore
         // minted, so writing in it lists it ahead of the other.
-        $tui->agent()->getChatHistory()->addMessage(new UserMessage('Written later'));
+        $conversation->agent()->getChatHistory()->addMessage(new UserMessage('Written later'));
         self::assertSame(
             [null, null],
             array_map(
@@ -5300,8 +5306,9 @@ final class TuiTest extends TestCase
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
         $terminal = new VirtualTerminal(rows: 24);
+        $conversation = new Conversation($agent, new SessionStore($storage, 'test-user'));
         $tui = (new Tui(
-            new Conversation($agent, new SessionStore($storage, 'test-user')),
+            $conversation,
             terminal: $terminal,
             inputHistory: new InputHistory($storage),
             commands: (new Commands())->addCommand([
@@ -5349,7 +5356,7 @@ final class TuiTest extends TestCase
         self::assertStringContainsString('❯ A question', $refusedDisplay);
         self::assertSame([], $sessionStore->summaries());
         self::assertNotNull($ongoing);
-        self::assertSame($ongoing->getThreadId(), $tui->agent()->getChatHistory()->getThreadId());
+        self::assertSame($ongoing->getThreadId(), $conversation->agent()->getChatHistory()->getThreadId());
         self::assertFalse($forcedExit);
     }
 
@@ -5371,8 +5378,9 @@ final class TuiTest extends TestCase
         ]));
         $terminal = new VirtualTerminal(rows: 30);
         $pickerDisplay = null;
+        $conversation = new Conversation($agent, new SessionStore($storage, 'test-user'));
         $tui = (new Tui(
-            new Conversation($agent, new SessionStore($storage, 'test-user')),
+            $conversation,
             terminal: $terminal,
             inputHistory: new InputHistory($storage),
             commands: (new Commands())->addCommand(self::sessionCommands()),
@@ -5420,7 +5428,7 @@ final class TuiTest extends TestCase
             array_map(
                 static fn(Message $message): string => (string) $message
                     ->getContent(),
-                array_slice($tui->agent()->getChatHistory()->getMessages(), 0, 2),
+                array_slice($conversation->agent()->getChatHistory()->getMessages(), 0, 2),
             ),
         );
         $provider->assertSent(
@@ -5459,8 +5467,9 @@ final class TuiTest extends TestCase
             $agent = (new Agent())->setThreadId('test-thread');
             $terminal = new VirtualTerminal(rows: 30);
             $pickerDisplay = null;
+            $conversation = new Conversation($agent, new SessionStore($storage, 'test-user'));
             $tui = (new Tui(
-                new Conversation($agent, new SessionStore($storage, 'test-user')),
+                $conversation,
                 terminal: $terminal,
                 inputHistory: new InputHistory($storage),
                 commands: (new Commands())->addCommand(self::sessionCommands()),
@@ -5500,7 +5509,7 @@ final class TuiTest extends TestCase
                 array_map(
                     static fn(Message $message): string => (string) $message
                         ->getContent(),
-                    $tui->agent()->getChatHistory()->getMessages(),
+                    $conversation->agent()->getChatHistory()->getMessages(),
                 ),
             );
         } finally {
@@ -5544,8 +5553,9 @@ final class TuiTest extends TestCase
         SessionHistory::of($earlier)->addMessage(new UserMessage('The earlier subject'));
         $earlier->setTitle('The earlier subject');
         $terminal = new VirtualTerminal(rows: 30);
+        $conversation = new Conversation($agent, new SessionStore($storage, 'test-user'));
         $tui = (new Tui(
-            new Conversation($agent, new SessionStore($storage, 'test-user')),
+            $conversation,
             terminal: $terminal,
             inputHistory: new InputHistory($storage),
             commands: (new Commands())->addCommand(self::sessionCommands()),
@@ -5585,7 +5595,7 @@ final class TuiTest extends TestCase
             array_map(
                 static fn(Message $message): string => (string) $message
                     ->getContent(),
-                $tui->agent()->getChatHistory()->getMessages(),
+                $conversation->agent()->getChatHistory()->getMessages(),
             ),
         );
     }
@@ -5608,8 +5618,9 @@ final class TuiTest extends TestCase
         self::assertSame($title, $sessionStore->summaries()[0]->title);
         $terminal = new VirtualTerminal(rows: 24);
         $pickerDisplay = null;
+        $conversation = new Conversation($agent, new SessionStore($storage, 'test-user'));
         $tui = (new Tui(
-            new Conversation($agent, new SessionStore($storage, 'test-user')),
+            $conversation,
             terminal: $terminal,
             inputHistory: new InputHistory($storage),
             commands: (new Commands())->addCommand(self::sessionCommands()),
@@ -5648,7 +5659,7 @@ final class TuiTest extends TestCase
             array_map(
                 static fn(Message $message): string => (string) $message
                     ->getContent(),
-                $tui->agent()->getChatHistory()->getMessages(),
+                $conversation->agent()->getChatHistory()->getMessages(),
             ),
         );
     }
@@ -5669,8 +5680,9 @@ final class TuiTest extends TestCase
         $earlier->setTitle('The earlier subject');
         $terminal = new VirtualTerminal(rows: 24);
         $pickerDisplay = null;
+        $conversation = new Conversation($agent, new SessionStore($storage, 'test-user'));
         $tui = (new Tui(
-            new Conversation($agent, new SessionStore($storage, 'test-user')),
+            $conversation,
             terminal: $terminal,
             inputHistory: new InputHistory($storage),
             commands: (new Commands())->addCommand([
@@ -5723,7 +5735,7 @@ final class TuiTest extends TestCase
         self::assertStringNotContainsString('zzz', $display);
         self::assertStringContainsString('ready · Enter sends', $display);
         self::assertNotNull($ongoing);
-        self::assertSame($ongoing->getThreadId(), $tui->agent()->getChatHistory()->getThreadId());
+        self::assertSame($ongoing->getThreadId(), $conversation->agent()->getChatHistory()->getThreadId());
     }
 
     public function testResumeSaysSoWhenThereIsNothingToReturnTo(): void
@@ -5772,8 +5784,9 @@ final class TuiTest extends TestCase
 
         $terminal = new VirtualTerminal(rows: 24);
         $narrowedDisplay = null;
+        $conversation = new Conversation($agent, new SessionStore($storage, 'test-user'));
         $tui = (new Tui(
-            new Conversation($agent, new SessionStore($storage, 'test-user')),
+            $conversation,
             terminal: $terminal,
             inputHistory: new InputHistory($storage),
             commands: (new Commands())->addCommand(self::sessionCommands()),
@@ -5813,7 +5826,7 @@ final class TuiTest extends TestCase
             array_map(
                 static fn(Message $message): string => (string) $message
                     ->getContent(),
-                $tui->agent()->getChatHistory()->getMessages(),
+                $conversation->agent()->getChatHistory()->getMessages(),
             ),
         );
     }
@@ -5829,8 +5842,9 @@ final class TuiTest extends TestCase
             new UserMessage('The newer subject'),
         );
         $terminal = new VirtualTerminal(rows: 24);
+        $conversation = new Conversation($agent, new SessionStore($storage, 'test-user'));
         $tui = (new Tui(
-            new Conversation($agent, new SessionStore($storage, 'test-user')),
+            $conversation,
             terminal: $terminal,
             inputHistory: new InputHistory($storage),
             commands: (new Commands())->addCommand(self::sessionCommands()),
@@ -5862,7 +5876,7 @@ final class TuiTest extends TestCase
             array_map(
                 static fn(Message $message): string => (string) $message
                     ->getContent(),
-                $tui->agent()->getChatHistory()->getMessages(),
+                $conversation->agent()->getChatHistory()->getMessages(),
             ),
         );
     }
@@ -5943,8 +5957,9 @@ final class TuiTest extends TestCase
         $pickerDisplay = null;
         $resumedDisplay = null;
         $clearedDisplay = null;
+        $conversation = new Conversation($agent, new SessionStore($storage, 'test-user'));
         $tui = (new Tui(
-            new Conversation($agent, new SessionStore($storage, 'test-user')),
+            $conversation,
             terminal: $terminal,
             inputHistory: new InputHistory($storage),
             commands: (new Commands())->addCommand([
@@ -6012,7 +6027,7 @@ final class TuiTest extends TestCase
             'The earlier subject',
             $clearedDisplay,
         );
-        self::assertSame([], $tui->agent()->getChatHistory()->getMessages());
+        self::assertSame([], $conversation->agent()->getChatHistory()->getMessages());
         // Both commands reached the one SessionStore instance the runtime owns,
         // so the Session the first resumed is the one the second left stored.
         self::assertSame(
@@ -6107,8 +6122,9 @@ final class TuiTest extends TestCase
         $terminal = new VirtualTerminal(rows: 30);
         $refusedDisplay = null;
         $clearedDisplay = null;
+        $conversation = new Conversation($agent, $sessionStore, session: $initialSession);
         $tui = (new Tui(
-            new Conversation($agent, $sessionStore, session: $initialSession),
+            $conversation,
             terminal: $terminal,
             inputHistory: new InputHistory(new InMemoryStorage()),
             commands: (new Commands())->addCommand([
@@ -6166,7 +6182,7 @@ final class TuiTest extends TestCase
             'The earlier subject',
             $clearedDisplay,
         );
-        self::assertSame([], $tui->agent()->getChatHistory()->getMessages());
+        self::assertSame([], $conversation->agent()->getChatHistory()->getMessages());
     }
 
     public function testPageKeysBrowseAConversationAndReturnToLatest(): void
