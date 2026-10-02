@@ -10,7 +10,6 @@ use NeuronInteraction\Command\HelpCommand;
 use NeuronInteraction\Command\LeaveCommand;
 use NeuronInteraction\Command\ResumeCommand;
 use NeuronInteraction\Configuration\ConfigurationStore;
-use NeuronInteraction\Conversation;
 use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Interruption\StopSignal;
 use NeuronInteraction\Message\UserMessageProcessors;
@@ -64,12 +63,14 @@ $userMessageProcessors = (new UserMessageProcessors())->addProcessor([
     new FileReferenceProcessor(__DIR__ . '/..'),
 ]);
 
-Tui::make(
-    new Conversation($agent, $sessionStore, session: $session, stopSignal: $stopSignal, userMessageProcessors: $userMessageProcessors),
-    commands: $commands,
-    configurationStore: $configurationStore,
-    inputHistory: $inputHistory
-)
+Tui::make($agent)
+    ->setSessionStore($sessionStore)
+    ->setSession($session)
+    ->setStopSignal($stopSignal)
+    ->setUserMessageProcessors($userMessageProcessors)
+    ->setCommands($commands)
+    ->setConfigurationStore($configurationStore)
+    ->setInputHistory($inputHistory)
     ->setFiglet('NeuronTUI')
     ->setTitle('Neuron TUI Demo')
     ->setSubtitle('Powered by Neuron AI')

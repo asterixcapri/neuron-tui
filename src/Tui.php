@@ -6,10 +6,16 @@ namespace NeuronTui;
 
 use InvalidArgumentException;
 use LogicException;
+use NeuronAI\Agent\Agent;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Configuration\ConfigurationStore;
 use NeuronInteraction\Conversation;
 use NeuronInteraction\InputHistory\InputHistory;
+use NeuronInteraction\Interruption\StopSignal;
+use NeuronInteraction\Message\UserMessageProcessorInterface;
+use NeuronInteraction\Message\UserMessageProcessors;
+use NeuronInteraction\Session\Session;
+use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Input\InputHandler;
 use NeuronTui\Session\SessionTitleGeneration;
@@ -48,41 +54,104 @@ final class Tui
 
     private string $figletFont = 'standard';
 
-    private readonly Commands $commands;
+    private SessionStore $sessionStore;
 
-    private readonly ConfigurationStore $configurationStore;
+    private bool $sessionStoreConfigured = false;
 
-    private readonly InputHistory $inputHistory;
+    private ?Session $session = null;
+
+    private ?StopSignal $stopSignal = null;
+
+    private UserMessageProcessorInterface $userMessageProcessors;
+
+    private ?TerminalInterface $terminal = null;
+
+    private Commands $commands;
+
+    private ConfigurationStore $configurationStore;
+
+    private InputHistory $inputHistory;
 
     private bool $started = false;
 
-
     public function __construct(
-        private readonly Conversation $conversation,
-        private readonly ?TerminalInterface $terminal = null,
-        ?Commands $commands = null,
-        ?ConfigurationStore $configurationStore = null,
-        ?InputHistory $inputHistory = null,
+        private readonly Agent $agent,
     ) {
-        $this->commands = $commands ?? new Commands();
-        $this->configurationStore = $configurationStore ?? new ConfigurationStore(new InMemoryStorage(), 'local');
-        $this->inputHistory = $inputHistory ?? new InputHistory(new InMemoryStorage());
+        $this->sessionStore = new SessionStore(new InMemoryStorage(), 'local');
+        $this->commands = new Commands();
+        $this->configurationStore = new ConfigurationStore(new InMemoryStorage(), 'local');
+        $this->inputHistory = new InputHistory(new InMemoryStorage());
+        $this->userMessageProcessors = new UserMessageProcessors();
     }
 
-    public static function make(
-        Conversation $conversation,
-        ?TerminalInterface $terminal = null,
-        ?Commands $commands = null,
-        ?ConfigurationStore $configurationStore = null,
-        ?InputHistory $inputHistory = null,
-    ): self {
-        return new self(
-            $conversation,
-            $terminal,
-            $commands,
-            $configurationStore,
-            $inputHistory,
-        );
+    public static function make(Agent $agent): self
+    {
+        return new self($agent);
+    }
+
+    public function setSessionStore(SessionStore $sessionStore): self
+    {
+        $this->ensureNotStarted();
+        $this->sessionStore = $sessionStore;
+        $this->sessionStoreConfigured = true;
+
+        return $this;
+    }
+
+    public function setSession(Session $session): self
+    {
+        $this->ensureNotStarted();
+        $this->session = $session;
+
+        return $this;
+    }
+
+    public function setStopSignal(StopSignal $stopSignal): self
+    {
+        $this->ensureNotStarted();
+        $this->stopSignal = $stopSignal;
+
+        return $this;
+    }
+
+    public function setUserMessageProcessors(UserMessageProcessorInterface $userMessageProcessors): self
+    {
+        $this->ensureNotStarted();
+        $this->userMessageProcessors = $userMessageProcessors;
+
+        return $this;
+    }
+
+    public function setTerminal(TerminalInterface $terminal): self
+    {
+        $this->ensureNotStarted();
+        $this->terminal = $terminal;
+
+        return $this;
+    }
+
+    public function setCommands(Commands $commands): self
+    {
+        $this->ensureNotStarted();
+        $this->commands = $commands;
+
+        return $this;
+    }
+
+    public function setConfigurationStore(ConfigurationStore $configurationStore): self
+    {
+        $this->ensureNotStarted();
+        $this->configurationStore = $configurationStore;
+
+        return $this;
+    }
+
+    public function setInputHistory(InputHistory $inputHistory): self
+    {
+        $this->ensureNotStarted();
+        $this->inputHistory = $inputHistory;
+
+        return $this;
     }
 
     public function setTitle(string $title): self
@@ -126,36 +195,11 @@ final class Tui
         $this->ensureNotStarted();
         $this->started = true;
 
-        $terminal = $this->terminal ?? new Terminal();
-        $view = new ConversationView(
-            $terminal,
-            $this->title,
-            $this->subtitle,
-            $this->commands->all(),
-            $this->figlet,
-            $this->figletFont,
-            $this->conversation->userMessageProcessors(),
-        );
-        $sessionTitleGeneration = new SessionTitleGeneration();
-        $scheduler = new TurnScheduler(
-            $this->conversation,
-            $view,
-            $sessionTitleGeneration,
-        );
-        $input = new InputHandler(
-            $view,
-            $this->inputHistory,
-            $scheduler,
-            $this->commands,
-            $this->conversation,
-            $this->configurationStore,
-        );
-        $scheduler->synchronizeHistory();
-        $view->onSubmit($input->handleSubmit(...));
-        $view->onDraftChange($input->handleDraftChange(...));
-        $view->onInput($input->handleInput(...));
-        $view->onTick($scheduler->tick(...));
+        if ($this->session !== null && !$this->sessionStoreConfigured) {
+            throw new InvalidArgumentException('An initial Session requires an explicit SessionStore.');
+        }
 
+        $terminal = $this->terminal ?? new Terminal();
         if (
             $terminal instanceof Terminal
             && (
@@ -167,6 +211,42 @@ final class Tui
                 'Neuron TUI requires an interactive TTY.',
             );
         }
+
+        $conversation = new Conversation(
+            $this->agent,
+            $this->sessionStore,
+            session: $this->session,
+            stopSignal: $this->stopSignal,
+            userMessageProcessors: $this->userMessageProcessors,
+        );
+        $view = new ConversationView(
+            $terminal,
+            $this->title,
+            $this->subtitle,
+            $this->commands->all(),
+            $this->figlet,
+            $this->figletFont,
+            $this->userMessageProcessors,
+        );
+        $sessionTitleGeneration = new SessionTitleGeneration();
+        $scheduler = new TurnScheduler(
+            $conversation,
+            $view,
+            $sessionTitleGeneration,
+        );
+        $input = new InputHandler(
+            $view,
+            $this->inputHistory,
+            $scheduler,
+            $this->commands,
+            $conversation,
+            $this->configurationStore,
+        );
+        $scheduler->synchronizeHistory();
+        $view->onSubmit($input->handleSubmit(...));
+        $view->onDraftChange($input->handleDraftChange(...));
+        $view->onInput($input->handleInput(...));
+        $view->onTick($scheduler->tick(...));
 
         $view->run();
     }

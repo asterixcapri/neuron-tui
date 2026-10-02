@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 namespace NeuronTuiDemo\Tests;
 
+use Closure;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Providers\OpenAI\Responses\OpenAIResponses;
 use NeuronAI\Testing\FakeAIProvider;
+use NeuronInteraction\Command\CommandAdapterInterface;
+use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Configuration\ConfigurationStore;
-use NeuronInteraction\Conversation;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronInteraction\Storage\StorageInterface;
@@ -59,17 +61,25 @@ final class ModelCommandTest extends TestCase
             }
             EventLoop::delay(0.08, static fn() => $terminal->simulateInput("\x03"));
 
-            $conversation = new Conversation($agent, $sessions, session: $session);
-            $tui = Tui::make($conversation, $terminal, (new Commands())->addCommand(new ModelCommand()), configurationStore: $store);
+            $observed = null;
+            $tui = Tui::make($agent)
+                ->setSessionStore($sessions)
+                ->setSession($session)
+                ->setTerminal($terminal)
+                ->setCommands((new Commands())->addCommand($this->observeModel(static function (CommandAdapterInterface $adapter) use (&$observed): void {
+                    $observed = $adapter;
+                })))
+                ->setConfigurationStore($store);
             $tui->run();
+            self::assertNotNull($observed);
 
             self::assertSame($model, (new ConfigurationStore($storage, 'demo-user'))->read('model'));
             self::assertSame('dark', $store->read('theme'));
             if ($selection) {
                 self::assertSame(['theme' => 'dark'], $beforeSelection);
             }
-            self::assertInstanceOf(OpenAIResponses::class, $conversation->agent()->getProvider());
-            self::assertSame($history->getThreadId(), $conversation->agent()->getChatHistory()->getThreadId());
+            self::assertInstanceOf(OpenAIResponses::class, $observed->agent()->getProvider());
+            self::assertSame($history->getThreadId(), $observed->agent()->getChatHistory()->getThreadId());
             self::assertSame('Keep this conversation', $history->getMessages()[0]->getContent());
             self::assertStringContainsString("Model changed to {$model}.", AnsiUtils::stripAnsiCodes($terminal->getOutput()));
         } finally {
@@ -93,12 +103,19 @@ final class ModelCommandTest extends TestCase
         EventLoop::delay(0.04, static fn() => $terminal->simulateInput("\x1b"));
         EventLoop::delay(0.08, static fn() => $terminal->simulateInput("\x03"));
 
-        $conversation = new Conversation($agent, new SessionStore(new InMemoryStorage(), 'local'));
-        $tui = Tui::make($conversation, $terminal, (new Commands())->addCommand(new ModelCommand()), configurationStore: $store);
+        $observed = null;
+        $tui = Tui::make($agent)
+            ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
+            ->setTerminal($terminal)
+            ->setCommands((new Commands())->addCommand($this->observeModel(static function (CommandAdapterInterface $adapter) use (&$observed): void {
+                $observed = $adapter;
+            })))
+            ->setConfigurationStore($store);
         $tui->run();
+        self::assertNotNull($observed);
 
         self::assertSame(['model' => 'previous'], $store->entries());
-        self::assertSame($provider, $conversation->agent()->getProvider());
+        self::assertSame($provider, $observed->agent()->getProvider());
         self::assertStringNotContainsString('Model changed to', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
     }
 
@@ -113,12 +130,19 @@ final class ModelCommandTest extends TestCase
         EventLoop::queue(static fn() => $terminal->simulateInput("/model unknown:model\r"));
         EventLoop::delay(0.08, static fn() => $terminal->simulateInput("\x03"));
 
-        $conversation = new Conversation($agent, new SessionStore(new InMemoryStorage(), 'local'));
-        $tui = Tui::make($conversation, $terminal, (new Commands())->addCommand(new ModelCommand()), configurationStore: $store);
+        $observed = null;
+        $tui = Tui::make($agent)
+            ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
+            ->setTerminal($terminal)
+            ->setCommands((new Commands())->addCommand($this->observeModel(static function (CommandAdapterInterface $adapter) use (&$observed): void {
+                $observed = $adapter;
+            })))
+            ->setConfigurationStore($store);
         $tui->run();
+        self::assertNotNull($observed);
 
         self::assertSame('previous', $store->read('model'));
-        self::assertSame($provider, $conversation->agent()->getProvider());
+        self::assertSame($provider, $observed->agent()->getProvider());
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('Unknown provider: unknown.', $display);
         self::assertStringNotContainsString('Model changed to', $display);
@@ -140,12 +164,20 @@ final class ModelCommandTest extends TestCase
             EventLoop::queue(static fn() => $terminal->simulateInput("/model openai:gpt-5.4-nano\r"));
             EventLoop::delay(0.08, static fn() => $terminal->simulateInput("\x03"));
 
-            $conversation = new Conversation($agent, $sessions, session: $session);
-            $tui = Tui::make($conversation, $terminal, (new Commands())->addCommand(new ModelCommand()), configurationStore: $store);
+            $observed = null;
+            $tui = Tui::make($agent)
+                ->setSessionStore($sessions)
+                ->setSession($session)
+                ->setTerminal($terminal)
+                ->setCommands((new Commands())->addCommand($this->observeModel(static function (CommandAdapterInterface $adapter) use (&$observed): void {
+                    $observed = $adapter;
+                })))
+                ->setConfigurationStore($store);
             $tui->run();
+            self::assertNotNull($observed);
 
             self::assertSame('previous', $store->read('model'));
-            self::assertSame($session->getKey(), $conversation->agent()->getThreadId());
+            self::assertSame($session->getKey(), $observed->agent()->getThreadId());
             $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
             self::assertStringContainsString('Preferences unavailable', $display);
             self::assertStringNotContainsString('Model changed to', $display);
@@ -157,4 +189,35 @@ final class ModelCommandTest extends TestCase
             }
         }
     }
+    /** @param Closure(CommandAdapterInterface<mixed>): void $observe */
+    private function observeModel(Closure $observe): CommandInterface
+    {
+        return new class ($observe) implements CommandInterface {
+            private readonly ModelCommand $command;
+
+            /** @param Closure(CommandAdapterInterface<mixed>): void $observe */
+            public function __construct(private readonly Closure $observe)
+            {
+                $this->command = new ModelCommand();
+            }
+
+            public function name(): string
+            {
+                return $this->command->name();
+            }
+
+            public function describe(): string
+            {
+                return $this->command->describe();
+            }
+
+            /** @param CommandAdapterInterface<mixed> $adapter */
+            public function run(CommandAdapterInterface $adapter, string $value): void
+            {
+                ($this->observe)($adapter);
+                $this->command->run($adapter, $value);
+            }
+        };
+    }
+
 }
