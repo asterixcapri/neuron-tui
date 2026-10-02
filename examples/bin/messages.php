@@ -3,11 +3,11 @@
 declare(strict_types=1);
 
 use NeuronAI\Agent\Agent;
-use NeuronChatCore\Conversation\ConversationRuntime;
-use NeuronChatCore\InputHistory\InputHistory;
-use NeuronChatCore\Message\UserMessageProcessors;
-use NeuronChatCore\Session\SessionStore;
-use NeuronChatCore\Storage\InMemoryStorage;
+use NeuronInteraction\Conversation\ConversationRuntime;
+use NeuronInteraction\InputHistory\InputHistory;
+use NeuronInteraction\Message\UserMessageProcessors;
+use NeuronInteraction\Session\SessionStore;
+use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Tui;
 use NeuronTuiDemo\AIProviderFactory;
 use NeuronTuiDemo\FileReferenceProcessor;

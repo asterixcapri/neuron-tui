@@ -2,7 +2,7 @@
 
 _The native-stream revision supersedes the extraction's core FIFO and custom
 EventPublisher protocol. The Host Application still supplies a configured Agent
-and constructs `NeuronChatCore\Conversation\ConversationRuntime`; `Tui::make()`
+and constructs `NeuronInteraction\Conversation\ConversationRuntime`; `Tui::make()`
 receives that runtime. Core owns message preparation, Agent/Session binding,
 native Neuron output and supported response stop. The user-approved simplification
 removes core isBusy() and overlap admission: TUI derives interaction state from

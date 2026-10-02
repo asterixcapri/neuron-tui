@@ -19,7 +19,7 @@ use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Chat\Messages\Usage;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Tools\ToolCall;
-use NeuronChatCore\Message\UserMessageProcessorInterface;
+use NeuronInteraction\Message\UserMessageProcessorInterface;
 use NeuronTui\History\HistoryProjection;
 use NeuronTui\History\ProjectedEntry;
 use NeuronTui\View\HistoryEntryKind;

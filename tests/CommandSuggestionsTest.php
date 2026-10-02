@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace NeuronTui\Tests;
 
-use NeuronChatCore\Command\CommandInterface;
-use NeuronChatCore\Command\ConcurrentCommandInterface;
+use NeuronInteraction\Command\CommandInterface;
+use NeuronInteraction\Command\ConcurrentCommandInterface;
 use NeuronTui\View\CommandSuggestions;
 use PHPUnit\Framework\TestCase;
 

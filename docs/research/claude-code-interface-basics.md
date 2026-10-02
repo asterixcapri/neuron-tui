@@ -7,7 +7,7 @@
 > `CommandAdapterInterface`; il montaggio avviene tramite `Commands`.
 > La gestione dei tasti ora vive in `ConversationInput::handleInput()`; la
 > composizione e la presentazione della History iniziale in `Tui::run()`.
-> Nel contratto attuale `NeuronChatCore\Conversation\ConversationRuntime`
+> Nel contratto attuale `NeuronInteraction\Conversation\ConversationRuntime`
 > conserva Agent e Session ed espone lo stream Neuron;
 > `NeuronTui\Conversation\ConversationController` gestisce coda e ciclo della TUI.
 > I riferimenti al runtime TUI nel testo sotto sono storici.

@@ -12,7 +12,7 @@
     "require": {
         "php": ">=8.4.1",
         "amphp/amp": "^3.0",
-        "asterixcapri/neuron-chat-core": "dev-main",
+        "asterixcapri/neuron-interaction": "dev-feat/conversation-runtime",
         "league/commonmark": "^2.10",
         "neuron-core/neuron-ai": "^4.0",
         "symfony/tui": "^8.1.2",
@@ -45,7 +45,7 @@
     "repositories": [
         {
             "type": "path",
-            "url": "../neuron-chat-core",
+            "url": "../neuron-interaction",
             "options": {
                 "symlink": true
             }

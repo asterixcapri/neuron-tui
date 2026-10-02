@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-use NeuronChatCore\Conversation\ConversationRuntime;
-use NeuronChatCore\Session\SessionStore;
-use NeuronChatCore\Storage\InMemoryStorage;
+use NeuronInteraction\Conversation\ConversationRuntime;
+use NeuronInteraction\Session\SessionStore;
+use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Tui;
 use NeuronTuiDemo\AIProviderFactory;
 use NeuronTuiDemo\DemoAgent;

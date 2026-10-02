@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-use NeuronChatCore\Command\Commands;
-use NeuronChatCore\Configuration\ConfigurationStore;
-use NeuronChatCore\Conversation\ConversationRuntime;
-use NeuronChatCore\Session\SessionStore;
-use NeuronChatCore\Storage\FileStorage;
-use NeuronChatCore\Storage\InMemoryStorage;
+use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Configuration\ConfigurationStore;
+use NeuronInteraction\Conversation\ConversationRuntime;
+use NeuronInteraction\Session\SessionStore;
+use NeuronInteraction\Storage\FileStorage;
+use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Tui;
 use NeuronTuiDemo\AIProviderFactory;
 use NeuronTuiDemo\DemoAgent;

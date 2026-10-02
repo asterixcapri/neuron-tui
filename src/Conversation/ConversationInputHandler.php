@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace NeuronTui\Conversation;
 
-use NeuronChatCore\Command\Commands;
-use NeuronChatCore\Configuration\ConfigurationStore;
-use NeuronChatCore\InputHistory\InputHistory;
-use NeuronChatCore\Session\SessionStore;
+use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Configuration\ConfigurationStore;
+use NeuronInteraction\InputHistory\InputHistory;
+use NeuronInteraction\Session\SessionStore;
 use NeuronTui\Command\TuiCommandAdapter;
 use NeuronTui\View\ConversationView;
 use Symfony\Component\Tui\Event\InputEvent;

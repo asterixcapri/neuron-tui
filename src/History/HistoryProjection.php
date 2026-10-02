@@ -9,9 +9,9 @@ use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Tools\ToolCall;
-use NeuronChatCore\Message\UserMessageFactory;
-use NeuronChatCore\Message\UserMessageProcessorInterface;
-use NeuronChatCore\Message\UserMessageProcessors;
+use NeuronInteraction\Message\UserMessageFactory;
+use NeuronInteraction\Message\UserMessageProcessorInterface;
+use NeuronInteraction\Message\UserMessageProcessors;
 use NeuronTui\View\HistoryEntryKind;
 use NeuronTui\View\MessageTextFormatter;
 
