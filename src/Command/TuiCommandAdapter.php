@@ -100,7 +100,7 @@ final class TuiCommandAdapter extends AbstractCommandAdapter
     {
         $this->scheduler->synchronizeHistory();
 
-        $this->scheduler->submitMessage($prompt);
+        $this->scheduler->enqueueMessage($prompt);
     }
 
     public function requestSelection(Selection $request): void

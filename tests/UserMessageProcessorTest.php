@@ -36,6 +36,7 @@ use RuntimeException;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
+use function count;
 use function str_ends_with;
 use function str_starts_with;
 use function strlen;
@@ -45,15 +46,24 @@ final class UserMessageProcessorTest extends TestCase
 {
     private const string IMAGE = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
 
-    public function testOriginalMessageIsPaintedBeforePreparationWithoutDisplayProcessing(): void
+    public function testDisplayProjectionIsPaintedBeforePreparationWithoutChangingSubmittedInput(): void
     {
         $terminal = new VirtualTerminal(rows: 30);
         $provider = new FakeAIProvider(new AssistantMessage('Reply.'));
         $processor = $this->createMock(UserMessageProcessorInterface::class);
-        $processor->expects(self::never())->method('forDisplay');
+        $processor->expects(self::atLeastOnce())->method('forDisplay')->willReturnCallback(
+            static function (UserMessage $message): UserMessage {
+                self::assertSame('Original request', $message->getContent());
+                $display = clone $message;
+                $display->setContents('Public preview');
+
+                return $display;
+            },
+        );
         $processor->expects(self::once())->method('forAgent')->willReturnCallback(
             static function (UserMessage $message) use ($terminal, $provider): UserMessage {
-                self::assertStringContainsString('❯ Original request', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
+                self::assertStringContainsString('❯ Public preview', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
+                self::assertSame('Original request', $message->getContent());
                 self::assertSame([], $provider->getRecorded());
                 $prepared = clone $message;
                 $prepared->setContents('Private instructions');
@@ -394,6 +404,9 @@ final class UserMessageProcessorTest extends TestCase
             }
             public function forDisplay(UserMessage $message): UserMessage
             {
+                if (count($message->getContentBlocks()) < 2) {
+                    return clone $message;
+                }
                 TestCase::assertInstanceOf(FileContent::class, $message->getContentBlocks()[1]);
                 $result = clone $message;
                 $result->setContents('Message with attachment');

@@ -277,11 +277,11 @@ See [stop.php](examples/bin/stop.php) for the complete example.
 
 ## User message processors
 
-A user message processor changes what the Agent receives without changing what
-the user sees. Implement `NeuronInteraction\Message\UserMessageProcessorInterface`:
-`forAgent()` prepares submitted messages before they are sent. Live human input
-is shown immediately as written. `forDisplay()` projects resumed History and
-Command-generated prompt previews.
+A user message processor defines preparation for the Agent and projection for
+display. Implement `NeuronInteraction\Message\UserMessageProcessorInterface`:
+`forAgent()` prepares submitted messages before they are sent.
+`forDisplay()` projects all user messages for presentation,
+including live input, queued messages, Command prompts, and resumed History.
 
 ```php
 use NeuronInteraction\Conversation;
@@ -296,12 +296,13 @@ $conversation = new Conversation($agent, $sessionStore, userMessageProcessors: $
 Tui::make($conversation)->run();
 ```
 
-The TUI shows original input immediately, clears the composer and queues it.
-When its turn starts, `submitMessage()` applies preparation once and returns the
+The TUI shows the display projection immediately, clears the composer and queues
+the original input. When its turn starts, `submitMessage()` applies preparation
+once and returns the
 native stream. Command-generated prompts use the same submission API; processors
 preserve recognized expanded content. Saved messages are never changed by display
-projection. If preparation fails, the original remains visible with an error and
-returns to an empty composer without replacing a newer draft. Input recall stores
+projection. If preparation fails, the preview remains visible with an error and
+the original input returns to an empty composer without replacing a newer draft. Input recall stores
 the original submitted input. Reloaded messages use `forDisplay()` on the saved
 Agent History, so transformed content or attachments can have a different preview.
 
@@ -368,6 +369,10 @@ Neuron chunks through its internal TurnScheduler. The core
 Conversation owns preparation, Session/Agent binding and native streaming;
 it has no busy admission, queue or custom event protocol. This is
 the same boundary as a React frontend making sequential streaming POST requests.
+
+The scheduler queues all messages with `enqueueMessage(UserMessage $message)`.
+Display projection applies to every queued message. Its `tick()` prepares and runs
+one turn at a time; `isBusy()` includes both queued messages and active turn work.
 
 Preparation of pending input is deferred until its turn. A rejected queued input
 is reported and restored to an empty composer; a newer draft is preserved and
