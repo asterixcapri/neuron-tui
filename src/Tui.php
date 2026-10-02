@@ -167,10 +167,8 @@ final class Tui
         return $this;
     }
 
-    public function setFiglet(
-        string $text,
-        string $font = 'standard',
-    ): self {
+    public function setFiglet(string $text, string $font = 'standard'): self
+    {
         $this->ensureNotStarted();
 
         if (!in_array($font, self::FIGLET_FONTS, true)) {
