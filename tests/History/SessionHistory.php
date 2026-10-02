@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronTui\Tests\History;
 
+use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\History\ChatHistory;
 use NeuronInteraction\Session\Session;
 
@@ -12,6 +13,6 @@ final class SessionHistory
 {
     public static function of(Session|ChatHistory $session): ChatHistory
     {
-        return $session instanceof ChatHistory ? $session : new ChatHistory($session->messageStore(), $session->getKey());
+        return $session instanceof ChatHistory ? $session : $session->bindToAgent(new Agent())->getChatHistory();
     }
 }

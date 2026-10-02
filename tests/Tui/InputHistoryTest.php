@@ -215,7 +215,7 @@ final class InputHistoryTest extends TestCase
         $agent->setAiProvider($provider);
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
-        $agent = ($sessionStore->create())->bindTo($agent);
+        $agent = ($sessionStore->create())->bindToAgent($agent);
         $terminal = new VirtualTerminal(rows: 24);
 
         EventLoop::queue(
@@ -253,7 +253,7 @@ final class InputHistoryTest extends TestCase
             'Remember across clear after clear',
             $provider->getRecorded()[1]->messages[0]->getContent(),
         );
-        self::assertCount(2, (new SessionStore($storage, 'test-user'))->summaries());
+        self::assertCount(2, (new SessionStore($storage, 'test-user'))->list());
     }
 
     public function testResumingASessionKeepsItsInputHistoryAvailable(): void

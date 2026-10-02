@@ -64,7 +64,7 @@ final class SessionCompositionTest extends TestCase
         $documents = iterator_to_array($storage->entries('sessions'));
         self::assertCount(1, $documents);
         self::assertSame('alice', $documents[0]->metadata['userId']);
-        $created = $store->read($documents[0]->key);
+        $created = $store->get($documents[0]->key);
         self::assertNotNull($created);
         self::assertSame([], $created->getMessages());
     }
@@ -164,7 +164,7 @@ final class SessionCompositionTest extends TestCase
             self::assertSame($originalKey, $observation->agent()->getThreadId());
             self::assertIsString($originalKey);
             self::assertInstanceOf(SessionStore::class, $currentStore);
-            $stored = $currentStore->read($originalKey);
+            $stored = $currentStore->get($originalKey);
             self::assertNotNull($stored);
             self::assertEquals($beforeClear, $stored->getMessages());
         }
@@ -191,10 +191,10 @@ final class SessionCompositionTest extends TestCase
         self::assertCount(2, $documents);
         $created = array_values(array_filter($documents, static fn($document): bool => $document->key !== $earlier->getKey()));
         self::assertCount(1, $created);
-        $newSession = $store->read($created[0]->key);
+        $newSession = $store->get($created[0]->key);
         self::assertNotNull($newSession);
         self::assertSame([], $newSession->getMessages());
-        self::assertCount(1, $store->summaries());
+        self::assertCount(1, $store->list());
         self::assertStringNotContainsString('Stored subject', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
     }
 
@@ -239,7 +239,7 @@ final class SessionCompositionTest extends TestCase
                         if (count($received) === 1) {
                             SessionHistory::of($adapter->sessionStore()->create())->addMessage(new UserMessage('Kept by this module'));
                         } else {
-                            self::assertCount(1, $adapter->sessionStore()->summaries());
+                            self::assertCount(1, $adapter->sessionStore()->list());
                         }
                     },
                 );
@@ -342,7 +342,7 @@ final class SessionCompositionTest extends TestCase
     {
         $history = new SeededHistory();
         $history->addMessage(new UserMessage('External conversation'));
-        $agent = $history->bindTo(new Agent());
+        $agent = $history->bindToAgent(new Agent());
         $store = new SessionStore(new InMemoryStorage(), 'test-user');
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('An Agent with existing messages requires an explicit Session.');
@@ -360,7 +360,7 @@ final class SessionCompositionTest extends TestCase
         SessionHistory::of($session)->addMessage(new UserMessage('Selected conversation'));
         $history = new SeededHistory();
         $history->addMessage(new UserMessage('External conversation'));
-        $agent = $history->bindTo(new Agent());
+        $agent = $history->bindToAgent(new Agent());
         $terminal = new VirtualTerminal();
         $tui = Tui::make($agent)
             ->setSessionStore($store)
@@ -479,7 +479,7 @@ final class SessionCompositionTest extends TestCase
             SessionHistory::of($foreign)->addMessage(new UserMessage('Private Bob subject'));
             $initial = $sessionStore->create();
             $agent = (new Agent())->setThreadId('test-thread');
-            $agent = ($initial)->bindTo($agent);
+            $agent = ($initial)->bindToAgent($agent);
             $provider = new FakeAIProvider(new AssistantMessage('Persisted Alice answer'));
             $agent->setAiProvider($provider);
             $terminal = new VirtualTerminal(rows: 30);
@@ -506,7 +506,7 @@ final class SessionCompositionTest extends TestCase
             $tui->run();
 
             self::assertInstanceOf(ChatHistory::class, $cleared);
-            $clearedSession = $sessionStore->read($cleared->getThreadId());
+            $clearedSession = $sessionStore->get($cleared->getThreadId());
             self::assertNotNull($clearedSession);
             self::assertSame('alice', $clearedSession->getUserId());
             self::assertNotSame($initial->getKey(), $cleared->getThreadId());
@@ -514,15 +514,15 @@ final class SessionCompositionTest extends TestCase
             self::assertIsString($picker);
             self::assertStringContainsString('Alice subject', $picker);
             self::assertStringNotContainsString('Private Bob subject', $picker);
-            self::assertNotNull($sessionStore->read($observation->agent()->getChatHistory()->getThreadId()));
+            self::assertNotNull($sessionStore->get($observation->agent()->getChatHistory()->getThreadId()));
             self::assertSame($initial->getKey(), $observation->agent()->getChatHistory()->getThreadId());
-            $reopened = (new SessionStore(new FileStorage($directory), 'alice'))->read($initial->getKey());
+            $reopened = (new SessionStore(new FileStorage($directory), 'alice'))->get($initial->getKey());
             self::assertNotNull($reopened);
             self::assertCount(2, $reopened->getMessages());
             self::assertSame('Persisted Alice answer', $reopened->getMessages()[1]->getContent());
             self::assertEquals($reopened->getMessages(), $observation->agent()->getChatHistory()->getMessages());
-            self::assertNull($sessionStore->read($foreign->getKey()));
-            self::assertNotNull((new SessionStore(new FileStorage($directory), 'bob'))->read($foreign->getKey()));
+            self::assertNull($sessionStore->get($foreign->getKey()));
+            self::assertNotNull((new SessionStore(new FileStorage($directory), 'bob'))->get($foreign->getKey()));
             $provider->assertCallCount(1);
         } finally {
             foreach (glob($directory . '/sessions/*') ?: [] as $path) {
@@ -546,7 +546,7 @@ final class SessionCompositionTest extends TestCase
         $initial = $sessionStore->create();
         SessionHistory::of($initial)->addMessage(new UserMessage('Current conversation'));
         $agent = (new Agent())->setThreadId('test-thread');
-        $agent = ($initial)->bindTo($agent);
+        $agent = ($initial)->bindToAgent($agent);
         $terminal = new VirtualTerminal();
         $observation = new CommandObservation();
         $tui = Tui::make($agent)
@@ -569,7 +569,7 @@ final class SessionCompositionTest extends TestCase
             'No Session is named by that key.',
             AnsiUtils::stripAnsiCodes($terminal->getOutput()),
         );
-        self::assertCount(1, $sessionStore->summaries());
+        self::assertCount(1, $sessionStore->list());
     }
 
     /**

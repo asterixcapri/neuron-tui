@@ -120,7 +120,7 @@ final class UserMessageProcessorTest extends TestCase
     {
         $store = new SessionStore(new InMemoryStorage(), 'test-user');
         $session = $store->create();
-        $agent = $session->bindTo(new Agent());
+        $agent = $session->bindToAgent(new Agent());
         $agent->getChatHistory()->addMessage(new UserMessage('B[A[Earlier]]'));
         $agent->getChatHistory()->addMessage(new AssistantMessage('B[A[Reply]]'));
         $terminal = new VirtualTerminal(rows: 30);
@@ -318,7 +318,7 @@ final class UserMessageProcessorTest extends TestCase
             self::assertStringContainsString('Readable session', $display);
             self::assertStringNotContainsString('stored-payload', $display);
             self::assertSame('B[A[stored-payload]]', $session->getMessages()[0]->getContent());
-            self::assertSame('B[A[stored-payload]]', $store->read($session->getKey())?->getMessages()[0]->getContent());
+            self::assertSame('B[A[stored-payload]]', $store->get($session->getKey())?->getMessages()[0]->getContent());
         }
     }
 
@@ -497,7 +497,7 @@ final class UserMessageProcessorTest extends TestCase
             ->run();
 
         self::assertStringContainsString('❯ Message with attachment', AnsiUtils::stripAnsiCodes($reopened->getOutput()));
-        $restored = $store->read($session->getKey());
+        $restored = $store->get($session->getKey());
         self::assertNotNull($restored);
         self::assertCount(2, $restored->getMessages()[0]->getContentBlocks());
     }

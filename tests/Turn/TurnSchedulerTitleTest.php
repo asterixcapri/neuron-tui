@@ -30,7 +30,7 @@ final class TurnSchedulerTitleTest extends TestCase
         $store = new SessionStore(new InMemoryStorage(), 'local');
         $session = $store->create();
         $agent = $this->agent($requests);
-        $agent = ($session)->bindTo($agent);
+        $agent = ($session)->bindToAgent($agent);
         $terminal = new VirtualTerminal();
         EventLoop::queue(static fn() => $terminal->simulateInput("ciao\r"));
         EventLoop::delay(0.05, static fn() => $terminal->simulateInput("Configuriamo Redis\r"));
@@ -46,7 +46,7 @@ final class TurnSchedulerTitleTest extends TestCase
         self::assertSame('Configurazione Redis', $session->getTitle());
         self::assertSame(2, $requests->count);
         self::assertCount(6, $agent->getChatHistory()->getMessages());
-        self::assertSame('Configurazione Redis', $store->summaries()[0]->title);
+        self::assertSame('Configurazione Redis', $store->list()[0]->getTitle());
     }
 
     public function testTitleFailureDoesNotShowAWarningOrFailTheTurn(): void
@@ -55,7 +55,7 @@ final class TurnSchedulerTitleTest extends TestCase
         $store = new SessionStore(new InMemoryStorage(), 'local');
         $session = $store->create();
         $agent = $this->agent($requests);
-        $agent = ($session)->bindTo($agent);
+        $agent = ($session)->bindToAgent($agent);
         $terminal = new VirtualTerminal();
         EventLoop::queue(static fn() => $terminal->simulateInput("A subject\r"));
         EventLoop::delay(0.1, static fn() => $terminal->simulateInput("\x03"));
@@ -82,7 +82,7 @@ final class TurnSchedulerTitleTest extends TestCase
         $store = new SessionStore(new InMemoryStorage(), 'local');
         $session = $store->create();
         $agent = $this->agent($requests);
-        $agent = ($session)->bindTo($agent);
+        $agent = ($session)->bindToAgent($agent);
         $terminal = new VirtualTerminal();
         EventLoop::queue(static fn() => $terminal->simulateInput("A subject\r"));
         EventLoop::delay(0.1, static fn() => $terminal->simulateInput("\x03"));
@@ -103,7 +103,7 @@ final class TurnSchedulerTitleTest extends TestCase
         $requests->titleDelay = 0.15;
         $store = new SessionStore(new InMemoryStorage(), 'local');
         $session = $store->create();
-        $agent = $session->bindTo($this->agent($requests));
+        $agent = $session->bindToAgent($this->agent($requests));
         $terminal = new VirtualTerminal();
         EventLoop::queue(static fn() => $terminal->simulateInput("First subject\r"));
         EventLoop::delay(0.04, static fn() => $terminal->simulateInput("More detail\r"));
@@ -127,7 +127,7 @@ final class TurnSchedulerTitleTest extends TestCase
         $requests->titleFailures = 1;
         $store = new SessionStore(new InMemoryStorage(), 'local');
         $session = $store->create();
-        $agent = $session->bindTo($this->agent($requests));
+        $agent = $session->bindToAgent($this->agent($requests));
         $terminal = new VirtualTerminal();
         EventLoop::queue(static fn() => $terminal->simulateInput("A subject\r"));
         EventLoop::delay(0.05, static fn() => $terminal->simulateInput("More detail\r"));

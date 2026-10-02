@@ -183,7 +183,7 @@ default Store.
 To reopen a conversation, read and validate the initial Session before starting:
 
 ```php
-$session = $sessionStore->read($key);
+$session = $sessionStore->get($key);
 if ($session === null) {
     throw new InvalidArgumentException('The requested session does not exist.');
 }

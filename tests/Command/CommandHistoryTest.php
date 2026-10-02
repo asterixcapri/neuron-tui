@@ -14,6 +14,7 @@ use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Configuration\ConfigurationStore;
 use NeuronInteraction\Conversation;
+use NeuronInteraction\Session\SessionMessageStore;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Command\TuiCommandAdapter;
@@ -29,6 +30,7 @@ use function array_map;
 final class CommandHistoryTest extends TestCase
 {
     private SessionStore $sessionStore;
+    private SessionMessageStore $messageStore;
     private VirtualTerminal $terminal;
     private ConversationView $view;
     private TurnScheduler $scheduler;
@@ -37,7 +39,9 @@ final class CommandHistoryTest extends TestCase
     protected function setUp(): void
     {
         $agent = (new Agent())->setThreadId('test-thread');
-        $this->sessionStore = new SessionStore(new InMemoryStorage(), 'test-user');
+        $storage = new InMemoryStorage();
+        $this->sessionStore = new SessionStore($storage, 'test-user');
+        $this->messageStore = new SessionMessageStore($storage, 'sessions', 'test-user');
         $session = $this->sessionStore->create();
         $history = SessionHistory::of($session);
         $history->addMessage(new UserMessage('Earlier conversation'));
@@ -108,9 +112,9 @@ final class CommandHistoryTest extends TestCase
     public function testAgentReplacementKeepsTheSessionAndItsArchivedMessages(): void
     {
         $key = $this->scheduler->agent()->getChatHistory()->getThreadId();
-        $session = $this->sessionStore->read($key);
+        $session = $this->sessionStore->get($key);
         self::assertNotNull($session);
-        $session->messageStore()->archive($key, 1);
+        $this->messageStore->archive($key, 1);
         SessionHistory::of($session)->addMessage(new UserMessage('Active question'));
 
         $currentSession = $this->scheduler->session();

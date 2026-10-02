@@ -46,7 +46,7 @@ final class ModelCommandTest extends TestCase
             $store->write('theme', 'dark');
             $sessions = new SessionStore($storage, 'demo-user');
             $session = $sessions->create();
-            $agent = $session->bindTo(Agent::make());
+            $agent = $session->bindToAgent(Agent::make());
             $agent->setAiProvider(new FakeAIProvider());
             $history = $agent->getChatHistory();
             $history->addMessage(new UserMessage('Keep this conversation'));
