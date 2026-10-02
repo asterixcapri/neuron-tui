@@ -7,8 +7,9 @@ before run. Tui constructs its Conversation once startup begins, after checking
 the terminal. An optional initial Session is selected directly; otherwise the
 Conversation creates a new Session in the configured Store, or in an independent
 in-memory Store when none is supplied. Selecting an initial Session requires an
-explicit Store; Session and Store setters may be called in either order before
-startup. Configuration creates
+explicit Store; Conversation reloads the Session from that Store and rejects a
+missing Session. Session and Store setters may be called in either order before
+startup. Tui initializes its default Store in its constructor. Configuration creates
 no temporary Session. This keeps execution and session-switching operations out
 of the host's TUI setup interface without adding a separate configuration object.
 Conversation retains its constructor-based composition and operational methods
