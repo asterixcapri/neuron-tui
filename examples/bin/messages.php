@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 use NeuronAI\Agent\Agent;
-use NeuronInteraction\Conversation\ConversationRuntime;
+use NeuronInteraction\Conversation;
 use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Message\UserMessageProcessors;
 use NeuronInteraction\Session\SessionStore;
@@ -28,7 +28,7 @@ $userMessageProcessors = (new UserMessageProcessors())->addProcessor([
 ]);
 
 Tui::make(
-    new ConversationRuntime($agent, new SessionStore(new InMemoryStorage(), 'local'), userMessageProcessors: $userMessageProcessors),
+    new Conversation($agent, new SessionStore(new InMemoryStorage(), 'local'), userMessageProcessors: $userMessageProcessors),
     inputHistory: $inputHistory
 )
     ->setSubtitle('Try: Explain @composer.json')

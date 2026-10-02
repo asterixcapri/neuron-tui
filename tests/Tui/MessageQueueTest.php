@@ -12,7 +12,7 @@ use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Providers\ProviderResponse;
 use NeuronAI\Testing\FakeAIProvider;
-use NeuronInteraction\Conversation\ConversationRuntime;
+use NeuronInteraction\Conversation;
 use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Message\UserMessageProcessorInterface;
 use NeuronInteraction\Storage\InMemoryStorage;
@@ -56,7 +56,7 @@ final class MessageQueueTest extends TestCase
         };
         $inputs = new InputHistory(new InMemoryStorage());
         $terminal = new VirtualTerminal(rows: 40);
-        $runtime = new ConversationRuntime((new Agent())->setAiProvider($provider), userMessageProcessors: $processor);
+        $conversation = new Conversation((new Agent())->setAiProvider($provider), userMessageProcessors: $processor);
         EventLoop::queue(static fn() => $terminal->simulateInput("First\r"));
         EventLoop::delay(0.03, static fn() => $terminal->simulateInput("Invalid\rNext\rNewer draft"));
         $beforeCompletion = null;
@@ -64,7 +64,7 @@ final class MessageQueueTest extends TestCase
             $beforeCompletion = $processor->prepared;
         });
         EventLoop::delay(0.4, static fn() => $terminal->simulateInput("\x03"));
-        Tui::make($runtime, $terminal, inputHistory: $inputs)->run();
+        Tui::make($conversation, $terminal, inputHistory: $inputs)->run();
 
         self::assertSame(['First'], $beforeCompletion);
         self::assertSame(['First', 'Invalid', 'Next'], $processor->prepared);
@@ -102,11 +102,11 @@ final class MessageQueueTest extends TestCase
             }
         };
         $terminal = new VirtualTerminal(rows: 30);
-        $runtime = new ConversationRuntime((new Agent())->setAiProvider($provider), userMessageProcessors: $processor);
+        $conversation = new Conversation((new Agent())->setAiProvider($provider), userMessageProcessors: $processor);
         EventLoop::queue(static fn() => $terminal->simulateInput("First\r"));
         EventLoop::delay(0.03, static fn() => $terminal->simulateInput("Recover me\r"));
         EventLoop::delay(0.25, static fn() => $terminal->simulateInput("\x03"));
-        Tui::make($runtime, $terminal)->run();
+        Tui::make($conversation, $terminal)->run();
         self::assertCount(1, $provider->getRecorded());
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('Preparation failed', $display);

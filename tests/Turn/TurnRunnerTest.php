@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace NeuronTui\Tests\Conversation;
+namespace NeuronTui\Tests\Turn;
 
 use Generator;
 use NeuronAI\Agent\Agent;

@@ -2,13 +2,14 @@
 
 declare(strict_types=1);
 
-namespace NeuronTui\Conversation;
+namespace NeuronTui\Input;
 
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Configuration\ConfigurationStore;
+use NeuronInteraction\Conversation;
 use NeuronInteraction\InputHistory\InputHistory;
-use NeuronInteraction\Session\SessionStore;
 use NeuronTui\Command\TuiCommandAdapter;
+use NeuronTui\Turn\TurnScheduler;
 use NeuronTui\View\ConversationView;
 use Symfony\Component\Tui\Event\InputEvent;
 use Symfony\Component\Tui\Event\SubmitEvent;
@@ -21,20 +22,20 @@ use Throwable;
  *
  * @internal
  */
-final class ConversationInputHandler
+final class InputHandler
 {
     public function __construct(
         private readonly ConversationView $view,
         private readonly InputHistory $inputHistory,
-        private readonly ConversationController $controller,
+        private readonly TurnScheduler $scheduler,
         private readonly Commands $commands,
-        private readonly SessionStore $sessionStore,
+        private readonly Conversation $conversation,
         private readonly ConfigurationStore $configurationStore,
     ) {}
 
     public function handleSubmit(SubmitEvent $event): void
     {
-        if ($this->controller->isStopped()) {
+        if ($this->scheduler->isStopped()) {
             return;
         }
 
@@ -52,14 +53,14 @@ final class ConversationInputHandler
             $this->commands->run(
                 $submission->name,
                 $submission->value,
-                new TuiCommandAdapter($this->controller, $this->view, $this->commands, $this->sessionStore, $this->configurationStore),
+                new TuiCommandAdapter($this->scheduler, $this->view, $this->commands, $this->conversation, $this->configurationStore),
             );
 
             return;
         }
 
         try {
-            $this->controller->submitUserMessage($original);
+            $this->scheduler->submitUserMessage($original);
         } catch (Throwable $exception) {
             $this->view->showError($exception->getMessage());
 
@@ -86,7 +87,7 @@ final class ConversationInputHandler
 
         if ($keys->matches($event->getData(), 'quit')) {
             $event->stopPropagation();
-            $this->controller->stop();
+            $this->scheduler->stop();
 
             return;
         }
@@ -100,11 +101,11 @@ final class ConversationInputHandler
         if (
             $keys->matches($event->getData(), 'interrupt-turn')
             && !$this->view->hasCommandSuggestions()
-            && $this->controller->isBusy()
-            && $this->controller->supportsResponseStop()
+            && $this->scheduler->isBusy()
+            && $this->scheduler->supportsResponseStop()
         ) {
             $event->stopPropagation();
-            $this->controller->requestInterruption();
+            $this->scheduler->requestInterruption();
 
             return;
         }

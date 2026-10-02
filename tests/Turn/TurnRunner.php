@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace NeuronTui\Tests\Conversation;
+namespace NeuronTui\Tests\Turn;
 
 use Closure;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\Messages\UserMessage;
-use NeuronTui\Conversation\TurnRenderer;
+use NeuronTui\Turn\TurnRenderer;
 use NeuronTui\View\ConversationView;
 
 /** Connects native Neuron streaming to terminal presentation. @internal */

@@ -5,7 +5,7 @@ declare(strict_types=1);
 use NeuronInteraction\Command\ClearCommand;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Command\ResumeCommand;
-use NeuronInteraction\Conversation\ConversationRuntime;
+use NeuronInteraction\Conversation;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\FileStorage;
 use NeuronTui\Tui;
@@ -30,6 +30,6 @@ $commands = (new Commands())->addCommand([
 ]);
 
 Tui::make(
-    new ConversationRuntime($agent, $sessionStore, session: $session),
+    new Conversation($agent, $sessionStore, session: $session),
     commands: $commands,
 )->run();

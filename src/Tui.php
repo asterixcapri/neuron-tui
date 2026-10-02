@@ -9,13 +9,12 @@ use LogicException;
 use NeuronAI\Agent\Agent;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Configuration\ConfigurationStore;
-use NeuronInteraction\Conversation\ConversationRuntime;
+use NeuronInteraction\Conversation;
 use NeuronInteraction\InputHistory\InputHistory;
-use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\InMemoryStorage;
-use NeuronTui\Conversation\ConversationController;
-use NeuronTui\Conversation\ConversationInputHandler;
+use NeuronTui\Input\InputHandler;
 use NeuronTui\Session\SessionTitleGeneration;
+use NeuronTui\Turn\TurnScheduler;
 use NeuronTui\View\ConversationView;
 use RuntimeException;
 use Symfony\Component\Tui\Terminal\Terminal;
@@ -52,8 +51,6 @@ final class Tui
 
     private readonly Commands $commands;
 
-    private readonly SessionStore $sessionStore;
-
     private readonly ConfigurationStore $configurationStore;
 
     private readonly InputHistory $inputHistory;
@@ -62,27 +59,26 @@ final class Tui
 
 
     public function __construct(
-        private readonly ConversationRuntime $runtime,
+        private readonly Conversation $conversation,
         private readonly ?TerminalInterface $terminal = null,
         ?Commands $commands = null,
         ?ConfigurationStore $configurationStore = null,
         ?InputHistory $inputHistory = null,
     ) {
         $this->commands = $commands ?? new Commands();
-        $this->sessionStore = $this->runtime->sessionStore();
         $this->configurationStore = $configurationStore ?? new ConfigurationStore(new InMemoryStorage(), 'local');
         $this->inputHistory = $inputHistory ?? new InputHistory(new InMemoryStorage());
     }
 
     public static function make(
-        ConversationRuntime $runtime,
+        Conversation $conversation,
         ?TerminalInterface $terminal = null,
         ?Commands $commands = null,
         ?ConfigurationStore $configurationStore = null,
         ?InputHistory $inputHistory = null,
     ): self {
         return new self(
-            $runtime,
+            $conversation,
             $terminal,
             $commands,
             $configurationStore,
@@ -129,7 +125,7 @@ final class Tui
     /** The Agent currently answering, including a copy bound to a selected Session. */
     public function agent(): Agent
     {
-        return $this->runtime->agent();
+        return $this->conversation->agent();
     }
 
     public function run(): void
@@ -145,27 +141,27 @@ final class Tui
             $this->commands->all(),
             $this->figlet,
             $this->figletFont,
-            $this->runtime->userMessageProcessors(),
+            $this->conversation->userMessageProcessors(),
         );
         $sessionTitleGeneration = new SessionTitleGeneration();
-        $controller = new ConversationController(
-            $this->runtime,
+        $scheduler = new TurnScheduler(
+            $this->conversation,
             $view,
             $sessionTitleGeneration,
         );
-        $input = new ConversationInputHandler(
+        $input = new InputHandler(
             $view,
             $this->inputHistory,
-            $controller,
+            $scheduler,
             $this->commands,
-            $this->sessionStore,
+            $this->conversation,
             $this->configurationStore,
         );
-        $controller->synchronizeHistory();
+        $scheduler->synchronizeHistory();
         $view->onSubmit($input->handleSubmit(...));
         $view->onDraftChange($input->handleDraftChange(...));
         $view->onInput($input->handleInput(...));
-        $view->onTick($controller->tick(...));
+        $view->onTick($scheduler->tick(...));
 
         if (
             $terminal instanceof Terminal

@@ -1,14 +1,25 @@
-# The TUI is composed around a host-supplied conversation runtime
+# The TUI is composed around a host-supplied Conversation
+
+_2026-10-02 — Naming revision: the core class
+`NeuronInteraction\Conversation\ConversationRuntime` becomes
+`NeuronInteraction\Conversation`. The internal TUI ConversationController becomes
+`NeuronTui\Turn\TurnScheduler`, and input interpretation moves to
+`NeuronTui\Input\InputHandler`. ConversationView keeps its name.
+CommandAdapterInterface retains its Agent and Session controls; optional
+AbstractCommandAdapter shares delegation without exposing the Conversation to
+Commands. This revision changes names and delegation, preserving FIFO,
+preparation, response stop, command admission, History and title generation.
+The historical decision below retains its original terminology._
 
 _The native-stream revision supersedes the extraction's core FIFO and custom
 EventPublisher protocol. The Host Application still supplies a configured Agent
-and constructs `NeuronInteraction\Conversation\ConversationRuntime`; `Tui::make()`
-receives that runtime. Core owns message preparation, Agent/Session binding,
+and constructs `NeuronInteraction\Conversation`; `Tui::make()`
+receives that Conversation. Core owns message preparation, Agent/Session binding,
 native Neuron output and supported response stop. The user-approved simplification
 removes core isBusy() and overlap admission: TUI derives interaction state from
 its own preparation, ready stream, running task and pending queue. Hosts coordinate
 external executions; core has no session execution lock.
-The TUI is the terminal frontend: its internal ConversationController owns
+The TUI is the terminal frontend: its internal TurnScheduler owns
 pending original inputs, FIFO progression,
 Amp scheduling, stream consumption, presentation and Session title scheduling.
 This matches a React frontend that queues inputs and submits one streaming HTTP

@@ -7,7 +7,7 @@ Agent.
 
 **Neuron TUI**:
 The reusable terminal Adapter through which a person converses with an Agent
-configured by a Host Application through its conversation runtime.
+configured by a Host Application through its Conversation.
 _Avoid_: Neuron CLI, executable, command
 
 **Agent**:
@@ -17,7 +17,7 @@ Agents, but Neuron TUI sees only the Agent it converses with.
 _Avoid_: Bot, model
 
 **Host Application**:
-The application that configures the Agent, composes the conversation runtime
+The application that configures the Agent, composes the Conversation
 and starts the interaction.
 _Avoid_: Neuron TUI, library
 
@@ -80,9 +80,9 @@ _Avoid_: Choice option, Picker row, menu item
 
 **Concurrent command**:
 A Command declared safe to execute while an Agent is working, without
-interfering with the state used by that work. The core runtime permits only
-Concurrent Commands while busy; the interaction Adapter may further restrict
-admission and presents refusal.
+interfering with the state used by that work. Each interaction Adapter decides
+admission; Neuron TUI admits only Concurrent Commands while busy and presents
+refusal.
 _Avoid_: Async command, background command, command that runs while working
 
 **Command controls**:
@@ -94,8 +94,7 @@ _Avoid_: Command context, environment, facade, API
 
 **Command Adapter**:
 The realization of Command controls in a particular interaction environment.
-It presents shared runtime admission and may impose additional restrictions,
-carries out Command operations, and interprets
+It decides Command admission, carries out Command operations, and interprets
 their technical outcomes as terminal effects, backend responses, or other
 output appropriate to that environment.
 _Avoid_: Command runner, Command result
@@ -126,9 +125,9 @@ completed for further writing or taken immediately; nothing is suspended, so
 this is not the Picker, whatever the two look like.
 _Avoid_: Picker, menu, autocomplete, palette, command palette
 
-**Conversation runtime**:
-The shared execution component holding the current Agent and Session and
-producing a response stream for one submitted message.
+**Conversation**:
+The active interaction with an Agent in a selected Session, through which submitted
+messages produce response streams. Pending input and turn scheduling belong to the client.
 _Avoid_: TUI, event loop, Agent
 
 **Pending messages**:
