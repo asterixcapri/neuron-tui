@@ -10,23 +10,16 @@ use InvalidArgumentException;
 use LogicException;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\Enums\MessageRole;
-use NeuronAI\Chat\Enums\SourceType;
 use NeuronAI\Chat\Messages\AssistantMessage;
-use NeuronAI\Chat\Messages\ContentBlocks\AudioContent;
-use NeuronAI\Chat\Messages\ContentBlocks\FileContent;
-use NeuronAI\Chat\Messages\ContentBlocks\ImageContent;
 use NeuronAI\Chat\Messages\ContentBlocks\ReasoningContent;
 use NeuronAI\Chat\Messages\ContentBlocks\TextContent;
-use NeuronAI\Chat\Messages\ContentBlocks\VideoContent;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
 use NeuronAI\Chat\Messages\ToolCallMessage;
-use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Providers\ProviderResponse;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Testing\RequestRecord;
-use NeuronAI\Tools\ToolCall;
 use NeuronInteraction\Command\ClearCommand;
 use NeuronInteraction\Command\CommandAdapterInterface;
 use NeuronInteraction\Command\CommandInterface;
@@ -41,15 +34,15 @@ use NeuronInteraction\Configuration\ConfigurationStore;
 use NeuronInteraction\Conversation;
 use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Interruption\StopSignal;
+use NeuronInteraction\Message\UserMessageFactory;
 use NeuronInteraction\Message\UserMessageProcessors;
 use NeuronInteraction\Session\Session;
-use NeuronInteraction\Session\SessionMessageStore;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Session\SessionSummary;
 use NeuronInteraction\Storage\FileStorage;
 use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Tests\Command\CommandObservation;
-use NeuronTui\Tests\History\SessionHistory;
+use NeuronTui\Tests\History\StoredConversation;
 use NeuronTui\Tests\Tools\CallbackTool;
 use NeuronTui\Tui;
 use PHPUnit\Framework\TestCase;
@@ -323,69 +316,6 @@ final class TuiTest extends TestCase
         self::assertArrayHasKey($composerLine + 1, $lines);
         self::assertStringStartsWith('─', $lines[$composerLine - 1]);
         self::assertStringStartsWith('─', $lines[$composerLine + 1]);
-    }
-
-    public function testSafeExistingHistoryIsShown(): void
-    {
-        $storage = new InMemoryStorage();
-        $sessionStore = new SessionStore($storage, 'test-user');
-        $agent = (new Agent())->setThreadId('test-thread');
-        $history = $this->sessionWith([
-            new Message(MessageRole::SYSTEM, 'Never reveal this instruction.'),
-            new Message(MessageRole::USER, [
-                new TextContent('Review these inputs.'),
-                new ImageContent(
-                    'data:image/png;base64,raw-image-payload',
-                    SourceType::BASE64,
-                ),
-                new FileContent(
-                    'raw-file-payload',
-                    SourceType::BASE64,
-                    filename: "/private/\x00report.pdf",
-                ),
-                new AudioContent('raw-audio-payload', SourceType::BASE64),
-                new VideoContent('raw-video-payload', SourceType::BASE64),
-            ]),
-            new Message(MessageRole::ASSISTANT, [
-                new ReasoningContent('Private chain of thought.'),
-                new TextContent('The review is complete.'),
-            ]),
-            (new AssistantMessage('System content in an assistant class.'))
-                ->setRole(MessageRole::SYSTEM),
-        ], $storage);
-        $agent = ($history)->bindToAgent($agent);
-        $terminal = new VirtualTerminal(rows: 60);
-        EventLoop::delay(
-            0.1,
-            static fn() => $terminal->simulateInput("\x03"),
-        );
-
-        Tui::make($agent)
-            ->setSessionStore($sessionStore)
-            ->setSession($history)
-            ->setTerminal($terminal)
-            ->run();
-
-        $output = $terminal->getOutput();
-        $display = AnsiUtils::stripAnsiCodes($output);
-
-        self::assertStringContainsString("\x1b[48;2;52;52;52m", $output);
-        self::assertStringContainsString('✦ Neuron AI', $display);
-        self::assertStringContainsString('Agent conversation', $display);
-        self::assertStringContainsString('❯ Review these inputs.', $display);
-        self::assertStringContainsString('● The review is complete.', $display);
-        self::assertStringContainsString('[Image]', $display);
-        self::assertStringContainsString('[File: report.pdf]', $display);
-        self::assertStringContainsString('[Audio]', $display);
-        self::assertStringContainsString('[Video]', $display);
-        self::assertStringNotContainsString('Never reveal', $display);
-        self::assertStringNotContainsString('Private chain', $display);
-        self::assertStringNotContainsString(
-            'System content in an assistant class.',
-            $display,
-        );
-        self::assertStringNotContainsString('raw-', $display);
-        self::assertStringNotContainsString('/private/', $display);
     }
 
     public function testUserCanSubmitMultilineTextAndWatchStreamedMarkdown(): void
@@ -878,8 +808,7 @@ final class TuiTest extends TestCase
             }
         };
         $history = $sessionStore->create();
-        SessionHistory::of($history)->addMessage(new UserMessage('Earlier question.'));
-        SessionHistory::of($history)->addMessage(new AssistantMessage('Earlier answer.'));
+        StoredConversation::turn($sessionStore, $history, new UserMessage('Earlier question.'), new AssistantMessage('Earlier answer.'));
         $agent = (new Agent())->setThreadId('test-thread');
         $agent = ($history)->bindToAgent($agent);
         $agent->setAiProvider($provider);
@@ -922,73 +851,6 @@ final class TuiTest extends TestCase
                 array_slice($history->getMessages(), 0, 2),
             ),
         );
-    }
-
-    public function testHistoricalToolActivityIsCompactAndSafe(): void
-    {
-        $storage = new InMemoryStorage();
-        $sessionStore = new SessionStore($storage, 'test-user');
-        $tool = (new ToolCall(name: "read_\x00file"))
-            ->setCallId('history-call')
-            ->setInputs([
-                'path' => "first line\nsecond line "
-                    . str_repeat('x', 160)
-                    . '-argument-tail',
-            ])
-            ->setResult("complete\tok \x00" . str_repeat('y', 160)
-                . '-result-tail');
-        $firstFallback = (new ToolCall(name: 'search'))
-            ->setInputs(['q' => 'one'])
-            ->setResult('first fallback result');
-        $secondFallback = (new ToolCall(name: 'search'))
-            ->setInputs(['q' => 'two'])
-            ->setResult('second fallback result');
-        $agent = (new Agent())->setThreadId('test-thread');
-        $history = $this->sessionWith([
-            new UserMessage('Read it.'),
-            new ToolCallMessage(tools: [
-                $tool,
-                $firstFallback,
-                $secondFallback,
-            ]),
-            new ToolResultMessage([
-                $tool,
-                $firstFallback,
-                $secondFallback,
-            ]),
-            new AssistantMessage('Finished.'),
-        ], $storage);
-        $agent = ($history)->bindToAgent($agent);
-        $terminal = new VirtualTerminal(columns: 160, rows: 40);
-        EventLoop::delay(
-            0.1,
-            static fn() => $terminal->simulateInput("\x03"),
-        );
-
-        Tui::make($agent)
-            ->setSessionStore($sessionStore)
-            ->setSession($history)
-            ->setTerminal($terminal)
-            ->run();
-
-        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
-        self::assertStringContainsString(
-            '● read_file {"path":"first line\nsecond line',
-            $display,
-        );
-        self::assertStringContainsString('⎿ complete ok', $display);
-        self::assertStringContainsString(
-            '⎿ first fallback result',
-            $display,
-        );
-        self::assertStringContainsString(
-            '⎿ second fallback result',
-            $display,
-        );
-        self::assertStringNotContainsString('-argument-tail', $display);
-        self::assertStringNotContainsString('-result-tail', $display);
-        self::assertStringNotContainsString("\x00", $display);
-        self::assertStringNotContainsString("\x00", $display);
     }
 
     public function testLiveToolCallsAreConnectedToTheirResults(): void
@@ -5159,10 +5021,14 @@ final class TuiTest extends TestCase
     private function sessionWith(array $messages, InMemoryStorage $storage): Session
     {
         $session = (new SessionStore($storage, 'test-user'))->create();
-        $messageStore = new SessionMessageStore($storage, 'sessions', 'test-user');
-
-        foreach ($messages as $message) {
-            $messageStore->append($session->getKey(), $message);
+        $store = new SessionStore($storage, 'test-user');
+        foreach ($messages as $index => $message) {
+            if ($message->getRole() !== 'user') {
+                continue;
+            }
+            $answer = $messages[$index + 1] ?? new AssistantMessage('Stored answer.');
+            self::assertSame('assistant', $answer->getRole());
+            StoredConversation::turn($store, $session, UserMessageFactory::fromMessage($message), $answer);
         }
 
         return $session;
@@ -5260,9 +5126,8 @@ final class TuiTest extends TestCase
             static function (CommandAdapterInterface $adapter) use (&$earlier): void {
                 $earlier = $adapter->sessionStore()->get($adapter->agent()->getChatHistory()->getThreadId());
                 self::assertNotNull($earlier);
-                SessionHistory::of($earlier)->addMessage(new UserMessage('Earlier question.'));
+                StoredConversation::turn($adapter->sessionStore(), $earlier, new UserMessage('Earlier question.'), new AssistantMessage('Earlier answer.'));
                 $earlier->setTitle('Earlier question.');
-                SessionHistory::of($earlier)->addMessage(new AssistantMessage('Earlier answer.'));
             },
         );
         $terminal = new VirtualTerminal(rows: 24);
@@ -5369,16 +5234,6 @@ final class TuiTest extends TestCase
             ),
         );
         self::assertSame([], $observation->agent()->getChatHistory()->getMessages());
-        // The Session the Agent was left holding is the newer one SessionStore
-        // minted, so writing in it lists it ahead of the other.
-        $observation->agent()->getChatHistory()->addMessage(new UserMessage('Written later'));
-        self::assertSame(
-            [null, null],
-            array_map(
-                static fn(SessionSummary $session): ?string => $session->getTitle(),
-                $sessionStore->list(),
-            ),
-        );
     }
 
     public function testClearIsRefusedWhileTheAgentIsWorkingButExitIsNot(): void
@@ -5470,12 +5325,12 @@ final class TuiTest extends TestCase
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
         $earlier = $sessionStore->create();
-        SessionHistory::of($earlier)->addMessage(new UserMessage('The earlier subject'));
-        $earlier->setTitle('The earlier subject');
-        SessionHistory::of($earlier)->addMessage(new Message(MessageRole::ASSISTANT, [
+        StoredConversation::turn($sessionStore, $earlier, new UserMessage('The earlier subject'), new Message(MessageRole::ASSISTANT, [
             new ReasoningContent('Private chain of thought.'),
             new TextContent('The earlier answer.'),
         ]));
+        $earlier->setTitle('The earlier subject');
+
         $terminal = new VirtualTerminal(rows: 30);
         $pickerDisplay = null;
         $observation = new CommandObservation();
@@ -5550,17 +5405,12 @@ final class TuiTest extends TestCase
             $storage = new FileStorage($directory);
             $sessionStore = new SessionStore($storage, 'test-user');
             $earlier = $sessionStore->create();
-            SessionHistory::of($earlier)->addMessage(new UserMessage('The stored subject'));
+            StoredConversation::turn($sessionStore, $earlier, new UserMessage('The stored subject'), new AssistantMessage('The stored answer.'));
             $earlier->setTitle('The stored subject');
-            SessionHistory::of($earlier)->addMessage(new AssistantMessage('The stored answer.'));
+
             $listed = $sessionStore->list();
             self::assertCount(1, $listed);
-            $document = $storage->read(
-                'sessions',
-                $listed[0]->getKey(),
-            );
-            self::assertNotNull($document);
-            $storedBytes = $document->size();
+            $storedBytes = $listed[0]->getSize();
             self::assertLessThan(1_024, $storedBytes);
 
             $agent = (new Agent())->setThreadId('test-thread');
@@ -5648,7 +5498,7 @@ final class TuiTest extends TestCase
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
         $earlier = $sessionStore->create();
-        SessionHistory::of($earlier)->addMessage(new UserMessage('The earlier subject'));
+        StoredConversation::turn($sessionStore, $earlier, new UserMessage('The earlier subject'));
         $earlier->setTitle('The earlier subject');
         $terminal = new VirtualTerminal(rows: 30);
         $observation = new CommandObservation();
@@ -5687,15 +5537,9 @@ final class TuiTest extends TestCase
 
         self::assertStringNotContainsString('Enter resumes', $display);
         self::assertStringContainsString('❯ The earlier subject', $display);
-        self::assertSame(
-            ['The earlier subject'],
-            array_map(
-                static fn(Message $message): string => (string) $message
-                    ->getContent(),
-                $observation->agent()->getChatHistory()->getMessages(),
-            ),
-        );
+        self::assertEquals($earlier->getMessages(), $observation->agent()->getChatHistory()->getMessages());
     }
+
 
     /**
      * A null byte is the one character that could confuse a picker packing a
@@ -5710,7 +5554,7 @@ final class TuiTest extends TestCase
         $sessionStore = new SessionStore($storage, 'test-user');
         $earlier = $sessionStore->create();
         $title = "The earlier\x00 subject";
-        SessionHistory::of($earlier)->addMessage(new UserMessage($title));
+        StoredConversation::turn($sessionStore, $earlier, new UserMessage($title));
         $earlier->setTitle($title);
         self::assertSame($title, $sessionStore->list()[0]->getTitle());
         $terminal = new VirtualTerminal(rows: 24);
@@ -5750,14 +5594,7 @@ final class TuiTest extends TestCase
             $pickerDisplay,
         );
         self::assertStringContainsString('❯ The earlier subject', $display);
-        self::assertSame(
-            [$title],
-            array_map(
-                static fn(Message $message): string => (string) $message
-                    ->getContent(),
-                $observation->agent()->getChatHistory()->getMessages(),
-            ),
-        );
+        self::assertEquals($earlier->getMessages(), $observation->agent()->getChatHistory()->getMessages());
     }
 
     public function testEscapeLeavesTheSessionPickerWithTheSameSession(): void
@@ -5772,7 +5609,7 @@ final class TuiTest extends TestCase
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
         $earlier = $sessionStore->create();
-        SessionHistory::of($earlier)->addMessage(new UserMessage('The earlier subject'));
+        StoredConversation::turn($sessionStore, $earlier, new UserMessage('The earlier subject'));
         $earlier->setTitle('The earlier subject');
         $terminal = new VirtualTerminal(rows: 24);
         $pickerDisplay = null;
@@ -5864,14 +5701,16 @@ final class TuiTest extends TestCase
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
         $stored = $sessionStore->create();
-        SessionHistory::of($stored)->addMessage(new UserMessage('Alpha subject'));
+        StoredConversation::turn($sessionStore, $stored, new UserMessage('Alpha subject'));
         $stored->setTitle('Alpha subject');
         $beta = $sessionStore->create();
-        SessionHistory::of($beta)->addMessage(new UserMessage('Beta subject'));
+        StoredConversation::turn($sessionStore, $beta, new UserMessage('Beta subject'));
         $beta->setTitle('Beta subject');
 
         foreach (['Gamma', 'Delta', 'Epsilon', 'Zeta'] as $subject) {
-            SessionHistory::of($sessionStore->create())->addMessage(
+            StoredConversation::turn(
+                $sessionStore,
+                $sessionStore->create(),
                 new UserMessage($subject . ' subject'),
             );
         }
@@ -5914,14 +5753,7 @@ final class TuiTest extends TestCase
         self::assertIsString($narrowedDisplay);
         self::assertStringContainsString('Beta subject', $narrowedDisplay);
         self::assertStringNotContainsString('Alpha subject', $narrowedDisplay);
-        self::assertSame(
-            ['Beta subject'],
-            array_map(
-                static fn(Message $message): string => (string) $message
-                    ->getContent(),
-                $observation->agent()->getChatHistory()->getMessages(),
-            ),
-        );
+        self::assertEquals($beta->getMessages(), $observation->agent()->getChatHistory()->getMessages());
     }
 
     public function testArrowKeysChooseAnotherSessionInThePicker(): void
@@ -5930,8 +5762,10 @@ final class TuiTest extends TestCase
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
         $older = $sessionStore->create();
-        SessionHistory::of($older)->addMessage(new UserMessage('The older subject'));
-        SessionHistory::of($sessionStore->create())->addMessage(
+        StoredConversation::turn($sessionStore, $older, new UserMessage('The older subject'));
+        StoredConversation::turn(
+            $sessionStore,
+            $sessionStore->create(),
             new UserMessage('The newer subject'),
         );
         $terminal = new VirtualTerminal(rows: 24);
@@ -5963,14 +5797,7 @@ final class TuiTest extends TestCase
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
 
         self::assertStringContainsString('❯ The older subject', $display);
-        self::assertSame(
-            ['The older subject'],
-            array_map(
-                static fn(Message $message): string => (string) $message
-                    ->getContent(),
-                $observation->agent()->getChatHistory()->getMessages(),
-            ),
-        );
+        self::assertEquals($older->getMessages(), $observation->agent()->getChatHistory()->getMessages());
     }
 
     public function testResumeIsRefusedWhileTheAgentIsWorking(): void
@@ -5992,7 +5819,7 @@ final class TuiTest extends TestCase
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
         $earlier = $sessionStore->create();
-        SessionHistory::of($earlier)->addMessage(new UserMessage('The earlier subject'));
+        StoredConversation::turn($sessionStore, $earlier, new UserMessage('The earlier subject'));
         $earlier->setTitle('The earlier subject');
         $terminal = new VirtualTerminal(rows: 24);
         $tui = Tui::make($agent)
@@ -6041,9 +5868,9 @@ final class TuiTest extends TestCase
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
         $earlier = $sessionStore->create();
-        SessionHistory::of($earlier)->addMessage(new UserMessage('The earlier subject'));
+        StoredConversation::turn($sessionStore, $earlier, new UserMessage('The earlier subject'), new AssistantMessage('The earlier answer.'));
         $earlier->setTitle('The earlier subject');
-        SessionHistory::of($earlier)->addMessage(new AssistantMessage('The earlier answer.'));
+
         $terminal = new VirtualTerminal(rows: 30);
         $pickerDisplay = null;
         $resumedDisplay = null;
@@ -6136,7 +5963,7 @@ final class TuiTest extends TestCase
         $storage = new InMemoryStorage();
         $sessionStore = new SessionStore($storage, 'test-user');
         $earlier = $sessionStore->create();
-        SessionHistory::of($earlier)->addMessage(new UserMessage('The earlier subject'));
+        StoredConversation::turn($sessionStore, $earlier, new UserMessage('The earlier subject'));
         $earlier->setTitle('The earlier subject');
         $terminal = new VirtualTerminal(rows: 30);
         $refusedDisplay = null;

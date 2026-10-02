@@ -7,30 +7,28 @@ namespace NeuronTui\Tests\Command;
 use Closure;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\Messages\AssistantMessage;
-use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\UserMessage;
+use NeuronAI\Testing\FakeAIProvider;
 use NeuronInteraction\Command\CommandAdapterInterface;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Configuration\ConfigurationStore;
 use NeuronInteraction\Conversation;
-use NeuronInteraction\Session\SessionMessageStore;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Command\TuiCommandAdapter;
-use NeuronTui\Tests\History\SessionHistory;
+use NeuronTui\Tests\History\StoredConversation;
 use NeuronTui\Turn\TurnScheduler;
 use NeuronTui\View\ConversationView;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
-use function array_map;
+use function Amp\delay;
 
 final class CommandHistoryTest extends TestCase
 {
     private SessionStore $sessionStore;
-    private SessionMessageStore $messageStore;
     private VirtualTerminal $terminal;
     private ConversationView $view;
     private TurnScheduler $scheduler;
@@ -41,10 +39,8 @@ final class CommandHistoryTest extends TestCase
         $agent = (new Agent())->setThreadId('test-thread');
         $storage = new InMemoryStorage();
         $this->sessionStore = new SessionStore($storage, 'test-user');
-        $this->messageStore = new SessionMessageStore($storage, 'sessions', 'test-user');
         $session = $this->sessionStore->create();
-        $history = SessionHistory::of($session);
-        $history->addMessage(new UserMessage('Earlier conversation'));
+        StoredConversation::turn($this->sessionStore, $session, new UserMessage('Earlier conversation'));
 
         $this->terminal = new VirtualTerminal(rows: 30);
         $this->view = new ConversationView($this->terminal, 'Neuron AI', 'Conversation');
@@ -56,7 +52,7 @@ final class CommandHistoryTest extends TestCase
     public function testCompletionDisplaysTheSelectedSession(): void
     {
         $replacement = $this->sessionStore->create();
-        SessionHistory::of($replacement)->addMessage(new UserMessage('Replacement conversation'));
+        StoredConversation::turn($this->sessionStore, $replacement, new UserMessage('Replacement conversation'));
 
         $this->runCommand(static function (CommandAdapterInterface $adapter) use ($replacement): void {
             $adapter->useSession($replacement);
@@ -71,7 +67,7 @@ final class CommandHistoryTest extends TestCase
     public function testSelectingTheCurrentSessionRefreshesItsChangedHistory(): void
     {
         $session = $this->conversation->session();
-        SessionHistory::of($session)->addMessage(new AssistantMessage('Added after the initial display'));
+        StoredConversation::turn($this->sessionStore, $session, new UserMessage('A later question'), new AssistantMessage('Added after the initial display'));
 
         $this->runCommand(static function (CommandAdapterInterface $adapter) use ($session): void {
             $adapter->useSession($session);
@@ -109,23 +105,26 @@ final class CommandHistoryTest extends TestCase
         self::assertStringNotContainsString('Earlier conversation', $display);
     }
 
-    public function testAgentReplacementKeepsTheSessionAndItsArchivedMessages(): void
+    public function testAgentReplacementKeepsTheSelectedSessionAndDisplayedHistory(): void
     {
-        $key = $this->scheduler->agent()->getChatHistory()->getThreadId();
-        $session = $this->sessionStore->get($key);
-        self::assertNotNull($session);
-        $this->messageStore->archive($key, 1);
-        SessionHistory::of($session)->addMessage(new UserMessage('Active question'));
-
         $currentSession = $this->scheduler->session();
-        $this->scheduler->useAgent(new Agent());
+        $before = $currentSession->getMessages();
+        $replacement = (new Agent())->setAiProvider(new FakeAIProvider(new AssistantMessage('Replacement answer')));
+        $this->scheduler->useAgent($replacement);
         self::assertSame($currentSession, $this->scheduler->session());
-
-        self::assertSame($key, $this->scheduler->agent()->getThreadId());
-        self::assertSame(['Active question'], array_map(static fn(Message $message): ?string => $message->getContent(), $this->scheduler->agent()->getChatHistory()->getMessages()));
-        self::assertSame(['Earlier conversation', 'Active question'], array_map(static fn(Message $message): ?string => $message->getContent(), $session->getMessages()));
-        $this->scheduler->agent()->getChatHistory()->addMessage(new AssistantMessage('Replacement answer'));
-        self::assertCount(3, $session->getMessages());
+        self::assertSame($currentSession->getKey(), $this->scheduler->agent()->getThreadId());
+        self::assertEquals($before, $currentSession->getMessages());
+        $this->scheduler->enqueueMessage(new UserMessage('Continue the selected conversation'));
+        for ($tick = 0; $tick < 10 && $this->scheduler->isBusy(); ++$tick) {
+            $this->scheduler->tick();
+            delay(0);
+        }
+        self::assertFalse($this->scheduler->isBusy());
+        $messages = $currentSession->getMessages();
+        self::assertSame('Replacement answer', $messages[3]->getContent());
+        $display = $this->display();
+        self::assertStringContainsString('Earlier conversation', $display);
+        self::assertStringContainsString('Replacement answer', $display);
     }
 
     public function testSelectingAForeignSessionLeavesTheConversationUnchanged(): void

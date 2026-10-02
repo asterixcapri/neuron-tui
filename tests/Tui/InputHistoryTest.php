@@ -23,7 +23,7 @@ use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\FileStorage;
 use NeuronInteraction\Storage\InMemoryStorage;
-use NeuronTui\Tests\History\SessionHistory;
+use NeuronTui\Tests\History\StoredConversation;
 use NeuronTui\Tui;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
@@ -262,9 +262,9 @@ final class InputHistoryTest extends TestCase
         $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $storage = new InMemoryStorage();
-        $earlier = (new SessionStore($storage, 'test-user'))->create();
-        SessionHistory::of($earlier)->addMessage(new UserMessage('Earlier subject.'));
-        SessionHistory::of($earlier)->addMessage(new AssistantMessage('Earlier answer.'));
+        $sessionStore = new SessionStore($storage, 'test-user');
+        $earlier = $sessionStore->create();
+        StoredConversation::turn($sessionStore, $earlier, new UserMessage('Earlier subject.'), new AssistantMessage('Earlier answer.'));
         (new InputHistory($storage))->record(new UserMessage('Remember across resume'));
         $terminal = new VirtualTerminal(rows: 24);
 

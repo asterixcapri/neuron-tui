@@ -27,7 +27,7 @@ use NeuronInteraction\Message\UserMessageProcessorInterface;
 use NeuronInteraction\Message\UserMessageProcessors;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\InMemoryStorage;
-use NeuronTui\Tests\History\SessionHistory;
+use NeuronTui\Tests\History\StoredConversation;
 use NeuronTui\Tui;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
@@ -120,9 +120,8 @@ final class UserMessageProcessorTest extends TestCase
     {
         $store = new SessionStore(new InMemoryStorage(), 'test-user');
         $session = $store->create();
-        $agent = $session->bindToAgent(new Agent());
-        $agent->getChatHistory()->addMessage(new UserMessage('B[A[Earlier]]'));
-        $agent->getChatHistory()->addMessage(new AssistantMessage('B[A[Reply]]'));
+        StoredConversation::turn($store, $session, new UserMessage('B[A[Earlier]]'), new AssistantMessage('B[A[Reply]]'));
+        $agent = new Agent();
         $terminal = new VirtualTerminal(rows: 30);
         EventLoop::delay(0.05, static fn() => $terminal->simulateInput("\x03"));
 
@@ -279,10 +278,10 @@ final class UserMessageProcessorTest extends TestCase
             $session = $store->create();
             $titleMessage = new UserMessage('B[A[stored-payload]]');
             $titleMessage->setMetadata(['title-source' => 'original']);
-            SessionHistory::of($session)->addMessage($titleMessage);
+            StoredConversation::turn($store, $session, $titleMessage);
             $session->setTitle('Readable session');
             for ($index = 0; $index < 5; ++$index) {
-                SessionHistory::of($store->create())->addMessage(new UserMessage('Other session ' . $index));
+                StoredConversation::turn($store, $store->create(), new UserMessage('Other session ' . $index));
             }
             $agent = (new Agent())->setThreadId('test-thread');
             $terminal = new VirtualTerminal(rows: 30);
