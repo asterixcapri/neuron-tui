@@ -12,8 +12,9 @@ use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Providers\ProviderResponse;
 use NeuronAI\Testing\FakeAIProvider;
-use NeuronChatCore\Session\SessionStore;
-use NeuronChatCore\Storage\InMemoryStorage;
+use NeuronInteraction\Conversation;
+use NeuronInteraction\Session\SessionStore;
+use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Session\SessionTitleGeneration;
 use NeuronTui\Tests\History\SessionHistory;
 use NeuronTui\Tui;
@@ -162,7 +163,7 @@ final class SessionTitleGenerationTest extends TestCase
         EventLoop::delay(0.1, static fn() => $terminal->simulateInput("Grazie\r"));
         EventLoop::delay(0.2, static fn() => $terminal->simulateInput("\x03"));
 
-        Tui::make($agent, $terminal, sessionStore: $store, session: $session)->run();
+        Tui::make(new Conversation($agent, $store, session: $session), $terminal)->run();
 
         self::assertSame('Configurazione Redis', $session->getTitle());
         self::assertSame(2, $requests->count);
@@ -181,7 +182,7 @@ final class SessionTitleGenerationTest extends TestCase
         EventLoop::queue(static fn() => $terminal->simulateInput("A subject\r"));
         EventLoop::delay(0.1, static fn() => $terminal->simulateInput("\x03"));
 
-        Tui::make($agent, $terminal, sessionStore: $store, session: $session)->run();
+        Tui::make(new Conversation($agent, $store, session: $session), $terminal)->run();
 
         self::assertNull($session->getTitle());
         self::assertSame(1, $requests->count);
@@ -218,7 +219,7 @@ final class SessionTitleGenerationTest extends TestCase
         EventLoop::queue(static fn() => $terminal->simulateInput("A subject\r"));
         EventLoop::delay(0.1, static fn() => $terminal->simulateInput("\x03"));
 
-        Tui::make($agent, $terminal, sessionStore: $store, session: $session)->run();
+        Tui::make(new Conversation($agent, $store, session: $session), $terminal)->run();
 
         self::assertNull($session->getTitle());
         self::assertSame(0, $requests->count);

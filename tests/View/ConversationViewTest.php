@@ -10,7 +10,7 @@ use NeuronAI\Chat\Enums\SourceType;
 use NeuronAI\Chat\Messages\AssistantMessage;
 use NeuronAI\Chat\Messages\ContentBlocks\FileContent;
 use NeuronAI\Chat\Messages\UserMessage;
-use NeuronChatCore\Command\HelpCommand;
+use NeuronInteraction\Command\HelpCommand;
 use NeuronTui\View\ChoiceOption;
 use NeuronTui\View\ConversationView;
 use PHPUnit\Framework\TestCase;

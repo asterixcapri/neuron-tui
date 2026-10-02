@@ -2,16 +2,14 @@
 
 declare(strict_types=1);
 
-namespace NeuronTui\Conversation;
+namespace NeuronTui\Input;
 
-use NeuronAI\Chat\Messages\ContentBlocks\TextContent;
-use NeuronChatCore\Command\Commands;
-use NeuronChatCore\Configuration\ConfigurationStore;
-use NeuronChatCore\InputHistory\InputHistory;
-use NeuronChatCore\Message\UserMessageProcessorInterface;
-use NeuronChatCore\Message\UserMessageProcessors;
-use NeuronChatCore\Session\SessionStore;
+use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Configuration\ConfigurationStore;
+use NeuronInteraction\Conversation;
+use NeuronInteraction\InputHistory\InputHistory;
 use NeuronTui\Command\TuiCommandAdapter;
+use NeuronTui\Turn\TurnScheduler;
 use NeuronTui\View\ConversationView;
 use Symfony\Component\Tui\Event\InputEvent;
 use Symfony\Component\Tui\Event\SubmitEvent;
@@ -19,29 +17,25 @@ use Symfony\Component\Tui\Input\Key;
 use Symfony\Component\Tui\Input\Keybindings;
 use Throwable;
 
-use function array_all;
-use function trim;
-
 /**
  * Interprets human input and keeps submission, recall, and draft editing together.
  *
  * @internal
  */
-final class ConversationInputHandler
+final class InputHandler
 {
     public function __construct(
         private readonly ConversationView $view,
         private readonly InputHistory $inputHistory,
-        private readonly ConversationRuntime $runtime,
+        private readonly TurnScheduler $scheduler,
         private readonly Commands $commands,
-        private readonly SessionStore $sessionStore,
+        private readonly Conversation $conversation,
         private readonly ConfigurationStore $configurationStore,
-        private readonly UserMessageProcessorInterface $userMessageProcessors = new UserMessageProcessors(),
     ) {}
 
     public function handleSubmit(SubmitEvent $event): void
     {
-        if ($this->runtime->isStopped()) {
+        if ($this->scheduler->isStopped()) {
             return;
         }
 
@@ -59,30 +53,20 @@ final class ConversationInputHandler
             $this->commands->run(
                 $submission->name,
                 $submission->value,
-                new TuiCommandAdapter($this->runtime, $this->view, $this->commands, $this->sessionStore, $this->configurationStore),
+                new TuiCommandAdapter($this->scheduler, $this->view, $this->commands, $this->conversation, $this->configurationStore),
             );
 
             return;
         }
 
         try {
-            $message = $this->userMessageProcessors->forAgent($original);
-
-            if (trim($message->getContent() ?? '') === '' && array_all(
-                $message->getContentBlocks(),
-                static fn($block): bool => $block instanceof TextContent,
-            )) {
-                $this->view->showError('The prepared user message is empty.');
-
-                return;
-            }
+            $this->scheduler->submitUserMessage($original);
         } catch (Throwable $exception) {
             $this->view->showError($exception->getMessage());
 
             return;
         }
 
-        $this->runtime->submitMessage($message);
     }
 
     public function handleDraftChange(): void
@@ -103,7 +87,7 @@ final class ConversationInputHandler
 
         if ($keys->matches($event->getData(), 'quit')) {
             $event->stopPropagation();
-            $this->runtime->stop();
+            $this->scheduler->stop();
 
             return;
         }
@@ -117,11 +101,11 @@ final class ConversationInputHandler
         if (
             $keys->matches($event->getData(), 'interrupt-turn')
             && !$this->view->hasCommandSuggestions()
-            && $this->runtime->isBusy()
-            && $this->runtime->supportsResponseStop()
+            && $this->scheduler->isBusy()
+            && $this->scheduler->supportsResponseStop()
         ) {
             $event->stopPropagation();
-            $this->runtime->requestInterruption();
+            $this->scheduler->requestInterruption();
 
             return;
         }

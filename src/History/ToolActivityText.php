@@ -45,7 +45,7 @@ final class ToolActivityText
     ): string {
         return self::callText($tool)
             . "\n  ⎿ "
-            . DisplayableText::preview((string) $tool->getResult(), self::DETAIL_WIDTH)
+            . DisplayableText::preview($tool->hasResult() ? (string) $tool->getResult() : '', self::DETAIL_WIDTH)
             . "\n  Done in "
             . self::duration($elapsedSeconds);
     }

@@ -16,7 +16,6 @@ use function array_shift;
  * so calls of that name are answered in the order they were made — and a
  * result that answers nothing at all is reported as unmatched rather than
  * guessed at.
- *
  * @internal
  */
 final class ToolCallCorrelation

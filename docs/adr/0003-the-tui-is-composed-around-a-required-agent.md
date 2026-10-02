@@ -1,4 +1,47 @@
-# The TUI is composed around a required Agent
+# The TUI is composed around a host-supplied Conversation
+
+_2026-10-02 — Naming revision: the core class
+`NeuronInteraction\Conversation\ConversationRuntime` becomes
+`NeuronInteraction\Conversation`. The internal TUI ConversationController becomes
+`NeuronTui\Turn\TurnScheduler`, and input interpretation moves to
+`NeuronTui\Input\InputHandler`. ConversationView keeps its name.
+CommandAdapterInterface retains its Agent and Session controls; optional
+AbstractCommandAdapter shares delegation without exposing the Conversation to
+Commands. This revision changes names and delegation, preserving FIFO,
+preparation, response stop, command admission, History and title generation.
+The historical decision below retains its original terminology._
+
+_The native-stream revision supersedes the extraction's core FIFO and custom
+EventPublisher protocol. The Host Application still supplies a configured Agent
+and constructs `NeuronInteraction\Conversation`; `Tui::make()`
+receives that Conversation. Core owns message preparation, Agent/Session binding,
+native Neuron output and supported response stop. The user-approved simplification
+removes core isBusy() and overlap admission: TUI derives interaction state from
+its own preparation, ready stream, running task and pending queue. Hosts coordinate
+external executions; core has no session execution lock.
+The TUI is the terminal frontend: its internal TurnScheduler owns
+pending original inputs, FIFO progression,
+Amp scheduling, stream consumption, presentation and Session title scheduling.
+This matches a React frontend that queues inputs and submits one streaming HTTP
+request at a time. Pending input is prepared when its turn reaches execution
+admission. Live input is shown immediately as submitted; rejection reports an
+error and restores input only to an empty composer, preserving a newer draft.
+submitMessage() is the sole submission API for both human input and Command
+prompts. Preparation is internal, and processors preserve recognized expanded
+content. forDisplay() projects saved History and Command-generated prompt previews,
+while live human input is never projected.
+Command collections remain client-owned. UI effects belong to the Adapter;
+conversation operations delegate to core. Command visibility and admission belong
+entirely to the client: TUI filters suggestions and its Adapter refuses ordinary
+Commands while busy, including its local turn reservation. Selection continuations
+invoke Commands directly with a fresh Adapter. Core has no Command availability
+or dispatch methods; it validates Session ownership. TUI requests response stop
+only for its own active task; the core writes StopSignal without busy admission. Native generators preserve
+Neuron objects and AgentState without a second event vocabulary. History
+presentation and display-position correlation belong entirely to the TUI, using
+native Neuron messages and ToolCall without core presentation snapshots. Host composition, Session
+ownership, captured execution context, first-match identifiers, no default Command
+mounting, single-run lifecycle and response-stop limits remain unchanged._
 
 _The Refine Interaction composition revision supersedes the TUI-owned mounting
 and rejection of module constructor composition below. The required Agent and
@@ -32,8 +75,10 @@ listeners are built once inside `run()`. The instance is frozen when that
 single run starts. `addCommand()` deliberately follows `Agent::addTool()`: it
 accepts one command or an array of commands, validates
 each value as it is added, preserves order and does not reject duplicate names.
-The first command with a repeated name is the one reached; repeated entries may
-remain visible in command suggestions. This duplicate rule supersedes the
+The first command with a repeated name is the one reached; availability and suggestions resolve the
+same first entry. A later concurrent duplicate cannot make an unavailable first
+entry executable. The terminal Adapter owns busy-state admission and presents
+refusal; core ConversationRuntime exposes no busy state. This duplicate rule supersedes the
 contrary rule in ADR 0002.
 
 ## Considered options

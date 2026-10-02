@@ -11,10 +11,12 @@ use NeuronAI\Chat\Messages\ContentBlocks\FileContent;
 use NeuronAI\Chat\Messages\ContentBlocks\TextContent;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Testing\FakeAIProvider;
-use NeuronChatCore\InputHistory\InputHistory;
-use NeuronChatCore\Message\UserMessageFactory;
-use NeuronChatCore\Message\UserMessageProcessors;
-use NeuronChatCore\Storage\InMemoryStorage;
+use NeuronInteraction\Conversation;
+use NeuronInteraction\InputHistory\InputHistory;
+use NeuronInteraction\Message\UserMessageFactory;
+use NeuronInteraction\Message\UserMessageProcessors;
+use NeuronInteraction\Session\SessionStore;
+use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Tui;
 use NeuronTuiDemo\FileReferenceProcessor;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -75,10 +77,9 @@ final class FileReferenceProcessorTest extends TestCase
         EventLoop::delay(0.15, static fn() => $terminal->simulateInput("\x03"));
 
         Tui::make(
-            $agent,
+            new Conversation($agent, new SessionStore(new InMemoryStorage(), 'local'), userMessageProcessors: $processors),
             $terminal,
-            inputHistory: $inputHistory,
-            userMessageProcessors: $processors,
+            inputHistory: $inputHistory
         )->run();
 
         self::assertStringContainsString('Demo file content.', $provider->getRecorded()[0]->messages[0]->getContent() ?? '');

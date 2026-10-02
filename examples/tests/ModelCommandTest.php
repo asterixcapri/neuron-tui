@@ -8,12 +8,13 @@ use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Providers\OpenAI\Responses\OpenAIResponses;
 use NeuronAI\Testing\FakeAIProvider;
-use NeuronChatCore\Command\Commands;
-use NeuronChatCore\Configuration\ConfigurationStore;
-use NeuronChatCore\Session\SessionStore;
-use NeuronChatCore\Storage\InMemoryStorage;
-use NeuronChatCore\Storage\StorageInterface;
-use NeuronChatCore\Storage\StoredDocument;
+use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Configuration\ConfigurationStore;
+use NeuronInteraction\Conversation;
+use NeuronInteraction\Session\SessionStore;
+use NeuronInteraction\Storage\InMemoryStorage;
+use NeuronInteraction\Storage\StorageInterface;
+use NeuronInteraction\Storage\StoredDocument;
 use NeuronTui\Tui;
 use NeuronTuiDemo\ModelCommand;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -58,7 +59,7 @@ final class ModelCommandTest extends TestCase
             }
             EventLoop::delay(0.08, static fn() => $terminal->simulateInput("\x03"));
 
-            $tui = Tui::make($agent, $terminal, (new Commands())->addCommand(new ModelCommand()), configurationStore: $store, sessionStore: $sessions, session: $session);
+            $tui = Tui::make(new Conversation($agent, $sessions, session: $session), $terminal, (new Commands())->addCommand(new ModelCommand()), configurationStore: $store);
             $tui->run();
 
             self::assertSame($model, (new ConfigurationStore($storage, 'demo-user'))->read('model'));
@@ -91,7 +92,7 @@ final class ModelCommandTest extends TestCase
         EventLoop::delay(0.04, static fn() => $terminal->simulateInput("\x1b"));
         EventLoop::delay(0.08, static fn() => $terminal->simulateInput("\x03"));
 
-        $tui = Tui::make($agent, $terminal, (new Commands())->addCommand(new ModelCommand()), configurationStore: $store);
+        $tui = Tui::make(new Conversation($agent, new SessionStore(new InMemoryStorage(), 'local')), $terminal, (new Commands())->addCommand(new ModelCommand()), configurationStore: $store);
         $tui->run();
 
         self::assertSame(['model' => 'previous'], $store->entries());
@@ -110,7 +111,7 @@ final class ModelCommandTest extends TestCase
         EventLoop::queue(static fn() => $terminal->simulateInput("/model unknown:model\r"));
         EventLoop::delay(0.08, static fn() => $terminal->simulateInput("\x03"));
 
-        $tui = Tui::make($agent, $terminal, (new Commands())->addCommand(new ModelCommand()), configurationStore: $store);
+        $tui = Tui::make(new Conversation($agent, new SessionStore(new InMemoryStorage(), 'local')), $terminal, (new Commands())->addCommand(new ModelCommand()), configurationStore: $store);
         $tui->run();
 
         self::assertSame('previous', $store->read('model'));
@@ -136,7 +137,7 @@ final class ModelCommandTest extends TestCase
             EventLoop::queue(static fn() => $terminal->simulateInput("/model openai:gpt-5.4-nano\r"));
             EventLoop::delay(0.08, static fn() => $terminal->simulateInput("\x03"));
 
-            $tui = Tui::make($agent, $terminal, (new Commands())->addCommand(new ModelCommand()), configurationStore: $store, sessionStore: $sessions, session: $session);
+            $tui = Tui::make(new Conversation($agent, $sessions, session: $session), $terminal, (new Commands())->addCommand(new ModelCommand()), configurationStore: $store);
             $tui->run();
 
             self::assertSame('previous', $store->read('model'));

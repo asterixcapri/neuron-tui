@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace NeuronTui\Tests\History;
 
 use NeuronAI\Chat\History\ChatHistory;
-use NeuronChatCore\Session\Session;
+use NeuronInteraction\Session\Session;
 
 /** Opens Neuron's context to seed or clear a stored test conversation. */
 final class SessionHistory

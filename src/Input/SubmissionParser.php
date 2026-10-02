@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace NeuronTui\Conversation;
+namespace NeuronTui\Input;
 
 use NeuronAI\Chat\Messages\UserMessage;
 

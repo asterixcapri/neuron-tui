@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace NeuronTui\Conversation;
+namespace NeuronTui\Input;
 
 /**
  * Input a person meant as a Command, read as a name and its arguments.

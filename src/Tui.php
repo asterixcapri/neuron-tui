@@ -7,17 +7,14 @@ namespace NeuronTui;
 use InvalidArgumentException;
 use LogicException;
 use NeuronAI\Agent\Agent;
-use NeuronChatCore\Command\Commands;
-use NeuronChatCore\Configuration\ConfigurationStore;
-use NeuronChatCore\InputHistory\InputHistory;
-use NeuronChatCore\Interruption\StopSignal;
-use NeuronChatCore\Message\UserMessageProcessors;
-use NeuronChatCore\Session\Session;
-use NeuronChatCore\Session\SessionStore;
-use NeuronChatCore\Storage\InMemoryStorage;
-use NeuronTui\Conversation\ConversationInputHandler;
-use NeuronTui\Conversation\ConversationRuntime;
+use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Configuration\ConfigurationStore;
+use NeuronInteraction\Conversation;
+use NeuronInteraction\InputHistory\InputHistory;
+use NeuronInteraction\Storage\InMemoryStorage;
+use NeuronTui\Input\InputHandler;
 use NeuronTui\Session\SessionTitleGeneration;
+use NeuronTui\Turn\TurnScheduler;
 use NeuronTui\View\ConversationView;
 use RuntimeException;
 use Symfony\Component\Tui\Terminal\Terminal;
@@ -54,60 +51,38 @@ final class Tui
 
     private readonly Commands $commands;
 
-    private readonly SessionStore $sessionStore;
-
     private readonly ConfigurationStore $configurationStore;
 
     private readonly InputHistory $inputHistory;
 
     private bool $started = false;
 
-    private ?ConversationRuntime $runtime = null;
-
-    private readonly UserMessageProcessors $userMessageProcessors;
 
     public function __construct(
-        private readonly Agent $agent,
+        private readonly Conversation $conversation,
         private readonly ?TerminalInterface $terminal = null,
         ?Commands $commands = null,
-        ?SessionStore $sessionStore = null,
         ?ConfigurationStore $configurationStore = null,
         ?InputHistory $inputHistory = null,
-        ?UserMessageProcessors $userMessageProcessors = null,
-        private readonly ?StopSignal $stopSignal = null,
-        private readonly ?Session $session = null,
     ) {
-        $this->userMessageProcessors = $userMessageProcessors ?? new UserMessageProcessors();
         $this->commands = $commands ?? new Commands();
-        $this->sessionStore = $sessionStore ?? new SessionStore(
-            new InMemoryStorage(),
-            'local',
-        );
         $this->configurationStore = $configurationStore ?? new ConfigurationStore(new InMemoryStorage(), 'local');
         $this->inputHistory = $inputHistory ?? new InputHistory(new InMemoryStorage());
     }
 
     public static function make(
-        Agent $agent,
+        Conversation $conversation,
         ?TerminalInterface $terminal = null,
         ?Commands $commands = null,
-        ?SessionStore $sessionStore = null,
         ?ConfigurationStore $configurationStore = null,
         ?InputHistory $inputHistory = null,
-        ?UserMessageProcessors $userMessageProcessors = null,
-        ?StopSignal $stopSignal = null,
-        ?Session $session = null,
     ): self {
         return new self(
-            $agent,
+            $conversation,
             $terminal,
             $commands,
-            $sessionStore,
             $configurationStore,
             $inputHistory,
-            $userMessageProcessors,
-            $stopSignal,
-            $session,
         );
     }
 
@@ -150,26 +125,13 @@ final class Tui
     /** The Agent currently answering, including a copy bound to a selected Session. */
     public function agent(): Agent
     {
-        return $this->runtime?->agent() ?? $this->agent;
+        return $this->conversation->agent();
     }
 
     public function run(): void
     {
         $this->ensureNotStarted();
         $this->started = true;
-
-        $session = $this->session;
-        if ($session === null) {
-            if ($this->agent->getThreadId() !== null && $this->agent->getChatHistory()->getMessages() !== []) {
-                throw new InvalidArgumentException('An Agent with existing messages requires an explicit Session.');
-            }
-            $session = $this->sessionStore->create();
-        } else {
-            $session = $this->sessionStore->read($session->getKey());
-            if ($session === null) {
-                throw new InvalidArgumentException('The selected Session does not belong to this SessionStore.');
-            }
-        }
 
         $terminal = $this->terminal ?? new Terminal();
         $view = new ConversationView(
@@ -179,30 +141,27 @@ final class Tui
             $this->commands->all(),
             $this->figlet,
             $this->figletFont,
-            $this->userMessageProcessors,
+            $this->conversation->userMessageProcessors(),
         );
         $sessionTitleGeneration = new SessionTitleGeneration();
-        $runtime = $this->runtime = new ConversationRuntime(
-            $this->agent,
+        $scheduler = new TurnScheduler(
+            $this->conversation,
             $view,
-            $session,
-            $this->stopSignal,
             $sessionTitleGeneration,
         );
-        $input = new ConversationInputHandler(
+        $input = new InputHandler(
             $view,
             $this->inputHistory,
-            $runtime,
+            $scheduler,
             $this->commands,
-            $this->sessionStore,
+            $this->conversation,
             $this->configurationStore,
-            $this->userMessageProcessors,
         );
-        $runtime->synchronizeHistory();
+        $scheduler->synchronizeHistory();
         $view->onSubmit($input->handleSubmit(...));
         $view->onDraftChange($input->handleDraftChange(...));
         $view->onInput($input->handleInput(...));
-        $view->onTick($runtime->tick(...));
+        $view->onTick($scheduler->tick(...));
 
         if (
             $terminal instanceof Terminal

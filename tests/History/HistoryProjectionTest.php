@@ -19,7 +19,7 @@ use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Chat\Messages\Usage;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Tools\ToolCall;
-use NeuronChatCore\Message\UserMessageProcessorInterface;
+use NeuronInteraction\Message\UserMessageProcessorInterface;
 use NeuronTui\History\HistoryProjection;
 use NeuronTui\History\ProjectedEntry;
 use NeuronTui\View\HistoryEntryKind;
@@ -238,6 +238,52 @@ final class HistoryProjectionTest extends TestCase
         self::assertStringContainsString('⎿ second result', $entries[1]->text);
     }
 
+    public function testDistinctResultsAndRepeatedUpdatesKeepTheOriginalCallPositions(): void
+    {
+        $first = (new ToolCall(name: 'search'))->setCallId('first')->setInputs(['q' => 'one']);
+        $second = (new ToolCall(name: 'search'))->setCallId('second')->setInputs(['q' => 'two']);
+        $originalFirst = $first->jsonSerialize();
+        $originalSecond = $second->jsonSerialize();
+        $firstResult = (clone $first)->setResult('initial result');
+        $secondResult = (clone $second)->setResult('second result');
+        $updatedResult = (clone $first)->setResult('updated result');
+
+        $entries = $this->project([
+            new UserMessage(''),
+            new ToolCallMessage('Searching.', [$first, $second]),
+            new ToolResultMessage([$secondResult, $firstResult]),
+            new ToolResultMessage([$updatedResult]),
+        ]);
+
+        self::assertCount(3, $entries);
+        self::assertSame('Searching.', $entries[0]->text);
+        self::assertStringContainsString('"q":"one"', $entries[1]->text);
+        self::assertStringContainsString('⎿ updated result', $entries[1]->text);
+        self::assertStringContainsString('"q":"two"', $entries[2]->text);
+        self::assertStringContainsString('⎿ second result', $entries[2]->text);
+        self::assertSame($originalFirst, $first->jsonSerialize());
+        self::assertSame($originalSecond, $second->jsonSerialize());
+
+        $updatedResult->setResult('later mutation');
+        self::assertStringContainsString('⎿ updated result', $entries[1]->text);
+    }
+
+    public function testExcludedRolesNeverReachTheDisplayProcessor(): void
+    {
+        $processor = $this->createMock(UserMessageProcessorInterface::class);
+        $processor->expects(self::never())->method('forDisplay');
+        $processor->expects(self::never())->method('forAgent');
+        $tool = (new ToolCall(name: 'hidden'))->setCallId('hidden');
+
+        $entries = (new HistoryProjection([
+            new Message(MessageRole::SYSTEM, 'Private instruction.'),
+            (new ToolCallMessage(tools: [$tool]))->setRole(MessageRole::SYSTEM),
+            (new ToolResultMessage([$tool]))->setRole(MessageRole::SYSTEM),
+        ], $processor))->entries();
+
+        self::assertSame([], $entries);
+    }
+
     public function testCallsWithoutACallIdArePairedInTheOrderMade(): void
     {
         $first = (new ToolCall(name: 'search'))
@@ -295,6 +341,21 @@ final class HistoryProjectionTest extends TestCase
         self::assertCount(1, $entries);
         self::assertSame(HistoryEntryKind::ToolActivity, $entries[0]->kind);
         self::assertStringContainsString('⎿ orphan result', $entries[0]->text);
+    }
+
+    public function testAResultRecordWithoutOutputStillRendersWithoutExecutingTheCall(): void
+    {
+        $tool = (new ToolCall(name: 'lookup'))->setCallId('empty-result');
+
+        $entries = $this->project([
+            new ToolCallMessage(tools: [$tool]),
+            new ToolResultMessage([$tool]),
+        ]);
+
+        self::assertCount(1, $entries);
+        self::assertStringContainsString('● lookup', $entries[0]->text);
+        self::assertStringContainsString('Done in <1s', $entries[0]->text);
+        self::assertFalse($tool->hasResult());
     }
 
     public function testTextSentWithAToolCallComesBeforeTheActivity(): void

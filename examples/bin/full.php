@@ -4,18 +4,19 @@ declare(strict_types=1);
 
 use NeuronAI\HttpClient\Amp\AmpHttpClient;
 use NeuronAI\HttpClient\StoppableHttpClient;
-use NeuronChatCore\Command\ClearCommand;
-use NeuronChatCore\Command\Commands;
-use NeuronChatCore\Command\HelpCommand;
-use NeuronChatCore\Command\LeaveCommand;
-use NeuronChatCore\Command\ResumeCommand;
-use NeuronChatCore\Configuration\ConfigurationStore;
-use NeuronChatCore\InputHistory\InputHistory;
-use NeuronChatCore\Interruption\StopSignal;
-use NeuronChatCore\Message\UserMessageProcessors;
-use NeuronChatCore\Session\SessionStore;
-use NeuronChatCore\Storage\FileStorage;
-use NeuronChatCore\Storage\InMemoryStorage;
+use NeuronInteraction\Command\ClearCommand;
+use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Command\HelpCommand;
+use NeuronInteraction\Command\LeaveCommand;
+use NeuronInteraction\Command\ResumeCommand;
+use NeuronInteraction\Configuration\ConfigurationStore;
+use NeuronInteraction\Conversation;
+use NeuronInteraction\InputHistory\InputHistory;
+use NeuronInteraction\Interruption\StopSignal;
+use NeuronInteraction\Message\UserMessageProcessors;
+use NeuronInteraction\Session\SessionStore;
+use NeuronInteraction\Storage\FileStorage;
+use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Tui;
 use NeuronTuiDemo\AIProviderFactory;
 use NeuronTuiDemo\DemoAgent;
@@ -64,14 +65,10 @@ $userMessageProcessors = (new UserMessageProcessors())->addProcessor([
 ]);
 
 Tui::make(
-    $agent,
+    new Conversation($agent, $sessionStore, session: $session, stopSignal: $stopSignal, userMessageProcessors: $userMessageProcessors),
     commands: $commands,
-    sessionStore: $sessionStore,
-    session: $session,
     configurationStore: $configurationStore,
-    inputHistory: $inputHistory,
-    userMessageProcessors: $userMessageProcessors,
-    stopSignal: $stopSignal,
+    inputHistory: $inputHistory
 )
     ->setFiglet('NeuronTUI')
     ->setTitle('Neuron TUI Demo')

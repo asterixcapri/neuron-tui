@@ -7,7 +7,7 @@ sessions, add commands, and recall previous inputs—all from the terminal.
 Built with [Symfony TUI](https://github.com/symfony/tui).
 
 Sessions, commands, and input history are powered by
-[Neuron Chat Core](https://github.com/asterixcapri/neuron-chat-core), so you
+[Neuron Interaction](https://github.com/asterixcapri/neuron-interaction), so you
 can use the same features in backend applications too.
 
 Requires PHP 8.4.1+ and an interactive terminal.
@@ -28,18 +28,21 @@ Composer also installs Neuron Interaction and the other required dependencies.
 
 ## Usage
 
-Configure the Agent in your application, then pass it to `Tui`. Here,
+Configure the Agent in your application, compose a core Conversation,
+then pass that Conversation to `Tui`. Here,
 `$provider` is your configured `NeuronAI\Providers\AIProviderInterface`
 implementation:
 
 ```php
 use NeuronAI\Agent\Agent;
+use NeuronInteraction\Conversation;
 use NeuronTui\Tui;
 
 $agent = Agent::make();
 $agent->setAiProvider($provider);
+$conversation = new Conversation($agent);
 
-Tui::make($agent)->run();
+Tui::make($conversation)->run();
 ```
 
 `Tui` starts a new conversation and accepts messages. Use `Ctrl+C` to exit.
@@ -52,7 +55,7 @@ be supplied when the terminal should identify a particular Agent or product:
 ```php
 use NeuronTui\Tui;
 
-Tui::make($agent)
+Tui::make($conversation)
     ->setTitle('Research Agent')
     ->setSubtitle('Ask about the knowledge base')
     ->setFiglet('Research', 'slant')
@@ -72,9 +75,9 @@ The TUI mounts no Commands by default. Add `/help` to list available commands
 and `/exit` to close the terminal:
 
 ```php
-use NeuronChatCore\Command\Commands;
-use NeuronChatCore\Command\HelpCommand;
-use NeuronChatCore\Command\LeaveCommand;
+use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Command\HelpCommand;
+use NeuronInteraction\Command\LeaveCommand;
 use NeuronTui\Tui;
 
 $commands = (new Commands())->addCommand([
@@ -82,7 +85,7 @@ $commands = (new Commands())->addCommand([
     new LeaveCommand(),
 ]);
 
-Tui::make($agent, commands: $commands)->run();
+Tui::make($conversation, commands: $commands)->run();
 ```
 
 Each standard command accepts a custom slash-prefixed name: `new LeaveCommand('/quit')`
@@ -94,9 +97,9 @@ Implement `CommandInterface` to add your own behavior. This command sends the
 staged Git diff to the Agent for review:
 
 ```php
-use NeuronChatCore\Command\Commands;
-use NeuronChatCore\Command\CommandAdapterInterface;
-use NeuronChatCore\Command\CommandInterface;
+use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Command\CommandAdapterInterface;
+use NeuronInteraction\Command\CommandInterface;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronTui\Tui;
 
@@ -127,7 +130,7 @@ final class ReviewCommand implements CommandInterface
     }
 }
 
-Tui::make($agent, commands: (new Commands())->addCommand(new ReviewCommand()))->run();
+Tui::make($conversation, commands: (new Commands())->addCommand(new ReviewCommand()))->run();
 ```
 
 Commands communicate through `notify()`, `warn()` and `error()`. Neuron TUI
@@ -136,7 +139,7 @@ Return from your command after reporting an error if it cannot continue.
 
 While the Agent is responding, ordinary commands are unavailable. Commands that
 can safely run during a response may implement
-`NeuronChatCore\Command\ConcurrentCommandInterface`; Help and Leave already do.
+`NeuronInteraction\Command\ConcurrentCommandInterface`; Help and Leave already do.
 
 ## Sessions
 
@@ -148,11 +151,11 @@ To keep conversations between runs, configure a file-backed `SessionStore` and
 pass an initial Session from it:
 
 ```php
-use NeuronChatCore\Command\ClearCommand;
-use NeuronChatCore\Command\ResumeCommand;
-use NeuronChatCore\Command\Commands;
-use NeuronChatCore\Storage\FileStorage;
-use NeuronChatCore\Session\SessionStore;
+use NeuronInteraction\Command\ClearCommand;
+use NeuronInteraction\Command\ResumeCommand;
+use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Storage\FileStorage;
+use NeuronInteraction\Session\SessionStore;
 use NeuronTui\Tui;
 
 $storage = new FileStorage(__DIR__ . '/.storage');
@@ -166,10 +169,8 @@ $commands = (new Commands())->addCommand([
 ]);
 
 Tui::make(
-    $agent,
+    new \NeuronInteraction\Conversation($agent, $sessionStore, session: $session),
     commands: $commands,
-    sessionStore: $sessionStore,
-    session: $session,
 )->run();
 ```
 
@@ -177,11 +178,10 @@ Use a user identifier appropriate to your application in place of `local-user`.
 By default, Sessions last only for the current run. Session selection can replace
 the Agent instance; use `$tui->agent()` to retrieve the currently selected Agent.
 
-Every TUI conversation belongs to its SessionStore from startup. Without `session`,
-TUI creates an empty Session in the supplied Store, or in its default in-memory
-Store. To reopen a conversation, pass `session: $sessionStore->read($key)` after
-checking that it exists. Supply the matching `sessionStore` together with the
-Session. An Agent that already contains messages requires an explicit Session;
+Every Conversation belongs to its SessionStore from construction.
+Without `session`, the Conversation creates an empty Session in the supplied Store,
+or in its default in-memory Store. To reopen a conversation, pass `session: $sessionStore->read($key)` after
+checking that it exists. Pass the matching SessionStore and Session to the Conversation. An Agent that already contains messages requires an explicit Session;
 that Session determines the conversation displayed and continued by TUI.
 
 Commands use `useAgent($agent)` to change capabilities while keeping the current
@@ -195,15 +195,15 @@ Use `ConfigurationStore` to remember application preferences, such as the
 selected model:
 
 ```php
-use NeuronChatCore\Configuration\ConfigurationStore;
-use NeuronChatCore\Storage\FileStorage;
+use NeuronInteraction\Configuration\ConfigurationStore;
+use NeuronInteraction\Storage\FileStorage;
 use NeuronTui\Tui;
 
 $settings = new ConfigurationStore(new FileStorage(__DIR__ . '/.storage'), 'local-user');
 $model = $settings->read('model', 'openai:gpt-5.4-nano');
 $settings->write('model', 'openai:gpt-5.4-mini');
 
-Tui::make($agent, configurationStore: $settings)->run();
+Tui::make($conversation, configurationStore: $settings)->run();
 ```
 
 The fallback determines the expected type: use `read('retries', 3)` for an
@@ -219,16 +219,16 @@ From an empty input, use ↑ and ↓ to recall earlier messages and commands.
 By default, input history lasts for the current run. To keep it between runs:
 
 ```php
-use NeuronChatCore\InputHistory\InputHistory;
-use NeuronChatCore\Storage\FileStorage;
+use NeuronInteraction\InputHistory\InputHistory;
+use NeuronInteraction\Storage\FileStorage;
 use NeuronTui\Tui;
 
 $inputHistory = new InputHistory(new FileStorage(__DIR__ . '/.storage'));
 
-Tui::make($agent, inputHistory: $inputHistory)->run();
+Tui::make($conversation, inputHistory: $inputHistory)->run();
 ```
 
-You can pass `inputHistory`, `sessionStore`, `configurationStore` and `commands`
+You can pass `inputHistory`, `configurationStore` and `commands`
 together in the same `Tui::make()` call.
 
 ## Stop a response
@@ -241,8 +241,8 @@ configure the provider with this client:
 use NeuronAI\HttpClient\Amp\AmpHttpClient;
 use NeuronAI\Providers\OpenAI\Responses\OpenAIResponses;
 use NeuronAI\HttpClient\StoppableHttpClient;
-use NeuronChatCore\Interruption\StopSignal;
-use NeuronChatCore\Storage\InMemoryStorage;
+use NeuronInteraction\Interruption\StopSignal;
+use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Tui;
 
 use function Amp\delay;
@@ -265,7 +265,7 @@ $agent->setAiProvider(new OpenAIResponses(
     httpClient: $client,
 ));
 
-Tui::make($agent, stopSignal: $stopSignal)
+Tui::make(new \NeuronInteraction\Conversation($agent, stopSignal: $stopSignal))
     ->run();
 ```
 
@@ -278,24 +278,32 @@ See [stop.php](examples/bin/stop.php) for the complete example.
 ## User message processors
 
 A user message processor changes what the Agent receives without changing what
-the user sees. Implement `NeuronChatCore\Message\UserMessageProcessorInterface`:
-`forAgent()` prepares ordinary input before it is sent, and `forDisplay()` adjusts
-messages before they are shown, including resumed History.
+the user sees. Implement `NeuronInteraction\Message\UserMessageProcessorInterface`:
+`forAgent()` prepares submitted messages before they are sent. Live human input
+is shown immediately as written. `forDisplay()` projects resumed History and
+Command-generated prompt previews.
 
 ```php
-use NeuronChatCore\Message\UserMessageProcessors;
+use NeuronInteraction\Conversation;
+use NeuronInteraction\Message\UserMessageProcessors;
 use NeuronTui\Tui;
 
 $processors = (new UserMessageProcessors())->addProcessor([
     new FileReferenceProcessor(__DIR__),
 ]);
 
-Tui::make($agent, userMessageProcessors: $processors)->run();
+$conversation = new Conversation($agent, $sessionStore, userMessageProcessors: $processors);
+Tui::make($conversation)->run();
 ```
 
-Processors prepare messages in registration order and display them in reverse
-order. Saved messages are never changed, and Commands bypass processors. If
-`forAgent()` throws, the TUI shows the error and keeps the draft.
+The TUI shows original input immediately, clears the composer and queues it.
+When its turn starts, `submitMessage()` applies preparation once and returns the
+native stream. Command-generated prompts use the same submission API; processors
+preserve recognized expanded content. Saved messages are never changed by display
+projection. If preparation fails, the original remains visible with an error and
+returns to an empty composer without replacing a newer draft. Input recall stores
+the original submitted input. Reloaded messages use `forDisplay()` on the saved
+Agent History, so transformed content or attachments can have a different preview.
 
 See [messages.php](examples/bin/messages.php) for the complete example.
 
@@ -351,3 +359,17 @@ and makes no network requests.
 ## License
 
 Neuron TUI is released under the MIT License.
+
+## Execution and pending messages
+
+The TUI is the terminal frontend. It owns the pending-input FIFO, local turn
+reservation, Amp scheduling, command presentation and consumption of native
+Neuron chunks through its internal TurnScheduler. The core
+Conversation owns preparation, Session/Agent binding and native streaming;
+it has no busy admission, queue or custom event protocol. This is
+the same boundary as a React frontend making sequential streaming POST requests.
+
+Preparation of pending input is deferred until its turn. A rejected queued input
+is reported and restored to an empty composer; a newer draft is preserved and
+the original remains in Input history. Errors and supported response stops
+advance the queue without retries, preserving terminal behavior.

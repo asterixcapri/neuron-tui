@@ -6,10 +6,13 @@ namespace NeuronTui\Tests;
 
 use Closure;
 use NeuronAI\Agent\Agent;
-use NeuronChatCore\Command\CommandAdapterInterface;
-use NeuronChatCore\Command\CommandInterface;
-use NeuronChatCore\Command\Commands;
-use NeuronChatCore\Command\HelpCommand;
+use NeuronInteraction\Command\CommandAdapterInterface;
+use NeuronInteraction\Command\CommandInterface;
+use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Command\HelpCommand;
+use NeuronInteraction\Conversation;
+use NeuronInteraction\Session\SessionStore;
+use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Tui;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop;
@@ -17,6 +20,7 @@ use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
 use function array_map;
+use function array_slice;
 use function strpos;
 
 final class DuplicateCommandsTest extends TestCase
@@ -68,13 +72,13 @@ final class DuplicateCommandsTest extends TestCase
                 static fn() => $terminal->simulateInput("/clear\r"),
             );
 
-            (new Tui((new Agent())->setThreadId('test-thread'), $terminal, commands: $add(new Commands(), $first, $second)))->run();
+            (new Tui(new Conversation((new Agent())->setThreadId('test-thread'), new SessionStore(new InMemoryStorage(), 'local')), $terminal, commands: $add(new Commands(), $first, $second)))->run();
 
             self::assertSame(['first'], $ran, $form);
         }
     }
 
-    public function testSuggestionsAndHelpReceiveEveryDuplicateInAdditionOrder(): void
+    public function testSuggestionsResolveFirstDuplicateWhileHelpRetainsMountedCollection(): void
     {
         $descriptions = [
             'Added alone first.',
@@ -133,10 +137,13 @@ final class DuplicateCommandsTest extends TestCase
             ->addCommand([$commands[3], $commands[4]])
             ->addCommand([$commands[5], $commands[6]])
             ->addCommand(new HelpCommand());
-        (new Tui((new Agent())->setThreadId('test-thread'), $terminal, commands: $mounted))->run();
+        (new Tui(new Conversation((new Agent())->setThreadId('test-thread'), new SessionStore(new InMemoryStorage(), 'local')), $terminal, commands: $mounted))->run();
 
         self::assertIsString($suggestions);
-        self::assertInOrder($descriptions, $suggestions);
+        self::assertStringContainsString($descriptions[0], $suggestions);
+        foreach (array_slice($descriptions, 1) as $description) {
+            self::assertStringNotContainsString($description, $suggestions);
+        }
         self::assertIsString($help);
         self::assertInOrder([
             ...$descriptions,

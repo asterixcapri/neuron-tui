@@ -6,8 +6,8 @@ namespace NeuronTui\Session;
 
 use InvalidArgumentException;
 use NeuronAI\Agent\Agent;
-use NeuronChatCore\Session\Session;
-use NeuronChatCore\Session\SessionTitleGenerator;
+use NeuronInteraction\Session\Session;
+use NeuronInteraction\Session\SessionTitleGenerator;
 use Throwable;
 
 use function Amp\async;

@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace NeuronTui\Tests\Conversation;
+namespace NeuronTui\Tests\Input;
 
 use NeuronAI\Chat\Messages\UserMessage;
-use NeuronTui\Conversation\CommandInput;
-use NeuronTui\Conversation\SubmissionParser;
+use NeuronTui\Input\CommandInput;
+use NeuronTui\Input\SubmissionParser;
 use PHPUnit\Framework\TestCase;
 
 final class SubmissionParserTest extends TestCase

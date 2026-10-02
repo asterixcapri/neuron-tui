@@ -7,7 +7,7 @@ namespace NeuronTuiDemo;
 use InvalidArgumentException;
 use NeuronAI\Chat\Messages\ContentBlocks\TextContent;
 use NeuronAI\Chat\Messages\UserMessage;
-use NeuronChatCore\Message\UserMessageProcessorInterface;
+use NeuronInteraction\Message\UserMessageProcessorInterface;
 use RuntimeException;
 
 use function array_unique;

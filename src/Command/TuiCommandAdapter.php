@@ -4,20 +4,18 @@ declare(strict_types=1);
 
 namespace NeuronTui\Command;
 
-use InvalidArgumentException;
-use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\Messages\UserMessage;
-use NeuronChatCore\Command\CommandAdapterInterface;
-use NeuronChatCore\Command\CommandExecution;
-use NeuronChatCore\Command\CommandInterface;
-use NeuronChatCore\Command\Commands;
-use NeuronChatCore\Command\ConcurrentCommandInterface;
-use NeuronChatCore\Command\Selection;
-use NeuronChatCore\Command\SelectionOption;
-use NeuronChatCore\Configuration\ConfigurationStore;
-use NeuronChatCore\Session\Session;
-use NeuronChatCore\Session\SessionStore;
-use NeuronTui\Conversation\ConversationRuntime;
+use NeuronInteraction\Command\AbstractCommandAdapter;
+use NeuronInteraction\Command\CommandExecution;
+use NeuronInteraction\Command\CommandInterface;
+use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Command\ConcurrentCommandInterface;
+use NeuronInteraction\Command\Selection;
+use NeuronInteraction\Command\SelectionOption;
+use NeuronInteraction\Configuration\ConfigurationStore;
+use NeuronInteraction\Conversation;
+use NeuronInteraction\Session\Session;
+use NeuronTui\Turn\TurnScheduler;
 use NeuronTui\View\ChoiceOption;
 use NeuronTui\View\ConversationView;
 use Revolt\EventLoop;
@@ -28,22 +26,24 @@ use function array_map;
 /**
  * Terminal behavior before, during, and after one Command invocation.
  *
- * @implements CommandAdapterInterface<null>
+ * @extends AbstractCommandAdapter<null>
  * @internal Commands depend on the shared interface, not this Adapter.
  */
-final class TuiCommandAdapter implements CommandAdapterInterface
+final class TuiCommandAdapter extends AbstractCommandAdapter
 {
     public function __construct(
-        private readonly ConversationRuntime $runtime,
+        private readonly TurnScheduler $scheduler,
         private readonly ConversationView $view,
         private readonly Commands $commands,
-        private readonly SessionStore $sessionStore,
+        Conversation $conversation,
         private readonly ConfigurationStore $configurationStore,
-    ) {}
+    ) {
+        parent::__construct($conversation);
+    }
 
     public function admit(CommandInterface $command): bool
     {
-        if ($this->runtime->isBusy() && !($command instanceof ConcurrentCommandInterface)) {
+        if ($this->scheduler->isBusy() && !$command instanceof ConcurrentCommandInterface) {
             $this->view->showError(
                 $command->name()
                     . ' is refused while the Agent is working. '
@@ -60,7 +60,7 @@ final class TuiCommandAdapter implements CommandAdapterInterface
 
     public function afterExecution(CommandExecution $execution): null
     {
-        $this->runtime->synchronizeHistory();
+        $this->scheduler->synchronizeHistory();
 
         if ($execution->status === 'unknown') {
             $this->view->showUnknownCommand($execution->identifier);
@@ -77,38 +77,38 @@ final class TuiCommandAdapter implements CommandAdapterInterface
 
     public function notify(string $text): void
     {
-        $this->runtime->synchronizeHistory();
+        $this->scheduler->synchronizeHistory();
 
         $this->view->showNotice($text);
     }
 
     public function warn(string $text): void
     {
-        $this->runtime->synchronizeHistory();
+        $this->scheduler->synchronizeHistory();
 
         $this->view->showWarning($text);
     }
 
     public function error(string $text): void
     {
-        $this->runtime->synchronizeHistory();
+        $this->scheduler->synchronizeHistory();
 
         $this->view->showError($text);
     }
 
     public function promptAgent(UserMessage $prompt): void
     {
-        $this->runtime->synchronizeHistory();
+        $this->scheduler->synchronizeHistory();
 
-        $this->runtime->submitMessage($prompt);
+        $this->scheduler->submitMessage($prompt);
     }
 
     public function requestSelection(Selection $request): void
     {
         // Presentation happens after this invocation has returned. Its
-        // continuation reads the live runtime through a fresh Adapter.
+        // continuation reads the live scheduler through a fresh Adapter.
         EventLoop::queue(function () use ($request): void {
-            if ($this->runtime->isStopped()) {
+            if ($this->scheduler->isStopped()) {
                 return;
             }
 
@@ -130,7 +130,7 @@ final class TuiCommandAdapter implements CommandAdapterInterface
                     $this->commands->run(
                         $request->command,
                         $chosen,
-                        new self($this->runtime, $this->view, $this->commands, $this->sessionStore, $this->configurationStore),
+                        new self($this->scheduler, $this->view, $this->commands, $this->conversation, $this->configurationStore),
                     );
                 }
             } catch (Throwable $exception) {
@@ -139,38 +139,14 @@ final class TuiCommandAdapter implements CommandAdapterInterface
         });
     }
 
-    public function agent(): Agent
-    {
-        return $this->runtime->agent();
-    }
-
-    public function useAgent(Agent $agent): void
-    {
-        $this->runtime->useAgent($agent);
-    }
-
-    public function session(): Session
-    {
-        return $this->runtime->session();
-    }
-
     public function useSession(Session $session): void
     {
-        $selected = $this->sessionStore->read($session->getKey());
-        if ($selected === null) {
-            throw new InvalidArgumentException('The selected Session does not belong to this SessionStore.');
-        }
-        $this->runtime->useSession($selected);
+        $this->scheduler->useSession($session);
     }
 
     public function commands(): Commands
     {
         return $this->commands;
-    }
-
-    public function sessionStore(): SessionStore
-    {
-        return $this->sessionStore;
     }
 
     public function configurationStore(): ConfigurationStore
@@ -180,7 +156,7 @@ final class TuiCommandAdapter implements CommandAdapterInterface
 
     public function stop(): void
     {
-        $this->runtime->stop();
+        $this->scheduler->stop();
     }
 
     private function showFailure(Throwable $exception): void

@@ -4,16 +4,14 @@ declare(strict_types=1);
 
 namespace NeuronTui\View;
 
-use NeuronChatCore\Command\CommandInterface;
-use NeuronChatCore\Command\ConcurrentCommandInterface;
+use NeuronInteraction\Command\CommandInterface;
+use NeuronInteraction\Command\ConcurrentCommandInterface;
 use Symfony\Component\Tui\Style\Style;
 use Symfony\Component\Tui\Widget\AbstractWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 use Symfony\Component\Tui\Widget\SelectListWidget;
 use Symfony\Component\Tui\Widget\TextWidget;
 
-use function array_filter;
-use function array_values;
 use function count;
 use function mb_stripos;
 use function mb_strlen;
@@ -167,13 +165,8 @@ final class CommandSuggestions
         $this->noMatchesMessage = new TextWidget('');
         $this->noMatchesMessage->addStyleClass('suggestions-empty');
         $this->emphasis = new Style(bold: true);
-        $this->suggestible = self::suggestible($commands);
-        $this->suggestibleWhileWorking = self::suggestible(array_values(
-            array_filter(
-                $commands,
-                static fn(CommandInterface $command): bool => $command instanceof ConcurrentCommandInterface,
-            ),
-        ));
+        $this->suggestible = self::suggestible($commands, false);
+        $this->suggestibleWhileWorking = self::suggestible($commands, true);
         $this->list = new SelectListWidget([], self::VISIBLE_LINES);
         $this->list->addStyleClass('suggestions-list');
     }
@@ -501,11 +494,20 @@ final class CommandSuggestions
      *     description: string,
      * }>
      */
-    private static function suggestible(array $commands): array
+    private static function suggestible(array $commands, bool $working): array
     {
         $suggestible = [];
+        $seen = [];
 
         foreach ($commands as $command) {
+            $identifier = $command->name();
+            if (isset($seen[$identifier])) {
+                continue;
+            }
+            $seen[$identifier] = true;
+            if ($working && !$command instanceof ConcurrentCommandInterface) {
+                continue;
+            }
             $suggestible[] = [
                 'answersTo' => $command->name(),
                 'name' => DisplayableText::safe($command->name()),

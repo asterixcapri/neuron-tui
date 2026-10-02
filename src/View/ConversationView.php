@@ -10,9 +10,9 @@ use InvalidArgumentException;
 use LogicException;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\UserMessage;
-use NeuronChatCore\Command\CommandInterface;
-use NeuronChatCore\Message\UserMessageProcessorInterface;
-use NeuronChatCore\Message\UserMessageProcessors;
+use NeuronInteraction\Command\CommandInterface;
+use NeuronInteraction\Message\UserMessageProcessorInterface;
+use NeuronInteraction\Message\UserMessageProcessors;
 use NeuronTui\History\HistoryProjection;
 use NeuronTui\View\Widget\ComposerEditor;
 use Symfony\Component\Tui\Event\CancelEvent;
@@ -396,7 +396,7 @@ final class ConversationView
     {
         $this->history->addEntry(
             HistoryEntryKind::UserMessage,
-            $this->messagePreview($contents),
+            MessageTextFormatter::format($contents),
         );
     }
 
@@ -501,7 +501,7 @@ final class ConversationView
     /**
      * @param list<UserMessage> $messages
      */
-    public function showQueuedMessages(array $messages): void
+    public function showQueuedMessages(array $messages, bool $prepared = true): void
     {
         $this->queuedMessages->clear();
 
@@ -511,7 +511,7 @@ final class ConversationView
             ];
 
             foreach ($messages as $message) {
-                $message = DisplayableText::safe($this->messagePreview($message));
+                $message = DisplayableText::safe($prepared ? $this->messagePreview($message) : MessageTextFormatter::format($message));
                 $lines[] = '  ↳ ' . str_replace(
                     "\n",
                     "\n    ",

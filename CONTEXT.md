@@ -7,7 +7,7 @@ Agent.
 
 **Neuron TUI**:
 The reusable terminal Adapter through which a person converses with an Agent
-supplied by a Host Application.
+configured by a Host Application through its Conversation.
 _Avoid_: Neuron CLI, executable, command
 
 **Agent**:
@@ -17,8 +17,8 @@ Agents, but Neuron TUI sees only the Agent it converses with.
 _Avoid_: Bot, model
 
 **Host Application**:
-The application that configures the Agent and starts the terminal
-interaction.
+The application that configures the Agent, composes the Conversation
+and starts the interaction.
 _Avoid_: Neuron TUI, library
 
 **Conversation TUI**:
@@ -80,8 +80,9 @@ _Avoid_: Choice option, Picker row, menu item
 
 **Concurrent command**:
 A Command declared safe to execute while an Agent is working, without
-interfering with the state used by that work. The interaction Adapter decides
-whether to admit it.
+interfering with the state used by that work. Each interaction Adapter decides
+admission; Neuron TUI admits only Concurrent Commands while busy and presents
+refusal.
 _Avoid_: Async command, background command, command that runs while working
 
 **Command controls**:
@@ -93,7 +94,7 @@ _Avoid_: Command context, environment, facade, API
 
 **Command Adapter**:
 The realization of Command controls in a particular interaction environment.
-It admits Commands, carries out their requested operations, and interprets
+It decides Command admission, carries out Command operations, and interprets
 their technical outcomes as terminal effects, backend responses, or other
 output appropriate to that environment.
 _Avoid_: Command runner, Command result
@@ -123,6 +124,22 @@ a slash, each under the line that describes it. The selected name can be
 completed for further writing or taken immediately; nothing is suspended, so
 this is not the Picker, whatever the two look like.
 _Avoid_: Picker, menu, autocomplete, palette, command palette
+
+**Conversation**:
+The active interaction with an Agent in a selected Session, through which submitted
+messages produce response streams. Pending input and turn scheduling belong to the client.
+_Avoid_: TUI, event loop, Agent
+
+**Pending messages**:
+Original inputs held by the TUI until it submits them for execution. They are
+not yet prepared or saved in the Session.
+_Avoid_: Saved History, durable queue
+
+**Response stop**:
+A request to interrupt the model's streamed response when its HTTP callback
+consumes the signal. It does not promise cancellation of tools or the entire
+Turn.
+_Avoid_: Tool cancellation, client close
 
 **Turn**:
 One stretch of the conversation, from the moment a person's message is taken
