@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronTui\Tests\Command;
 
-use NeuronInteraction\Command\CommandAdapterInterface;
+use NeuronInteraction\Command\CommandContext;
 use NeuronInteraction\Command\CommandInterface;
 
 class ObservedCommand implements CommandInterface
@@ -24,10 +24,9 @@ class ObservedCommand implements CommandInterface
         return $this->command->describe();
     }
 
-    /** @param CommandAdapterInterface<mixed> $adapter */
-    public function run(CommandAdapterInterface $adapter, string $value): void
+    public function run(CommandContext $context, string $value): void
     {
-        $this->observation->record($adapter);
-        $this->command->run($adapter, $value);
+        $this->observation->record($context);
+        $this->command->run($context, $value);
     }
 }

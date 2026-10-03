@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace NeuronTuiDemo;
 
 use NeuronAI\HttpClient\HttpClientInterface;
-use NeuronInteraction\Command\CommandAdapterInterface;
+use NeuronInteraction\Command\CommandContext;
 use NeuronInteraction\Command\CommandInterface;
-use NeuronInteraction\Command\Selection;
 use NeuronInteraction\Command\SelectionOption;
+use NeuronInteraction\Command\SelectionRequest;
 
 final readonly class ModelCommand implements CommandInterface
 {
@@ -24,11 +24,10 @@ final readonly class ModelCommand implements CommandInterface
         return 'Changes the AI model.';
     }
 
-    /** @param CommandAdapterInterface<mixed> $adapter */
-    public function run(CommandAdapterInterface $adapter, string $value): void
+    public function run(CommandContext $context, string $value): void
     {
         if ($value === '') {
-            $adapter->requestSelection(new Selection($this->name(), 'Choose a model', [
+            $context->requestSelection(new SelectionRequest($this->name(), 'Choose a model', [
                 new SelectionOption(
                     'openai:gpt-5.6-sol',
                     'OpenAI · GPT-5.6 Sol',
@@ -95,8 +94,8 @@ final readonly class ModelCommand implements CommandInterface
         }
 
         $provider = AIProviderFactory::create($value, $this->httpClient);
-        $adapter->agent()->setAiProvider($provider);
-        $adapter->configurationStore()->write('model', $value);
-        $adapter->notify("Model changed to {$value}.");
+        $context->agent()->setAiProvider($provider);
+        $context->configurationStore()->write('model', $value);
+        $context->notify("Model changed to {$value}.");
     }
 }

@@ -45,60 +45,46 @@ outlive the Adapter using it. Documents are identified by logical keys.
 _Avoid_: Blob store, filesystem, database
 
 **Command**:
-A named operation whose effect an interaction Adapter decides rather than the
-model. Its identifier includes the shared slash convention, such as `/help`;
-each Adapter decides how a person submits it.
+A named operation selected explicitly by a person rather than by the model.
+Its slash identifier names the operation independently of the presentation used
+by the Host Application.
 _Avoid_: Message, prompt, action
 
 **Commands**:
-The ordered collection of mounted Commands.
-It resolves an identifier to the first matching Command and coordinates its
-execution through a Command Adapter.
-_Avoid_: Command container, command list
-
-**Command execution**:
-The technical outcome of a Command dispatch: completed, unknown or failed.
-It does not describe the domain effect or presentation of a Command, or imply
-that a requested selection or Agent response has finished.
-_Avoid_: Command result, response, view model
+The ordered catalog of Commands with distinct identifiers.
+_Avoid_: Command container, dispatcher
 
 **Command arguments**:
-The text supplied with a Command invocation after an interaction Adapter has
-removed its presentation syntax.
+The opaque text supplied with a Command invocation.
 _Avoid_: Parameters, payload
 
+**Command context**:
+The shared interaction state and operations available to a Command for one
+invocation, including Agent and Session changes and requests for presentation
+or Agent responses.
+_Avoid_: Command Adapter, Command controls
+
+**Notification**:
+Feedback addressed to the person, with an informational, warning or error level.
+_Avoid_: Agent message, execution result
+
 **Selection request**:
-A presentation-neutral request for a person to choose one value from a list.
-The Adapter presents it and invokes the named Command again with the selected
-value as Command arguments; the request itself retains no selection.
+A presentation-neutral request to choose one value from an ordered list.
+It identifies the Command to receive the value in a later invocation and retains
+no selected value or continuation.
 _Avoid_: Picker, selected value, Command result
 
 **Selection option**:
-One value offered by a Selection request, carrying the label shown to a person
-and, when useful, a description. Its value is returned unchanged as Command
-arguments after the person selects it.
+One opaque value offered by a Selection request, with a label and optional description.
 _Avoid_: Choice option, Picker row, menu item
 
-**Concurrent command**:
-A Command declared safe to execute while an Agent is working, without
-interfering with the state used by that work. Each interaction Adapter decides
-admission; Neuron TUI admits only Concurrent Commands while busy and presents
-refusal.
-_Avoid_: Async command, background command, command that runs while working
+**Exit request**:
+A request for the Host Application to leave its interface.
+_Avoid_: Response stop, Conversation termination
 
-**Command controls**:
-The presentation-independent verbs and shared interaction state available to
-a Command for one execution. They cover notices, warnings, Agent prompts,
-selections, the answering Agent, mounted Commands, SessionStore, and leaving the
-interaction.
-_Avoid_: Command context, environment, facade, API
-
-**Command Adapter**:
-The realization of Command controls in a particular interaction environment.
-It decides Command admission, carries out Command operations, and interprets
-their technical outcomes as terminal effects, backend responses, or other
-output appropriate to that environment.
-_Avoid_: Command runner, Command result
+**Command admission**:
+The Host Application's decision whether a Command may run in the current interaction.
+_Avoid_: Concurrent command, authorization marker
 
 **Session**:
 One conversation owned by a user and identified by a key, with its saved messages
@@ -128,7 +114,8 @@ _Avoid_: Picker, menu, autocomplete, palette, command palette
 
 **Conversation**:
 The active interaction with an Agent in a selected Session, through which submitted
-messages produce response streams. Pending input and turn scheduling belong to the client.
+messages and Commands produce a shared stream of response and interaction events.
+Pending input and turn scheduling belong to the client.
 _Avoid_: TUI, event loop, Agent
 
 **Pending messages**:

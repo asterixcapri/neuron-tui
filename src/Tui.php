@@ -7,6 +7,7 @@ namespace NeuronTui;
 use InvalidArgumentException;
 use LogicException;
 use NeuronAI\Agent\Agent;
+use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Configuration\ConfigurationStore;
 use NeuronInteraction\Conversation;
@@ -198,12 +199,18 @@ final class Tui
             );
         }
 
+        $admitCommand = static fn(CommandInterface $command): bool => true;
         $conversation = new Conversation(
             $this->agent,
             $this->sessionStore,
             session: $this->session,
             stopSignal: $this->stopSignal,
             userMessageProcessors: $this->userMessageProcessors,
+            commands: $this->commands,
+            configurationStore: $this->configurationStore,
+            admitCommand: static function (CommandInterface $command) use (&$admitCommand): bool {
+                return $admitCommand($command);
+            },
         );
         $view = new ConversationView(
             $terminal,
@@ -218,13 +225,11 @@ final class Tui
             $conversation,
             $view,
         );
+        $admitCommand = $scheduler->admitCommand(...);
         $input = new InputHandler(
             $view,
             $this->inputHistory,
             $scheduler,
-            $this->commands,
-            $conversation,
-            $this->configurationStore,
         );
         $scheduler->synchronizeHistory();
         $view->onSubmit($input->handleSubmit(...));
