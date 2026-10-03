@@ -9,18 +9,19 @@ use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\Messages\AssistantMessage;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Testing\FakeAIProvider;
-use NeuronInteraction\Command\CommandAdapterInterface;
+use NeuronInteraction\Command\CommandContext;
+use NeuronInteraction\Command\CommandInput;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\Commands;
-use NeuronInteraction\Configuration\ConfigurationStore;
+use NeuronInteraction\Command\NotificationLevel;
 use NeuronInteraction\Conversation;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\InMemoryStorage;
-use NeuronTui\Command\TuiCommandAdapter;
 use NeuronTui\Tests\History\StoredConversation;
 use NeuronTui\Turn\TurnScheduler;
 use NeuronTui\View\ConversationView;
 use PHPUnit\Framework\TestCase;
+use Revolt\EventLoop;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 
@@ -28,6 +29,9 @@ use function Amp\delay;
 
 final class CommandHistoryTest extends TestCase
 {
+    /** @var (Closure(CommandContext): void)|null */
+    private ?Closure $nextRun = null;
+
     private SessionStore $sessionStore;
     private VirtualTerminal $terminal;
     private ConversationView $view;
@@ -44,7 +48,26 @@ final class CommandHistoryTest extends TestCase
 
         $this->terminal = new VirtualTerminal(rows: 30);
         $this->view = new ConversationView($this->terminal, 'Neuron AI', 'Conversation');
-        $this->conversation = new Conversation($agent, $this->sessionStore, session: $session);
+        $agent->setAiProvider(new FakeAIProvider(new AssistantMessage('Prompt answer')));
+        $command = new class (function (CommandContext $context): void {
+            $this->nextRun?->__invoke($context);
+        }) implements CommandInterface {
+            /** @param Closure(CommandContext): void $run */
+            public function __construct(private readonly Closure $run) {}
+            public function name(): string
+            {
+                return '/probe';
+            }
+            public function describe(): string
+            {
+                return 'Change the conversation.';
+            }
+            public function run(CommandContext $context, string $value): void
+            {
+                ($this->run)($context);
+            }
+        };
+        $this->conversation = new Conversation($agent, $this->sessionStore, session: $session, commands: new Commands($command));
         $this->scheduler = new TurnScheduler($this->conversation, $this->view);
         $this->scheduler->synchronizeHistory();
     }
@@ -54,9 +77,9 @@ final class CommandHistoryTest extends TestCase
         $replacement = $this->sessionStore->create();
         StoredConversation::turn($this->sessionStore, $replacement, new UserMessage('Replacement conversation'));
 
-        $this->runCommand(static function (CommandAdapterInterface $adapter) use ($replacement): void {
-            $adapter->useSession($replacement);
-            self::assertSame($replacement->getKey(), $adapter->session()->getKey());
+        $this->runCommand(static function (CommandContext $context) use ($replacement): void {
+            $context->useSession($replacement);
+            self::assertSame($replacement->getKey(), $context->session()->getKey());
         });
 
         $display = $this->display();
@@ -69,8 +92,8 @@ final class CommandHistoryTest extends TestCase
         $session = $this->conversation->session();
         StoredConversation::turn($this->sessionStore, $session, new UserMessage('A later question'), new AssistantMessage('Added after the initial display'));
 
-        $this->runCommand(static function (CommandAdapterInterface $adapter) use ($session): void {
-            $adapter->useSession($session);
+        $this->runCommand(static function (CommandContext $context) use ($session): void {
+            $context->useSession($session);
         });
 
         self::assertStringContainsString('Added after the initial display', $this->display());
@@ -78,13 +101,13 @@ final class CommandHistoryTest extends TestCase
 
     public function testMessagesAfterAHistoryChangeSurviveCompletionAndTheNextInvocation(): void
     {
-        $this->runCommand(static function (CommandAdapterInterface $adapter): void {
-            $adapter->useSession($adapter->sessionStore()->create());
-            $adapter->notify('Session changed');
-            $adapter->warn('A warning remains');
-            $adapter->error('An expected error remains');
+        $this->runCommand(static function (CommandContext $context): void {
+            $context->useSession($context->sessionStore()->create());
+            $context->notify('Session changed');
+            $context->notify('A warning remains', NotificationLevel::Warning);
+            $context->notify('An expected error remains', NotificationLevel::Error);
         });
-        $this->runCommand(static function (CommandAdapterInterface $adapter): void {});
+        $this->runCommand(static function (CommandContext $context): void {});
 
         $display = $this->display();
         self::assertStringContainsString('Session changed', $display);
@@ -95,13 +118,14 @@ final class CommandHistoryTest extends TestCase
 
     public function testAPromptAfterAHistoryChangeRemainsVisibleAtCompletion(): void
     {
-        $this->runCommand(static function (CommandAdapterInterface $adapter): void {
-            $adapter->useSession($adapter->sessionStore()->create());
-            $adapter->promptAgent(new UserMessage('Question in the new conversation'));
+        $this->runCommand(static function (CommandContext $context): void {
+            $context->useSession($context->sessionStore()->create());
+            $context->promptAgent(new UserMessage('Question in the new conversation'));
         });
 
         $display = $this->display();
-        self::assertStringContainsString('Question in the new conversation', $display);
+        self::assertStringNotContainsString('❯ Question in the new conversation', $display);
+        self::assertSame('Question in the new conversation', $this->conversation->session()->getMessages()[0]->getContent());
         self::assertStringNotContainsString('Earlier conversation', $display);
     }
 
@@ -132,8 +156,8 @@ final class CommandHistoryTest extends TestCase
         $foreign = (new SessionStore(new InMemoryStorage(), 'other-user'))->create();
         $before = $this->scheduler->agent();
 
-        $this->runCommand(static function (CommandAdapterInterface $adapter) use ($foreign): void {
-            $adapter->useSession($foreign);
+        $this->runCommand(static function (CommandContext $context) use ($foreign): void {
+            $context->useSession($foreign);
         });
 
         self::assertSame($before, $this->scheduler->agent());
@@ -142,38 +166,13 @@ final class CommandHistoryTest extends TestCase
         self::assertStringContainsString('Earlier conversation', $display);
     }
 
-    /** @param Closure(CommandAdapterInterface<null>): void $run */
+    /** @param Closure(CommandContext): void $run */
     private function runCommand(Closure $run): void
     {
-        $command = new class ($run) implements CommandInterface {
-            /** @param Closure(CommandAdapterInterface<null>): void $run */
-            public function __construct(private readonly Closure $run) {}
-
-            public function name(): string
-            {
-                return '/probe';
-            }
-
-            public function describe(): string
-            {
-                return 'Change the conversation.';
-            }
-
-            /** @param CommandAdapterInterface<null> $adapter */
-            public function run(CommandAdapterInterface $adapter, string $value): void
-            {
-                ($this->run)($adapter);
-            }
-        };
-        $commands = (new Commands())->addCommand($command);
-        $storage = new InMemoryStorage();
-        $commands->run('/probe', '', new TuiCommandAdapter(
-            $this->scheduler,
-            $this->view,
-            $commands,
-            $this->conversation,
-            new ConfigurationStore($storage, 'test-user'),
-        ));
+        $this->nextRun = $run;
+        $this->scheduler->submitCommand(new CommandInput('/probe'));
+        EventLoop::run();
+        $this->scheduler->tick();
     }
 
     private function display(): string

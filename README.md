@@ -78,10 +78,10 @@ use NeuronInteraction\Command\HelpCommand;
 use NeuronInteraction\Command\LeaveCommand;
 use NeuronTui\Tui;
 
-$commands = (new Commands())->addCommand([
+$commands = new Commands(
     new HelpCommand(),
     new LeaveCommand(),
-]);
+);
 
 Tui::make($agent)
     ->setCommands($commands)
@@ -98,7 +98,8 @@ staged Git diff to the Agent for review:
 
 ```php
 use NeuronInteraction\Command\Commands;
-use NeuronInteraction\Command\CommandAdapterInterface;
+use NeuronInteraction\Command\CommandContext;
+use NeuronInteraction\Command\NotificationLevel;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronTui\Tui;
@@ -115,33 +116,42 @@ final class ReviewCommand implements CommandInterface
         return 'Reviews what is staged in git.';
     }
 
-    /** @param CommandAdapterInterface<mixed> $adapter */
-    public function run(CommandAdapterInterface $adapter, string $value): void
+    /** @param CommandContext $context */
+    public function run(CommandContext $context, string $value): void
     {
         $diff = shell_exec('git diff --staged') ?: '';
 
         if (trim($diff) === '') {
-            $adapter->warn('Nothing staged to review.');
+            $context->notify('Nothing staged to review.', NotificationLevel::Warning);
 
             return;
         }
 
-        $adapter->promptAgent(new UserMessage("Review this diff:\n\n" . $diff));
+        $context->promptAgent(new UserMessage("Review this diff:\n\n" . $diff));
     }
 }
 
 Tui::make($agent)
-    ->setCommands((new Commands())->addCommand(new ReviewCommand()))
+    ->setCommands(new Commands(new ReviewCommand()))
     ->run();
 ```
 
-Commands communicate through `notify()`, `warn()` and `error()`. Neuron TUI
-shows notices, yellow `Warning` labels and red `Error` labels respectively.
-Return from your command after reporting an error if it cannot continue.
+Commands receive the library's concrete `CommandContext` and return `void`.
+Use `notify($text, NotificationLevel::Info)` for feedback; Warning and Error
+select the corresponding terminal presentation. `promptAgent()` registers a
+UserMessage for execution in the same submission stream. Generated prompts are
+saved in Session History and do not appear as newly typed human input.
 
-While the Agent is responding, ordinary commands are unavailable. Commands that
-can safely run during a response may implement
-`NeuronInteraction\Command\ConcurrentCommandInterface`; Help and Leave already do.
+The TUI constructs its Conversation with the supplied Commands and
+ConfigurationStore. It consumes Notifications, SelectionRequests, ExitRequests
+and Agent/Session changes alongside native Agent events. Choosing a picker
+option submits CommandInput with the request's command and the opaque value;
+Escape closes the picker without a submission.
+
+While the Agent is responding, ordinary commands are unavailable. The terminal
+keeps HelpCommand and LeaveCommand available, including their configured names.
+The same policy governs suggestions and Conversation admission. ExitRequest
+asks the terminal host to close; response interruption remains separate.
 
 ## Sessions
 
@@ -162,10 +172,10 @@ use NeuronTui\Tui;
 $storage = new FileStorage(__DIR__ . '/.storage');
 $sessionStore = new SessionStore($storage, 'local-user');
 
-$commands = (new Commands())->addCommand([
+$commands = new Commands(
     new ClearCommand(),
     new ResumeCommand()
-]);
+);
 
 Tui::make($agent)
     ->setSessionStore($sessionStore)
@@ -205,7 +215,7 @@ Session and does not bind the Agent. Startup validates and creates the Conversat
 before entering the terminal event loop.
 
 Session selection can replace the Agent instance. Commands retrieve the currently
-selected Agent through `$adapter->agent()`; the host does not receive the internal
+selected Agent through `$context->agent()`; the host does not receive the internal
 Conversation or an Agent accessor on Tui.
 
 Commands use `useAgent($agent)` to change capabilities while keeping the current
@@ -237,7 +247,7 @@ The fallback determines the expected type: use `read('retries', 3)` for an
 integer, for example. Missing or incompatible values return the fallback;
 string preferences must be non-empty. Writes save immediately.
 
-Custom commands access these preferences through `$adapter->configurationStore()`.
+Custom commands access these preferences through `$context->configurationStore()`.
 The [model example](examples/bin/model.php) remembers the model chosen with `/model`.
 
 ## Input history
@@ -315,7 +325,8 @@ A user message processor defines preparation for the Agent and projection for
 display. Implement `NeuronInteraction\Message\UserMessageProcessorInterface`:
 `forAgent()` prepares submitted messages before they are sent.
 `forDisplay()` projects all user messages for presentation,
-including live input, queued messages, Command prompts, and resumed History.
+including live human input, queued messages, and resumed History. Command prompts
+receive a display projection when their saved History is shown.
 
 ```php
 use NeuronInteraction\Message\UserMessageProcessors;
@@ -332,9 +343,9 @@ Tui::make($agent)
 ```
 
 The TUI shows the display projection immediately, clears the composer and queues
-the original input. When its turn starts, `submitMessage()` applies preparation
-once and returns the
-native stream. Command-generated prompts use the same submission API; processors
+the original input. When its turn starts, `submitInput()` applies preparation
+once and returns the stream. Command-generated prompts execute in their existing
+submission stream; processors
 preserve recognized expanded content. Saved messages are never changed by display
 projection. If preparation fails, the preview remains visible with an error and
 the original input returns to an empty composer without replacing a newer draft. Input recall stores
@@ -413,3 +424,10 @@ Preparation of pending input is deferred until its turn. A rejected queued input
 is reported and restored to an empty composer; a newer draft is preserved and
 the original remains in Input history. Errors and supported response stops
 advance the queue without retries, preserving terminal behavior.
+
+## Commands API migration
+
+See [the migration guide](docs/commands-migration.md) for unified input, ordered
+requests, selection responses, error propagation and the terminal admission policy.
+Command prompts execute inside Conversation's stream; the host presents events
+and retains scheduling of human inputs.

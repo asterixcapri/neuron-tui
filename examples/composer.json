@@ -22,9 +22,42 @@
         "sessions": "php bin/sessions.php",
         "model": "php bin/model.php",
         "messages": "php bin/messages.php",
-        "full": "php bin/full.php"
+        "full": "php bin/full.php",
+        "stan": "phpstan analyse --no-progress --memory-limit=512M",
+        "test": "phpunit"
     },
     "config": {
         "sort-packages": true
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../../neuron-interaction",
+            "options": {
+                "symlink": true,
+                "versions": {
+                    "asterixcapri/neuron-interaction": "1.x-dev"
+                }
+            }
+        },
+        {
+            "type": "path",
+            "url": "..",
+            "options": {
+                "symlink": true,
+                "versions": {
+                    "asterixcapri/neuron-tui": "1.x-dev"
+                }
+            }
+        }
+    ],
+    "require-dev": {
+        "phpstan/phpstan": "^2.1",
+        "phpunit/phpunit": "^13.0"
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "NeuronTuiDemo\\Tests\\": "tests/"
+        }
     }
 }

@@ -1,5 +1,15 @@
 # The TUI owns its Conversation
 
+_2026-10-03 — Commands API revision: Tui continues to construct Conversation
+internally, now supplying Commands, ConfigurationStore and its admission closure.
+submitInput is the shared execution entry point. Conversation owns Command dispatch
+and ordered requests; the TUI owns human FIFO, Amp tasks, interruption, History
+projection and title scheduling. Command-generated prompts execute in their current
+stream without a second queue or human-input preview. HelpCommand and LeaveCommand
+remain available while working through a terminal policy shared with suggestions.
+Commands rejects invalid or duplicate identifiers. This supersedes the historical
+Adapter, first-match duplicate and mutable mounting decisions below._
+
 _2026-10-02 — Fluent composition revision supersedes host-supplied Conversation
 composition. The Host Application passes a configured Agent to Tui and supplies
 optional dependencies, including SessionStore, through fluent setters

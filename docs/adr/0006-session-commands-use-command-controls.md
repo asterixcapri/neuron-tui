@@ -1,5 +1,13 @@
 # Session commands use Command Controls
 
+_2026-10-03 — Commands API revision: Session Commands receive the library's
+concrete CommandContext. State changes appear as SessionChanged and AgentChanged
+in the submitInput stream; the TUI synchronizes its presentation from those events.
+SelectionRequest remains stateless in Conversation. The terminal presents it in a
+separate picker task and submits CommandInput(command, value) after a choice;
+Escape closes the picker without submitting anything. No Command Adapter or
+selection continuation dispatch remains._
+
 _The shared-contract revision replaces `CommandControlsInterface` with
 `CommandAdapterInterface`, retaining the control verbs and adding admission
 and completion. `Commands::run()` coordinates those phases; ADR-0007 describes

@@ -22,6 +22,6 @@ final class StoredConversation
     {
         $agent = (new Agent())->setAiProvider(new FakeAIProvider($answer));
         $conversation = new Conversation($agent, $store, session: $session);
-        iterator_to_array($conversation->submitMessage($question));
+        iterator_to_array($conversation->submitInput($question));
     }
 }

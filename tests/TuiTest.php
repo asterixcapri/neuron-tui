@@ -21,15 +21,15 @@ use NeuronAI\Providers\ProviderResponse;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Testing\RequestRecord;
 use NeuronInteraction\Command\ClearCommand;
-use NeuronInteraction\Command\CommandAdapterInterface;
+use NeuronInteraction\Command\CommandContext;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\Commands;
-use NeuronInteraction\Command\ConcurrentCommandInterface;
 use NeuronInteraction\Command\HelpCommand;
 use NeuronInteraction\Command\LeaveCommand;
+use NeuronInteraction\Command\NotificationLevel;
 use NeuronInteraction\Command\ResumeCommand;
-use NeuronInteraction\Command\Selection;
 use NeuronInteraction\Command\SelectionOption;
+use NeuronInteraction\Command\SelectionRequest;
 use NeuronInteraction\Configuration\ConfigurationStore;
 use NeuronInteraction\Conversation;
 use NeuronInteraction\InputHistory\InputHistory;
@@ -698,6 +698,30 @@ final class TuiTest extends TestCase
         self::assertStringContainsString('Empty response.', $display);
     }
 
+    public function testEmptyStreamPreservesThePreviousAssistantResponse(): void
+    {
+        $provider = new FakeAIProvider(new AssistantMessage('First answer must remain'), new AssistantMessage());
+        $terminal = new VirtualTerminal(rows: 35);
+        EventLoop::queue(static fn() => $terminal->simulateInput("First\rSecond\r"));
+        EventLoop::delay(0.2, static fn() => $terminal->simulateInput("\x03"));
+
+        Tui::make((new Agent())->setAiProvider($provider))
+            ->setTerminal($terminal)
+            ->run();
+
+        $screen = new ScreenBuffer($terminal->getColumns(), $terminal->getRows());
+        $screen->write($terminal->getOutput());
+        $display = $screen->getScreen();
+        $last = -1;
+        foreach (['❯ First', '● First answer must remain', '❯ Second', '● Empty response.'] as $text) {
+            $position = strpos($display, $text);
+            self::assertNotFalse($position, $text);
+            self::assertGreaterThan($last, $position);
+            $last = $position;
+        }
+        $provider->assertCallCount(2);
+    }
+
     public function testWhitespaceTextChunksStillCountAsAnEmptyResponse(): void
     {
         $provider = new class (new AssistantMessage()) extends FakeAIProvider {
@@ -1053,7 +1077,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([new LeaveCommand()]))
+            ->setCommands(new Commands(new LeaveCommand()))
             ->run();
 
         self::assertIsString($intermediateDisplay);
@@ -1085,7 +1109,7 @@ final class TuiTest extends TestCase
         $tui = Tui::make($agent)
             ->setSessionStore(new SessionStore($storage, 'test-user'))
             ->setTerminal($terminal)
-            ->setCommands($observation->wrap((new Commands())->addCommand(self::sessionCommands())))
+            ->setCommands($observation->wrap(new Commands(...self::sessionCommands())))
             ->setInputHistory(new InputHistory($storage));
         EventLoop::queue(
             static fn() => $terminal->simulateInput("/clear now\r"),
@@ -1163,11 +1187,11 @@ final class TuiTest extends TestCase
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
             static function (
-                CommandAdapterInterface $adapter,
+                CommandContext $context,
                 string $typed,
             ) use (&$value): void {
                 $value = $typed;
-                $adapter->notify('The command ran.');
+                $context->notify('The command ran.');
             },
         );
         EventLoop::queue(
@@ -1181,7 +1205,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([$command]))
+            ->setCommands(new Commands($command))
             ->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -1198,11 +1222,11 @@ final class TuiTest extends TestCase
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
-            static function (CommandAdapterInterface $adapter, string $value): void {
-                $adapter->notify('Everything was in order.');
-                $adapter->warn('Except for one thing.');
-                $adapter->error('The operation could not finish.');
-                $adapter->notify('The command continued.');
+            static function (CommandContext $context, string $value): void {
+                $context->notify('Everything was in order.');
+                $context->notify('Except for one thing.', NotificationLevel::Warning);
+                $context->notify('The operation could not finish.', NotificationLevel::Error);
+                $context->notify('The command continued.');
             },
         );
         EventLoop::queue(
@@ -1216,7 +1240,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([$command]))
+            ->setCommands(new Commands($command))
             ->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -1238,8 +1262,8 @@ final class TuiTest extends TestCase
         $terminal = new VirtualTerminal(rows: 30);
         $storage = new InMemoryStorage();
         $command = $this->commandThat(
-            static function (CommandAdapterInterface $adapter, string $value): void {
-                $adapter->promptAgent(new UserMessage('Review ' . $value . '.'));
+            static function (CommandContext $context, string $value): void {
+                $context->promptAgent(new UserMessage('Review ' . $value . '.'));
             },
         );
         EventLoop::queue(
@@ -1253,12 +1277,12 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore($storage, 'test-user'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([$command]))
+            ->setCommands(new Commands($command))
             ->setInputHistory(new InputHistory($storage))
             ->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
-        self::assertStringContainsString('❯ Review this diff.', $display);
+        self::assertStringNotContainsString('❯ Review this diff.', $display);
         self::assertStringContainsString('An answer.', $display);
         self::assertCount(1, $provider->getRecorded());
         self::assertSame(
@@ -1278,17 +1302,17 @@ final class TuiTest extends TestCase
         $events = [];
         $beforeChoice = null;
         $command = $this->commandThat(
-            static function (CommandAdapterInterface $adapter, string $value) use (&$events): void {
+            static function (CommandContext $context, string $value) use (&$events): void {
                 if ($value !== '') {
                     $events[] = $value;
 
                     return;
                 }
 
-                $adapter->requestSelection(new Selection('/probe', 'Models', [
+                $context->requestSelection(new SelectionRequest('/probe', 'Models', [
                     new SelectionOption('stable-value', 'Visible label', 'Optional detail'),
                 ]));
-                $adapter->notify('Request submitted.');
+                $context->notify('Request submitted.');
                 $events[] = 'first invocation finished';
             },
         );
@@ -1302,7 +1326,7 @@ final class TuiTest extends TestCase
         Tui::make((new Agent())->setThreadId('test-thread'))
             ->setSessionStore(new SessionStore($storage, 'test-user'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand($command))
+            ->setCommands(new Commands($command))
             ->setInputHistory(new InputHistory($storage))
             ->run();
 
@@ -1326,23 +1350,23 @@ final class TuiTest extends TestCase
         };
         $tui = Tui::make((new Agent())->setAiProvider($provider))
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'));
-        $command = $this->commandThat(static function (CommandAdapterInterface $adapter, string $value) use (&$selected): void {
+        $command = $this->commandThat(static function (CommandContext $context, string $value) use (&$selected): void {
             if ($value !== '') {
                 $selected = true;
                 return;
             }
-            $adapter->requestSelection(new Selection('/probe', 'Choose', [new SelectionOption('selected', 'Selected')]));
-            $adapter->promptAgent(new UserMessage('Started by TUI'));
+            $context->requestSelection(new SelectionRequest('/probe', 'Choose', [new SelectionOption('selected', 'Selected')]));
+            $context->promptAgent(new UserMessage('Started by TUI'));
         });
         EventLoop::queue(static fn() => $terminal->simulateInput("/probe\r"));
         EventLoop::delay(0.08, static fn() => $terminal->simulateInput("\r"));
         EventLoop::delay(0.16, static fn() => $terminal->simulateInput("\x03"));
         $tui
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand($command))
+            ->setCommands(new Commands($command))
             ->run();
         self::assertFalse($selected);
-        self::assertStringContainsString('/probe is refused while the Agent is working', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
+        self::assertStringContainsString('/probe is refused by the Host Application', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
     }
 
     public function testStoppingImmediatelyAfterRequestingSelectionLeavesWithoutPresentingIt(): void
@@ -1351,11 +1375,11 @@ final class TuiTest extends TestCase
         $forcedExit = false;
         $selected = false;
         $requester = $this->commandThat(
-            static function (CommandAdapterInterface $adapter): void {
-                $adapter->requestSelection(new Selection('/apply', 'Abandoned selection', [
+            static function (CommandContext $context): void {
+                $context->requestSelection(new SelectionRequest('/apply', 'Abandoned selection', [
                     new SelectionOption('unused', 'Must not appear'),
                 ]));
-                $adapter->stop();
+                $context->requestExit();
             },
             '/choose',
         );
@@ -1374,7 +1398,7 @@ final class TuiTest extends TestCase
         Tui::make((new Agent())->setThreadId('test-thread'))
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([$requester, $target]))
+            ->setCommands(new Commands($requester, $target))
             ->run();
 
         EventLoop::cancel($fallback);
@@ -1408,29 +1432,29 @@ final class TuiTest extends TestCase
         $observedAgent = null;
         $observedArguments = null;
         $requester = $this->commandThat(
-            static function (CommandAdapterInterface $adapter): void {
-                $adapter->requestSelection(new Selection('/apply', 'Choose an action', [
+            static function (CommandContext $context): void {
+                $context->requestSelection(new SelectionRequest('/apply', 'Choose an action', [
                     new SelectionOption('  /chosen value  ', 'Apply to the current Agent'),
                 ]));
             },
             '/choose',
         );
         $replacement = $this->commandThat(
-            static function (CommandAdapterInterface $adapter) use ($successor, $replacementHistory): void {
-                $adapter->useAgent($successor);
-                $adapter->useSession($replacementHistory);
+            static function (CommandContext $context) use ($successor, $replacementHistory): void {
+                $context->useAgent($successor);
+                $context->useSession($replacementHistory);
             },
             '/replace',
         );
         $target = $this->commandThat(
-            static function (CommandAdapterInterface $adapter, string $value) use (
+            static function (CommandContext $context, string $value) use (
                 &$observedAgent,
                 &$observedArguments,
                 $resultingHistory,
             ): void {
-                $observedAgent = $adapter->agent();
+                $observedAgent = $context->agent();
                 $observedArguments = $value;
-                $adapter->useSession($resultingHistory);
+                $context->useSession($resultingHistory);
 
                 throw new RuntimeException('Selected command failed.');
             },
@@ -1442,11 +1466,11 @@ final class TuiTest extends TestCase
             ->setSessionStore($sessionStore)
             ->setSession($originalHistory)
             ->setTerminal($terminal)
-            ->setCommands($observation->wrap((new Commands())->addCommand([$requester, $replacement, $target])))
+            ->setCommands($observation->wrap(new Commands($requester, $replacement, $target)))
             ->setInputHistory($inputHistory);
         EventLoop::queue(static function () use ($terminal): void {
             $terminal->simulateInput("/choose\r");
-            $terminal->simulateInput("/replace\r");
+            EventLoop::queue(static fn() => $terminal->simulateInput("/replace\r"));
         });
         EventLoop::delay(0.08, static function () use ($terminal): void {
             $terminal->clearOutput();
@@ -1491,11 +1515,11 @@ final class TuiTest extends TestCase
         $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $requester = $this->commandThat(
-            static function (CommandAdapterInterface $adapter): void {
-                $adapter->requestSelection(new Selection('/apply', 'Choose an action', [
+            static function (CommandContext $context): void {
+                $context->requestSelection(new SelectionRequest('/apply', 'Choose an action', [
                     new SelectionOption('selected-value', 'An action'),
                 ]));
-                $adapter->promptAgent(new UserMessage('Generated request.'));
+                $context->promptAgent(new UserMessage('Generated request.'));
             },
             '/choose',
         );
@@ -1512,13 +1536,13 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([$requester, $target]))
+            ->setCommands(new Commands($requester, $target))
             ->setInputHistory($inputHistory)
             ->run();
 
         self::assertFalse($selected);
         self::assertStringContainsString(
-            '/apply is refused while the Agent is working.',
+            '/apply is refused by the Host Application.',
             AnsiUtils::stripAnsiCodes($terminal->getOutput()),
         );
         $provider->assertCallCount(1);
@@ -1535,10 +1559,10 @@ final class TuiTest extends TestCase
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
             static function (
-                CommandAdapterInterface $adapter,
+                CommandContext $context,
                 string $value,
             ) use ($chosen): void {
-                $adapter->agent()
+                $context->agent()
                     ->setAiProvider($chosen)
                     ->setInstructions('Answer in one word.')
                     ->addTool(new CallbackTool('read_file'));
@@ -1559,7 +1583,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([$command]))
+            ->setCommands(new Commands($command))
             ->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -1582,10 +1606,10 @@ final class TuiTest extends TestCase
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
             static function (
-                CommandAdapterInterface $adapter,
+                CommandContext $context,
                 string $value,
             ) use ($successor): void {
-                $adapter->useAgent($successor);
+                $context->useAgent($successor);
             },
         );
         EventLoop::queue(
@@ -1607,7 +1631,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([$command]))
+            ->setCommands(new Commands($command))
             ->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -1640,17 +1664,17 @@ final class TuiTest extends TestCase
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
             static function (
-                CommandAdapterInterface $adapter,
+                CommandContext $context,
                 string $value,
             ) use ($successor, $replacementSession): void {
-                $adapter->useAgent($successor);
-                $adapter->useSession($replacementSession);
+                $context->useAgent($successor);
+                $context->useSession($replacementSession);
             },
         );
         $tui = Tui::make($agent)
             ->setSessionStore($sessionStore)
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([$command]));
+            ->setCommands(new Commands($command));
         EventLoop::queue(
             static fn() => $terminal->simulateInput("A question\r"),
         );
@@ -1689,8 +1713,8 @@ final class TuiTest extends TestCase
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
-            static function (CommandAdapterInterface $adapter, string $value): void {
-                $adapter->stop();
+            static function (CommandContext $context, string $value): void {
+                $context->requestExit();
             },
             '/quit',
         );
@@ -1708,7 +1732,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([$command]))
+            ->setCommands(new Commands($command))
             ->run();
 
         self::assertFalse($forcedExit);
@@ -1721,7 +1745,7 @@ final class TuiTest extends TestCase
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
-            static function (CommandAdapterInterface $adapter, string $value): void {
+            static function (CommandContext $context, string $value): void {
                 throw new RuntimeException('The command broke.');
             },
         );
@@ -1740,7 +1764,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([$command]))
+            ->setCommands(new Commands($command))
             ->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -1766,8 +1790,8 @@ final class TuiTest extends TestCase
         $replacementSession = $sessionStore->create();
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
-            static function (CommandAdapterInterface $adapter, string $value) use ($replacementSession): void {
-                $adapter->useSession($replacementSession);
+            static function (CommandContext $context, string $value) use ($replacementSession): void {
+                $context->useSession($replacementSession);
 
                 throw new RuntimeException('The command broke.');
             },
@@ -1776,7 +1800,7 @@ final class TuiTest extends TestCase
             ->setSessionStore($sessionStore)
             ->setSession($initialSession)
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([$command]));
+            ->setCommands(new Commands($command));
         EventLoop::queue(
             static fn() => $terminal->simulateInput("/probe\r"),
         );
@@ -1883,10 +1907,10 @@ final class TuiTest extends TestCase
             ->setSessionStore($sessionStore)
             ->setSession($initialSession)
             ->setTerminal($terminal)
-            ->setCommands($observation->wrap((new Commands())->addCommand([
+            ->setCommands($observation->wrap(new Commands(
                 new ClearCommand('/wipe'),
                 new LeaveCommand('/quit'),
-            ])));
+            )));
         EventLoop::queue(
             static fn() => $terminal->simulateInput("/clear\r"),
         );
@@ -1949,7 +1973,7 @@ final class TuiTest extends TestCase
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
-            static function (CommandAdapterInterface $adapter, string $value): void {},
+            static function (CommandContext $context, string $value): void {},
         );
         EventLoop::queue(
             static fn() => $terminal->simulateInput("/help\r"),
@@ -1962,7 +1986,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([new HelpCommand(), new LeaveCommand(), $command]))
+            ->setCommands(new Commands(new HelpCommand(), new LeaveCommand(), $command))
             ->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -2006,7 +2030,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([new LeaveCommand()]))
+            ->setCommands(new Commands(new LeaveCommand()))
             ->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -2030,14 +2054,14 @@ final class TuiTest extends TestCase
         ], $storage);
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
-            static function (CommandAdapterInterface $adapter, string $value) use ($restored): void {
-                $adapter->useSession($restored);
+            static function (CommandContext $context, string $value) use ($restored): void {
+                $context->useSession($restored);
             },
         );
         $tui = Tui::make($agent)
             ->setSessionStore($sessionStore)
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([$command]));
+            ->setCommands(new Commands($command));
         EventLoop::queue(
             static fn() => $terminal->simulateInput("A question\r"),
         );
@@ -2072,8 +2096,8 @@ final class TuiTest extends TestCase
         ));
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
-            static function (CommandAdapterInterface $adapter, string $value): void {
-                $adapter->notify('The command ran.');
+            static function (CommandContext $context, string $value): void {
+                $context->notify('The command ran.');
             },
         );
         EventLoop::queue(
@@ -2091,7 +2115,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([$command]))
+            ->setCommands(new Commands($command))
             ->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -2121,7 +2145,7 @@ final class TuiTest extends TestCase
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
             static function (
-                CommandAdapterInterface $adapter,
+                CommandContext $context,
                 string $value,
             ) use (&$ran): void {
                 $ran = true;
@@ -2148,12 +2172,12 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([$command]))
+            ->setCommands(new Commands($command))
             ->run();
 
         self::assertIsString($refusedDisplay);
         self::assertStringContainsString(
-            '/help is refused while the Agent is working',
+            '/help is refused by the Host Application',
             $refusedDisplay,
         );
         self::assertFalse($ran);
@@ -2204,7 +2228,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([$command]))
+            ->setCommands(new Commands($command))
             ->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -2222,69 +2246,6 @@ final class TuiTest extends TestCase
         self::assertStringContainsString('/probe — Lists what can be typed here.', $display);
     }
 
-    public function testCustomConcurrentCommandIsCarriedOutMidTurn(): void
-    {
-        $midTurnDisplay = null;
-        $provider = new class (
-            new AssistantMessage('A slow answer.'),
-        ) extends FakeAIProvider {
-            protected function streamChunks(Message $response): Generator
-            {
-                \Amp\delay(0.5);
-                yield new TextChunk('slow-stream', 'A slow answer.');
-
-                return new ProviderResponse(message: $response);
-            }
-        };
-        $agent = (new Agent())->setThreadId('test-thread');
-        $agent->setAiProvider($provider);
-        $terminal = new VirtualTerminal(rows: 24);
-        $command = $this->concurrentCommand();
-        EventLoop::queue(
-            static fn() => $terminal->simulateInput("A question\r"),
-        );
-        EventLoop::delay(
-            0.06,
-            static fn() => $terminal->simulateInput("/probe\r"),
-        );
-        EventLoop::delay(
-            0.12,
-            static function () use (&$midTurnDisplay, $terminal): void {
-                $midTurnDisplay = AnsiUtils::stripAnsiCodes(
-                    $terminal->getOutput(),
-                );
-            },
-        );
-        EventLoop::delay(
-            0.9,
-            static fn() => $terminal->simulateInput("\x03"),
-        );
-
-        Tui::make($agent)
-            ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
-            ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([$command]))
-            ->run();
-
-        $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
-
-        self::assertIsString($midTurnDisplay);
-        self::assertStringContainsString(
-            'Custom concurrent command ran.',
-            $midTurnDisplay,
-        );
-        self::assertStringNotContainsString('is refused', $midTurnDisplay);
-        // The answer under way arrives all the same, on the conversation the
-        // command ran in, and what the command said is still there under it.
-        self::assertStringContainsString('❯ A question', $display);
-        self::assertStringContainsString('● A slow answer.', $display);
-        self::assertStringContainsString('Custom concurrent command ran.', $display);
-    }
-
-    /**
-     * Asking for help is one of the two shipped commands a turn under way
-     * does not hold back, and leaving is the other.
-     */
     public function testHelpAndLeaveAnswerWhileTheAgentIsWorking(): void
     {
         $forcedExit = false;
@@ -2330,7 +2291,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([new HelpCommand(), new LeaveCommand()]))
+            ->setCommands(new Commands(new HelpCommand(), new LeaveCommand()))
             ->run();
 
         self::assertIsString($midTurnDisplay);
@@ -2400,7 +2361,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([new HelpCommand('/guide'), new LeaveCommand('/quit')]))
+            ->setCommands(new Commands(new HelpCommand('/guide'), new LeaveCommand('/quit')))
             ->run();
 
         self::assertIsString($midTurnDisplay);
@@ -2430,11 +2391,11 @@ final class TuiTest extends TestCase
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
             static function (
-                CommandAdapterInterface $adapter,
+                CommandContext $context,
                 string $value,
             ) use (&$chosen): void {
                 if ($value === '') {
-                    $adapter->requestSelection(new Selection('/probe', 'Models', [
+                    $context->requestSelection(new SelectionRequest('/probe', 'Models', [
                         new SelectionOption('haiku', 'Claude Haiku'),
                         new SelectionOption('007', 'Claude Opus'),
                     ]));
@@ -2443,7 +2404,7 @@ final class TuiTest extends TestCase
                 }
 
                 $chosen = $value;
-                $adapter->notify('Chosen: ' . $chosen);
+                $context->notify('Chosen: ' . $chosen);
             },
         );
         EventLoop::delay(
@@ -2472,7 +2433,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([$command]))
+            ->setCommands(new Commands($command))
             ->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -2501,12 +2462,12 @@ final class TuiTest extends TestCase
         $terminal = new VirtualTerminal(columns: 48, rows: 30);
         $command = $this->commandThat(
             static function (
-                CommandAdapterInterface $adapter,
+                CommandContext $context,
                 string $value,
             ) use (&$chosen): void {
-                $adapter->notify('History remains visible.');
+                $context->notify('History remains visible.');
                 if ($value === '') {
-                    $adapter->requestSelection(new Selection(
+                    $context->requestSelection(new SelectionRequest(
                         '/probe',
                         'Models',
                         [
@@ -2560,7 +2521,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([$command]))
+            ->setCommands(new Commands($command))
             ->run();
 
         self::assertIsString($initialDisplay);
@@ -2601,9 +2562,9 @@ final class TuiTest extends TestCase
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(columns: 32, rows: 30);
         $command = $this->commandThat(
-            static function (CommandAdapterInterface $adapter, string $value): void {
+            static function (CommandContext $context, string $value): void {
                 if ($value === '') {
-                    $adapter->requestSelection(new Selection('/probe', 'First choice', [
+                    $context->requestSelection(new SelectionRequest('/probe', 'First choice', [
                         new SelectionOption('first', 'First option'),
                     ]));
 
@@ -2614,7 +2575,7 @@ final class TuiTest extends TestCase
                     return;
                 }
 
-                $adapter->requestSelection(new Selection(
+                $context->requestSelection(new SelectionRequest(
                     '/probe',
                     'Second choice',
                     [new SelectionOption('second', 'Second option')],
@@ -2666,7 +2627,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([$command]))
+            ->setCommands(new Commands($command))
             ->run();
 
         self::assertIsString($withoutDescription);
@@ -2698,11 +2659,11 @@ final class TuiTest extends TestCase
         $terminal = new VirtualTerminal(columns: 42, rows: 32);
         $command = $this->commandThat(
             static function (
-                CommandAdapterInterface $adapter,
+                CommandContext $context,
                 string $value,
             ) use (&$chosen): void {
                 if ($value === '') {
-                    $adapter->requestSelection(new Selection('/probe', 'Models', [
+                    $context->requestSelection(new SelectionRequest('/probe', 'Models', [
                         new SelectionOption(
                             'detailed',
                             "A selected label with a supplied\nline break and enough text to need more than two visual lines",
@@ -2736,7 +2697,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([$command]))
+            ->setCommands(new Commands($command))
             ->run();
 
         self::assertIsString($pickerOutput);
@@ -2822,7 +2783,7 @@ final class TuiTest extends TestCase
         $terminal = new VirtualTerminal(rows: 40);
         $command = $this->commandThat(
             static function (
-                CommandAdapterInterface $adapter,
+                CommandContext $context,
                 string $value,
             ) use (&$chosen): void {
                 $options = [];
@@ -2836,7 +2797,7 @@ final class TuiTest extends TestCase
                 }
 
                 if ($value === '') {
-                    $adapter->requestSelection(new Selection('/probe', 'Models', $options));
+                    $context->requestSelection(new SelectionRequest('/probe', 'Models', $options));
 
                     return;
                 }
@@ -2872,7 +2833,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([$command]))
+            ->setCommands(new Commands($command))
             ->run();
 
         self::assertIsString($scrolledDisplay);
@@ -2896,11 +2857,11 @@ final class TuiTest extends TestCase
         $terminal = new VirtualTerminal(columns: 36, rows: 40);
         $command = $this->commandThat(
             static function (
-                CommandAdapterInterface $adapter,
+                CommandContext $context,
                 string $value,
             ) use (&$chosen): void {
                 if ($value === '') {
-                    $adapter->requestSelection(new Selection('/probe', 'Viewport', [
+                    $context->requestSelection(new SelectionRequest('/probe', 'Viewport', [
                         new SelectionOption('one', 'Option one', 'Detail one'),
                         new SelectionOption('two', 'Option two'),
                         new SelectionOption(
@@ -2969,7 +2930,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([$command]))
+            ->setCommands(new Commands($command))
             ->run();
 
         self::assertIsString($initialDisplay);
@@ -3005,7 +2966,7 @@ final class TuiTest extends TestCase
         $terminal = new VirtualTerminal(columns: 40, rows: 30);
         $command = $this->commandThat(
             static function (
-                CommandAdapterInterface $adapter,
+                CommandContext $context,
                 string $value,
             ) use (&$chosen): void {
                 $options = [
@@ -3025,7 +2986,7 @@ final class TuiTest extends TestCase
                     new SelectionOption('six', 'Match sixth choice'),
                 ];
                 if ($value === '') {
-                    $adapter->requestSelection(new Selection('/probe', 'Resizable', $options));
+                    $context->requestSelection(new SelectionRequest('/probe', 'Resizable', $options));
 
                     return;
                 }
@@ -3035,7 +2996,7 @@ final class TuiTest extends TestCase
                 }
 
                 $chosen = $value;
-                $adapter->requestSelection(new Selection('/probe', 'Reopened', array_map(
+                $context->requestSelection(new SelectionRequest('/probe', 'Reopened', array_map(
                     static fn(SelectionOption $option): SelectionOption => new SelectionOption(
                         'done:' . $option->value,
                         $option->label,
@@ -3111,7 +3072,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([$command]))
+            ->setCommands(new Commands($command))
             ->run();
 
         self::assertIsString($shortDisplay);
@@ -3164,11 +3125,11 @@ final class TuiTest extends TestCase
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
             static function (
-                CommandAdapterInterface $adapter,
+                CommandContext $context,
                 string $value,
             ) use (&$chosen): void {
                 if ($value === '') {
-                    $adapter->requestSelection(new Selection('/probe', 'Models', [
+                    $context->requestSelection(new SelectionRequest('/probe', 'Models', [
                         new SelectionOption('haiku', 'Claude Haiku'),
                     ]));
 
@@ -3176,7 +3137,7 @@ final class TuiTest extends TestCase
                 }
 
                 $chosen = $value;
-                $adapter->notify('Chosen: ' . $chosen);
+                $context->notify('Chosen: ' . $chosen);
             },
         );
         EventLoop::delay(
@@ -3205,7 +3166,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([$command]))
+            ->setCommands(new Commands($command))
             ->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -3229,11 +3190,11 @@ final class TuiTest extends TestCase
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
             static function (
-                CommandAdapterInterface $adapter,
+                CommandContext $context,
                 string $value,
             ) use (&$chosen, &$completions): void {
                 if ($value === '') {
-                    $adapter->requestSelection(new Selection('/probe', 'Models', [
+                    $context->requestSelection(new SelectionRequest('/probe', 'Models', [
                         new SelectionOption('haiku', 'Claude Haiku'),
                     ]));
 
@@ -3256,7 +3217,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([$command]))
+            ->setCommands(new Commands($command))
             ->run();
 
         self::assertSame('nothing yet', $chosen);
@@ -3272,11 +3233,11 @@ final class TuiTest extends TestCase
         $terminal = new VirtualTerminal(rows: 24);
         $command = $this->commandThat(
             static function (
-                CommandAdapterInterface $adapter,
+                CommandContext $context,
                 string $value,
             ) use (&$chosen): void {
                 if ($value === '') {
-                    $adapter->requestSelection(new Selection('/probe', 'Models', [
+                    $context->requestSelection(new SelectionRequest('/probe', 'Models', [
                         new SelectionOption('haiku', 'Claude Haiku'),
                         new SelectionOption('opus', 'Claude Opus'),
                         new SelectionOption('sonnet', 'Claude Sonnet'),
@@ -3319,7 +3280,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([$command]))
+            ->setCommands(new Commands($command))
             ->run();
 
         self::assertIsString($narrowedDisplay);
@@ -3340,11 +3301,11 @@ final class TuiTest extends TestCase
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
             static function (
-                CommandAdapterInterface $adapter,
+                CommandContext $context,
                 string $value,
             ) use (&$shortChoice, &$longChoice): void {
                 if ($value === '') {
-                    $adapter->requestSelection(new Selection('/probe', 'Short choice', [
+                    $context->requestSelection(new SelectionRequest('/probe', 'Short choice', [
                         new SelectionOption('short-1', 'Short one'),
                         new SelectionOption('short-2', 'Short two'),
                         new SelectionOption('short-3', 'Short three'),
@@ -3362,7 +3323,7 @@ final class TuiTest extends TestCase
                 }
 
                 $shortChoice = $value;
-                $adapter->requestSelection(new Selection('/probe', 'Long choice', [
+                $context->requestSelection(new SelectionRequest('/probe', 'Long choice', [
                     new SelectionOption('long-1', 'Long one'),
                     new SelectionOption('long-2', 'Long two'),
                     new SelectionOption('long-3', 'Long three'),
@@ -3413,7 +3374,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([$command]))
+            ->setCommands(new Commands($command))
             ->run();
 
         self::assertIsString($shortDisplay);
@@ -3437,11 +3398,11 @@ final class TuiTest extends TestCase
         $terminal = new VirtualTerminal(columns: 38, rows: 32);
         $command = $this->commandThat(
             static function (
-                CommandAdapterInterface $adapter,
+                CommandContext $context,
                 string $value,
             ) use (&$chosen): void {
                 if ($value === '') {
-                    $adapter->requestSelection(new Selection('/probe', 'Models', [
+                    $context->requestSelection(new SelectionRequest('/probe', 'Models', [
                         new SelectionOption('alpha', 'Alpha'),
                         new SelectionOption(
                             'detail',
@@ -3493,7 +3454,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([$command]))
+            ->setCommands(new Commands($command))
             ->run();
 
         self::assertIsString($filteredDisplay);
@@ -3523,7 +3484,7 @@ final class TuiTest extends TestCase
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
             static function (
-                CommandAdapterInterface $adapter,
+                CommandContext $context,
                 string $value,
             ) use (&$first, &$second): void {
                 $options = [
@@ -3535,7 +3496,7 @@ final class TuiTest extends TestCase
                     new SelectionOption('six', 'Option six'),
                 ];
                 if ($value === '' || $value === 'reopen') {
-                    $adapter->requestSelection(new Selection(
+                    $context->requestSelection(new SelectionRequest(
                         '/probe',
                         $value === '' ? 'First opening' : 'Second opening',
                         $options,
@@ -3616,7 +3577,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([$command]))
+            ->setCommands(new Commands($command))
             ->run();
 
         self::assertIsString($emptyDisplay);
@@ -3679,7 +3640,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([new HelpCommand(), new LeaveCommand()]))
+            ->setCommands(new Commands(new HelpCommand(), new LeaveCommand()))
             ->run();
 
         self::assertIsString($display);
@@ -3728,7 +3689,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([new HelpCommand()]))
+            ->setCommands(new Commands(new HelpCommand()))
             ->run();
 
         self::assertIsString($display);
@@ -3769,7 +3730,7 @@ final class TuiTest extends TestCase
 
         for ($place = 0; $place < 10; ++$place) {
             $commands[] = $this->commandThat(
-                static function (CommandAdapterInterface $adapter, string $value): void {},
+                static function (CommandContext $context, string $value): void {},
                 '/cmd' . $place,
             );
         }
@@ -3794,7 +3755,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand($commands))
+            ->setCommands(new Commands(...$commands))
             ->run();
 
         self::assertIsString($display);
@@ -3883,7 +3844,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([new HelpCommand()]))
+            ->setCommands(new Commands(new HelpCommand()))
             ->run();
 
         self::assertIsString($open);
@@ -3968,7 +3929,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([new HelpCommand()]))
+            ->setCommands(new Commands(new HelpCommand()))
             ->run();
 
         self::assertIsString($display);
@@ -4022,11 +3983,11 @@ final class TuiTest extends TestCase
             [
                 $this->commandThat(
                     static function (
-                        CommandAdapterInterface $adapter,
+                        CommandContext $context,
                         string $written,
                     ) use (&$value): void {
                         $value = $written;
-                        $adapter->notify('Alpha ran.');
+                        $context->notify('Alpha ran.');
                     },
                     '/alpha',
                 ),
@@ -4054,12 +4015,12 @@ final class TuiTest extends TestCase
             &$value,
         ): Closure {
             return static function (
-                CommandAdapterInterface $adapter,
+                CommandContext $context,
                 string $written,
             ) use ($name, &$ran, &$value): void {
                 $ran = $name;
                 $value = $written;
-                $adapter->notify($name . ' ran.');
+                $context->notify($name . ' ran.');
             };
         };
         $display = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
@@ -4329,7 +4290,7 @@ final class TuiTest extends TestCase
         $tui = Tui::make((new Agent())->setThreadId('test-thread'))
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand($commands));
+            ->setCommands(new Commands(...$commands));
 
         $tui->run();
 
@@ -4363,7 +4324,7 @@ final class TuiTest extends TestCase
             }
 
             public function run(
-                CommandAdapterInterface $adapter,
+                CommandContext $context,
                 string $value,
             ): void {}
         };
@@ -4392,9 +4353,9 @@ final class TuiTest extends TestCase
         $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
-        $concurrent = $this->concurrentCommand('/pulse');
+        $concurrent = $this->helpWhileWorking('/pulse');
         $refused = $this->commandThat(
-            static function (CommandAdapterInterface $adapter, string $value): void {},
+            static function (CommandContext $context, string $value): void {},
             '/probe',
         );
         EventLoop::delay(
@@ -4435,7 +4396,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([$refused, $concurrent]))
+            ->setCommands(new Commands($refused, $concurrent))
             ->run();
 
         self::assertIsString($midTurnDisplay);
@@ -4468,7 +4429,7 @@ final class TuiTest extends TestCase
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $refused = $this->commandThat(
-            static function (CommandAdapterInterface $adapter, string $value): void {},
+            static function (CommandContext $context, string $value): void {},
             '/probe',
         );
         EventLoop::delay(
@@ -4499,7 +4460,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([$refused]))
+            ->setCommands(new Commands($refused))
             ->run();
 
         self::assertIsString($midTurnDisplay);
@@ -4521,12 +4482,12 @@ final class TuiTest extends TestCase
         $agent->setAiProvider(new FakeAIProvider());
         $terminal = new VirtualTerminal(rows: 30);
         $command = $this->commandThat(
-            static function (CommandAdapterInterface $adapter, string $value): void {
+            static function (CommandContext $context, string $value): void {
                 if ($value !== '') {
                     return;
                 }
 
-                $adapter->requestSelection(new Selection('/probe', 'Models', [
+                $context->requestSelection(new SelectionRequest('/probe', 'Models', [
                     new SelectionOption('haiku', 'Claude Haiku'),
                 ]));
             },
@@ -4556,7 +4517,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([$command]))
+            ->setCommands(new Commands($command))
             ->run();
 
         self::assertIsString($choosingDisplay);
@@ -4647,7 +4608,7 @@ final class TuiTest extends TestCase
         $value = null;
         $note = static function (string $name) use (&$ran, &$value) {
             return static function (
-                CommandAdapterInterface $adapter,
+                CommandContext $context,
                 string $written,
             ) use ($name, &$ran, &$value): void {
                 $ran = $name;
@@ -4686,10 +4647,10 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([
+            ->setCommands(new Commands(
                 $this->commandThat($note('/alpha'), '/alpha'),
                 $this->commandThat($note('/album'), '/album'),
-            ]))
+            ))
             ->run();
 
         self::assertIsString($completed);
@@ -4731,7 +4692,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([self::commandNamed('/alpha', 'The only one.')]))
+            ->setCommands(new Commands(self::commandNamed('/alpha', 'The only one.')))
             ->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -4826,7 +4787,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([new HelpCommand()]))
+            ->setCommands(new Commands(new HelpCommand()))
             ->run();
 
         self::assertIsString($closed);
@@ -4916,7 +4877,7 @@ final class TuiTest extends TestCase
         $tui = Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([new HelpCommand()]));
+            ->setCommands(new Commands(new HelpCommand()));
         EventLoop::delay(
             0.05,
             static fn() => $terminal->simulateInput('/'),
@@ -4957,34 +4918,16 @@ final class TuiTest extends TestCase
         self::assertStringNotContainsString('Enter runs', $closed);
     }
 
-    private function concurrentCommand(string $name = '/probe'): ConcurrentCommandInterface
+    private function helpWhileWorking(string $name = '/probe'): HelpCommand
     {
-        return new class ($name) implements ConcurrentCommandInterface {
-            public function __construct(private readonly string $identifier) {}
-
-            public function name(): string
-            {
-                return $this->identifier;
-            }
-
-            public function describe(): string
-            {
-                return 'Reports status while the Agent is working.';
-            }
-
-            /** @param CommandAdapterInterface<mixed> $adapter */
-            public function run(CommandAdapterInterface $adapter, string $value): void
-            {
-                $adapter->notify('Custom concurrent command ran.');
-            }
-        };
+        return new HelpCommand($name);
     }
 
     /**
      * A command that does what the test tells it to, under a name of the
      * test's choosing.
      *
-     * @param Closure(CommandAdapterInterface<mixed>, string): void $run
+     * @param Closure(CommandContext, string): void $run
      */
     private function commandThat(
         Closure $run,
@@ -4992,7 +4935,7 @@ final class TuiTest extends TestCase
     ): CommandInterface {
         return new class ($run, $name) implements CommandInterface {
             /**
-             * @param Closure(CommandAdapterInterface<mixed>, string): void $run
+             * @param Closure(CommandContext, string): void $run
              */
             public function __construct(
                 private readonly Closure $run,
@@ -5009,10 +4952,9 @@ final class TuiTest extends TestCase
                 return 'Does what the test says.';
             }
 
-            /** @param CommandAdapterInterface<mixed> $adapter */
-            public function run(CommandAdapterInterface $adapter, string $value): void
+            public function run(CommandContext $context, string $value): void
             {
-                ($this->run)($adapter, $value);
+                ($this->run)($context, $value);
             }
         };
     }
@@ -5058,7 +5000,7 @@ final class TuiTest extends TestCase
         $tui = Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands($observation->wrap((new Commands())->addCommand(self::sessionCommands())));
+            ->setCommands($observation->wrap(new Commands(...self::sessionCommands())));
         EventLoop::delay(
             0.03,
             static fn() => $terminal->simulateInput("/clear\r"),
@@ -5123,10 +5065,10 @@ final class TuiTest extends TestCase
         $agent = ($sessionStore->create())->bindToAgent($agent);
         $earlier = null;
         $fillSession = $this->commandThat(
-            static function (CommandAdapterInterface $adapter) use (&$earlier): void {
-                $earlier = $adapter->sessionStore()->get($adapter->agent()->getChatHistory()->getThreadId());
+            static function (CommandContext $context) use (&$earlier): void {
+                $earlier = $context->sessionStore()->get($context->agent()->getChatHistory()->getThreadId());
                 self::assertNotNull($earlier);
-                StoredConversation::turn($adapter->sessionStore(), $earlier, new UserMessage('Earlier question.'), new AssistantMessage('Earlier answer.'));
+                StoredConversation::turn($context->sessionStore(), $earlier, new UserMessage('Earlier question.'), new AssistantMessage('Earlier answer.'));
                 $earlier->setTitle('Earlier question.');
             },
         );
@@ -5136,10 +5078,7 @@ final class TuiTest extends TestCase
         $tui = Tui::make($agent)
             ->setSessionStore($sessionStore)
             ->setTerminal($terminal)
-            ->setCommands($observation->wrap((new Commands())->addCommand([
-                ...self::sessionCommands(),
-                $fillSession,
-            ])))
+            ->setCommands($observation->wrap(new Commands(...[...self::sessionCommands(), $fillSession])))
             ->setInputHistory(new InputHistory($storage));
         EventLoop::queue(
             static fn() => $terminal->simulateInput("/probe\r"),
@@ -5198,7 +5137,7 @@ final class TuiTest extends TestCase
         $tui = Tui::make($agent)
             ->setSessionStore(new SessionStore($storage, 'test-user'))
             ->setTerminal($terminal)
-            ->setCommands($observation->wrap((new Commands())->addCommand(self::sessionCommands())))
+            ->setCommands($observation->wrap(new Commands(...self::sessionCommands())))
             ->setInputHistory(new InputHistory($storage));
         EventLoop::delay(
             0.03,
@@ -5255,8 +5194,8 @@ final class TuiTest extends TestCase
         $agent->setAiProvider($provider);
         $ongoing = null;
         $remember = $this->commandThat(
-            static function (CommandAdapterInterface $adapter) use (&$ongoing): void {
-                $ongoing = $adapter->agent()->getChatHistory();
+            static function (CommandContext $context) use (&$ongoing): void {
+                $ongoing = $context->agent()->getChatHistory();
             },
         );
         $storage = new InMemoryStorage();
@@ -5266,10 +5205,7 @@ final class TuiTest extends TestCase
         $tui = Tui::make($agent)
             ->setSessionStore(new SessionStore($storage, 'test-user'))
             ->setTerminal($terminal)
-            ->setCommands($observation->wrap((new Commands())->addCommand([
-                ...self::sessionCommands(),
-                $remember,
-            ])))
+            ->setCommands($observation->wrap(new Commands(...[...self::sessionCommands(), $remember])))
             ->setInputHistory(new InputHistory($storage));
         EventLoop::queue(
             static fn() => $terminal->simulateInput("/probe\r"),
@@ -5305,7 +5241,7 @@ final class TuiTest extends TestCase
 
         self::assertIsString($refusedDisplay);
         self::assertStringContainsString(
-            '/clear is refused while the Agent is working',
+            '/clear is refused by the Host Application',
             $refusedDisplay,
         );
         self::assertStringContainsString('❯ A question', $refusedDisplay);
@@ -5337,7 +5273,7 @@ final class TuiTest extends TestCase
         $tui = Tui::make($agent)
             ->setSessionStore(new SessionStore($storage, 'test-user'))
             ->setTerminal($terminal)
-            ->setCommands($observation->wrap((new Commands())->addCommand(self::sessionCommands())))
+            ->setCommands($observation->wrap(new Commands(...self::sessionCommands())))
             ->setInputHistory(new InputHistory($storage));
         EventLoop::delay(
             0.04,
@@ -5420,7 +5356,7 @@ final class TuiTest extends TestCase
             $tui = Tui::make($agent)
                 ->setSessionStore(new SessionStore($storage, 'test-user'))
                 ->setTerminal($terminal)
-                ->setCommands($observation->wrap((new Commands())->addCommand(self::sessionCommands())))
+                ->setCommands($observation->wrap(new Commands(...self::sessionCommands())))
                 ->setInputHistory(new InputHistory($storage));
             EventLoop::delay(
                 0.04,
@@ -5505,7 +5441,7 @@ final class TuiTest extends TestCase
         $tui = Tui::make($agent)
             ->setSessionStore(new SessionStore($storage, 'test-user'))
             ->setTerminal($terminal)
-            ->setCommands($observation->wrap((new Commands())->addCommand(self::sessionCommands())))
+            ->setCommands($observation->wrap(new Commands(...self::sessionCommands())))
             ->setInputHistory(new InputHistory($storage));
         EventLoop::delay(
             0.04,
@@ -5563,7 +5499,7 @@ final class TuiTest extends TestCase
         $tui = Tui::make($agent)
             ->setSessionStore(new SessionStore($storage, 'test-user'))
             ->setTerminal($terminal)
-            ->setCommands($observation->wrap((new Commands())->addCommand(self::sessionCommands())))
+            ->setCommands($observation->wrap(new Commands(...self::sessionCommands())))
             ->setInputHistory(new InputHistory($storage));
         EventLoop::delay(
             0.04,
@@ -5602,8 +5538,8 @@ final class TuiTest extends TestCase
         $agent = (new Agent())->setThreadId('test-thread');
         $ongoing = null;
         $remember = $this->commandThat(
-            static function (CommandAdapterInterface $adapter) use (&$ongoing): void {
-                $ongoing = $adapter->agent()->getChatHistory();
+            static function (CommandContext $context) use (&$ongoing): void {
+                $ongoing = $context->agent()->getChatHistory();
             },
         );
         $storage = new InMemoryStorage();
@@ -5617,10 +5553,7 @@ final class TuiTest extends TestCase
         $tui = Tui::make($agent)
             ->setSessionStore(new SessionStore($storage, 'test-user'))
             ->setTerminal($terminal)
-            ->setCommands($observation->wrap((new Commands())->addCommand([
-                ...self::sessionCommands(),
-                $remember,
-            ])))
+            ->setCommands($observation->wrap(new Commands(...[...self::sessionCommands(), $remember])))
             ->setInputHistory(new InputHistory($storage));
         EventLoop::queue(
             static fn() => $terminal->simulateInput("/probe\r"),
@@ -5677,7 +5610,7 @@ final class TuiTest extends TestCase
         $tui = Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand(self::sessionCommands()));
+            ->setCommands(new Commands(...self::sessionCommands()));
         EventLoop::delay(
             0.04,
             static fn() => $terminal->simulateInput("/resume\r"),
@@ -5721,7 +5654,7 @@ final class TuiTest extends TestCase
         $tui = Tui::make($agent)
             ->setSessionStore(new SessionStore($storage, 'test-user'))
             ->setTerminal($terminal)
-            ->setCommands($observation->wrap((new Commands())->addCommand(self::sessionCommands())))
+            ->setCommands($observation->wrap(new Commands(...self::sessionCommands())))
             ->setInputHistory(new InputHistory($storage));
         EventLoop::delay(
             0.04,
@@ -5773,7 +5706,7 @@ final class TuiTest extends TestCase
         $tui = Tui::make($agent)
             ->setSessionStore(new SessionStore($storage, 'test-user'))
             ->setTerminal($terminal)
-            ->setCommands($observation->wrap((new Commands())->addCommand(self::sessionCommands())))
+            ->setCommands($observation->wrap(new Commands(...self::sessionCommands())))
             ->setInputHistory(new InputHistory($storage));
         EventLoop::delay(
             0.04,
@@ -5825,7 +5758,7 @@ final class TuiTest extends TestCase
         $tui = Tui::make($agent)
             ->setSessionStore(new SessionStore($storage, 'test-user'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand(self::sessionCommands()))
+            ->setCommands(new Commands(...self::sessionCommands()))
             ->setInputHistory(new InputHistory($storage));
         EventLoop::queue(
             static fn() => $terminal->simulateInput("A question\r"),
@@ -5848,7 +5781,7 @@ final class TuiTest extends TestCase
 
         self::assertIsString($refusedDisplay);
         self::assertStringContainsString(
-            '/resume is refused while the Agent is working',
+            '/resume is refused by the Host Application',
             $refusedDisplay,
         );
         self::assertStringNotContainsString(
@@ -5879,11 +5812,11 @@ final class TuiTest extends TestCase
         $tui = Tui::make($agent)
             ->setSessionStore(new SessionStore($storage, 'test-user'))
             ->setTerminal($terminal)
-            ->setCommands($observation->wrap((new Commands())->addCommand([
+            ->setCommands($observation->wrap(new Commands(
                 new ClearCommand(),
                 new ResumeCommand(),
                 new LeaveCommand(),
-            ])))
+            )))
             ->setInputHistory(new InputHistory($storage));
         EventLoop::delay(
             0.04,
@@ -5971,10 +5904,10 @@ final class TuiTest extends TestCase
         $tui = Tui::make($agent)
             ->setSessionStore(new SessionStore($storage, 'test-user'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand([
+            ->setCommands(new Commands(
                 new ResumeCommand(),
                 new LeaveCommand(),
-            ]))
+            ))
             ->setInputHistory(new InputHistory($storage));
         EventLoop::delay(
             0.04,
@@ -6044,10 +5977,10 @@ final class TuiTest extends TestCase
             ->setSessionStore($sessionStore)
             ->setSession($initialSession)
             ->setTerminal($terminal)
-            ->setCommands($observation->wrap((new Commands())->addCommand([
+            ->setCommands($observation->wrap(new Commands(
                 new ClearCommand(),
                 new LeaveCommand(),
-            ])))
+            )))
             ->setInputHistory(new InputHistory(new InMemoryStorage()));
         EventLoop::delay(
             0.04,
@@ -6116,8 +6049,8 @@ final class TuiTest extends TestCase
         $agent = (new Agent())->setThreadId('test-thread');
         $history = $this->sessionWith($messages, $storage);
         $restore = $this->commandThat(
-            static function (CommandAdapterInterface $adapter) use ($history): void {
-                $adapter->useSession($history);
+            static function (CommandContext $context) use ($history): void {
+                $context->useSession($history);
             },
         );
         $terminal = new VirtualTerminal(rows: 16);
@@ -6127,7 +6060,7 @@ final class TuiTest extends TestCase
         $tui = Tui::make($agent)
             ->setSessionStore($sessionStore)
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand($restore));
+            ->setCommands(new Commands($restore));
         EventLoop::queue(
             static fn() => $terminal->simulateInput("/probe\r"),
         );

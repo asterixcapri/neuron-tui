@@ -31,10 +31,11 @@ final class TurnRenderer
     /**
      * Errors are presented and rethrown; false means a stopped or interrupted response.
      *
-     * @param Generator<int, object, mixed, AgentState> $stream
+     * @param Generator<int, object, mixed, AgentState|null> $stream
      * @param (Closure(): bool)|null $responseWasStopped
+     * @param (Closure(object): bool)|null $interactionEvent
      */
-    public function run(Generator $stream, ?Closure $responseWasStopped = null): bool
+    public function run(Generator $stream, ?Closure $responseWasStopped = null, ?Closure $interactionEvent = null): bool
     {
         $this->hasVisibleText = false;
         $this->pendingText = '';
@@ -42,9 +43,17 @@ final class TurnRenderer
         $this->toolActivity = null;
 
         try {
-            $this->toolActivity = $this->view->beginAgentResponse();
             foreach ($stream as $chunk) {
+                if ($interactionEvent?->__invoke($chunk) ?? false) {
+                    continue;
+                }
+                $this->toolActivity ??= $this->view->beginAgentResponse();
                 $this->consume($chunk);
+            }
+
+            $state = $stream->getReturn();
+            if ($state === null) {
+                return true;
             }
 
             if ($responseWasStopped?->__invoke() ?? false) {
@@ -52,12 +61,13 @@ final class TurnRenderer
 
                 return false;
             }
-            if ($stream->getReturn()->isInterrupted()) {
+            if ($state->isInterrupted()) {
                 $this->view->showError('Human-in-the-loop interruptions are not supported.');
 
                 return false;
             }
             if (!$this->hasVisibleText && !($this->toolActivity?->hasActivity() ?? false)) {
+                $this->toolActivity ??= $this->view->beginAgentResponse();
                 $this->view->workingIndicator()->stop();
                 $this->view->showEmptyResponse();
             }

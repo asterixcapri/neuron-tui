@@ -51,13 +51,13 @@ $agent = DemoAgent::make();
 $agent->setAiProvider(AIProviderFactory::create($modelId, $httpClient));
 $session = $sessionStore->create();
 
-$commands = (new Commands())->addCommand([
+$commands = new Commands(
     new ClearCommand(),
     new ResumeCommand(),
     new ModelCommand($httpClient),
     new LeaveCommand(),
     new HelpCommand(),
-]);
+);
 
 $userMessageProcessors = (new UserMessageProcessors())->addProcessor([
     new FileReferenceProcessor(__DIR__ . '/..'),
