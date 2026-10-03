@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace NeuronTui\Turn;
 
 use Amp\Future;
+use Closure;
 use Generator;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Agent\AgentState;
@@ -89,18 +90,11 @@ final class TurnScheduler
         $busy = $this->isBusy();
         $stream = $this->conversation->submitInput($input);
         $turn = async(function () use ($stream, $busy): void {
-            try {
-                $completed = (new TurnRenderer($this->view))->run(
-                    $this->commandStream($stream, $busy),
-                    $this->conversation->responseWasStopped(...),
-                    $this->consumeInteractionEvent(...),
-                );
-            } catch (Throwable) {
-                return;
-            }
-            if ($stream->getReturn() !== null && $completed && !$this->stopped && !$this->conversation->responseStopRequested()) {
-                $this->scheduleSessionTitle($this->conversation->session(), $this->conversation->agent());
-            }
+            $this->consumeStream(
+                $this->commandStream($stream, $busy),
+                new TurnRenderer($this->view),
+                fn() => $this->scheduleSessionTitle($this->conversation->session(), $this->conversation->agent()),
+            );
         });
         if (!$busy) {
             $this->runningTurn = $turn;
@@ -312,17 +306,26 @@ final class TurnScheduler
             $agent = $this->conversation->agent();
             $session = $this->conversation->session();
 
-            try {
-                $completed = $this->renderer->run($stream, $this->conversation->responseWasStopped(...), $this->consumeInteractionEvent(...));
-            } catch (Throwable) {
-                // The renderer already presented the streaming error.
-                return;
-            }
-
-            if ($completed && !$this->stopped && !$this->conversation->responseStopRequested()) {
-                $this->scheduleSessionTitle($session, $agent);
-            }
+            $this->consumeStream($stream, $this->renderer, fn() => $this->scheduleSessionTitle($session, $agent));
         });
+    }
+
+    /**
+     * @param Generator<int, object, mixed, AgentState|null> $stream
+     * @param Closure(): void $onCompleted
+     */
+    private function consumeStream(Generator $stream, TurnRenderer $renderer, Closure $onCompleted): void
+    {
+        try {
+            $completed = $renderer->run($stream, $this->conversation->responseWasStopped(...), $this->consumeInteractionEvent(...));
+        } catch (Throwable) {
+            // The renderer already presented the streaming error.
+            return;
+        }
+
+        if ($stream->getReturn() !== null && $completed && !$this->stopped && !$this->conversation->responseStopRequested()) {
+            $onCompleted();
+        }
     }
 
     private function scheduleSessionTitle(Session $session, Agent $agent): void

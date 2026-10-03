@@ -67,6 +67,7 @@ final class TurnRenderer
                 return false;
             }
             if (!$this->hasVisibleText && !($this->toolActivity?->hasActivity() ?? false)) {
+                $this->toolActivity ??= $this->view->beginAgentResponse();
                 $this->view->workingIndicator()->stop();
                 $this->view->showEmptyResponse();
             }
