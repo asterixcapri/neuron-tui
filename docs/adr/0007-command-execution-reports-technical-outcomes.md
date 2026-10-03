@@ -1,5 +1,14 @@
 # Command execution reports technical outcomes
 
+_2026-10-03 — Commands API revision: submitInput streams native Agent events
+and Notification, SelectionRequest, ExitRequest, SessionChanged and AgentChanged.
+Commands return void through CommandContext; there is no public completion result,
+afterExecution hook or failure event. Registered effects precede the original
+Command exception, which reaches the TUI's stream catch. Unknown Commands and
+admission refusal appear as Notifications. The terminal decides ExitRequest
+handling and keeps the interface usable after execution failures. The historical
+technical-outcome protocol below is superseded._
+
 _The shared-contract revision changes the interface and return contract:
 `CommandAdapterInterface` replaces `CommandControlsInterface`, and
 `Commands::run()` returns Adapter output instead of `CommandExecution`._

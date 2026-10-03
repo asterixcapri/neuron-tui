@@ -528,7 +528,9 @@ final class ConversationView
         $this->stopping = false;
         $this->suggestions->ready();
         $this->showStatus();
-        $this->tui->setFocus($this->editor);
+        if (!$this->isChoosing()) {
+            $this->tui->setFocus($this->editor);
+        }
         $this->history->followLatest();
     }
 

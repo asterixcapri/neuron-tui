@@ -13,12 +13,12 @@ use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Providers\ProviderResponse;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronInteraction\Command\ClearCommand;
-use NeuronInteraction\Command\CommandAdapterInterface;
+use NeuronInteraction\Command\CommandContext;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Command\ResumeCommand;
-use NeuronInteraction\Command\Selection;
 use NeuronInteraction\Command\SelectionOption;
+use NeuronInteraction\Command\SelectionRequest;
 use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\FileStorage;
@@ -75,8 +75,7 @@ final class InputHistoryTest extends TestCase
                 return 'Record that the command ran.';
             }
 
-            /** @param CommandAdapterInterface<mixed> $adapter */
-            public function run(CommandAdapterInterface $adapter, string $value): void
+            public function run(CommandContext $context, string $value): void
             {
                 $this->arguments[] = $value;
             }
@@ -116,7 +115,7 @@ final class InputHistoryTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore($storage, 'test-user'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand($command))
+            ->setCommands(new Commands($command))
             ->setInputHistory(new InputHistory($storage))
             ->run();
 
@@ -244,7 +243,7 @@ final class InputHistoryTest extends TestCase
         Tui::make($agent)
             ->setSessionStore($sessionStore)
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand(new ClearCommand()))
+            ->setCommands(new Commands(new ClearCommand()))
             ->setInputHistory(new InputHistory($storage))
             ->run();
 
@@ -292,7 +291,7 @@ final class InputHistoryTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore($storage, 'test-user'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand(new ResumeCommand()))
+            ->setCommands(new Commands(new ResumeCommand()))
             ->setInputHistory(new InputHistory($storage))
             ->run();
 
@@ -717,10 +716,10 @@ final class InputHistoryTest extends TestCase
         Tui::make($fixture->agent)
             ->setSessionStore(new SessionStore($fixture->storage, 'test-user'))
             ->setTerminal($fixture->terminal)
-            ->setCommands((new Commands())->addCommand([
+            ->setCommands(new Commands(
                 self::commandNamed('/alpha', 'The first suggestion.'),
                 self::commandNamed('/album', 'The second suggestion.'),
-            ]))
+            ))
             ->setInputHistory(new InputHistory($fixture->storage))
             ->run();
 
@@ -751,8 +750,7 @@ final class InputHistoryTest extends TestCase
                 return 'Choose an option.';
             }
 
-            /** @param CommandAdapterInterface<mixed> $adapter */
-            public function run(CommandAdapterInterface $adapter, string $value): void
+            public function run(CommandContext $context, string $value): void
             {
                 if ($value !== '') {
                     $this->chosen = $value;
@@ -760,7 +758,7 @@ final class InputHistoryTest extends TestCase
                     return;
                 }
 
-                $adapter->requestSelection(new Selection($this->name(), 'Options', [
+                $context->requestSelection(new SelectionRequest($this->name(), 'Options', [
                     new SelectionOption('first', 'First option'),
                     new SelectionOption('last', 'Last option'),
                 ]));
@@ -782,7 +780,7 @@ final class InputHistoryTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore($storage, 'test-user'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand($command))
+            ->setCommands(new Commands($command))
             ->setInputHistory(new InputHistory($storage))
             ->run();
 
@@ -863,7 +861,7 @@ final class InputHistoryTest extends TestCase
         Tui::make($fixture->agent)
             ->setSessionStore(new SessionStore($fixture->storage, 'test-user'))
             ->setTerminal($fixture->terminal)
-            ->setCommands((new Commands())->addCommand(self::commandNamed('/probe', 'Runs the probe.')))
+            ->setCommands(new Commands(self::commandNamed('/probe', 'Runs the probe.')))
             ->setInputHistory(new InputHistory($fixture->storage))
             ->run();
 
@@ -909,7 +907,7 @@ final class InputHistoryTest extends TestCase
         Tui::make($fixture->agent)
             ->setSessionStore(new SessionStore($fixture->storage, 'test-user'))
             ->setTerminal($fixture->terminal)
-            ->setCommands((new Commands())->addCommand(self::commandNamed('/probe', 'Runs the probe.')))
+            ->setCommands(new Commands(self::commandNamed('/probe', 'Runs the probe.')))
             ->setInputHistory(new InputHistory($fixture->storage))
             ->run();
 
@@ -948,8 +946,7 @@ final class InputHistoryTest extends TestCase
                 return $this->description;
             }
 
-            /** @param CommandAdapterInterface<mixed> $adapter */
-            public function run(CommandAdapterInterface $adapter, string $value): void {}
+            public function run(CommandContext $context, string $value): void {}
         };
     }
 }

@@ -87,7 +87,7 @@ final class HttpResponseStopTest extends TestCase
             ->setSession($session)
             ->setStopSignal($stopSignal)
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand(new HelpCommand()));
+            ->setCommands(new Commands(new HelpCommand()));
         $tui->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());

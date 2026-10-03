@@ -9,7 +9,7 @@ use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Providers\OpenAI\Responses\OpenAIResponses;
 use NeuronAI\Testing\FakeAIProvider;
-use NeuronInteraction\Command\CommandAdapterInterface;
+use NeuronInteraction\Command\CommandContext;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Configuration\ConfigurationStore;
@@ -66,8 +66,8 @@ final class ModelCommandTest extends TestCase
                 ->setSessionStore($sessions)
                 ->setSession($session)
                 ->setTerminal($terminal)
-                ->setCommands((new Commands())->addCommand($this->observeModel(static function (CommandAdapterInterface $adapter) use (&$observed): void {
-                    $observed = $adapter;
+                ->setCommands(new Commands($this->observeModel(static function (CommandContext $context) use (&$observed): void {
+                    $observed = $context;
                 })))
                 ->setConfigurationStore($store);
             $tui->run();
@@ -107,8 +107,8 @@ final class ModelCommandTest extends TestCase
         $tui = Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand($this->observeModel(static function (CommandAdapterInterface $adapter) use (&$observed): void {
-                $observed = $adapter;
+            ->setCommands(new Commands($this->observeModel(static function (CommandContext $context) use (&$observed): void {
+                $observed = $context;
             })))
             ->setConfigurationStore($store);
         $tui->run();
@@ -134,8 +134,8 @@ final class ModelCommandTest extends TestCase
         $tui = Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand($this->observeModel(static function (CommandAdapterInterface $adapter) use (&$observed): void {
-                $observed = $adapter;
+            ->setCommands(new Commands($this->observeModel(static function (CommandContext $context) use (&$observed): void {
+                $observed = $context;
             })))
             ->setConfigurationStore($store);
         $tui->run();
@@ -169,8 +169,8 @@ final class ModelCommandTest extends TestCase
                 ->setSessionStore($sessions)
                 ->setSession($session)
                 ->setTerminal($terminal)
-                ->setCommands((new Commands())->addCommand($this->observeModel(static function (CommandAdapterInterface $adapter) use (&$observed): void {
-                    $observed = $adapter;
+                ->setCommands(new Commands($this->observeModel(static function (CommandContext $context) use (&$observed): void {
+                    $observed = $context;
                 })))
                 ->setConfigurationStore($store);
             $tui->run();
@@ -189,13 +189,13 @@ final class ModelCommandTest extends TestCase
             }
         }
     }
-    /** @param Closure(CommandAdapterInterface<mixed>): void $observe */
+    /** @param Closure(CommandContext): void $observe */
     private function observeModel(Closure $observe): CommandInterface
     {
         return new class ($observe) implements CommandInterface {
             private readonly ModelCommand $command;
 
-            /** @param Closure(CommandAdapterInterface<mixed>): void $observe */
+            /** @param Closure(CommandContext): void $observe */
             public function __construct(private readonly Closure $observe)
             {
                 $this->command = new ModelCommand();
@@ -211,11 +211,10 @@ final class ModelCommandTest extends TestCase
                 return $this->command->describe();
             }
 
-            /** @param CommandAdapterInterface<mixed> $adapter */
-            public function run(CommandAdapterInterface $adapter, string $value): void
+            public function run(CommandContext $context, string $value): void
             {
-                ($this->observe)($adapter);
-                $this->command->run($adapter, $value);
+                ($this->observe)($context);
+                $this->command->run($context, $value);
             }
         };
     }

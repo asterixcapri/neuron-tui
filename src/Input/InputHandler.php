@@ -4,11 +4,8 @@ declare(strict_types=1);
 
 namespace NeuronTui\Input;
 
-use NeuronInteraction\Command\Commands;
-use NeuronInteraction\Configuration\ConfigurationStore;
-use NeuronInteraction\Conversation;
+use NeuronInteraction\Command\CommandInput;
 use NeuronInteraction\InputHistory\InputHistory;
-use NeuronTui\Command\TuiCommandAdapter;
 use NeuronTui\Turn\TurnScheduler;
 use NeuronTui\View\ConversationView;
 use Symfony\Component\Tui\Event\InputEvent;
@@ -28,9 +25,6 @@ final class InputHandler
         private readonly ConversationView $view,
         private readonly InputHistory $inputHistory,
         private readonly TurnScheduler $scheduler,
-        private readonly Commands $commands,
-        private readonly Conversation $conversation,
-        private readonly ConfigurationStore $configurationStore,
     ) {}
 
     public function handleSubmit(SubmitEvent $event): void
@@ -47,14 +41,10 @@ final class InputHandler
 
         $original = $this->view->composerMessage();
         $this->inputHistory->record($original);
-        $submission = SubmissionParser::parse($event->getValue());
+        $submission = CommandInput::parse($event->getValue());
 
         if ($submission instanceof CommandInput) {
-            $this->commands->run(
-                $submission->name,
-                $submission->value,
-                new TuiCommandAdapter($this->scheduler, $this->view, $this->commands, $this->conversation, $this->configurationStore),
-            );
+            $this->scheduler->submitCommand($submission);
 
             return;
         }
