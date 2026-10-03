@@ -698,6 +698,30 @@ final class TuiTest extends TestCase
         self::assertStringContainsString('Empty response.', $display);
     }
 
+    public function testEmptyStreamPreservesThePreviousAssistantResponse(): void
+    {
+        $provider = new FakeAIProvider(new AssistantMessage('First answer must remain'), new AssistantMessage());
+        $terminal = new VirtualTerminal(rows: 35);
+        EventLoop::queue(static fn() => $terminal->simulateInput("First\rSecond\r"));
+        EventLoop::delay(0.2, static fn() => $terminal->simulateInput("\x03"));
+
+        Tui::make((new Agent())->setAiProvider($provider))
+            ->setTerminal($terminal)
+            ->run();
+
+        $screen = new ScreenBuffer($terminal->getColumns(), $terminal->getRows());
+        $screen->write($terminal->getOutput());
+        $display = $screen->getScreen();
+        $last = -1;
+        foreach (['❯ First', '● First answer must remain', '❯ Second', '● Empty response.'] as $text) {
+            $position = strpos($display, $text);
+            self::assertNotFalse($position, $text);
+            self::assertGreaterThan($last, $position);
+            $last = $position;
+        }
+        $provider->assertCallCount(2);
+    }
+
     public function testWhitespaceTextChunksStillCountAsAnEmptyResponse(): void
     {
         $provider = new class (new AssistantMessage()) extends FakeAIProvider {
