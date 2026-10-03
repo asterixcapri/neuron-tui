@@ -3,3 +3,4 @@
 /.storage
 /.phpunit.cache/
 /composer.lock
+/.phpstan.cache/

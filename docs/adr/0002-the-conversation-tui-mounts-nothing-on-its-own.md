@@ -1,5 +1,13 @@
 # The Conversation TUI mounts nothing on its own
 
+_2026-10-03 — Commands API revision supersedes the shared concurrent marker and
+adapter revisions below. The TUI supplies Commands and ConfigurationStore to its
+Conversation and submits input through submitInput. Its host admission policy
+recognizes HelpCommand and LeaveCommand while busy. Other commands are refused;
+there is no shared concurrency marker. Commands use concrete CommandContext and
+ExitRequest asks the terminal to leave. The no-default-commands decision remains;
+previous revisions below are historical._
+
 _ADR 0003 supersedes only this decision's duplicate-name rule. The TUI still
 mounts nothing on its own._
 

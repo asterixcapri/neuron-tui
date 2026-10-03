@@ -424,3 +424,10 @@ Preparation of pending input is deferred until its turn. A rejected queued input
 is reported and restored to an empty composer; a newer draft is preserved and
 the original remains in Input history. Errors and supported response stops
 advance the queue without retries, preserving terminal behavior.
+
+## Commands API migration
+
+See [the migration guide](docs/commands-migration.md) for unified input, ordered
+requests, selection responses, error propagation and the terminal admission policy.
+Command prompts execute inside Conversation's stream; the host presents events
+and retains scheduling of human inputs.

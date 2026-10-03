@@ -1,3 +1,7 @@
+> Historical research: command adapters, concurrency markers and mutable command
+> registration mentioned below were superseded by the 2026-10-03 Commands API.
+> See ADR0003, ADR0006 and ADR0007 for the current Conversation/context contract.
+
 # Clonare Claude Code come *interfaccia*: quali funzionalità basiche valgono per Neuron TUI
 
 > Nota storica: questa ricerca descrive la revisione indicata sotto. Le sezioni

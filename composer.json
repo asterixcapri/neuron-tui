@@ -47,7 +47,10 @@
             "type": "path",
             "url": "../neuron-interaction",
             "options": {
-                "symlink": true
+                "symlink": true,
+                "versions": {
+                    "asterixcapri/neuron-interaction": "1.x-dev"
+                }
             }
         }
     ]
