@@ -4,21 +4,17 @@ declare(strict_types=1);
 
 namespace NeuronTui\Turn;
 
-use Closure;
-use Generator;
-use NeuronAI\Agent\AgentState;
 use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
 use NeuronAI\Chat\Messages\Stream\Chunks\ToolCallChunk;
 use NeuronAI\Chat\Messages\Stream\Chunks\ToolResultChunk;
 use NeuronTui\View\ConversationView;
 use NeuronTui\View\DisplayableText;
 use NeuronTui\View\ToolActivity;
-use Throwable;
 
 use function microtime;
 use function trim;
 
-/** Terminal-only policy for rendering one response. @internal */
+/** Renders text and tool activity for one stream; event routing belongs to TurnRunner. @internal */
 final class TurnRenderer
 {
     private ?ToolActivity $toolActivity = null;
@@ -28,80 +24,23 @@ final class TurnRenderer
 
     public function __construct(private readonly ConversationView $view) {}
 
-    /**
-     * Errors are presented and rethrown; false means a stopped or interrupted response.
-     *
-     * @param Generator<int, object, mixed, AgentState|null> $stream
-     * @param (Closure(): bool)|null $responseWasStopped
-     * @param (Closure(object): bool)|null $interactionEvent
-     */
-    public function run(Generator $stream, ?Closure $responseWasStopped = null, ?Closure $interactionEvent = null): bool
+    public function beginResponse(): void
     {
-        $this->hasVisibleText = false;
-        $this->pendingText = '';
-        $this->messageId = null;
-        $this->toolActivity = null;
+        $this->toolActivity ??= $this->view->beginAgentResponse();
+    }
 
-        try {
-            foreach ($stream as $chunk) {
-                if ($interactionEvent?->__invoke($chunk) ?? false) {
-                    continue;
-                }
-                $this->toolActivity ??= $this->view->beginAgentResponse();
-                $this->consume($chunk);
-            }
-
-            $state = $stream->getReturn();
-            if ($state === null) {
-                return true;
-            }
-
-            if ($responseWasStopped?->__invoke() ?? false) {
-                $this->showStoppedResponse();
-
-                return false;
-            }
-            if ($state->isInterrupted()) {
-                $this->view->showError('Human-in-the-loop interruptions are not supported.');
-
-                return false;
-            }
-            if (!$this->hasVisibleText && !($this->toolActivity?->hasActivity() ?? false)) {
-                $this->toolActivity ??= $this->view->beginAgentResponse();
-                $this->view->workingIndicator()->stop();
-                $this->view->showEmptyResponse();
-            }
-
-            return true;
-        } catch (Throwable $error) {
-            $this->view->showError($error::class . ': ' . $error->getMessage());
-            if ($responseWasStopped?->__invoke() ?? false) {
-                $this->showStoppedResponse();
-            }
-
-            throw $error;
+    public function finish(): void
+    {
+        if (!$this->hasVisibleText && !($this->toolActivity?->hasActivity() ?? false)) {
+            $this->beginResponse();
+            $this->view->workingIndicator()->stop();
+            $this->view->showEmptyResponse();
         }
     }
 
-    private function showStoppedResponse(): void
+    public function toolCall(ToolCallChunk $chunk): void
     {
-        $this->view->workingIndicator()->stop();
-        $this->view->showResponseStopped();
-    }
-
-    private function consume(object $chunk): void
-    {
-        if ($chunk instanceof ToolCallChunk) {
-            $this->consumeToolCall($chunk);
-        } elseif ($chunk instanceof ToolResultChunk) {
-            $this->consumeToolResult($chunk);
-        } elseif ($chunk instanceof TextChunk) {
-            $this->consumeText($chunk);
-        }
-    }
-
-    private function consumeToolCall(ToolCallChunk $chunk): void
-    {
+        $this->beginResponse();
         $this->view->endAgentMessage();
         $this->pendingText = '';
         $this->messageId = null;
@@ -111,16 +50,18 @@ final class TurnRenderer
         $this->view->paintPendingChanges();
     }
 
-    private function consumeToolResult(ToolResultChunk $chunk): void
+    public function toolResult(ToolResultChunk $chunk): void
     {
+        $this->beginResponse();
         $this->view->workingIndicator()->whilePaused(microtime(true), function () use ($chunk): void {
             $this->toolActivity?->finish($chunk->tool);
         });
         $this->view->paintPendingChanges();
     }
 
-    private function consumeText(TextChunk $chunk): void
+    public function text(TextChunk $chunk): void
     {
+        $this->beginResponse();
         if ($this->messageId !== null && $chunk->messageId !== $this->messageId) {
             $this->view->endAgentMessage();
             $this->pendingText = '';

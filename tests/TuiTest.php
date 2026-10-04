@@ -1106,10 +1106,11 @@ final class TuiTest extends TestCase
         $agent->setAiProvider($provider);
         $terminal = new VirtualTerminal(rows: 30);
         $observation = new CommandObservation();
+        $sessionStore = new SessionStore($storage, 'test-user');
         $tui = Tui::make($agent)
-            ->setSessionStore(new SessionStore($storage, 'test-user'))
+            ->setSessionStore($sessionStore)
             ->setTerminal($terminal)
-            ->setCommands($observation->wrap(new Commands(...self::sessionCommands())))
+            ->setCommands($observation->wrap(new Commands(...self::sessionCommands($sessionStore))))
             ->setInputHistory(new InputHistory($storage));
         EventLoop::queue(
             static fn() => $terminal->simulateInput("/clear now\r"),
@@ -1908,7 +1909,7 @@ final class TuiTest extends TestCase
             ->setSession($initialSession)
             ->setTerminal($terminal)
             ->setCommands($observation->wrap(new Commands(
-                new ClearCommand('/wipe'),
+                new ClearCommand($sessionStore, '/wipe'),
                 new LeaveCommand('/quit'),
             )));
         EventLoop::queue(
@@ -4977,11 +4978,11 @@ final class TuiTest extends TestCase
     }
 
     /** @return list<CommandInterface> */
-    private static function sessionCommands(): array
+    private static function sessionCommands(SessionStore $sessionStore): array
     {
         return [
-            new ClearCommand(),
-            new ResumeCommand(),
+            new ClearCommand($sessionStore),
+            new ResumeCommand($sessionStore),
             new LeaveCommand(),
         ];
     }
@@ -4997,10 +4998,11 @@ final class TuiTest extends TestCase
         self::assertIsString($workingDirectory);
         $before = scandir($workingDirectory);
         $observation = new CommandObservation();
+        $sessionStore = new SessionStore(new InMemoryStorage(), 'local');
         $tui = Tui::make($agent)
-            ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
+            ->setSessionStore($sessionStore)
             ->setTerminal($terminal)
-            ->setCommands($observation->wrap(new Commands(...self::sessionCommands())));
+            ->setCommands($observation->wrap(new Commands(...self::sessionCommands($sessionStore))));
         EventLoop::delay(
             0.03,
             static fn() => $terminal->simulateInput("/clear\r"),
@@ -5065,10 +5067,10 @@ final class TuiTest extends TestCase
         $agent = ($sessionStore->create())->bindToAgent($agent);
         $earlier = null;
         $fillSession = $this->commandThat(
-            static function (CommandContext $context) use (&$earlier): void {
-                $earlier = $context->sessionStore()->get($context->agent()->getChatHistory()->getThreadId());
+            static function (CommandContext $context) use (&$earlier, $sessionStore): void {
+                $earlier = $sessionStore->get($context->agent()->getChatHistory()->getThreadId());
                 self::assertNotNull($earlier);
-                StoredConversation::turn($context->sessionStore(), $earlier, new UserMessage('Earlier question.'), new AssistantMessage('Earlier answer.'));
+                StoredConversation::turn($sessionStore, $earlier, new UserMessage('Earlier question.'), new AssistantMessage('Earlier answer.'));
                 $earlier->setTitle('Earlier question.');
             },
         );
@@ -5078,7 +5080,7 @@ final class TuiTest extends TestCase
         $tui = Tui::make($agent)
             ->setSessionStore($sessionStore)
             ->setTerminal($terminal)
-            ->setCommands($observation->wrap(new Commands(...[...self::sessionCommands(), $fillSession])))
+            ->setCommands($observation->wrap(new Commands(...[...self::sessionCommands($sessionStore), $fillSession])))
             ->setInputHistory(new InputHistory($storage));
         EventLoop::queue(
             static fn() => $terminal->simulateInput("/probe\r"),
@@ -5137,7 +5139,7 @@ final class TuiTest extends TestCase
         $tui = Tui::make($agent)
             ->setSessionStore(new SessionStore($storage, 'test-user'))
             ->setTerminal($terminal)
-            ->setCommands($observation->wrap(new Commands(...self::sessionCommands())))
+            ->setCommands($observation->wrap(new Commands(...self::sessionCommands($sessionStore))))
             ->setInputHistory(new InputHistory($storage));
         EventLoop::delay(
             0.03,
@@ -5205,7 +5207,7 @@ final class TuiTest extends TestCase
         $tui = Tui::make($agent)
             ->setSessionStore(new SessionStore($storage, 'test-user'))
             ->setTerminal($terminal)
-            ->setCommands($observation->wrap(new Commands(...[...self::sessionCommands(), $remember])))
+            ->setCommands($observation->wrap(new Commands(...[...self::sessionCommands($sessionStore), $remember])))
             ->setInputHistory(new InputHistory($storage));
         EventLoop::queue(
             static fn() => $terminal->simulateInput("/probe\r"),
@@ -5273,7 +5275,7 @@ final class TuiTest extends TestCase
         $tui = Tui::make($agent)
             ->setSessionStore(new SessionStore($storage, 'test-user'))
             ->setTerminal($terminal)
-            ->setCommands($observation->wrap(new Commands(...self::sessionCommands())))
+            ->setCommands($observation->wrap(new Commands(...self::sessionCommands($sessionStore))))
             ->setInputHistory(new InputHistory($storage));
         EventLoop::delay(
             0.04,
@@ -5356,7 +5358,7 @@ final class TuiTest extends TestCase
             $tui = Tui::make($agent)
                 ->setSessionStore(new SessionStore($storage, 'test-user'))
                 ->setTerminal($terminal)
-                ->setCommands($observation->wrap(new Commands(...self::sessionCommands())))
+                ->setCommands($observation->wrap(new Commands(...self::sessionCommands($sessionStore))))
                 ->setInputHistory(new InputHistory($storage));
             EventLoop::delay(
                 0.04,
@@ -5441,7 +5443,7 @@ final class TuiTest extends TestCase
         $tui = Tui::make($agent)
             ->setSessionStore(new SessionStore($storage, 'test-user'))
             ->setTerminal($terminal)
-            ->setCommands($observation->wrap(new Commands(...self::sessionCommands())))
+            ->setCommands($observation->wrap(new Commands(...self::sessionCommands($sessionStore))))
             ->setInputHistory(new InputHistory($storage));
         EventLoop::delay(
             0.04,
@@ -5499,7 +5501,7 @@ final class TuiTest extends TestCase
         $tui = Tui::make($agent)
             ->setSessionStore(new SessionStore($storage, 'test-user'))
             ->setTerminal($terminal)
-            ->setCommands($observation->wrap(new Commands(...self::sessionCommands())))
+            ->setCommands($observation->wrap(new Commands(...self::sessionCommands($sessionStore))))
             ->setInputHistory(new InputHistory($storage));
         EventLoop::delay(
             0.04,
@@ -5553,7 +5555,7 @@ final class TuiTest extends TestCase
         $tui = Tui::make($agent)
             ->setSessionStore(new SessionStore($storage, 'test-user'))
             ->setTerminal($terminal)
-            ->setCommands($observation->wrap(new Commands(...[...self::sessionCommands(), $remember])))
+            ->setCommands($observation->wrap(new Commands(...[...self::sessionCommands($sessionStore), $remember])))
             ->setInputHistory(new InputHistory($storage));
         EventLoop::queue(
             static fn() => $terminal->simulateInput("/probe\r"),
@@ -5607,10 +5609,11 @@ final class TuiTest extends TestCase
     {
         $agent = (new Agent())->setThreadId('test-thread');
         $terminal = new VirtualTerminal(rows: 24);
+        $sessionStore = new SessionStore(new InMemoryStorage(), 'local');
         $tui = Tui::make($agent)
-            ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
+            ->setSessionStore($sessionStore)
             ->setTerminal($terminal)
-            ->setCommands(new Commands(...self::sessionCommands()));
+            ->setCommands(new Commands(...self::sessionCommands($sessionStore)));
         EventLoop::delay(
             0.04,
             static fn() => $terminal->simulateInput("/resume\r"),
@@ -5654,7 +5657,7 @@ final class TuiTest extends TestCase
         $tui = Tui::make($agent)
             ->setSessionStore(new SessionStore($storage, 'test-user'))
             ->setTerminal($terminal)
-            ->setCommands($observation->wrap(new Commands(...self::sessionCommands())))
+            ->setCommands($observation->wrap(new Commands(...self::sessionCommands($sessionStore))))
             ->setInputHistory(new InputHistory($storage));
         EventLoop::delay(
             0.04,
@@ -5706,7 +5709,7 @@ final class TuiTest extends TestCase
         $tui = Tui::make($agent)
             ->setSessionStore(new SessionStore($storage, 'test-user'))
             ->setTerminal($terminal)
-            ->setCommands($observation->wrap(new Commands(...self::sessionCommands())))
+            ->setCommands($observation->wrap(new Commands(...self::sessionCommands($sessionStore))))
             ->setInputHistory(new InputHistory($storage));
         EventLoop::delay(
             0.04,
@@ -5758,7 +5761,7 @@ final class TuiTest extends TestCase
         $tui = Tui::make($agent)
             ->setSessionStore(new SessionStore($storage, 'test-user'))
             ->setTerminal($terminal)
-            ->setCommands(new Commands(...self::sessionCommands()))
+            ->setCommands(new Commands(...self::sessionCommands($sessionStore)))
             ->setInputHistory(new InputHistory($storage));
         EventLoop::queue(
             static fn() => $terminal->simulateInput("A question\r"),
@@ -5813,8 +5816,8 @@ final class TuiTest extends TestCase
             ->setSessionStore(new SessionStore($storage, 'test-user'))
             ->setTerminal($terminal)
             ->setCommands($observation->wrap(new Commands(
-                new ClearCommand(),
-                new ResumeCommand(),
+                new ClearCommand($sessionStore),
+                new ResumeCommand($sessionStore),
                 new LeaveCommand(),
             )))
             ->setInputHistory(new InputHistory($storage));
@@ -5905,7 +5908,7 @@ final class TuiTest extends TestCase
             ->setSessionStore(new SessionStore($storage, 'test-user'))
             ->setTerminal($terminal)
             ->setCommands(new Commands(
-                new ResumeCommand(),
+                new ResumeCommand($sessionStore),
                 new LeaveCommand(),
             ))
             ->setInputHistory(new InputHistory($storage));
@@ -5978,7 +5981,7 @@ final class TuiTest extends TestCase
             ->setSession($initialSession)
             ->setTerminal($terminal)
             ->setCommands($observation->wrap(new Commands(
-                new ClearCommand(),
+                new ClearCommand($sessionStore),
                 new LeaveCommand(),
             )))
             ->setInputHistory(new InputHistory(new InMemoryStorage()));

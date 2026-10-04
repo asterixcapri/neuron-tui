@@ -173,8 +173,8 @@ $storage = new FileStorage(__DIR__ . '/.storage');
 $sessionStore = new SessionStore($storage, 'local-user');
 
 $commands = new Commands(
-    new ClearCommand(),
-    new ResumeCommand()
+    new ClearCommand($sessionStore),
+    new ResumeCommand($sessionStore)
 );
 
 Tui::make($agent)
@@ -186,7 +186,8 @@ Tui::make($agent)
 Use a user identifier appropriate to your application in place of `local-user`.
 SessionStore is optional. Without `setSessionStore()`, each TUI uses its own
 in-memory Store with the local owner. Supply a persistent Store to keep sessions
-between runs. An explicit initial Session requires an explicit SessionStore.
+between runs. ClearCommand and ResumeCommand receive their SessionStore in their
+constructors. An explicit initial Session does not require setSessionStore().
 
 Without `setSession()`, `run()` creates an empty Session in the configured or
 default Store.
@@ -205,14 +206,14 @@ Tui::make($agent)
     ->run();
 ```
 
-At startup, Conversation reloads the initial Session by its key from the supplied
-SessionStore and rejects it if the Store cannot read it. `setSession()`
-without `setSessionStore()` is rejected at startup; the two setters can be called
-in either order before `run()`. An Agent that already
-contains messages requires an explicit initial Session; that Session determines
-the conversation displayed and continued by TUI. Configuring the TUI creates no
-Session and does not bind the Agent. Startup validates and creates the Conversation
-before entering the terminal event loop.
+At startup, Tui passes the supplied Session directly to Conversation. Session
+creation happens in Tui only when no initial Session is supplied. The host is
+responsible for authorizing access to the Session before supplying it; startup
+does not reload it from the configured Store. The two setters can be called in
+either order before `run()`. An Agent that already contains messages requires an
+explicit initial Session; that Session determines the conversation displayed and
+continued by TUI. Configuring the TUI creates no Session and does not bind the
+Agent. Startup creates the Conversation before entering the terminal event loop.
 
 Session selection can replace the Agent instance. Commands retrieve the currently
 selected Agent through `$context->agent()`; the host does not receive the internal
@@ -343,7 +344,7 @@ Tui::make($agent)
 ```
 
 The TUI shows the display projection immediately, clears the composer and queues
-the original input. When its turn starts, `submitInput()` applies preparation
+the original input. When its turn starts, `sendInput()` applies preparation
 once and returns the stream. Command-generated prompts execute in their existing
 submission stream; processors
 preserve recognized expanded content. Saved messages are never changed by display
@@ -410,11 +411,13 @@ Neuron TUI is released under the MIT License.
 ## Execution and pending messages
 
 The TUI is the terminal frontend. It owns the pending-input FIFO, local turn
-reservation, Amp scheduling, command presentation and consumption of native
-Neuron chunks through its internal TurnScheduler. The core
-Conversation owns preparation, Session/Agent binding and native streaming;
-it has no busy admission, queue or custom event protocol. This is
-the same boundary as a React frontend making sequential streaming POST requests.
+reservation and Amp scheduling through its internal `TurnScheduler`.
+`TurnRunner` calls `Conversation::sendInput()` and consumes the returned
+stream in one loop, routing interaction events and native Neuron chunks. Its
+`TurnRenderer` handles text and tool presentation without dispatching events.
+The core Conversation owns preparation, command dispatch, ordered requests,
+Session/Agent binding and native streaming. Queuing and busy-time admission remain
+host policies, like a React frontend making sequential streaming POST requests.
 
 The scheduler queues all messages with `enqueueMessage(UserMessage $message)`.
 Display projection applies to every queued message. Its `tick()` prepares and runs

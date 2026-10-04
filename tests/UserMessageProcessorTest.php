@@ -303,7 +303,7 @@ final class UserMessageProcessorTest extends TestCase
                 ->setSessionStore($store)
                 ->setUserMessageProcessors((new UserMessageProcessors())->addProcessor([$processor, new EnvelopeProcessor('A'), new EnvelopeProcessor('B')]))
                 ->setTerminal($terminal)
-                ->setCommands(new Commands(new ResumeCommand($name)));
+                ->setCommands(new Commands(new ResumeCommand($store, $name)));
             EventLoop::queue(static fn() => $terminal->simulateInput($name . "\r"));
             EventLoop::delay(0.05, static fn() => $terminal->simulateInput('Readable'));
             EventLoop::delay(0.08, static function () use ($terminal, &$display): void {

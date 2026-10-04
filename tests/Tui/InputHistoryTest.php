@@ -243,7 +243,7 @@ final class InputHistoryTest extends TestCase
         Tui::make($agent)
             ->setSessionStore($sessionStore)
             ->setTerminal($terminal)
-            ->setCommands(new Commands(new ClearCommand()))
+            ->setCommands(new Commands(new ClearCommand($sessionStore)))
             ->setInputHistory(new InputHistory($storage))
             ->run();
 
@@ -291,7 +291,7 @@ final class InputHistoryTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore($storage, 'test-user'))
             ->setTerminal($terminal)
-            ->setCommands(new Commands(new ResumeCommand()))
+            ->setCommands(new Commands(new ResumeCommand($sessionStore)))
             ->setInputHistory(new InputHistory($storage))
             ->run();
 

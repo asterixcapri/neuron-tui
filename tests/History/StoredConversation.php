@@ -21,7 +21,7 @@ final class StoredConversation
     public static function turn(SessionStore $store, Session $session, UserMessage $question, Message $answer = new AssistantMessage('Stored answer.')): void
     {
         $agent = (new Agent())->setAiProvider(new FakeAIProvider($answer));
-        $conversation = new Conversation($agent, $store, session: $session);
-        iterator_to_array($conversation->submitInput($question));
+        $conversation = new Conversation($agent, $session);
+        iterator_to_array($conversation->sendInput($question));
     }
 }

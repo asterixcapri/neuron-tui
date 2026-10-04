@@ -60,8 +60,7 @@ final class SessionCompositionTest extends TestCase
         $storage->method('read')->willReturn($document);
         $store = new SessionStore($storage, 'alice');
         $terminal = new VirtualTerminal();
-        $command = $this->commandThat(static function (CommandContext $context) use ($store): void {
-            self::assertSame($store, $context->sessionStore());
+        $command = $this->commandThat(static function (CommandContext $context): void {
             self::assertSame('alice', $context->session()->getUserId());
             self::assertSame([], $context->session()->getMessages());
             $context->requestExit();
@@ -107,47 +106,50 @@ final class SessionCompositionTest extends TestCase
         }
     }
 
-    public function testStartupRejectsAnExternalSessionWithTheDefaultStore(): void
+    public function testStartupAcceptsAnExternalSessionWithTheDefaultStore(): void
     {
         $store = new SessionStore(new InMemoryStorage(), 'alice');
         $session = $store->create();
+        $terminal = new VirtualTerminal();
+        $inspect = $this->commandThat(static function (CommandContext $context) use ($session): void {
+            self::assertSame($session, $context->session());
+            $context->requestExit();
+        });
+        EventLoop::queue(static fn() => $terminal->simulateInput("/inspect\r"));
         $tui = Tui::make(new Agent())
             ->setSession($session)
-            ->setTerminal(new VirtualTerminal());
+            ->setTerminal($terminal)
+            ->setCommands(new Commands($inspect));
 
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('The selected Session does not belong to this SessionStore.');
         $tui->run();
     }
 
     public function testManagedConversationsAndLaterTurnsCanBeClearedAndResumed(): void
     {
         foreach (['default', 'supplied', 'preselected'] as $composition) {
-            $store = $composition === 'default' ? null : new SessionStore(new InMemoryStorage(), 'test-user');
-            $session = $composition === 'preselected' && $store !== null ? $store->create() : null;
+            $store = new SessionStore(new InMemoryStorage(), $composition === 'default' ? 'local' : 'test-user');
+            $session = $composition === 'preselected' ? $store->create() : null;
             if ($session !== null) {
                 StoredConversation::turn($store, $session, new UserMessage('Initial subject'), new AssistantMessage('Initial answer'));
             }
             $agent = (new Agent())->setAiProvider(new FakeAIProvider(new AssistantMessage('Generated continuation')));
             $terminal = new VirtualTerminal(rows: 40);
             $currentStore = null;
-            $inspect = $this->commandThat(static function (CommandContext $context) use (&$currentStore): void {
-                $currentStore = $context->sessionStore();
+            $inspect = $this->commandThat(static function (CommandContext $context) use (&$currentStore, $store): void {
+                $currentStore = $store;
             });
             $beforeClear = null;
             $originalKey = null;
             $afterClear = null;
             $observation = new CommandObservation();
             $tui = Tui::make($agent);
-            if ($store !== null) {
-                $tui->setSessionStore($store);
-            }
+            $tui->setSessionStore($store);
             if ($session !== null) {
                 $tui->setSession($session);
             }
             $tui
                 ->setTerminal($terminal)
-                ->setCommands($observation->wrap(new Commands(new ClearCommand(), new ResumeCommand(), $inspect)));
+                ->setCommands($observation->wrap(new Commands(new ClearCommand($store), new ResumeCommand($store), $inspect)));
             EventLoop::queue(static fn() => $terminal->simulateInput("Later question\r"));
             EventLoop::delay(0.12, static fn() => $terminal->simulateInput("/inspect\r"));
             EventLoop::delay(0.15, static function () use ($observation, $terminal, &$beforeClear, &$originalKey): void {
@@ -184,8 +186,7 @@ final class SessionCompositionTest extends TestCase
         $earlier = $store->create();
         StoredConversation::turn($store, $earlier, new UserMessage('Stored subject'));
         $terminal = new VirtualTerminal();
-        $inspect = $this->commandThat(static function (CommandContext $context) use ($earlier, $store): void {
-            self::assertSame($store, $context->sessionStore());
+        $inspect = $this->commandThat(static function (CommandContext $context) use ($earlier): void {
             self::assertNotSame($earlier->getKey(), $context->session()->getKey());
             self::assertSame([], $context->session()->getMessages());
             $context->requestExit();
@@ -229,9 +230,9 @@ final class SessionCompositionTest extends TestCase
         }
     }
 
-    public function testSuppliedAndDefaultModulesKeepTheirStateAcrossCommands(): void
+    public function testSuppliedAndDefaultSessionsKeepTheirStateAcrossCommands(): void
     {
-        $defaultStores = [];
+        $defaultSessions = [];
         foreach ([false, true, false] as $supplySessionStore) {
             foreach ([false, true] as $supplyInputs) {
                 $sessionStore = $supplySessionStore ? new SessionStore(new InMemoryStorage(), 'test-user') : null;
@@ -239,17 +240,17 @@ final class SessionCompositionTest extends TestCase
                 $received = [];
                 $command = $this->commandThat(
                     static function (CommandContext $context) use (&$received): void {
-                        $received[] = [$context->commands(), $context->sessionStore()];
+                        $received[] = [$context->commands(), $context->session()];
                         if (count($received) === 1) {
-                            StoredConversation::turn($context->sessionStore(), $context->sessionStore()->create(), new UserMessage('Kept by this module'));
+                            $context->session()->setMetadata('kept', 'Kept by this module');
                         } else {
-                            self::assertCount(1, $context->sessionStore()->list());
+                            self::assertSame('Kept by this module', $context->session()->getMetadata()['kept']);
                         }
                     },
                 );
                 $commands = new Commands($command);
                 $terminal = new VirtualTerminal();
-                $tui = Tui::make((new Agent())->setThreadId('test-thread'))
+                $tui = Tui::make(new Agent())
                     ->setTerminal($terminal)
                     ->setCommands($commands);
                 if ($sessionStore !== null) {
@@ -269,9 +270,9 @@ final class SessionCompositionTest extends TestCase
                 self::assertSame($commands->all(), $received[0][0]);
                 self::assertSame($received[0], $received[1]);
                 if ($sessionStore !== null) {
-                    self::assertSame($sessionStore, $received[0][1]);
+                    self::assertSame('Kept by this module', $sessionStore->get($received[0][1]->getKey())?->getMetadata()['kept']);
                 } else {
-                    $defaultStores[] = $received[0][1];
+                    $defaultSessions[] = $received[0][1];
                 }
                 if ($inputs !== null) {
                     self::assertSame(['/inspect'], array_map(static fn(UserMessage $message): ?string => $message->getContent(), $inputs->entries()));
@@ -279,9 +280,9 @@ final class SessionCompositionTest extends TestCase
                 }
             }
         }
-        self::assertCount(4, $defaultStores);
-        self::assertNotSame($defaultStores[0], $defaultStores[1]);
-        self::assertNotSame($defaultStores[0], $defaultStores[2]);
+        self::assertCount(4, $defaultSessions);
+        self::assertNotSame($defaultSessions[0], $defaultSessions[1]);
+        self::assertNotSame($defaultSessions[0], $defaultSessions[2]);
     }
 
     public function testConfigurationStoreSurvivesSelectionAndIsScopedToTheTui(): void
@@ -391,30 +392,40 @@ final class SessionCompositionTest extends TestCase
         self::assertStringNotContainsString('External conversation', $display);
     }
 
-    public function testStartupRejectsASessionOwnedByAnotherUser(): void
+    public function testStartupAcceptsASessionOwnedByAnotherUser(): void
     {
         $storage = new InMemoryStorage();
         $foreign = (new SessionStore($storage, 'bob'))->create();
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('The selected Session does not belong to this SessionStore.');
 
+        $terminal = new VirtualTerminal();
+        $inspect = $this->commandThat(static function (CommandContext $context) use ($foreign): void {
+            self::assertSame($foreign, $context->session());
+            $context->requestExit();
+        });
+        EventLoop::queue(static fn() => $terminal->simulateInput("/inspect\r"));
         Tui::make(new Agent())
             ->setSessionStore(new SessionStore($storage, 'alice'))
             ->setSession($foreign)
-            ->setTerminal(new VirtualTerminal())
+            ->setTerminal($terminal)
+            ->setCommands(new Commands($inspect))
             ->run();
     }
 
-    public function testStartupRejectsASessionAbsentFromTheSuppliedStore(): void
+    public function testStartupAcceptsASessionAbsentFromTheSuppliedStore(): void
     {
         $session = (new SessionStore(new InMemoryStorage(), 'alice'))->create();
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('The selected Session does not belong to this SessionStore.');
 
+        $terminal = new VirtualTerminal();
+        $inspect = $this->commandThat(static function (CommandContext $context) use ($session): void {
+            self::assertSame($session, $context->session());
+            $context->requestExit();
+        });
+        EventLoop::queue(static fn() => $terminal->simulateInput("/inspect\r"));
         Tui::make(new Agent())
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'alice'))
             ->setSession($session)
-            ->setTerminal(new VirtualTerminal())
+            ->setTerminal($terminal)
+            ->setCommands(new Commands($inspect))
             ->run();
     }
 
@@ -424,7 +435,7 @@ final class SessionCompositionTest extends TestCase
         $owner = null;
         $command = $this->commandThat(
             static function (CommandContext $context) use (&$owner): void {
-                $owner = $context->sessionStore()->create()->getUserId();
+                $owner = $context->session()->getUserId();
                 $context->requestExit();
             },
         );
@@ -446,8 +457,8 @@ final class SessionCompositionTest extends TestCase
         $owner = null;
         $command = $this->commandThat(
             static function (CommandContext $context) use (&$received, &$owner): void {
-                $received = $context->sessionStore();
-                $owner = $received->create()->getUserId();
+                $received = $context->session();
+                $owner = $received->getUserId();
                 $context->requestExit();
             },
         );
@@ -459,7 +470,8 @@ final class SessionCompositionTest extends TestCase
             ->setCommands(new Commands($command))
             ->run();
 
-        self::assertSame($sessionStore, $received);
+        self::assertNotNull($received);
+        self::assertNotNull($sessionStore->get($received->getKey()));
         self::assertSame('store-owner', $owner);
     }
 
@@ -485,7 +497,7 @@ final class SessionCompositionTest extends TestCase
                 ->setSessionStore($sessionStore)
                 ->setSession($initial)
                 ->setTerminal($terminal)
-                ->setCommands($observation->wrap(new Commands(new ClearCommand(), new ResumeCommand())));
+                ->setCommands($observation->wrap(new Commands(new ClearCommand($sessionStore), new ResumeCommand($sessionStore))));
             EventLoop::queue(static fn() => $terminal->simulateInput("Alice subject\r"));
             EventLoop::delay(0.15, static fn() => $terminal->simulateInput("/clear\r"));
             EventLoop::delay(0.19, static function () use ($observation, $terminal, &$cleared): void {
@@ -548,7 +560,7 @@ final class SessionCompositionTest extends TestCase
             ->setSessionStore($sessionStore)
             ->setSession($initial)
             ->setTerminal($terminal)
-            ->setCommands($observation->wrap(new Commands(new ResumeCommand())));
+            ->setCommands($observation->wrap(new Commands(new ResumeCommand($sessionStore))));
         EventLoop::queue(static fn() => $terminal->simulateInput("/resume\r"));
         EventLoop::delay(0.03, static fn() => $terminal->simulateInput("\x1b[B"));
         EventLoop::delay(0.05, static function () use ($sessionStore, $earlier, $terminal): void {

@@ -23,8 +23,8 @@ $agent->setAiProvider(AIProviderFactory::create('openai:gpt-5.4-nano'));
 // Titles are generated automatically after successful turns and appear in /resume.
 
 $commands = new Commands(
-    new ClearCommand(),
-    new ResumeCommand(),
+    new ClearCommand($sessionStore),
+    new ResumeCommand($sessionStore),
 );
 
 Tui::make($agent)

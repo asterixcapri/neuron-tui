@@ -67,7 +67,7 @@ final class CommandHistoryTest extends TestCase
                 ($this->run)($context);
             }
         };
-        $this->conversation = new Conversation($agent, $this->sessionStore, session: $session, commands: new Commands($command));
+        $this->conversation = new Conversation($agent, $session, commands: new Commands($command));
         $this->scheduler = new TurnScheduler($this->conversation, $this->view);
         $this->scheduler->synchronizeHistory();
     }
@@ -101,8 +101,9 @@ final class CommandHistoryTest extends TestCase
 
     public function testMessagesAfterAHistoryChangeSurviveCompletionAndTheNextInvocation(): void
     {
-        $this->runCommand(static function (CommandContext $context): void {
-            $context->useSession($context->sessionStore()->create());
+        $replacement = $this->sessionStore->create();
+        $this->runCommand(static function (CommandContext $context) use ($replacement): void {
+            $context->useSession($replacement);
             $context->notify('Session changed');
             $context->notify('A warning remains', NotificationLevel::Warning);
             $context->notify('An expected error remains', NotificationLevel::Error);
@@ -118,8 +119,9 @@ final class CommandHistoryTest extends TestCase
 
     public function testAPromptAfterAHistoryChangeRemainsVisibleAtCompletion(): void
     {
-        $this->runCommand(static function (CommandContext $context): void {
-            $context->useSession($context->sessionStore()->create());
+        $replacement = $this->sessionStore->create();
+        $this->runCommand(static function (CommandContext $context) use ($replacement): void {
+            $context->useSession($replacement);
             $context->promptAgent(new UserMessage('Question in the new conversation'));
         });
 
@@ -151,19 +153,16 @@ final class CommandHistoryTest extends TestCase
         self::assertStringContainsString('Replacement answer', $display);
     }
 
-    public function testSelectingAForeignSessionLeavesTheConversationUnchanged(): void
+    public function testSelectingAHostProvidedSessionUpdatesTheConversation(): void
     {
         $foreign = (new SessionStore(new InMemoryStorage(), 'other-user'))->create();
-        $before = $this->scheduler->agent();
 
         $this->runCommand(static function (CommandContext $context) use ($foreign): void {
             $context->useSession($foreign);
         });
 
-        self::assertSame($before, $this->scheduler->agent());
-        $display = $this->display();
-        self::assertStringContainsString('The selected Session does not belong to this', $display);
-        self::assertStringContainsString('Earlier conversation', $display);
+        self::assertSame($foreign, $this->scheduler->session());
+        self::assertStringNotContainsString('Earlier conversation', $this->display());
     }
 
     /** @param Closure(CommandContext): void $run */

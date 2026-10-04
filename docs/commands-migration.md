@@ -10,7 +10,7 @@ Command run methods now receive concrete CommandContext and return void. They us
 notify with NotificationLevel, requestSelection with SelectionRequest, requestExit,
 and promptAgent with UserMessage. State controls and stores remain available.
 commands() returns a consultation list. Host adapters and generic completion
-results are removed; the TUI consumes Conversation::submitInput streams.
+results are removed; the TUI consumes Conversation::sendInput streams.
 
 The five interaction events are Notification, SelectionRequest, ExitRequest,
 SessionChanged and AgentChanged. Other objects remain native Neuron events.

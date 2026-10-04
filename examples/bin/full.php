@@ -52,8 +52,8 @@ $agent->setAiProvider(AIProviderFactory::create($modelId, $httpClient));
 $session = $sessionStore->create();
 
 $commands = new Commands(
-    new ClearCommand(),
-    new ResumeCommand(),
+    new ClearCommand($sessionStore),
+    new ResumeCommand($sessionStore),
     new ModelCommand($httpClient),
     new LeaveCommand(),
     new HelpCommand(),

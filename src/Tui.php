@@ -199,11 +199,15 @@ final class Tui
             );
         }
 
+        if ($this->session === null && $this->agent->getThreadId() !== null && $this->agent->getChatHistory()->getMessages() !== []) {
+            throw new InvalidArgumentException('An Agent with existing messages requires an explicit Session.');
+        }
+
+        $session = $this->session ?? $this->sessionStore->create();
         $admitCommand = static fn(CommandInterface $command): bool => true;
         $conversation = new Conversation(
             $this->agent,
-            $this->sessionStore,
-            session: $this->session,
+            $session,
             stopSignal: $this->stopSignal,
             userMessageProcessors: $this->userMessageProcessors,
             commands: $this->commands,

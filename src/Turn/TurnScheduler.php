@@ -10,23 +10,14 @@ use Generator;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Agent\AgentState;
 use NeuronAI\Chat\Messages\UserMessage;
-use NeuronInteraction\Command\AgentChanged;
 use NeuronInteraction\Command\CommandInput;
 use NeuronInteraction\Command\CommandInterface;
-use NeuronInteraction\Command\ExitRequest;
-use NeuronInteraction\Command\Notification;
-use NeuronInteraction\Command\NotificationLevel;
-use NeuronInteraction\Command\SelectionOption;
-use NeuronInteraction\Command\SelectionRequest;
-use NeuronInteraction\Command\SessionChanged;
 use NeuronInteraction\Conversation;
 use NeuronInteraction\Session\Session;
 use NeuronInteraction\Session\SessionTitleGenerator;
 use NeuronTui\Command\CommandAvailability;
-use NeuronTui\View\ChoiceOption;
 use NeuronTui\View\ConversationView;
 use NeuronTui\View\WorkingIndicator;
-use Revolt\EventLoop;
 use Throwable;
 
 use function Amp\async;
@@ -42,22 +33,18 @@ final class TurnScheduler
     /** @var Future<mixed>|null */
     private ?Future $runningTurn = null;
 
-    private bool $stopped = false;
-
     /** The reservation for this Command's own task must not refuse its admission. */
     private ?bool $commandAdmissionBusy = null;
 
     private bool $preparingTurn = false;
 
-    private readonly TurnRenderer $renderer;
+    private readonly TurnRunner $runner;
 
     /** @var Generator<int, object, mixed, AgentState|null>|null */
     private ?Generator $readyStream = null;
 
     /** @var list<UserMessage> */
     private array $pendingMessages = [];
-
-    private ?string $displayedHistory = null;
 
     /** @var array<string, true> */
     private array $runningTitles = [];
@@ -67,7 +54,7 @@ final class TurnScheduler
         private readonly ConversationView $view,
     ) {
         $this->workingIndicator = $view->workingIndicator();
-        $this->renderer = new TurnRenderer($view);
+        $this->runner = new TurnRunner($conversation, $view, $this->submitCommand(...));
     }
 
     public function admitCommand(CommandInterface $command): bool
@@ -84,15 +71,14 @@ final class TurnScheduler
     /** Commands execute immediately; only human messages enter the FIFO. */
     public function submitCommand(CommandInput $input): void
     {
-        if ($this->stopped) {
+        if ($this->isStopped()) {
             return;
         }
         $busy = $this->isBusy();
-        $stream = $this->conversation->submitInput($input);
+        $stream = $this->runner->sendInput($input);
         $turn = async(function () use ($stream, $busy): void {
             $this->consumeStream(
                 $this->commandStream($stream, $busy),
-                new TurnRenderer($this->view),
                 fn() => $this->scheduleSessionTitle($this->conversation->session(), $this->conversation->agent()),
             );
         });
@@ -116,52 +102,6 @@ final class TurnScheduler
         }
     }
 
-    private function consumeInteractionEvent(object $event): bool
-    {
-        if ($event instanceof Notification) {
-            $this->synchronizeHistory();
-            $this->view->endAgentMessage();
-            match ($event->level) {
-                NotificationLevel::Info => $this->view->showNotice($event->text),
-                NotificationLevel::Warning => $this->view->showWarning($event->text),
-                NotificationLevel::Error => $this->view->showError($event->text),
-            };
-        } elseif ($event instanceof SessionChanged || $event instanceof AgentChanged) {
-            if ($event instanceof SessionChanged) {
-                $this->displayedHistory = null;
-            }
-            $this->synchronizeHistory();
-        } elseif ($event instanceof ExitRequest) {
-            $this->stop();
-        } elseif ($event instanceof SelectionRequest) {
-            EventLoop::queue(function () use ($event): void {
-                if ($this->stopped) {
-                    return;
-                }
-                try {
-                    $value = $this->view->choose(
-                        $event->prompt,
-                        array_map(static fn(SelectionOption $option): ChoiceOption => new ChoiceOption(
-                            $option->value,
-                            $option->label,
-                            $option->description,
-                        ), $event->options),
-                        $event->description,
-                    );
-                    if ($value !== null && !$this->isStopped()) {
-                        $this->submitCommand(new CommandInput($event->command, $value));
-                    }
-                } catch (Throwable $error) {
-                    $this->view->showError($error::class . ': ' . $error->getMessage());
-                }
-            });
-        } else {
-            return false;
-        }
-        $this->view->paintPendingChanges();
-        return true;
-    }
-
     /** Queue a message for preparation when its turn starts. */
     public function enqueueMessage(UserMessage $message): void
     {
@@ -177,7 +117,7 @@ final class TurnScheduler
         try {
             $this->view->acceptUserMessage($this->displayMessage($message));
             $this->view->paintPendingChanges();
-            $stream = $this->conversation->submitInput($message);
+            $stream = $this->runner->sendInput($message);
             $this->readyStream = $stream;
             $this->view->working($this->conversation->supportsResponseStop());
             $this->workingIndicator->start(microtime(true));
@@ -193,14 +133,7 @@ final class TurnScheduler
 
     public function synchronizeHistory(): void
     {
-        $history = $this->conversation->agent()->getChatHistory();
-
-        if ($history->getThreadId() === $this->displayedHistory) {
-            return;
-        }
-
-        $this->view->showHistory($history->getMessages());
-        $this->displayedHistory = $history->getThreadId();
+        $this->runner->synchronizeHistory();
     }
 
     public function agent(): Agent
@@ -229,7 +162,7 @@ final class TurnScheduler
 
     public function isStopped(): bool
     {
-        return $this->stopped;
+        return $this->runner->isStopped();
     }
 
     public function useAgent(Agent $agent): void
@@ -240,7 +173,7 @@ final class TurnScheduler
     public function useSession(Session $session): void
     {
         $this->conversation->useSession($session);
-        $this->displayedHistory = null;
+        $this->runner->invalidateHistory();
     }
 
     public function requestInterruption(): void
@@ -259,7 +192,7 @@ final class TurnScheduler
 
     public function tick(): bool
     {
-        if ($this->stopped) {
+        if ($this->isStopped()) {
             return false;
         }
 
@@ -306,7 +239,7 @@ final class TurnScheduler
             $agent = $this->conversation->agent();
             $session = $this->conversation->session();
 
-            $this->consumeStream($stream, $this->renderer, fn() => $this->scheduleSessionTitle($session, $agent));
+            $this->consumeStream($stream, fn() => $this->scheduleSessionTitle($session, $agent));
         });
     }
 
@@ -314,16 +247,16 @@ final class TurnScheduler
      * @param Generator<int, object, mixed, AgentState|null> $stream
      * @param Closure(): void $onCompleted
      */
-    private function consumeStream(Generator $stream, TurnRenderer $renderer, Closure $onCompleted): void
+    private function consumeStream(Generator $stream, Closure $onCompleted): void
     {
         try {
-            $completed = $renderer->run($stream, $this->conversation->responseWasStopped(...), $this->consumeInteractionEvent(...));
+            $completed = $this->runner->run($stream);
         } catch (Throwable) {
-            // The renderer already presented the streaming error.
+            // The runner already presented the streaming error.
             return;
         }
 
-        if ($stream->getReturn() !== null && $completed && !$this->stopped && !$this->conversation->responseStopRequested()) {
+        if ($stream->getReturn() !== null && $completed && !$this->isStopped() && !$this->conversation->responseStopRequested()) {
             $onCompleted();
         }
     }
@@ -377,7 +310,6 @@ final class TurnScheduler
 
     public function stop(): void
     {
-        $this->stopped = true;
-        $this->view->stop();
+        $this->runner->stop();
     }
 }
