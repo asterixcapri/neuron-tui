@@ -210,12 +210,12 @@ final class Tui
             $session,
             stopSignal: $this->stopSignal,
             userMessageProcessors: $this->userMessageProcessors,
-            commands: $this->commands,
             configurationStore: $this->configurationStore,
             admitCommand: static function (CommandInterface $command) use (&$admitCommand): bool {
                 return $admitCommand($command);
             },
         );
+        $conversation->setCommands($this->commands);
         $view = new ConversationView(
             $terminal,
             $this->title,

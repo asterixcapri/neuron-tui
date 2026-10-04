@@ -67,7 +67,8 @@ final class CommandHistoryTest extends TestCase
                 ($this->run)($context);
             }
         };
-        $this->conversation = new Conversation($agent, $session, commands: new Commands($command));
+        $this->conversation = new Conversation($agent, $session);
+        $this->conversation->setCommands(new Commands($command));
         $this->scheduler = new TurnScheduler($this->conversation, $this->view);
         $this->scheduler->synchronizeHistory();
     }

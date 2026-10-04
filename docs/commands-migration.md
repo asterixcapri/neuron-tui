@@ -1,9 +1,12 @@
 # Unified Commands migration
 
-Tui constructs Conversation with the configured Commands, ConfigurationStore,
-SessionStore, initial Session, StopSignal and message processors. Configure these
-before run. Registry construction is variadic: `new Commands($first, $second)`.
-Resolve host name collisions before registration; invalid or duplicate names fail.
+Tui constructs Conversation with the Agent, initial Session, ConfigurationStore,
+StopSignal and message processors, then supplies the configured Commands through
+Conversation::setCommands(). Configure these before run. Registry construction
+is variadic: `new Commands($first, $second)`.
+Commands::addCommand() extends a registry; later Commands replace earlier ones
+with the same name. Invalid names fail. Tui passes its registry to
+Conversation::setCommands() after construction.
 Commands omitted means no commands, including no automatic help or exit.
 
 Command run methods now receive concrete CommandContext and return void. They use
