@@ -27,7 +27,7 @@ with command and opaque value. Escape closes it and submits nothing. Conversatio
 keeps no pending selection; another HTTP host can submit the same values in a new
 request after restoring stores and Session. A command owns argument validation.
 
-The terminal admits HelpCommand and LeaveCommand while busy and refuses ordinary
+The terminal admits HelpCommand and ExitCommand while busy and refuses ordinary
 commands, including selection responses. This is host policy, shared with command
 suggestions, rather than a library concurrency marker. Commands outside those
 classes are ordinary even if they use familiar names. Human inputs still follow

@@ -24,8 +24,8 @@ use NeuronInteraction\Command\ClearCommand;
 use NeuronInteraction\Command\CommandContext;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Command\ExitCommand;
 use NeuronInteraction\Command\HelpCommand;
-use NeuronInteraction\Command\LeaveCommand;
 use NeuronInteraction\Command\NotificationLevel;
 use NeuronInteraction\Command\ResumeCommand;
 use NeuronInteraction\Command\SelectionOption;
@@ -1077,7 +1077,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands(new Commands(new LeaveCommand()))
+            ->setCommands(new Commands(new ExitCommand()))
             ->run();
 
         self::assertIsString($intermediateDisplay);
@@ -1910,7 +1910,7 @@ final class TuiTest extends TestCase
             ->setTerminal($terminal)
             ->setCommands($observation->wrap(new Commands(
                 new ClearCommand($sessionStore, '/wipe'),
-                new LeaveCommand('/quit'),
+                new ExitCommand('/quit'),
             )));
         EventLoop::queue(
             static fn() => $terminal->simulateInput("/clear\r"),
@@ -1987,7 +1987,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands(new Commands(new HelpCommand(), new LeaveCommand(), $command))
+            ->setCommands(new Commands(new HelpCommand(), new ExitCommand(), $command))
             ->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -2031,7 +2031,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands(new Commands(new LeaveCommand()))
+            ->setCommands(new Commands(new ExitCommand()))
             ->run();
 
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
@@ -2247,7 +2247,7 @@ final class TuiTest extends TestCase
         self::assertStringContainsString('/probe — Lists what can be typed here.', $display);
     }
 
-    public function testHelpAndLeaveAnswerWhileTheAgentIsWorking(): void
+    public function testHelpAndExitAnswerWhileTheAgentIsWorking(): void
     {
         $forcedExit = false;
         $midTurnDisplay = null;
@@ -2292,7 +2292,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands(new Commands(new HelpCommand(), new LeaveCommand()))
+            ->setCommands(new Commands(new HelpCommand(), new ExitCommand()))
             ->run();
 
         self::assertIsString($midTurnDisplay);
@@ -2307,7 +2307,7 @@ final class TuiTest extends TestCase
         self::assertFalse($forcedExit);
     }
 
-    public function testHelpAndLeaveAliasesAnswerWhileTheAgentIsWorking(): void
+    public function testHelpAndExitAliasesAnswerWhileTheAgentIsWorking(): void
     {
         $forcedExit = false;
         $midTurnDisplay = null;
@@ -2362,7 +2362,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands(new Commands(new HelpCommand('/guide'), new LeaveCommand('/quit')))
+            ->setCommands(new Commands(new HelpCommand('/guide'), new ExitCommand('/quit')))
             ->run();
 
         self::assertIsString($midTurnDisplay);
@@ -3641,7 +3641,7 @@ final class TuiTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands(new Commands(new HelpCommand(), new LeaveCommand()))
+            ->setCommands(new Commands(new HelpCommand(), new ExitCommand()))
             ->run();
 
         self::assertIsString($display);
@@ -3866,14 +3866,14 @@ final class TuiTest extends TestCase
     public function testASlashAfterTextShowsAndFiltersCommands(): void
     {
         $display = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
-            [new HelpCommand(), new LeaveCommand()],
+            [new HelpCommand(), new ExitCommand()],
             'ask /',
         ));
         self::assertStringContainsString('Lists what can be typed here.', $display);
         self::assertStringContainsString('/exit', $display);
 
         $filtered = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
-            [new HelpCommand(), new LeaveCommand()],
+            [new HelpCommand(), new ExitCommand()],
             'ask /hel',
         ));
         self::assertStringContainsString('Lists what can be typed here.', $filtered);
@@ -4052,7 +4052,7 @@ final class TuiTest extends TestCase
     public function testTheSuggestionsNarrowToWhatIsBeingWritten(): void
     {
         $display = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
-            [new HelpCommand(), new LeaveCommand()],
+            [new HelpCommand(), new ExitCommand()],
             '/hel',
         ));
 
@@ -4066,7 +4066,7 @@ final class TuiTest extends TestCase
     public function testDeletingWidensTheSuggestionsAgain(): void
     {
         $display = AnsiUtils::stripAnsiCodes(self::screenAfterTyping(
-            [new HelpCommand(), new LeaveCommand()],
+            [new HelpCommand(), new ExitCommand()],
             '/hel',
             "\x7f\x7f\x7f",
         ));
@@ -4983,7 +4983,7 @@ final class TuiTest extends TestCase
         return [
             new ClearCommand($sessionStore),
             new ResumeCommand($sessionStore),
-            new LeaveCommand(),
+            new ExitCommand(),
         ];
     }
 
@@ -5818,7 +5818,7 @@ final class TuiTest extends TestCase
             ->setCommands($observation->wrap(new Commands(
                 new ClearCommand($sessionStore),
                 new ResumeCommand($sessionStore),
-                new LeaveCommand(),
+                new ExitCommand(),
             )))
             ->setInputHistory(new InputHistory($storage));
         EventLoop::delay(
@@ -5909,7 +5909,7 @@ final class TuiTest extends TestCase
             ->setTerminal($terminal)
             ->setCommands(new Commands(
                 new ResumeCommand($sessionStore),
-                new LeaveCommand(),
+                new ExitCommand(),
             ))
             ->setInputHistory(new InputHistory($storage));
         EventLoop::delay(
@@ -5982,7 +5982,7 @@ final class TuiTest extends TestCase
             ->setTerminal($terminal)
             ->setCommands($observation->wrap(new Commands(
                 new ClearCommand($sessionStore),
-                new LeaveCommand(),
+                new ExitCommand(),
             )))
             ->setInputHistory(new InputHistory(new InMemoryStorage()));
         EventLoop::delay(

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace NeuronTui\Tests;
 
 use NeuronInteraction\Command\CommandInterface;
+use NeuronInteraction\Command\ExitCommand;
 use NeuronInteraction\Command\HelpCommand;
-use NeuronInteraction\Command\LeaveCommand;
 use NeuronTui\View\CommandSuggestions;
 use PHPUnit\Framework\TestCase;
 
@@ -17,7 +17,7 @@ final class CommandSuggestionsTest extends TestCase
         $ordinary = $this->createStub(CommandInterface::class);
         $ordinary->method('name')->willReturn('/ordinary');
         $ordinary->method('describe')->willReturn('Ordinary');
-        $suggestions = new CommandSuggestions([$ordinary, new HelpCommand('/guide'), new LeaveCommand('/quit')]);
+        $suggestions = new CommandSuggestions([$ordinary, new HelpCommand('/guide'), new ExitCommand('/quit')]);
         $suggestions->draftChanged('/ordinary');
         self::assertSame('/ordinary', $suggestions->selectedCommandName());
         $suggestions->working();

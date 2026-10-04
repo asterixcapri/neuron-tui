@@ -6,8 +6,8 @@ use NeuronAI\HttpClient\Amp\AmpHttpClient;
 use NeuronAI\HttpClient\StoppableHttpClient;
 use NeuronInteraction\Command\ClearCommand;
 use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Command\ExitCommand;
 use NeuronInteraction\Command\HelpCommand;
-use NeuronInteraction\Command\LeaveCommand;
 use NeuronInteraction\Command\ResumeCommand;
 use NeuronInteraction\Configuration\ConfigurationStore;
 use NeuronInteraction\InputHistory\InputHistory;
@@ -55,7 +55,7 @@ $commands = new Commands(
     new ClearCommand($sessionStore),
     new ResumeCommand($sessionStore),
     new ModelCommand($httpClient),
-    new LeaveCommand(),
+    new ExitCommand(),
     new HelpCommand(),
 );
 

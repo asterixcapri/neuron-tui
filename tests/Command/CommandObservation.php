@@ -7,8 +7,8 @@ namespace NeuronTui\Tests\Command;
 use NeuronAI\Agent\Agent;
 use NeuronInteraction\Command\CommandContext;
 use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Command\ExitCommand;
 use NeuronInteraction\Command\HelpCommand;
-use NeuronInteraction\Command\LeaveCommand;
 use NeuronInteraction\Session\Session;
 
 /** Observe the live conversation only through mounted Commands. */
@@ -20,7 +20,7 @@ final class CommandObservation
     {
         $observed = [];
         foreach ($commands->all() as $command) {
-            $observed[] = $command instanceof HelpCommand || $command instanceof LeaveCommand
+            $observed[] = $command instanceof HelpCommand || $command instanceof ExitCommand
                 ? $command
                 : new ObservedCommand($command, $this);
         }

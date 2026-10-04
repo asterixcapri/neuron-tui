@@ -5,7 +5,7 @@ internally, now supplying Commands, ConfigurationStore and its admission closure
 submitInput is the shared execution entry point. Conversation owns Command dispatch
 and ordered requests; the TUI owns human FIFO, Amp tasks, interruption, History
 projection and title scheduling. Command-generated prompts execute in their current
-stream without a second queue or human-input preview. HelpCommand and LeaveCommand
+stream without a second queue or human-input preview. HelpCommand and ExitCommand
 remain available while working through a terminal policy shared with suggestions.
 Commands rejects invalid or duplicate identifiers. This supersedes the historical
 Adapter, first-match duplicate and mutable mounting decisions below._

@@ -75,12 +75,12 @@ and `/exit` to close the terminal:
 ```php
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Command\HelpCommand;
-use NeuronInteraction\Command\LeaveCommand;
+use NeuronInteraction\Command\ExitCommand;
 use NeuronTui\Tui;
 
 $commands = new Commands(
     new HelpCommand(),
-    new LeaveCommand(),
+    new ExitCommand(),
 );
 
 Tui::make($agent)
@@ -88,7 +88,7 @@ Tui::make($agent)
     ->run();
 ```
 
-Each standard command accepts a custom slash-prefixed name: `new LeaveCommand('/quit')`
+Each standard command accepts a custom slash-prefixed name: `new ExitCommand('/quit')`
 replaces `/exit` with `/quit`.
 
 ## Custom commands
@@ -149,7 +149,7 @@ option submits CommandInput with the request's command and the opaque value;
 Escape closes the picker without a submission.
 
 While the Agent is responding, ordinary commands are unavailable. The terminal
-keeps HelpCommand and LeaveCommand available, including their configured names.
+keeps HelpCommand and ExitCommand available, including their configured names.
 The same policy governs suggestions and Conversation admission. ExitRequest
 asks the terminal host to close; response interruption remains separate.
 

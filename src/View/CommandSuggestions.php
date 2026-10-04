@@ -46,7 +46,7 @@ use function substr;
  * nothing matches, which is what ↑↓, Tab and Enter have to work on.
  *
  * While a Turn is under way the list carries only help and exit commands.
- * The terminal policy admits HelpCommand and LeaveCommand during a turn;
+ * The terminal policy admits HelpCommand and ExitCommand during a turn;
  * offering any other name meanwhile would
  * promise a run that will not happen — and where none of the mounted
  * commands runs mid-turn, the line that says nothing matches is the honest
