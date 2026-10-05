@@ -31,6 +31,43 @@ use function trim;
 
 final class TuiTest extends TestCase
 {
+    public function testMouseWheelRevealsOlderMessagesAndKeepsComposerFixed(): void
+    {
+        $agent = Agent::make()->setThreadId('mouse-scroll')->setAiProvider(new FakeAIProvider());
+        $lines = [];
+        for ($i = 1; $i <= 50; ++$i) {
+            $lines[] = 'History line ' . $i;
+        }
+        $agent->getChatHistory()->addMessage(new UserMessage('Previous question'));
+        $agent->getChatHistory()->addMessage(new AssistantMessage(implode("\n", $lines)));
+        $stage = 0;
+        $this->runApplication($agent, function (VirtualTerminal $terminal, string $screen) use (&$stage): bool {
+            $lines = explode("\n", $screen);
+            self::assertSame('❯', trim($lines[37]));
+            self::assertSame('✻ Ready', rtrim($lines[35]));
+            if ($stage === 0) {
+                self::assertStringNotContainsString('● History line 1', $screen);
+                self::assertStringContainsString('History line 50', $screen);
+            }
+            if ($stage < 16) {
+                $terminal->simulateInput("\x1b[<64;10;10M");
+            } elseif ($stage === 16) {
+                self::assertStringContainsString('● History line 1', $screen);
+                self::assertStringNotContainsString('History line 50', $screen);
+                $terminal->simulateInput("\x1b[<65;10;10M");
+            } elseif ($stage < 32) {
+                $terminal->simulateInput("\x1b[<65;10;10M");
+            } else {
+                self::assertStringContainsString('History line 50', $screen);
+                self::assertStringNotContainsString('● History line 1', $screen);
+                return true;
+            }
+            ++$stage;
+
+            return false;
+        });
+    }
+
     public function testStreamsAndContinuesTheSuppliedConversation(): void
     {
         $provider = new FakeAIProvider(new AssistantMessage('Hello world'), new AssistantMessage('Second answer'));

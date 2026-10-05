@@ -16,6 +16,8 @@ use Symfony\Component\Tui\Style\Style;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 use Throwable;
 
+use function preg_match;
+
 /** @internal */
 final class MainView extends ContainerWidget
 {
@@ -62,6 +64,16 @@ final class MainView extends ContainerWidget
     public function handleInput(InputEvent $event): void
     {
         $data = $event->getData();
+        if (preg_match('/^\x1b\[<(\d+);\d+;\d+[Mm]$/', $data, $mouse) === 1) {
+            $button = (int) $mouse[1];
+            if (($button & ~28) === 64 || ($button & ~28) === 65) {
+                $this->history->scroll(($button & 1) === 0 ? 3 : -3);
+                $this->getContext()?->requestRender();
+            }
+            $event->stopPropagation();
+
+            return;
+        }
         if ($this->keys->matches($data, 'quit')) {
             $event->stopPropagation();
             $this->getContext()?->stop();
