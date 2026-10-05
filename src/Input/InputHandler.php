@@ -4,11 +4,8 @@ declare(strict_types=1);
 
 namespace NeuronTui\Input;
 
-use NeuronInteraction\Command\Commands;
-use NeuronInteraction\Configuration\ConfigurationStore;
-use NeuronInteraction\Conversation;
+use NeuronInteraction\Command\CommandInput;
 use NeuronInteraction\InputHistory\InputHistory;
-use NeuronTui\Command\TuiCommandAdapter;
 use NeuronTui\Turn\TurnScheduler;
 use NeuronTui\View\ConversationView;
 use Symfony\Component\Tui\Event\InputEvent;
@@ -24,14 +21,15 @@ use Throwable;
  */
 final class InputHandler
 {
+    private readonly InputHistoryNavigation $navigation;
+
     public function __construct(
         private readonly ConversationView $view,
         private readonly InputHistory $inputHistory,
         private readonly TurnScheduler $scheduler,
-        private readonly Commands $commands,
-        private readonly Conversation $conversation,
-        private readonly ConfigurationStore $configurationStore,
-    ) {}
+    ) {
+        $this->navigation = new InputHistoryNavigation($inputHistory);
+    }
 
     public function handleSubmit(SubmitEvent $event): void
     {
@@ -39,22 +37,18 @@ final class InputHandler
             return;
         }
 
-        $this->inputHistory->leave();
+        $this->navigation->leave();
 
         if ($event->isBlank() && !$this->view->composerHasAttachments()) {
             return;
         }
 
         $original = $this->view->composerMessage();
-        $this->inputHistory->record($original);
-        $submission = SubmissionParser::parse($event->getValue());
+        $this->inputHistory->append($original);
+        $submission = CommandInput::parse($event->getValue());
 
         if ($submission instanceof CommandInput) {
-            $this->commands->run(
-                $submission->name,
-                $submission->value,
-                new TuiCommandAdapter($this->scheduler, $this->view, $this->commands, $this->conversation, $this->configurationStore),
-            );
+            $this->scheduler->submitCommand($submission);
 
             return;
         }
@@ -71,7 +65,7 @@ final class InputHandler
 
     public function handleDraftChange(): void
     {
-        $this->inputHistory->leave();
+        $this->navigation->leave();
     }
 
     public function handleInput(InputEvent $event): void
@@ -112,10 +106,10 @@ final class InputHandler
 
         if ($keys->matches($event->getData(), 'recall-older-input')) {
             if (
-                $this->inputHistory->isNavigating()
+                $this->navigation->isNavigating()
                 || $this->view->isComposerEmpty()
             ) {
-                $input = $this->inputHistory->older($this->view->composerMessage());
+                $input = $this->navigation->older($this->view->composerMessage());
 
                 if ($input !== null) {
                     $event->stopPropagation();
@@ -128,9 +122,9 @@ final class InputHandler
 
         if (
             $keys->matches($event->getData(), 'recall-newer-input')
-            && $this->inputHistory->isNavigating()
+            && $this->navigation->isNavigating()
         ) {
-            $input = $this->inputHistory->newer();
+            $input = $this->navigation->newer();
 
             if ($input !== null) {
                 $event->stopPropagation();

@@ -77,7 +77,7 @@ final class MessageQueueTest extends TestCase
         self::assertSame(['First', 'Invalid', 'Next'], $processor->prepared);
         self::assertCount(2, $provider->getRecorded());
         self::assertSame('Next', $provider->getRecorded()[1]->messages[2]->getContent());
-        self::assertSame(['First', 'Invalid', 'Next'], array_map(static fn(UserMessage $message) => $message->getContent(), $inputs->entries()));
+        self::assertSame(['First', 'Invalid', 'Next'], array_map(static fn(UserMessage $message) => $message->getContent(), $inputs->list()));
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('↳ Invalid', $display);
         self::assertStringContainsString('Invalid queued input', $display);

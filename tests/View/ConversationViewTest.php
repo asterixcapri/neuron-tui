@@ -66,7 +66,7 @@ final class ConversationViewTest extends TestCase
                 $terminal,
                 'Neuron AI',
                 'Conversation',
-                (new Commands())->addCommand(new HelpCommand()),
+                new Commands(new HelpCommand()),
             );
             $submitted = [];
             $view->onSubmit(static function (SubmitEvent $event) use (&$submitted): void {

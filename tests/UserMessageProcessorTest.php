@@ -16,12 +16,12 @@ use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Providers\ProviderResponse;
 use NeuronAI\Testing\FakeAIProvider;
-use NeuronInteraction\Command\CommandAdapterInterface;
+use NeuronInteraction\Command\CommandContext;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Command\ResumeCommand;
-use NeuronInteraction\Command\Selection;
 use NeuronInteraction\Command\SelectionOption;
+use NeuronInteraction\Command\SelectionRequest;
 use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Message\UserMessageProcessorInterface;
 use NeuronInteraction\Message\UserMessageProcessors;
@@ -84,7 +84,7 @@ final class UserMessageProcessorTest extends TestCase
         self::assertStringNotContainsString('Private instructions', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
     }
 
-    public function testSingleAndArrayRegistrationsComposeWithoutChangingInputHistory(): void
+    public function testVariadicRegistrationsComposeWithoutChangingInputHistory(): void
     {
         $provider = new FakeAIProvider(new AssistantMessage('Reply.'));
         $agent = (new Agent())->setThreadId('test-thread');
@@ -96,11 +96,11 @@ final class UserMessageProcessorTest extends TestCase
         $tui = Tui::make($agent)
             ->setSessionStore($store)
             ->setSession($session)
-            ->setUserMessageProcessors((new UserMessageProcessors())->addProcessor([
+            ->setUserMessageProcessors((new UserMessageProcessors())->addProcessor(
                 new EnvelopeProcessor('A'),
                 new EnvelopeProcessor('B'),
                 new EnvelopeProcessor('C'),
-            ]))
+            ))
             ->setTerminal($terminal)
             ->setInputHistory($inputHistory);
 
@@ -110,7 +110,7 @@ final class UserMessageProcessorTest extends TestCase
 
         self::assertSame('C[B[A[Hello]]]', $provider->getRecorded()[0]->messages[0]->getContent());
         self::assertSame('C[B[A[Hello]]]', $session->getMessages()[0]->getContent());
-        self::assertSame('Hello', $inputHistory->older()?->getContent());
+        self::assertSame('Hello', $inputHistory->list()[0]->getContent());
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('❯ Hello', $display);
         self::assertStringNotContainsString('C[B[A[Hello]]]', $display);
@@ -128,10 +128,10 @@ final class UserMessageProcessorTest extends TestCase
         $tui = Tui::make($agent)
             ->setSessionStore($store)
             ->setSession($session)
-            ->setUserMessageProcessors((new UserMessageProcessors())->addProcessor([
+            ->setUserMessageProcessors((new UserMessageProcessors())->addProcessor(
                 new EnvelopeProcessor('A'),
                 new EnvelopeProcessor('B'),
-            ]));
+            ));
         $tui->setTerminal($terminal);
         $tui->run();
 
@@ -141,7 +141,7 @@ final class UserMessageProcessorTest extends TestCase
         self::assertSame('B[A[Earlier]]', $session->getMessages()[0]->getContent());
     }
 
-    public function testCommandPromptsUseTheSameSubmissionAndDisplayTheirPreview(): void
+    public function testCommandPromptsUseTheSameSubmissionWithoutAHumanPreview(): void
     {
         $provider = new FakeAIProvider(new AssistantMessage('Done.'));
         $agent = (new Agent())->setThreadId('test-thread');
@@ -155,9 +155,9 @@ final class UserMessageProcessorTest extends TestCase
             {
                 return 'Send a prepared prompt.';
             }
-            public function run(CommandAdapterInterface $adapter, string $value): void
+            public function run(CommandContext $context, string $value): void
             {
-                $adapter->promptAgent(new UserMessage('Command prompt'));
+                $context->promptAgent(new UserMessage('Command prompt'));
             }
         };
         $terminal = new VirtualTerminal(rows: 30);
@@ -168,11 +168,11 @@ final class UserMessageProcessorTest extends TestCase
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setUserMessageProcessors((new UserMessageProcessors())->addProcessor(new EnvelopeProcessor('A')))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand($command))
+            ->setCommands(new Commands($command))
             ->run();
 
         self::assertSame('A[Command prompt]', $provider->getRecorded()[0]->messages[0]->getContent());
-        self::assertStringContainsString('❯ Command prompt', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
+        self::assertStringNotContainsString('❯ Command prompt', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
     }
 
     public function testPreparationFailureLeavesTheDraftAndDoesNotContactTheProvider(): void
@@ -231,7 +231,7 @@ final class UserMessageProcessorTest extends TestCase
             ->setInputHistory($inputs)
             ->run();
         self::assertSame([], $provider->getRecorded());
-        self::assertSame('Keep original draft', $inputs->older(new UserMessage(''))?->getContent());
+        self::assertSame('Keep original draft', $inputs->list()[0]->getContent());
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('The prepared user message is empty.', $display);
         self::assertStringContainsString('❯ Keep original draft', $display);
@@ -301,9 +301,9 @@ final class UserMessageProcessorTest extends TestCase
             $display = '';
             $tui = Tui::make($agent)
                 ->setSessionStore($store)
-                ->setUserMessageProcessors((new UserMessageProcessors())->addProcessor([$processor, new EnvelopeProcessor('A'), new EnvelopeProcessor('B')]))
+                ->setUserMessageProcessors((new UserMessageProcessors())->addProcessor($processor, new EnvelopeProcessor('A'), new EnvelopeProcessor('B')))
                 ->setTerminal($terminal)
-                ->setCommands((new Commands())->addCommand(new ResumeCommand($name)));
+                ->setCommands(new Commands(new ResumeCommand($store, $name)));
             EventLoop::queue(static fn() => $terminal->simulateInput($name . "\r"));
             EventLoop::delay(0.05, static fn() => $terminal->simulateInput('Readable'));
             EventLoop::delay(0.08, static function () use ($terminal, &$display): void {
@@ -334,7 +334,7 @@ final class UserMessageProcessorTest extends TestCase
             {
                 return 'Choose an option.';
             }
-            public function run(CommandAdapterInterface $adapter, string $value): void
+            public function run(CommandContext $context, string $value): void
             {
                 if ($value !== '') {
                     $this->chosen = $value;
@@ -342,7 +342,7 @@ final class UserMessageProcessorTest extends TestCase
                     return;
                 }
 
-                $adapter->requestSelection(new Selection($this->name(), 'Custom options', [
+                $context->requestSelection(new SelectionRequest($this->name(), 'Custom options', [
                     new SelectionOption('opaque-key', 'A[Readable label]'),
                     new SelectionOption('other-key', 'Ordinary label'),
                 ]));
@@ -361,7 +361,7 @@ final class UserMessageProcessorTest extends TestCase
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setUserMessageProcessors((new UserMessageProcessors())->addProcessor(new EnvelopeProcessor('A')))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand($command))
+            ->setCommands(new Commands($command))
             ->run();
 
         self::assertStringContainsString('Readable label', $display);
@@ -370,7 +370,7 @@ final class UserMessageProcessorTest extends TestCase
         self::assertSame('opaque-key', $command->chosen);
     }
 
-    public function testCommandMessagesKeepTheirImagesAndMetadataThroughTheQueue(): void
+    public function testCommandMessagesKeepTheirImagesAndMetadataInTheCurrentStream(): void
     {
         $first = new UserMessage(new ImageContent(self::IMAGE, SourceType::BASE64, 'image/png'));
         $second = new UserMessage(new ImageContent(self::IMAGE, SourceType::BASE64, 'image/png'));
@@ -385,10 +385,10 @@ final class UserMessageProcessorTest extends TestCase
             {
                 return 'Send two photos.';
             }
-            public function run(CommandAdapterInterface $adapter, string $value): void
+            public function run(CommandContext $context, string $value): void
             {
-                $adapter->promptAgent($this->first);
-                $adapter->promptAgent($this->second);
+                $context->promptAgent($this->first);
+                $context->promptAgent($this->second);
             }
         };
         $provider = new FakeAIProvider(new AssistantMessage('One.'), new AssistantMessage('Two.'));
@@ -401,13 +401,13 @@ final class UserMessageProcessorTest extends TestCase
         Tui::make($agent)
             ->setSessionStore(new SessionStore(new InMemoryStorage(), 'local'))
             ->setTerminal($terminal)
-            ->setCommands((new Commands())->addCommand($command))
+            ->setCommands(new Commands($command))
             ->run();
 
         self::assertCount(2, $provider->getRecorded());
         self::assertEquals($first, $provider->getRecorded()[0]->messages[0]);
         self::assertEquals($second, $provider->getRecorded()[1]->messages[2]);
-        self::assertStringContainsString('[Image]', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
+        self::assertStringNotContainsString('❯ [Image]', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
     }
 
     public function testRecalledInputKeepsItsImageWhenItsTextIsPrepared(): void
@@ -416,7 +416,7 @@ final class UserMessageProcessorTest extends TestCase
         $image = new ImageContent(self::IMAGE, SourceType::BASE64, 'image/png');
         $message = new UserMessage('Original');
         $message->addContent($image);
-        $inputs->record($message);
+        $inputs->append($message);
         $provider = new FakeAIProvider(new AssistantMessage('Received.'));
         $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);
@@ -436,7 +436,7 @@ final class UserMessageProcessorTest extends TestCase
         self::assertCount(2, $sent->getContentBlocks());
         self::assertInstanceOf(ImageContent::class, $sent->getContentBlocks()[1]);
         self::assertSame($image->content, $sent->getContentBlocks()[1]->content);
-        self::assertStringContainsString('[Image]', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
+        self::assertStringNotContainsString('❯ [Image]', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
     }
 
     public function testLiveInputStaysOriginalAndReloadProjectsPreparedAttachments(): void

@@ -7,6 +7,7 @@ namespace NeuronTui;
 use InvalidArgumentException;
 use LogicException;
 use NeuronAI\Agent\Agent;
+use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\Commands;
 use NeuronInteraction\Configuration\ConfigurationStore;
 use NeuronInteraction\Conversation;
@@ -198,13 +199,25 @@ final class Tui
             );
         }
 
+        if ($this->session === null && $this->agent->getThreadId() !== null && $this->agent->getChatHistory()->getMessages() !== []) {
+            throw new InvalidArgumentException('An Agent with existing messages requires an explicit Session.');
+        }
+
+        $session = $this->session ?? $this->sessionStore->create();
+        $admitCommand = static fn(CommandInterface $command): bool => true;
         $conversation = new Conversation(
             $this->agent,
-            $this->sessionStore,
-            session: $this->session,
-            stopSignal: $this->stopSignal,
-            userMessageProcessors: $this->userMessageProcessors,
+            $session,
+            admitCommand: static function (CommandInterface $command) use (&$admitCommand): bool {
+                return $admitCommand($command);
+            },
         );
+        $conversation->setCommands($this->commands);
+        $conversation->setConfigurationStore($this->configurationStore);
+        $conversation->setUserMessageProcessors(new UserMessageProcessors($this->userMessageProcessors));
+        if ($this->stopSignal !== null) {
+            $conversation->setStopSignal($this->stopSignal);
+        }
         $view = new ConversationView(
             $terminal,
             $this->title,
@@ -218,13 +231,11 @@ final class Tui
             $conversation,
             $view,
         );
+        $admitCommand = $scheduler->admitCommand(...);
         $input = new InputHandler(
             $view,
             $this->inputHistory,
             $scheduler,
-            $this->commands,
-            $conversation,
-            $this->configurationStore,
         );
         $scheduler->synchronizeHistory();
         $view->onSubmit($input->handleSubmit(...));

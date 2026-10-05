@@ -1,10 +1,18 @@
 # The Conversation TUI mounts nothing on its own
 
+_2026-10-03 — Commands API revision supersedes the shared concurrent marker and
+adapter revisions below. The TUI supplies Commands and ConfigurationStore to its
+Conversation and submits input through submitInput. Its host admission policy
+recognizes HelpCommand and ExitCommand while busy. Other commands are refused;
+there is no shared concurrency marker. Commands use concrete CommandContext and
+ExitRequest asks the terminal to leave. The no-default-commands decision remains;
+previous revisions below are historical._
+
 _ADR 0003 supersedes only this decision's duplicate-name rule. The TUI still
 mounts nothing on its own._
 
 _The shared concurrent marker revision supersedes the concurrent type and
-restricted controls policy below. HelpCommand and LeaveCommand belong to Neuron
+restricted controls policy below. HelpCommand and ExitCommand belong to Neuron
 Interaction and implement ConcurrentCommandInterface, which extends the ordinary
 CommandInterface. The TUI admits Commands implementing this shared marker during
 a Turn, including custom Commands and aliases; ordinary Commands are refused
@@ -30,7 +38,7 @@ names a Host Application may not use.
 So the decision is inverted. **The Conversation TUI mounts nothing on its own.**
 A terminal built without naming a command is a terminal where every name after
 a slash is unknown, and where `Ctrl+C` is the way out. `ClearCommand`,
-`ResumeCommand`, `LeaveCommand` and `HelpCommand` are shipped with the library
+`ResumeCommand`, `ExitCommand` and `HelpCommand` are shipped with the library
 as classes a Host Application mounts exactly as it mounts its own, each taking
 the name it answers to at construction so `/quit` costs nothing but an
 argument.
@@ -72,7 +80,7 @@ Nothing had been released, so the interface break costs nobody anything.
   carried out at any time, and is handed the `ConcurrentControls` in exchange.
   The Conversation TUI names no class of its own to decide it, so a Host
   Application's own command to close the terminal runs mid-turn on the same
-  terms as the shipped `LeaveCommand`.
+  terms as the shipped `ExitCommand`.
 - The screen is reconciled by comparing the History the command was handed with
   the one the Agent holds afterwards, so a command that changed a History in
   place rather than replacing it leaves the screen as it was.

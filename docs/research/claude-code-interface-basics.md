@@ -1,3 +1,7 @@
+> Historical research: command adapters, concurrency markers and mutable command
+> registration mentioned below were superseded by the 2026-10-03 Commands API.
+> See ADR0003, ADR0006 and ADR0007 for the current Conversation/context contract.
+
 # Clonare Claude Code come *interfaccia*: quali funzionalità basiche valgono per Neuron TUI
 
 > Nota storica: questa ricerca descrive la revisione indicata sotto. Le sezioni
@@ -72,7 +76,7 @@ riferimenti ai simboli sono mantenuti aggiornati.
 | `/clear` apre una conversazione nuova conservando la precedente ([sessions, "Manage context within a session"](https://code.claude.com/docs/en/sessions)) | Fornito da `Command\ClearCommand`; è presente quando la Host Application lo monta |
 | `/resume` con picker: elenco, ricerca digitando, `↑↓`, `Enter`, `Esc` ([sessions, "Use the session picker"](https://code.claude.com/docs/en/sessions)) | Fornito da `Command\ResumeCommand` + `Tui\Picker`, ordinato dal più recente e corredato da titolo, età e — quando disponibile — dimensione persistita |
 | `/help` e scoperta dei comandi ([commands](https://code.claude.com/docs/en/commands)) | Fornito da `Command\HelpCommand`; i Command suggestions compaiono e si filtrano mentre si scrive un nome, con `↑↓`, `Tab`, `Enter` ed `Esc` |
-| `/exit` ([commands](https://code.claude.com/docs/en/commands)) | Fornito da `Command\LeaveCommand`; è presente quando la Host Application lo monta |
+| `/exit` ([commands](https://code.claude.com/docs/en/commands)) | Fornito da `Command\ExitCommand`; è presente quando la Host Application lo monta |
 | Markdown ed evidenziazione della sintassi nelle risposte | Presente: `MarkdownWidget` + `tempest/highlight` |
 
 Il confronto è più lusinghiero di quanto sembri: sul piano dell'*editing*

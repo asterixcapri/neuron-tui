@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace NeuronTui\View;
 
 use NeuronInteraction\Command\CommandInterface;
-use NeuronInteraction\Command\ConcurrentCommandInterface;
+use NeuronTui\Command\CommandAvailability;
 use Symfony\Component\Tui\Style\Style;
 use Symfony\Component\Tui\Widget\AbstractWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
@@ -45,9 +45,9 @@ use function substr;
  * whether what is on screen is a list rather than the one line that says
  * nothing matches, which is what ↑↓, Tab and Enter have to work on.
  *
- * While a Turn is under way the list carries only Concurrent commands.
- * The Conversation TUI turns away a command that does not say
- * in its type that it runs mid-turn, so offering that name meanwhile would
+ * While a Turn is under way the list carries only help and exit commands.
+ * The terminal policy admits HelpCommand and ExitCommand during a turn;
+ * offering any other name meanwhile would
  * promise a run that will not happen — and where none of the mounted
  * commands runs mid-turn, the line that says nothing matches is the honest
  * answer. The whole list is back when the turn ends.
@@ -408,7 +408,7 @@ final class CommandSuggestions
      * them. It is not a score: the order can be told from the code without
      * running it.
      *
-     * During a Turn only Concurrent commands are walked, so
+     * During a Turn only help and exit commands are walked, so
      * a name that would be turned away is never suggested.
      *
      * @return list<array{value: string, label: string, description: string}>
@@ -505,7 +505,7 @@ final class CommandSuggestions
                 continue;
             }
             $seen[$identifier] = true;
-            if ($working && !$command instanceof ConcurrentCommandInterface) {
+            if ($working && !CommandAvailability::whileWorking($command)) {
                 continue;
             }
             $suggestible[] = [
