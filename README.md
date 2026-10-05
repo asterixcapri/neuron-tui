@@ -272,7 +272,8 @@ Tui::make($agent)
 Configure input history, settings and commands with `setInputHistory()`,
 `setConfigurationStore()` and `setCommands()` before `run()`. Omitted input history
 and settings use independent in-memory storage. Every setter is fluent and rejects
-changes once startup begins; each TUI instance can run only once.
+changes once startup begins; each TUI instance can run only once. Input history
+persists submissions; the TUI owns recall navigation and draft restoration.
 
 ## Stop a response
 

@@ -84,7 +84,7 @@ final class UserMessageProcessorTest extends TestCase
         self::assertStringNotContainsString('Private instructions', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
     }
 
-    public function testSingleAndArrayRegistrationsComposeWithoutChangingInputHistory(): void
+    public function testVariadicRegistrationsComposeWithoutChangingInputHistory(): void
     {
         $provider = new FakeAIProvider(new AssistantMessage('Reply.'));
         $agent = (new Agent())->setThreadId('test-thread');
@@ -96,11 +96,11 @@ final class UserMessageProcessorTest extends TestCase
         $tui = Tui::make($agent)
             ->setSessionStore($store)
             ->setSession($session)
-            ->setUserMessageProcessors((new UserMessageProcessors())->addProcessor([
+            ->setUserMessageProcessors((new UserMessageProcessors())->addProcessor(
                 new EnvelopeProcessor('A'),
                 new EnvelopeProcessor('B'),
                 new EnvelopeProcessor('C'),
-            ]))
+            ))
             ->setTerminal($terminal)
             ->setInputHistory($inputHistory);
 
@@ -110,7 +110,7 @@ final class UserMessageProcessorTest extends TestCase
 
         self::assertSame('C[B[A[Hello]]]', $provider->getRecorded()[0]->messages[0]->getContent());
         self::assertSame('C[B[A[Hello]]]', $session->getMessages()[0]->getContent());
-        self::assertSame('Hello', $inputHistory->older()?->getContent());
+        self::assertSame('Hello', $inputHistory->list()[0]->getContent());
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('❯ Hello', $display);
         self::assertStringNotContainsString('C[B[A[Hello]]]', $display);
@@ -128,10 +128,10 @@ final class UserMessageProcessorTest extends TestCase
         $tui = Tui::make($agent)
             ->setSessionStore($store)
             ->setSession($session)
-            ->setUserMessageProcessors((new UserMessageProcessors())->addProcessor([
+            ->setUserMessageProcessors((new UserMessageProcessors())->addProcessor(
                 new EnvelopeProcessor('A'),
                 new EnvelopeProcessor('B'),
-            ]));
+            ));
         $tui->setTerminal($terminal);
         $tui->run();
 
@@ -231,7 +231,7 @@ final class UserMessageProcessorTest extends TestCase
             ->setInputHistory($inputs)
             ->run();
         self::assertSame([], $provider->getRecorded());
-        self::assertSame('Keep original draft', $inputs->older(new UserMessage(''))?->getContent());
+        self::assertSame('Keep original draft', $inputs->list()[0]->getContent());
         $display = AnsiUtils::stripAnsiCodes($terminal->getOutput());
         self::assertStringContainsString('The prepared user message is empty.', $display);
         self::assertStringContainsString('❯ Keep original draft', $display);
@@ -301,7 +301,7 @@ final class UserMessageProcessorTest extends TestCase
             $display = '';
             $tui = Tui::make($agent)
                 ->setSessionStore($store)
-                ->setUserMessageProcessors((new UserMessageProcessors())->addProcessor([$processor, new EnvelopeProcessor('A'), new EnvelopeProcessor('B')]))
+                ->setUserMessageProcessors((new UserMessageProcessors())->addProcessor($processor, new EnvelopeProcessor('A'), new EnvelopeProcessor('B')))
                 ->setTerminal($terminal)
                 ->setCommands(new Commands(new ResumeCommand($store, $name)));
             EventLoop::queue(static fn() => $terminal->simulateInput($name . "\r"));
@@ -416,7 +416,7 @@ final class UserMessageProcessorTest extends TestCase
         $image = new ImageContent(self::IMAGE, SourceType::BASE64, 'image/png');
         $message = new UserMessage('Original');
         $message->addContent($image);
-        $inputs->record($message);
+        $inputs->append($message);
         $provider = new FakeAIProvider(new AssistantMessage('Received.'));
         $agent = (new Agent())->setThreadId('test-thread');
         $agent->setAiProvider($provider);

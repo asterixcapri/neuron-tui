@@ -208,14 +208,16 @@ final class Tui
         $conversation = new Conversation(
             $this->agent,
             $session,
-            stopSignal: $this->stopSignal,
-            userMessageProcessors: $this->userMessageProcessors,
-            configurationStore: $this->configurationStore,
             admitCommand: static function (CommandInterface $command) use (&$admitCommand): bool {
                 return $admitCommand($command);
             },
         );
         $conversation->setCommands($this->commands);
+        $conversation->setConfigurationStore($this->configurationStore);
+        $conversation->setUserMessageProcessors(new UserMessageProcessors($this->userMessageProcessors));
+        if ($this->stopSignal !== null) {
+            $conversation->setStopSignal($this->stopSignal);
+        }
         $view = new ConversationView(
             $terminal,
             $this->title,

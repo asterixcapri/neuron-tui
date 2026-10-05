@@ -1292,7 +1292,7 @@ final class TuiTest extends TestCase
         );
         self::assertSame(
             ['/probe this diff'],
-            array_map(static fn(UserMessage $message): ?string => $message->getContent(), (new InputHistory($storage))->entries()),
+            array_map(static fn(UserMessage $message): ?string => $message->getContent(), (new InputHistory($storage))->list()),
         );
     }
 
@@ -1334,7 +1334,7 @@ final class TuiTest extends TestCase
         self::assertSame(['first invocation finished'], $beforeChoice);
         self::assertSame(['first invocation finished', 'stable-value'], $events);
         self::assertStringContainsString('Request submitted.', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
-        self::assertSame(['/probe'], array_map(static fn(UserMessage $message): ?string => $message->getContent(), (new InputHistory($storage))->entries()));
+        self::assertSame(['/probe'], array_map(static fn(UserMessage $message): ?string => $message->getContent(), (new InputHistory($storage))->list()));
     }
 
     public function testSelectionContinuationRechecksTheTuisOwnExecutionState(): void
@@ -1496,7 +1496,7 @@ final class TuiTest extends TestCase
         self::assertStringContainsString('RuntimeException: Selected command failed.', $display);
         self::assertStringNotContainsString('Original conversation.', $display);
         self::assertStringNotContainsString('Replacement conversation.', $display);
-        self::assertSame(['/choose', '/replace'], array_map(static fn(UserMessage $message): ?string => $message->getContent(), $inputHistory->entries()));
+        self::assertSame(['/choose', '/replace'], array_map(static fn(UserMessage $message): ?string => $message->getContent(), $inputHistory->list()));
     }
 
     public function testSelectedCommandIsReadmittedAfterItsRequesterStartsAnAgentTurn(): void
@@ -1548,7 +1548,7 @@ final class TuiTest extends TestCase
         );
         $provider->assertCallCount(1);
         self::assertSame('Generated request.', $provider->getRecorded()[0]->messages[0]->getContent());
-        self::assertSame(['/choose'], array_map(static fn(UserMessage $message): ?string => $message->getContent(), $inputHistory->entries()));
+        self::assertSame(['/choose'], array_map(static fn(UserMessage $message): ?string => $message->getContent(), $inputHistory->list()));
     }
 
     public function testACommandReachesTheAgentToChangeProviderInstructionsAndTools(): void

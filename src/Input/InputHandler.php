@@ -21,11 +21,15 @@ use Throwable;
  */
 final class InputHandler
 {
+    private readonly InputHistoryNavigation $navigation;
+
     public function __construct(
         private readonly ConversationView $view,
         private readonly InputHistory $inputHistory,
         private readonly TurnScheduler $scheduler,
-    ) {}
+    ) {
+        $this->navigation = new InputHistoryNavigation($inputHistory);
+    }
 
     public function handleSubmit(SubmitEvent $event): void
     {
@@ -33,14 +37,14 @@ final class InputHandler
             return;
         }
 
-        $this->inputHistory->leave();
+        $this->navigation->leave();
 
         if ($event->isBlank() && !$this->view->composerHasAttachments()) {
             return;
         }
 
         $original = $this->view->composerMessage();
-        $this->inputHistory->record($original);
+        $this->inputHistory->append($original);
         $submission = CommandInput::parse($event->getValue());
 
         if ($submission instanceof CommandInput) {
@@ -61,7 +65,7 @@ final class InputHandler
 
     public function handleDraftChange(): void
     {
-        $this->inputHistory->leave();
+        $this->navigation->leave();
     }
 
     public function handleInput(InputEvent $event): void
@@ -102,10 +106,10 @@ final class InputHandler
 
         if ($keys->matches($event->getData(), 'recall-older-input')) {
             if (
-                $this->inputHistory->isNavigating()
+                $this->navigation->isNavigating()
                 || $this->view->isComposerEmpty()
             ) {
-                $input = $this->inputHistory->older($this->view->composerMessage());
+                $input = $this->navigation->older($this->view->composerMessage());
 
                 if ($input !== null) {
                     $event->stopPropagation();
@@ -118,9 +122,9 @@ final class InputHandler
 
         if (
             $keys->matches($event->getData(), 'recall-newer-input')
-            && $this->inputHistory->isNavigating()
+            && $this->navigation->isNavigating()
         ) {
-            $input = $this->inputHistory->newer();
+            $input = $this->navigation->newer();
 
             if ($input !== null) {
                 $event->stopPropagation();

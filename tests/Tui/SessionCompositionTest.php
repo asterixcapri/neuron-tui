@@ -224,7 +224,7 @@ final class SessionCompositionTest extends TestCase
 
                 self::assertStringContainsString('Unknown Command: /help', AnsiUtils::stripAnsiCodes($terminal->getOutput()));
                 if ($inputs !== null) {
-                    self::assertSame(['/help'], array_map(static fn(UserMessage $message): ?string => $message->getContent(), $inputs->entries()));
+                    self::assertSame(['/help'], array_map(static fn(UserMessage $message): ?string => $message->getContent(), $inputs->list()));
                 }
             }
         }
@@ -275,8 +275,7 @@ final class SessionCompositionTest extends TestCase
                     $defaultSessions[] = $received[0][1];
                 }
                 if ($inputs !== null) {
-                    self::assertSame(['/inspect'], array_map(static fn(UserMessage $message): ?string => $message->getContent(), $inputs->entries()));
-                    self::assertTrue($inputs->isNavigating());
+                    self::assertSame(['/inspect'], array_map(static fn(UserMessage $message): ?string => $message->getContent(), $inputs->list()));
                 }
             }
         }
