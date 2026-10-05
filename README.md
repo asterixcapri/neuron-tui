@@ -6,6 +6,8 @@ agents, built with [Symfony TUI](https://github.com/symfony/tui).
 The conversation appears above a multiline composer fixed at the bottom, with an
 animated working indicator immediately above the input.
 
+![Neuron TUI demo: conversation, Markdown rendering and a filesystem tool](docs/images/neuron-tui-demo.gif)
+
 ## Requirements
 
 - PHP 8.4.1 or later.
