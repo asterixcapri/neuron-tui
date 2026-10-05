@@ -13,7 +13,7 @@ final class HeaderView extends ContainerWidget
 {
     public function __construct()
     {
-        $this->add((new TextWidget('✳ Neuron TUI'))->setStyle(new Style(color: '#d99a70', bold: true)));
-        $this->add((new TextWidget('A conversation with your agent'))->setStyle(new Style(color: '#999999')));
+        $this->add((new TextWidget('✳ Neuron TUI'))->setStyle(new Style(color: Theme::ACCENT, bold: true)));
+        $this->add((new TextWidget('A conversation with your agent'))->setStyle(new Style(color: Theme::MUTED)));
     }
 }

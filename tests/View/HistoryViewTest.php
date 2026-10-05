@@ -14,10 +14,14 @@ use NeuronAI\Tools\ToolOutput;
 use NeuronTui\View\HistoryView;
 use NeuronTui\View\MessageKind;
 use NeuronTui\View\MessageView;
+use NeuronTui\View\Theme;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Render\RenderContext;
 use Symfony\Component\Tui\Render\Renderer;
+use Symfony\Component\Tui\Style\Style;
+use Symfony\Component\Tui\Terminal\VirtualTerminal;
+use Symfony\Component\Tui\Tui as SymfonyTui;
 
 use function implode;
 use function rtrim;
@@ -25,6 +29,22 @@ use function substr_count;
 
 final class HistoryViewTest extends TestCase
 {
+    public function testMarkdownUsesTheSharedThemeInsideHistory(): void
+    {
+        $history = new HistoryView();
+        $history->load([new AssistantMessage("# Heading\n\n[Link](https://example.com) and `inline`\n\n> Quote\n\n- Item\n\n```php\necho 'hello'; // comment\n```")]);
+        $host = new SymfonyTui(terminal: new VirtualTerminal(80, 30), styleSheet: Theme::styleSheet());
+        $host->add($history);
+        $screen = implode("\n", (new Renderer(Theme::styleSheet()))->renderWidget($history, new RenderContext(80, 30)));
+        self::assertStringContainsString((new Style(color: Theme::ACCENT, bold: true))->apply('Heading'), $screen);
+        self::assertStringContainsString((new Style(color: Theme::INFO, underline: true))->apply('Link'), $screen);
+        self::assertStringContainsString((new Style(color: Theme::ACCENT))->apply('inline'), $screen);
+        self::assertStringContainsString((new Style(color: Theme::SECONDARY, italic: true))->apply('Quote'), $screen);
+        self::assertStringContainsString((new Style(color: Theme::ACCENT))->apply('• '), $screen);
+        self::assertStringContainsString((new Style(color: Theme::MUTED))->getAnsiRestore() . '// comment', $screen);
+        self::assertStringNotContainsString("\033[36m", $screen);
+    }
+
     public function testScrollingKeepsReadingPositionWhileResponseGrows(): void
     {
         $history = new HistoryView();

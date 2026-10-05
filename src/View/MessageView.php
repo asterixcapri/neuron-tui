@@ -8,30 +8,40 @@ use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Render\RenderContext;
 use Symfony\Component\Tui\Style\Style;
 use Symfony\Component\Tui\Widget\MarkdownWidget;
+use Symfony\Component\Tui\Widget\ParentInterface;
 use Symfony\Component\Tui\Widget\TextWidget;
 use Symfony\Component\Tui\Widget\Util\StringUtils;
+use Tempest\Highlight\Highlighter;
 
 use function max;
 use function str_repeat;
 
 /** @internal */
-final class MessageView extends TextWidget
+final class MessageView extends TextWidget implements ParentInterface
 {
     private readonly ?MarkdownWidget $markdown;
 
     public function __construct(string $text, private readonly MessageKind $kind)
     {
         parent::__construct(StringUtils::stripControlBytes($text));
-        $this->markdown = $kind === MessageKind::Agent ? new MarkdownWidget($this->getText()) : null;
+        $this->markdown = $kind === MessageKind::Agent
+            ? new MarkdownWidget($this->getText(), highlighter: new Highlighter(new Theme()))
+            : null;
         $this->setStyle(match ($kind) {
-            MessageKind::User => new Style(background: '#383838', color: '#eeeeee'),
-            MessageKind::Agent => new Style(color: '#eeeeee'),
-            MessageKind::ToolCall => new Style(color: '#d99a70'),
-            MessageKind::ToolResult => new Style(color: '#91b99a'),
-            MessageKind::System => new Style(color: '#999999', dim: true),
-            MessageKind::Notice => new Style(color: '#9caee0'),
-            MessageKind::Error => new Style(color: '#e88b8b'),
+            MessageKind::User => new Style(background: Theme::USER_BACKGROUND, color: Theme::TEXT),
+            MessageKind::Agent => new Style(color: Theme::TEXT),
+            MessageKind::ToolCall => new Style(color: Theme::ACCENT),
+            MessageKind::ToolResult => new Style(color: Theme::SUCCESS),
+            MessageKind::System => new Style(color: Theme::MUTED, dim: true),
+            MessageKind::Notice => new Style(color: Theme::INFO),
+            MessageKind::Error => new Style(color: Theme::ERROR),
         });
+    }
+
+    /** @return list<MarkdownWidget> */
+    public function all(): array
+    {
+        return $this->markdown === null ? [] : [$this->markdown];
     }
 
     public function setText(string $text): static
