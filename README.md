@@ -1,77 +1,81 @@
 # Neuron TUI
 
-A basic terminal interface for testing a [Neuron AI](https://github.com/neuron-core/neuron-ai)
-Agent, built with [Symfony TUI](https://github.com/symfony/tui).
+A terminal interface for testing [Neuron AI](https://github.com/neuron-core/neuron-ai)
+agents, built with [Symfony TUI](https://github.com/symfony/tui).
 
-Requires PHP 8.4.1+ and an interactive terminal.
+The conversation appears above a multiline composer fixed at the bottom, with an
+animated working indicator immediately above the input.
+
+## Requirements
+
+- PHP 8.4.1 or later.
+- Neuron AI 4.x.
+- An interactive terminal for both standard input and standard output.
+
+## Installation
+
+Install with Composer:
+
+```bash
+composer require asterixcapri/neuron-tui
+```
 
 ## Usage
 
-Configure your Agent and its provider, then run:
+Create a Neuron agent and pass it to the TUI:
 
 ```php
+<?php
+
+use NeuronAI\Agent\Agent;
+use NeuronAI\Providers\OpenAI\Responses\OpenAIResponses;
+use NeuronAI\Tools\Toolkits\FileSystem\FileSystemToolkit;
 use NeuronTui\Tui;
+
+$agent = Agent::make()
+    ->setAiProvider(new OpenAIResponses(
+        key: 'your-openai-api-key',
+        model: 'gpt-5.4-nano',
+    ))
+    ->addTool(FileSystemToolkit::make(__DIR__));
 
 Tui::make($agent)->run();
 ```
 
-Customize the header with fluent setters:
+Customize the header through fluent setters:
 
 ```php
 Tui::make($agent)
-    ->setTitle('My Agent')
-    ->setDescription('An assistant for my project')
+    ->setTitle('Filesystem Agent')
+    ->setDescription('Explore, read and edit files with Neuron AI')
     ->run();
 ```
 
-The conversation occupies the upper area, with the input bar fixed at the bottom
-and the working indicator immediately above it.
-
-Enter sends a message. Responses stream into the terminal, with tool activity
-and errors displayed in the conversation. Shift+Enter inserts a newline; the
-composer grows with the text, keeping its prompt aligned at the top.
-Ctrl+C exits. You can write the next
-message while the Agent responds; Enter sends it once the current turn has
-finished. Each TUI instance runs once.
-
-User messages use a highlighted row with `❯`; Agent responses use `●`. Tool
-calls and results have separate indicators and colors, as do notifications,
-system messages and errors. The same presentation applies to existing history
-and live streaming.
-
-`Tui` prepares the Agent, connects callbacks in `wire()` and runs the Symfony
-terminal. `MainView` is the root `ContainerWidget` for the screen, handling
-interface events and composing `HeaderView`, `HistoryView` and
-`ComposerView`. `TurnRunner` executes and streams Agent turns.
-
-`MainView` exposes `onInput()`, `onEscape()` and `onHistorySync()`, alongside
-`appendResponse()`, `notify()`, `finishTurn()` and `stop()`.
-`Tui::wire()` connects input to `TurnRunner::run()` and history synchronization
-to the supplied Agent. A history callback returns an iterable of Neuron messages
-for `HistoryView` to display. Escape invokes its callback during a turn; it has
-no default cancellation behavior.
-
-The supplied Agent keeps its own conversation history. An Agent without a thread
-ID receives one when `Tui::make()` connects it to the interface.
-
-This basic version consumes native Neuron stream chunks. Approval prompts and
-external tool results are not handled. Blocking providers and tools can delay
-processing of Ctrl+C until they yield control.
+The TUI loads the agent's existing conversation history at startup and keeps using
+that agent for subsequent turns. If the agent has no thread ID, `Tui::make()`
+assigns one. Each TUI instance can run once.
 
 ## Example
 
-From the repository root:
+From the repository root, install the example dependencies:
 
 ```bash
 composer --working-dir=examples install
-php examples/basic.php
 ```
 
-Create `examples/.env` with `OPENAI_API_KEY`, loaded through Symfony Dotenv.
-The example selects its model directly in `basic.php` and uses Neuron's
-`AmpHttpClient` so network waits allow input and the spinner to keep updating.
-The environment file is
-ignored by Git.
+Copy the environment template:
+
+```bash
+cp examples/.env.example examples/.env
+```
+
+Set `OPENAI_API_KEY` in `examples/.env`.
+
+Then run:
+
+```bash
+php examples/basic.php
+```
 
 ## Development
 
@@ -80,10 +84,8 @@ composer install
 composer cs:fix
 composer stan
 composer test
+composer cs
 ```
-
-Tests use Neuron's fake provider and Symfony's virtual terminal, without credentials.
-Previous domain documentation remains historical reference for the old implementation.
 
 ## License
 
