@@ -10,6 +10,7 @@ use NeuronAI\Chat\Messages\Stream\Chunks\ToolCallChunk;
 use NeuronAI\Chat\Messages\Stream\Chunks\ToolResultChunk;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronTui\View\MainView;
+use NeuronTui\View\MessageKind;
 use Revolt\EventLoop;
 use Symfony\Component\Tui\Tui as SymfonyTui;
 use Throwable;
@@ -44,9 +45,9 @@ final class TurnRunner
                 if ($chunk instanceof TextChunk) {
                     $this->view->appendResponse($chunk->content);
                 } elseif ($chunk instanceof ToolCallChunk) {
-                    $this->view->notify('Tool › ' . $chunk->tool->getName() . ' …');
+                    $this->view->notify($chunk->tool->getName() . ' …', MessageKind::ToolCall);
                 } elseif ($chunk instanceof ToolResultChunk) {
-                    $this->view->notify('Tool › ' . $chunk->tool->getName() . ' completed');
+                    $this->view->notify($chunk->tool->getName() . ' completed', MessageKind::ToolResult);
                 }
                 $this->tui->processRender();
                 // Let terminal input and async providers progress between chunks.
@@ -61,7 +62,7 @@ final class TurnRunner
                 $this->view->notify('Agent paused: approval or external tool results are required.');
             }
         } catch (Throwable $error) {
-            $this->view->notify('Error › ' . $error->getMessage());
+            $this->view->notify($error->getMessage(), MessageKind::Error);
         } finally {
             $this->view->finishTurn();
         }

@@ -22,6 +22,11 @@ Enter sends a message. Responses stream into the terminal, with tool activity
 and errors displayed in the conversation. Ctrl+C exits. Input is unavailable
 while the Agent responds. Each TUI instance runs once.
 
+User messages use a highlighted row with `❯`; Agent responses use `●`. Tool
+calls and results have separate indicators and colors, as do notifications,
+system messages and errors. The same presentation applies to existing history
+and live streaming.
+
 `Tui` prepares the Agent, connects callbacks in `wire()` and runs the Symfony
 terminal. `MainView` is the root `ContainerWidget` for the screen, handling
 interface events and composing `HeaderView`, `HistoryView` and

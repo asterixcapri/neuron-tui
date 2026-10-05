@@ -6,15 +6,13 @@ namespace NeuronTui\View;
 
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\ToolCallMessage;
+use NeuronAI\Chat\Messages\ToolResultMessage;
 use Symfony\Component\Tui\Render\RenderContext;
 use Symfony\Component\Tui\Render\Renderer;
-use Symfony\Component\Tui\Style\Padding;
 use Symfony\Component\Tui\Style\Style;
 use Symfony\Component\Tui\Widget\AbstractWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 use Symfony\Component\Tui\Widget\ParentInterface;
-use Symfony\Component\Tui\Widget\TextWidget;
-use Symfony\Component\Tui\Widget\Util\StringUtils;
 use Symfony\Component\Tui\Widget\VerticallyExpandableInterface;
 
 use function array_fill;
@@ -29,7 +27,7 @@ final class HistoryView extends AbstractWidget implements ParentInterface, Verti
     private readonly ContainerWidget $messages;
     private readonly Renderer $renderer;
     private bool $expanded = true;
-    private ?TextWidget $response = null;
+    private ?MessageView $response = null;
 
     public function __construct()
     {
@@ -46,63 +44,55 @@ final class HistoryView extends AbstractWidget implements ParentInterface, Verti
         foreach ($history as $message) {
             $content = $message->getContent();
             if ($content !== null && $content !== '') {
-                if ($message->getRole() === 'user') {
-                    $this->appendUser($content);
-                } else {
-                    $this->appendAgent($content);
-                }
+                $kind = match ($message->getRole()) {
+                    'user' => MessageKind::User,
+                    'assistant' => MessageKind::Agent,
+                    default => MessageKind::System,
+                };
+                $this->append($content, $kind);
             }
             if ($message instanceof ToolCallMessage) {
                 foreach ($message->getToolCalls() as $tool) {
-                    $this->notify('Tool › ' . $tool->getName());
+                    $this->notify($tool->getName() . ' …', MessageKind::ToolCall);
+                }
+            }
+            if ($message instanceof ToolResultMessage) {
+                foreach ($message->getToolCalls() as $tool) {
+                    $this->notify($tool->getName() . ' completed', MessageKind::ToolResult);
                 }
             }
         }
     }
 
-    private function appendUser(string $text): void
-    {
-        $this->append('You › ' . $text)->setStyle(new Style(
-            padding: Padding::xy(1),
-            background: '#292521',
-            color: '#f0d2b5',
-        ));
-    }
-
-    private function appendAgent(string $text): void
-    {
-        $this->append('Agent › ' . $text);
-    }
-
     public function beginTurn(string $prompt): void
     {
-        $this->appendUser($prompt);
-        $this->response = $this->append('Agent › ');
+        $this->append($prompt, MessageKind::User);
+        $this->response = $this->append('', MessageKind::Agent);
     }
 
     public function appendResponse(string $text): void
     {
-        $this->response ??= $this->append('Agent › ');
-        $this->response->setText(StringUtils::stripControlBytes($this->response->getText() . $text));
+        $this->response ??= $this->append('', MessageKind::Agent);
+        $this->response->setText($this->response->getText() . $text);
     }
 
-    public function notify(string $text): void
+    public function notify(string $text, MessageKind $kind = MessageKind::Notice): void
     {
         $this->finishTurn();
-        $this->append($text);
+        $this->append($text, $kind);
     }
 
     public function finishTurn(): void
     {
-        if ($this->response !== null && $this->response->getText() === 'Agent › ') {
+        if ($this->response !== null && $this->response->getText() === '') {
             $this->messages->remove($this->response);
         }
         $this->response = null;
     }
 
-    private function append(string $text): TextWidget
+    private function append(string $text, MessageKind $kind): MessageView
     {
-        $widget = new TextWidget(StringUtils::stripControlBytes($text));
+        $widget = new MessageView($text, $kind);
         $this->messages->add($widget);
 
         return $widget;

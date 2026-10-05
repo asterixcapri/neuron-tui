@@ -11,7 +11,6 @@ use Symfony\Component\Tui\Event\InputEvent;
 use Symfony\Component\Tui\Event\SubmitEvent;
 use Symfony\Component\Tui\Input\Key;
 use Symfony\Component\Tui\Input\Keybindings;
-use Symfony\Component\Tui\Style\Padding;
 use Symfony\Component\Tui\Style\Style;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 use Throwable;
@@ -44,7 +43,7 @@ final class MainView extends ContainerWidget
             'stop' => [Key::ESCAPE],
             'quit' => ['ctrl+c'],
         ]);
-        $this->setStyle(new Style(padding: Padding::xy(2), gap: 1));
+        $this->setStyle(new Style(gap: 1));
         $this->add($this->header)->add($this->history)->add($this->composer);
         $this->composer->onSubmit($this->submit(...));
     }
@@ -87,7 +86,7 @@ final class MainView extends ContainerWidget
         try {
             ($this->onInput)($prompt);
         } catch (Throwable $error) {
-            $this->notify('Error › ' . $error->getMessage());
+            $this->notify($error->getMessage(), MessageKind::Error);
             $this->finishTurn();
         }
     }
@@ -124,12 +123,12 @@ final class MainView extends ContainerWidget
         $this->getContext()?->requestRender();
     }
 
-    public function notify(string $text): void
+    public function notify(string $text, MessageKind $kind = MessageKind::Notice): void
     {
         if (!$this->busy) {
             throw new LogicException('No turn is in progress.');
         }
-        $this->history->notify($text);
+        $this->history->notify($text, $kind);
         $this->getContext()?->requestRender();
     }
 
