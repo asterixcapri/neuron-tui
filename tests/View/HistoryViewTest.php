@@ -10,6 +10,7 @@ use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Tools\ToolCall;
+use NeuronAI\Tools\ToolOutput;
 use NeuronTui\View\HistoryView;
 use NeuronTui\View\MessageKind;
 use NeuronTui\View\MessageView;
@@ -20,6 +21,7 @@ use Symfony\Component\Tui\Render\Renderer;
 
 use function implode;
 use function rtrim;
+use function substr_count;
 
 final class HistoryViewTest extends TestCase
 {
@@ -63,8 +65,8 @@ final class HistoryViewTest extends TestCase
         $live = new HistoryView();
         $live->beginTurn('Weather?');
         $live->appendResponse('Checking');
-        $live->notify('weather …', MessageKind::ToolCall);
-        $live->notify('weather completed', MessageKind::ToolResult);
+        $live->showToolCall($tool);
+        $live->showToolResult($tool);
         $live->appendResponse('It is sunny');
         $live->finishTurn();
         $renderer = new Renderer();
@@ -74,9 +76,53 @@ final class HistoryViewTest extends TestCase
         $text = AnsiUtils::stripAnsiCodes($screen);
         self::assertStringContainsString('❯ Weather?', $text);
         self::assertStringContainsString('● Checking', $text);
-        self::assertStringContainsString('◆ weather …', $text);
-        self::assertStringContainsString('└ weather completed', $text);
+        self::assertStringNotContainsString('◆ weather', $text);
+        self::assertSame(1, substr_count($text, '● weather'));
         self::assertStringContainsString('● It is sunny', $text);
+    }
+
+    public function testToolParametersAndCompletionUpdateTheSameCall(): void
+    {
+        $history = new HistoryView();
+        $history->showToolCall(new ToolCall('read_file', 'first', ['path' => 'examples/basic.php', 'start_line' => 1]));
+        $history->showToolCall(new ToolCall('read_file', 'second', ['path' => 'README.md']));
+        $renderer = new Renderer();
+        $context = new RenderContext(80, 12);
+        $pending = AnsiUtils::stripAnsiCodes(implode("\n", $renderer->renderWidget($history, $context)));
+        self::assertStringContainsString('◆ read_file(path: "examples/basic.php", start_line: 1)', $pending);
+        $history->showToolResult((new ToolCall('read_file', 'first'))->setResult('Long output hidden'));
+        $completed = implode("\n", $renderer->renderWidget($history, $context));
+        $text = AnsiUtils::stripAnsiCodes($completed);
+        self::assertSame(2, substr_count($text, 'read_file('));
+        self::assertStringContainsString('● read_file(path: "examples/basic.php", start_line: 1)', $text);
+        self::assertStringContainsString('◆ read_file(path: "README.md")', $text);
+        self::assertStringNotContainsString('Long output hidden', $text);
+        self::assertStringContainsString('38;2;145;185;154', $completed);
+    }
+
+    public function testNestedToolParametersAndErrorsAreReadable(): void
+    {
+        $call = new ToolCall('search', 'nested', ['query' => 'neuron', 'filters' => ['extensions' => ['php'], 'limit' => 10]]);
+        $history = new HistoryView();
+        $history->showToolCall($call);
+        $renderer = new Renderer();
+        $context = new RenderContext(60, 20);
+        $text = AnsiUtils::stripAnsiCodes(implode("\n", $renderer->renderWidget($history, $context)));
+        self::assertStringContainsString("◆ search\n  {", $text);
+        self::assertStringContainsString('      "filters": {', $text);
+        self::assertStringContainsString('          "limit": 10', $text);
+        $history->showToolResult((new ToolCall('search', 'nested'))->setResult(ToolOutput::error('File not found')));
+        $screen = implode("\n", $renderer->renderWidget($history, $context));
+        $text = AnsiUtils::stripAnsiCodes($screen);
+        self::assertStringContainsString('! search', $text);
+        self::assertStringContainsString('  └ File not found', $text);
+        self::assertSame(1, substr_count($text, 'search'));
+        self::assertStringContainsString('38;2;232;139;139', $screen);
+        $history->load([]);
+        $history->showToolResult((new ToolCall('search', 'nested', ['query' => 'new']))->setResult('Done'));
+        $reloaded = AnsiUtils::stripAnsiCodes(implode("\n", $renderer->renderWidget($history, $context)));
+        self::assertStringContainsString('● search(query: "new")', $reloaded);
+        self::assertStringNotContainsString('filters', $reloaded);
     }
 
     public function testUserHighlightAndAgentContinuationLines(): void

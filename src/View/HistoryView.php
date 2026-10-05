@@ -7,6 +7,7 @@ namespace NeuronTui\View;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\ToolResultMessage;
+use NeuronAI\Tools\ToolCall;
 use Symfony\Component\Tui\Render\RenderContext;
 use Symfony\Component\Tui\Render\Renderer;
 use Symfony\Component\Tui\Style\Style;
@@ -20,6 +21,7 @@ use function array_slice;
 use function array_values;
 use function count;
 use function max;
+use function spl_object_id;
 
 /** @internal */
 final class HistoryView extends AbstractWidget implements ParentInterface, VerticallyExpandableInterface
@@ -28,6 +30,9 @@ final class HistoryView extends AbstractWidget implements ParentInterface, Verti
     private readonly Renderer $renderer;
     private bool $expanded = true;
     private ?MessageView $response = null;
+
+    /** @var array<string, ToolView> */
+    private array $tools = [];
 
     public function __construct()
     {
@@ -40,6 +45,7 @@ final class HistoryView extends AbstractWidget implements ParentInterface, Verti
     public function load(iterable $history): void
     {
         $this->response = null;
+        $this->tools = [];
         $this->messages->clear();
         foreach ($history as $message) {
             $content = $message->getContent();
@@ -53,12 +59,12 @@ final class HistoryView extends AbstractWidget implements ParentInterface, Verti
             }
             if ($message instanceof ToolCallMessage) {
                 foreach ($message->getToolCalls() as $tool) {
-                    $this->notify($tool->getName() . ' …', MessageKind::ToolCall);
+                    $this->showToolCall($tool);
                 }
             }
             if ($message instanceof ToolResultMessage) {
                 foreach ($message->getToolCalls() as $tool) {
-                    $this->notify($tool->getName() . ' completed', MessageKind::ToolResult);
+                    $this->showToolResult($tool);
                 }
             }
         }
@@ -80,6 +86,31 @@ final class HistoryView extends AbstractWidget implements ParentInterface, Verti
     {
         $this->finishTurn();
         $this->append($text, $kind);
+    }
+
+    public function showToolCall(ToolCall $tool): void
+    {
+        $this->finishTurn();
+        $key = $this->toolKey($tool);
+        if (!isset($this->tools[$key])) {
+            $this->tools[$key] = new ToolView($tool);
+            $this->messages->add($this->tools[$key]);
+        }
+    }
+
+    public function showToolResult(ToolCall $tool): void
+    {
+        $this->finishTurn();
+        $this->showToolCall($tool);
+        $key = $this->toolKey($tool);
+        $this->tools[$key]->complete($tool);
+    }
+
+    private function toolKey(ToolCall $tool): string
+    {
+        $id = $tool->getCallId();
+
+        return $id !== null ? 'call:' . $id : 'object:' . spl_object_id($tool);
     }
 
     public function finishTurn(): void

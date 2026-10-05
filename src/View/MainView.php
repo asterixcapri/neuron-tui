@@ -7,6 +7,7 @@ namespace NeuronTui\View;
 use Closure;
 use LogicException;
 use NeuronAI\Chat\Messages\Message;
+use NeuronAI\Tools\ToolCall;
 use Symfony\Component\Tui\Event\InputEvent;
 use Symfony\Component\Tui\Event\SubmitEvent;
 use Symfony\Component\Tui\Input\Key;
@@ -129,6 +130,24 @@ final class MainView extends ContainerWidget
             throw new LogicException('No turn is in progress.');
         }
         $this->history->notify($text, $kind);
+        $this->getContext()?->requestRender();
+    }
+
+    public function showToolCall(ToolCall $tool): void
+    {
+        if (!$this->busy) {
+            throw new LogicException('No turn is in progress.');
+        }
+        $this->history->showToolCall($tool);
+        $this->getContext()?->requestRender();
+    }
+
+    public function showToolResult(ToolCall $tool): void
+    {
+        if (!$this->busy) {
+            throw new LogicException('No turn is in progress.');
+        }
+        $this->history->showToolResult($tool);
         $this->getContext()?->requestRender();
     }
 
