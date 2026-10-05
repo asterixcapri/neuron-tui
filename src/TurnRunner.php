@@ -45,9 +45,9 @@ final class TurnRunner
                 if ($chunk instanceof TextChunk) {
                     $this->view->appendResponse($chunk->content);
                 } elseif ($chunk instanceof ToolCallChunk) {
-                    $this->view->notify($chunk->tool->getName() . ' …', MessageKind::ToolCall);
+                    $this->view->showToolCall($chunk->tool);
                 } elseif ($chunk instanceof ToolResultChunk) {
-                    $this->view->notify($chunk->tool->getName() . ' completed', MessageKind::ToolResult);
+                    $this->view->showToolResult($chunk->tool);
                 }
                 $this->tui->processRender();
                 // Let terminal input and async providers progress between chunks.

@@ -87,7 +87,7 @@ final class TuiTest extends TestCase
             }
             return str_contains($screen, 'It is sunny') && !str_contains($screen, 'Working');
         });
-        self::assertStringContainsString('└ weather completed', $screen);
+        self::assertStringContainsString('● weather', $screen);
         self::assertStringContainsString('Checking', $screen);
         $provider->assertCallCount(2);
     }
