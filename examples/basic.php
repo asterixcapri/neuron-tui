@@ -27,4 +27,7 @@ $agent->setAiProvider(new OpenAIResponses(
     model: 'gpt-5.4-nano'
 ));
 
-Tui::make($agent)->run();
+Tui::make($agent)
+    ->setTitle('Filesystem Agent')
+    ->setDescription('Explore, read and edit files with Neuron AI')
+    ->run();

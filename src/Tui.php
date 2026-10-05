@@ -40,6 +40,20 @@ final class Tui
         return new self($agent);
     }
 
+    public function setTitle(string $title): self
+    {
+        $this->mainView->setTitle($title);
+
+        return $this;
+    }
+
+    public function setDescription(string $description): self
+    {
+        $this->mainView->setDescription($description);
+
+        return $this;
+    }
+
     private function wire(): void
     {
         $this->mainView->onInput(function (string $input): void {

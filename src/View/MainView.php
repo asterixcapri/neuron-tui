@@ -51,6 +51,18 @@ final class MainView extends ContainerWidget
         $this->composer->onSubmit($this->submit(...));
     }
 
+    public function setTitle(string $title): void
+    {
+        $this->header->setTitle($title);
+        $this->getContext()?->requestRender();
+    }
+
+    public function setDescription(string $description): void
+    {
+        $this->header->setDescription($description);
+        $this->getContext()?->requestRender();
+    }
+
     public function syncHistory(): void
     {
         $this->history->load($this->onHistorySync === null ? [] : ($this->onHistorySync)());

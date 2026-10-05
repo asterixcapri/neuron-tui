@@ -15,6 +15,15 @@ use NeuronTui\Tui;
 Tui::make($agent)->run();
 ```
 
+Customize the header with fluent setters:
+
+```php
+Tui::make($agent)
+    ->setTitle('My Agent')
+    ->setDescription('An assistant for my project')
+    ->run();
+```
+
 The conversation occupies the upper area, with the input bar fixed at the bottom
 and the working indicator immediately above it.
 
