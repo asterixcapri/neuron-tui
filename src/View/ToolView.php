@@ -28,21 +28,21 @@ final class ToolView extends ContainerWidget
 {
     public function __construct(private readonly ToolCall $tool)
     {
-        $this->display(false);
+        $this->display();
     }
 
     public function complete(ToolCall $result): void
     {
         $output = $result->hasResult() ? $result->getResult() : null;
         $error = $output instanceof ToolOutput && $output->isError() ? $output->getText() : null;
-        $this->display(true, $error);
+        $this->display($error);
     }
 
-    private function display(bool $completed, ?string $error = null): void
+    private function display(?string $error = null): void
     {
         $this->clear();
-        $style = new Style(color: $error !== null ? Theme::ERROR : ($completed ? Theme::SUCCESS : Theme::ACCENT));
-        $symbol = $error !== null ? '! ' : ($completed ? '● ' : '◆ ');
+        $style = new Style(color: $error !== null ? Theme::ERROR : Theme::ACCENT);
+        $symbol = $error !== null ? '! ' : '● ';
         $title = $style->apply($symbol . StringUtils::stripControlBytes($this->tool->getName()));
         $inputs = $this->tool->getInputs();
         $nested = false;

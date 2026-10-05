@@ -5,6 +5,7 @@
     "license": "MIT",
     "require": {
         "php": ">=8.4.1",
+        "amphp/http-client": "^5.0",
         "asterixcapri/neuron-tui": "1.x-dev",
         "symfony/dotenv": "^8.1"
     },

@@ -22,6 +22,7 @@ use Symfony\Component\Tui\Terminal\ScreenBuffer;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 use Symfony\Component\Tui\Tui as SymfonyTui;
 
+use function count;
 use function explode;
 use function implode;
 use function rtrim;
@@ -31,6 +32,46 @@ use function trim;
 
 final class TuiTest extends TestCase
 {
+    public function testWorkingIndicatorAnimatesAndReturnsToReady(): void
+    {
+        $agent = Agent::make()->setAiProvider(new FakeAIProvider());
+        $sent = false;
+        $frames = [];
+        $draftSent = false;
+        $sawDraftWhileWorking = false;
+        $this->runApplication($agent, function (VirtualTerminal $terminal, string $screen) use (&$sent, &$frames, &$draftSent, &$sawDraftWhileWorking): bool {
+            if (!$sent) {
+                $terminal->simulateInput("Animate\r");
+                $sent = true;
+
+                return false;
+            }
+            $lines = explode("\n", $screen);
+            if (str_contains($lines[35], 'Working')) {
+                $frames[rtrim($lines[35])] = true;
+                if (!$draftSent) {
+                    $terminal->simulateInput("Next question\r");
+                    $draftSent = true;
+                } elseif (str_contains($lines[37], 'Next question')) {
+                    $sawDraftWhileWorking = true;
+                }
+            } elseif ($frames !== [] && str_contains($lines[35], 'Ready')) {
+                self::assertGreaterThanOrEqual(2, count($frames));
+                self::assertSame('✻ Ready', rtrim($lines[35]));
+                self::assertTrue($sawDraftWhileWorking);
+                self::assertSame('❯ Next question', rtrim($lines[37]));
+
+                return true;
+            }
+
+            return false;
+        }, function (MainView $view): void {
+            $view->onInput(function (string $input) use ($view): void {
+                EventLoop::delay(0.3, $view->finishTurn(...));
+            });
+        });
+    }
+
     public function testMouseWheelRevealsOlderMessagesAndKeepsComposerFixed(): void
     {
         $agent = Agent::make()->setThreadId('mouse-scroll')->setAiProvider(new FakeAIProvider());
@@ -245,7 +286,7 @@ final class TuiTest extends TestCase
                 $terminal->simulateInput("New question\r");
                 $stage = 1;
             } elseif ($stage === 1 && str_contains($screen, 'Working')) {
-                self::assertSame('● Working…', rtrim($lines[35]));
+                self::assertMatchesRegularExpression('/^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] Working…$/u', rtrim($lines[35]));
                 $stage = 2;
             } elseif ($stage === 2 && str_contains($screen, 'Last response') && !str_contains($screen, 'Working')) {
                 self::assertSame('✻ Ready', rtrim($lines[35]));

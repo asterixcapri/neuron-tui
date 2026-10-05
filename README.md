@@ -28,8 +28,9 @@ The conversation occupies the upper area, with the input bar fixed at the bottom
 and the working indicator immediately above it.
 
 Enter sends a message. Responses stream into the terminal, with tool activity
-and errors displayed in the conversation. Ctrl+C exits. Input is unavailable
-while the Agent responds. Each TUI instance runs once.
+and errors displayed in the conversation. Ctrl+C exits. You can write the next
+message while the Agent responds; Enter sends it once the current turn has
+finished. Each TUI instance runs once.
 
 User messages use a highlighted row with `❯`; Agent responses use `●`. Tool
 calls and results have separate indicators and colors, as do notifications,
@@ -65,7 +66,9 @@ php examples/basic.php
 ```
 
 Create `examples/.env` with `OPENAI_API_KEY`, loaded through Symfony Dotenv.
-The example selects its model directly in `basic.php`. The environment file is
+The example selects its model directly in `basic.php` and uses Neuron's
+`AmpHttpClient` so network waits allow input and the spinner to keep updating.
+The environment file is
 ignored by Git.
 
 ## Development

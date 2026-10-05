@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use NeuronAI\Agent\Agent;
+use NeuronAI\HttpClient\Amp\AmpHttpClient;
 use NeuronAI\Providers\OpenAI\Responses\OpenAIResponses;
 use NeuronAI\Tools\Toolkits\FileSystem\FileSystemToolkit;
 use NeuronTui\Tui;
@@ -24,7 +25,8 @@ $agent = Agent::make()
 
 $agent->setAiProvider(new OpenAIResponses(
     key: $key,
-    model: 'gpt-5.4-nano'
+    model: 'gpt-5.4-nano',
+    httpClient: new AmpHttpClient(),
 ));
 
 Tui::make($agent)

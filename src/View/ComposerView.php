@@ -17,6 +17,7 @@ final class ComposerView extends ContainerWidget
 {
     private readonly InputWidget $input;
     private readonly TextWidget $status;
+    private readonly WorkingView $working;
 
     public function __construct()
     {
@@ -27,7 +28,8 @@ final class ComposerView extends ContainerWidget
         $prompt = (new Style(color: Theme::PROMPT))->apply('❯') . $inputStyle->getAnsiRestore() . ' ';
         $this->input = (new InputWidget())->setPrompt($prompt)->setStyle($inputStyle);
         $this->status = (new TextWidget('✻ Ready'))->setStyle(new Style(color: Theme::MUTED));
-        $this->add($this->status)->add($this->input);
+        $this->working = (new WorkingView())->setStyle(new Style(hidden: true));
+        $this->add($this->status)->add($this->working)->add($this->input);
         $this->add((new TextWidget('Enter to send · Ctrl+C to exit', truncate: true))
             ->setStyle(new Style(color: Theme::MUTED)));
     }
@@ -46,11 +48,15 @@ final class ComposerView extends ContainerWidget
     public function beginTurn(): void
     {
         $this->input->setValue('');
-        $this->status->setText('● Working…')->setStyle(new Style(color: Theme::ACCENT));
+        $this->status->setStyle(new Style(color: Theme::MUTED, hidden: true));
+        $this->working->setStyle(new Style(hidden: false));
+        $this->working->start();
     }
 
     public function finishTurn(): void
     {
-        $this->status->setText('✻ Ready')->setStyle(new Style(color: Theme::MUTED));
+        $this->working->stop();
+        $this->working->setStyle(new Style(hidden: true));
+        $this->status->setStyle(new Style(color: Theme::MUTED, hidden: false));
     }
 }
