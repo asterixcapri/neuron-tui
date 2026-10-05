@@ -25,6 +25,27 @@ use function substr_count;
 
 final class HistoryViewTest extends TestCase
 {
+    public function testScrollingKeepsReadingPositionWhileResponseGrows(): void
+    {
+        $history = new HistoryView();
+        $history->beginTurn('Question');
+        $history->appendResponse("Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6");
+        $renderer = new Renderer();
+        $context = new RenderContext(40, 3);
+        $renderer->renderWidget($history, $context);
+        $history->scroll(3);
+        $before = $renderer->renderWidget($history, $context);
+        $history->appendResponse("\nLine 7\nLine 8");
+        self::assertSame($before, $renderer->renderWidget($history, $context));
+        $history->scroll(-100);
+        $latest = AnsiUtils::stripAnsiCodes(implode("\n", $renderer->renderWidget($history, $context)));
+        self::assertStringContainsString('Line 8', $latest);
+        $history->scroll(100);
+        self::assertStringContainsString('❯ Question', AnsiUtils::stripAnsiCodes(implode("\n", $renderer->renderWidget($history, $context))));
+        $history->load([new UserMessage('New history')]);
+        self::assertStringContainsString('❯ New history', AnsiUtils::stripAnsiCodes(implode("\n", $renderer->renderWidget($history, $context))));
+    }
+
     public function testAgentMarkdownIsRenderedDuringStreamingAndWhenLoaded(): void
     {
         $markdown = "**Hello** with `code`\n\n- First item\n- Second item\n\n```php\necho 'Hi';\n```";
