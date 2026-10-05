@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use NeuronAI\Agent\Agent;
 use NeuronAI\Providers\OpenAI\Responses\OpenAIResponses;
+use NeuronAI\Tools\Toolkits\FileSystem\FileSystemToolkit;
 use NeuronTui\Tui;
 use Symfony\Component\Dotenv\Dotenv;
 
@@ -18,7 +19,8 @@ if (!\is_string($key) || \trim($key) === '') {
 }
 
 $agent = Agent::make()
-    ->setThreadId('demo');
+    ->setThreadId('demo')
+    ->addTool(FileSystemToolkit::make(__DIR__));
 
 $agent->setAiProvider(new OpenAIResponses(
     key: $key,

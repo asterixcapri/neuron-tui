@@ -24,6 +24,7 @@ use Symfony\Component\Tui\Tui as SymfonyTui;
 
 use function explode;
 use function implode;
+use function rtrim;
 use function str_contains;
 use function str_repeat;
 use function trim;
@@ -45,7 +46,7 @@ final class TuiTest extends TestCase
                 $terminal->simulateInput("First question\r");
                 $stage = 1;
             } elseif ($stage === 1) {
-                $sawPartial = $sawPartial || (str_contains($screen, 'Agent › Hello') && !str_contains($screen, 'Hello world'));
+                $sawPartial = $sawPartial || (str_contains($screen, '● Hello') && !str_contains($screen, 'Hello world'));
                 if (str_contains($screen, 'Hello world') && !str_contains($screen, 'Working')) {
                     $terminal->simulateInput("Second question\r");
                     $stage = 2;
@@ -86,7 +87,7 @@ final class TuiTest extends TestCase
             }
             return str_contains($screen, 'It is sunny') && !str_contains($screen, 'Working');
         });
-        self::assertStringContainsString('Tool › weather completed', $screen);
+        self::assertStringContainsString('└ weather completed', $screen);
         self::assertStringContainsString('Checking', $screen);
         $provider->assertCallCount(2);
     }
@@ -100,14 +101,14 @@ final class TuiTest extends TestCase
             if ($stage === 0) {
                 $terminal->simulateInput("Fail\r");
                 $stage = 1;
-            } elseif ($stage === 1 && str_contains($screen, 'Error ›')) {
+            } elseif ($stage === 1 && str_contains($screen, '! FakeAIProvider')) {
                 $provider->addResponses(new AssistantMessage('Recovered'));
                 $terminal->simulateInput("Try again\r");
                 $stage = 2;
             }
             return str_contains($screen, 'Recovered') && !str_contains($screen, 'Working');
         });
-        self::assertStringContainsString('Error ›', $screen);
+        self::assertStringContainsString('! FakeAIProvider', $screen);
         self::assertStringContainsString('Recovered', $screen);
     }
 
@@ -120,7 +121,7 @@ final class TuiTest extends TestCase
             if (!$sent) {
                 $terminal->simulateInput("Start\r");
                 $sent = true;
-            } elseif (str_contains($screen, 'Working') && str_contains($screen, 'Agent ›')) {
+            } elseif (str_contains($screen, 'Working') && str_contains($screen, '● Long')) {
                 $terminal->simulateInput("Ignored\r");
                 return true;
             }
@@ -200,16 +201,17 @@ final class TuiTest extends TestCase
         $this->runApplication($agent, function (VirtualTerminal $terminal, string $screen) use (&$stage): bool {
             $lines = explode("\n", $screen);
             self::assertSame('Enter to send · Ctrl+C to exit', trim($lines[39]));
-            self::assertSame('›', trim($lines[37]));
+            self::assertSame('❯', trim($lines[37]));
+            self::assertStringStartsWith('❯', $lines[37]);
             if ($stage === 0) {
-                self::assertSame('Ready', trim($lines[35]));
+                self::assertSame('✻ Ready', rtrim($lines[35]));
                 $terminal->simulateInput("New question\r");
                 $stage = 1;
             } elseif ($stage === 1 && str_contains($screen, 'Working')) {
-                self::assertSame('● Working…', trim($lines[35]));
+                self::assertSame('● Working…', rtrim($lines[35]));
                 $stage = 2;
             } elseif ($stage === 2 && str_contains($screen, 'Last response') && !str_contains($screen, 'Working')) {
-                self::assertSame('Ready', trim($lines[35]));
+                self::assertSame('✻ Ready', rtrim($lines[35]));
                 return true;
             }
             return false;
@@ -232,11 +234,12 @@ final class TuiTest extends TestCase
             } elseif ($stage === 2) {
                 $lines = explode("\n", $screen);
                 self::assertCount(18, $lines);
-                self::assertSame('›', trim($lines[15]));
+                self::assertSame('❯', trim($lines[15]));
+                self::assertStringStartsWith('❯', $lines[15]);
                 self::assertSame('Enter to send · Ctrl+C to exit', trim($lines[17]));
                 self::assertStringContainsString('Neuron TUI', $lines[0]);
                 if (str_contains($screen, 'Latest response') && !str_contains($screen, 'Working')) {
-                    self::assertSame('Ready', trim($lines[13]));
+                    self::assertSame('✻ Ready', rtrim($lines[13]));
                     return true;
                 }
             }

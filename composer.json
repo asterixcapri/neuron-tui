@@ -11,8 +11,10 @@
     ],
     "require": {
         "php": ">=8.4.1",
+        "league/commonmark": "^2.9",
         "neuron-core/neuron-ai": "^4.0",
-        "symfony/tui": "^8.1.8"
+        "symfony/tui": "^8.1.8",
+        "tempest/highlight": "^2.16"
     },
     "require-dev": {
         "friendsofphp/php-cs-fixer": "^3.95",
