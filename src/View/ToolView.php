@@ -41,7 +41,7 @@ final class ToolView extends ContainerWidget
     private function display(bool $completed, ?string $error = null): void
     {
         $this->clear();
-        $style = new Style(color: $error !== null ? '#e88b8b' : ($completed ? '#91b99a' : '#d99a70'));
+        $style = new Style(color: $error !== null ? Theme::ERROR : ($completed ? Theme::SUCCESS : Theme::ACCENT));
         $symbol = $error !== null ? '! ' : ($completed ? '● ' : '◆ ');
         $title = $style->apply($symbol . StringUtils::stripControlBytes($this->tool->getName()));
         $inputs = $this->tool->getInputs();
@@ -52,7 +52,7 @@ final class ToolView extends ContainerWidget
                 break;
             }
         }
-        $parameterStyle = new Style(color: '#bbbbbb');
+        $parameterStyle = new Style(color: Theme::SECONDARY);
         if (!$nested && $inputs !== []) {
             $parameters = [];
             foreach ($inputs as $name => $value) {
@@ -63,11 +63,11 @@ final class ToolView extends ContainerWidget
         $this->add(new TextWidget($title));
         if ($nested) {
             $this->add((new TextWidget($this->encode($inputs, pretty: true)))
-                ->setStyle(new Style(padding: new Padding(0, 0, 0, 2), color: '#bbbbbb')));
+                ->setStyle(new Style(padding: new Padding(0, 0, 0, 2), color: Theme::SECONDARY)));
         }
         if ($error !== null) {
             $this->add((new TextWidget('└ ' . StringUtils::stripControlBytes($error)))
-                ->setStyle(new Style(padding: new Padding(0, 0, 0, 2), color: '#e88b8b')));
+                ->setStyle(new Style(padding: new Padding(0, 0, 0, 2), color: Theme::ERROR)));
         }
     }
 

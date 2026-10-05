@@ -7,6 +7,7 @@ namespace NeuronTui;
 use LogicException;
 use NeuronAI\Agent\Agent;
 use NeuronTui\View\MainView;
+use NeuronTui\View\Theme;
 use RuntimeException;
 use Symfony\Component\Tui\Terminal\Terminal;
 use Symfony\Component\Tui\Tui as SymfonyTui;
@@ -56,6 +57,7 @@ final class Tui
             throw new RuntimeException('Neuron TUI requires an interactive TTY.');
         }
         $this->started = true;
+        $this->tui->addStyleSheet(Theme::styleSheet());
         $this->tui->add($this->mainView);
         $this->tui->addListener($this->mainView->handleInput(...));
         $this->mainView->focus();
