@@ -1,45 +1,14 @@
 {
-    "name": "asterixcapri/neuron-tui-demo",
-    "description": "Demo Host Application for the Neuron TUI.",
+    "name": "asterixcapri/neuron-tui-example",
+    "description": "Basic usage example for Neuron TUI.",
     "type": "project",
     "license": "MIT",
     "require": {
-        "php": "^8.4.1",
-        "amphp/http-client": "^5.3",
-        "asterixcapri/neuron-interaction": "1.x-dev",
+        "php": ">=8.4.1",
         "asterixcapri/neuron-tui": "1.x-dev",
-        "neuron-core/neuron-ai": "^4.0",
         "symfony/dotenv": "^8.1"
     },
-    "autoload": {
-        "psr-4": {
-            "NeuronTuiDemo\\": "src/"
-        }
-    },
-    "scripts": {
-        "basic": "php bin/basic.php",
-        "stop": "php bin/stop.php",
-        "sessions": "php bin/sessions.php",
-        "model": "php bin/model.php",
-        "messages": "php bin/messages.php",
-        "full": "php bin/full.php",
-        "stan": "phpstan analyse --no-progress --memory-limit=512M",
-        "test": "phpunit"
-    },
-    "config": {
-        "sort-packages": true
-    },
     "repositories": [
-        {
-            "type": "path",
-            "url": "../../neuron-interaction",
-            "options": {
-                "symlink": true,
-                "versions": {
-                    "asterixcapri/neuron-interaction": "1.x-dev"
-                }
-            }
-        },
         {
             "type": "path",
             "url": "..",
@@ -51,13 +20,7 @@
             }
         }
     ],
-    "require-dev": {
-        "phpstan/phpstan": "^2.1",
-        "phpunit/phpunit": "^13.0"
-    },
-    "autoload-dev": {
-        "psr-4": {
-            "NeuronTuiDemo\\Tests\\": "tests/"
-        }
+    "config": {
+        "sort-packages": true
     }
 }

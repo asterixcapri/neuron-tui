@@ -11,12 +11,8 @@
     ],
     "require": {
         "php": ">=8.4.1",
-        "amphp/amp": "^3.0",
-        "asterixcapri/neuron-interaction": "1.x-dev",
-        "league/commonmark": "^2.10",
         "neuron-core/neuron-ai": "^4.0",
-        "symfony/tui": "^8.1.2",
-        "tempest/highlight": "^2.16"
+        "symfony/tui": "^8.1.8"
     },
     "require-dev": {
         "friendsofphp/php-cs-fixer": "^3.95",
@@ -41,17 +37,5 @@
     },
     "config": {
         "sort-packages": true
-    },
-    "repositories": [
-        {
-            "type": "path",
-            "url": "../neuron-interaction",
-            "options": {
-                "symlink": true,
-                "versions": {
-                    "asterixcapri/neuron-interaction": "1.x-dev"
-                }
-            }
-        }
-    ]
+    }
 }

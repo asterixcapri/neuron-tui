@@ -1,6 +1,5 @@
-/.env
 /vendor/
-/.storage
-/.phpunit.cache/
 /composer.lock
-/.phpstan.cache/
+/.env
+/.env.local
+/.env.*.local
