@@ -17,6 +17,7 @@ use Symfony\Component\Tui\Widget\ContainerWidget;
 use Throwable;
 
 use function preg_match;
+use function trim;
 
 /** @internal */
 final class MainView extends ContainerWidget
@@ -100,7 +101,7 @@ final class MainView extends ContainerWidget
         if ($event->isBlank() || $this->busy || $this->onInput === null) {
             return;
         }
-        $prompt = $event->getValue();
+        $prompt = trim($event->getValue());
         $this->busy = true;
         $this->composer->beginTurn();
         $this->history->beginTurn($prompt);

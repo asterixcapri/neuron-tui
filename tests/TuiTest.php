@@ -32,6 +32,36 @@ use function trim;
 
 final class TuiTest extends TestCase
 {
+    public function testComposerGrowsForNewlinesAndSubmitsTheWholeMessage(): void
+    {
+        $provider = new FakeAIProvider(new AssistantMessage('Received both lines'));
+        $agent = Agent::make()->setAiProvider($provider);
+        $stage = 0;
+        $this->runApplication($agent, function (VirtualTerminal $terminal, string $screen) use (&$stage): bool {
+            $lines = explode("\n", $screen);
+            if ($stage === 0) {
+                $terminal->simulateInput("  First line\x1b[13;2uSecond line  ");
+                $stage = 1;
+            } elseif ($stage === 1 && str_contains($screen, 'Second line')) {
+                self::assertSame('✻ Ready', rtrim($lines[34]));
+                self::assertSame('❯   First line', rtrim($lines[36]));
+                self::assertSame('  Second line', rtrim($lines[37]));
+                self::assertSame('Enter send · Shift+Enter newline · Ctrl+C exit', rtrim($lines[39]));
+                $terminal->simulateInput("\r");
+                $stage = 2;
+            } elseif ($stage === 2 && str_contains($screen, 'Received both lines') && !str_contains($screen, 'Working')) {
+                self::assertSame('✻ Ready', rtrim($lines[35]));
+                self::assertSame('❯', rtrim($lines[37]));
+
+                return true;
+            }
+
+            return false;
+        });
+        self::assertSame("First line\nSecond line", $provider->getRecorded()[0]->messages[0]->getContent());
+        $provider->assertCallCount(1);
+    }
+
     public function testWorkingIndicatorAnimatesAndReturnsToReady(): void
     {
         $agent = Agent::make()->setAiProvider(new FakeAIProvider());
@@ -278,7 +308,7 @@ final class TuiTest extends TestCase
         $stage = 0;
         $this->runApplication($agent, function (VirtualTerminal $terminal, string $screen) use (&$stage): bool {
             $lines = explode("\n", $screen);
-            self::assertSame('Enter to send · Ctrl+C to exit', trim($lines[39]));
+            self::assertSame('Enter send · Shift+Enter newline · Ctrl+C exit', trim($lines[39]));
             self::assertSame('❯', trim($lines[37]));
             self::assertStringStartsWith('❯', $lines[37]);
             if ($stage === 0) {
@@ -314,7 +344,7 @@ final class TuiTest extends TestCase
                 self::assertCount(18, $lines);
                 self::assertSame('❯', trim($lines[15]));
                 self::assertStringStartsWith('❯', $lines[15]);
-                self::assertSame('Enter to send · Ctrl+C to exit', trim($lines[17]));
+                self::assertSame('Enter send · Shift+Enter newline · Ctrl+C exit', trim($lines[17]));
                 self::assertStringContainsString('Neuron TUI', $lines[0]);
                 if (str_contains($screen, 'Latest response') && !str_contains($screen, 'Working')) {
                     self::assertSame('✻ Ready', rtrim($lines[13]));

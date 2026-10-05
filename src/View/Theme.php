@@ -31,6 +31,7 @@ final class Theme implements TerminalTheme
     public static function styleSheet(): StyleSheet
     {
         return new StyleSheet([
+            ComposerInputView::class . '::frame' => new Style(color: self::BORDER),
             WorkingView::class . '::spinner' => new Style(color: self::ACCENT),
             WorkingView::class . '::message' => new Style(color: self::ACCENT),
             MarkdownWidget::class . '::heading' => new Style(color: self::ACCENT, bold: true),
