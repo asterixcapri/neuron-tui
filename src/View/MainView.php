@@ -92,8 +92,6 @@ final class MainView extends ContainerWidget
         } elseif ($this->keys->matches($data, 'stop') && $this->busy) {
             $this->onEscape?->__invoke();
             $event->stopPropagation();
-        } elseif ($this->busy) {
-            $event->stopPropagation();
         }
     }
 

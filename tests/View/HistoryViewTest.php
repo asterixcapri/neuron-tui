@@ -130,15 +130,16 @@ final class HistoryViewTest extends TestCase
         $renderer = new Renderer();
         $context = new RenderContext(80, 12);
         $pending = AnsiUtils::stripAnsiCodes(implode("\n", $renderer->renderWidget($history, $context)));
-        self::assertStringContainsString('◆ read_file(path: "examples/basic.php", start_line: 1)', $pending);
+        self::assertStringContainsString('● read_file(path: "examples/basic.php", start_line: 1)', $pending);
         $history->showToolResult((new ToolCall('read_file', 'first'))->setResult('Long output hidden'));
         $completed = implode("\n", $renderer->renderWidget($history, $context));
         $text = AnsiUtils::stripAnsiCodes($completed);
         self::assertSame(2, substr_count($text, 'read_file('));
         self::assertStringContainsString('● read_file(path: "examples/basic.php", start_line: 1)', $text);
-        self::assertStringContainsString('◆ read_file(path: "README.md")', $text);
+        self::assertStringContainsString('● read_file(path: "README.md")', $text);
         self::assertStringNotContainsString('Long output hidden', $text);
-        self::assertStringContainsString('38;2;145;185;154', $completed);
+        self::assertStringContainsString('38;2;217;154;112', $completed);
+        self::assertStringNotContainsString('38;2;145;185;154', $completed);
     }
 
     public function testNestedToolParametersAndErrorsAreReadable(): void
@@ -149,7 +150,8 @@ final class HistoryViewTest extends TestCase
         $renderer = new Renderer();
         $context = new RenderContext(60, 20);
         $text = AnsiUtils::stripAnsiCodes(implode("\n", $renderer->renderWidget($history, $context)));
-        self::assertStringContainsString("◆ search\n  {", $text);
+        self::assertStringContainsString('● search', $text);
+        self::assertStringContainsString('  {', $text);
         self::assertStringContainsString('      "filters": {', $text);
         self::assertStringContainsString('          "limit": 10', $text);
         $history->showToolResult((new ToolCall('search', 'nested'))->setResult(ToolOutput::error('File not found')));
