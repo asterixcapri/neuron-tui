@@ -28,7 +28,9 @@ The conversation occupies the upper area, with the input bar fixed at the bottom
 and the working indicator immediately above it.
 
 Enter sends a message. Responses stream into the terminal, with tool activity
-and errors displayed in the conversation. Ctrl+C exits. You can write the next
+and errors displayed in the conversation. Shift+Enter inserts a newline; the
+composer grows with the text, keeping its prompt aligned at the top.
+Ctrl+C exits. You can write the next
 message while the Agent responds; Enter sends it once the current turn has
 finished. Each TUI instance runs once.
 
