@@ -11,6 +11,7 @@
     ],
     "require": {
         "php": ">=8.4.1",
+        "asterixcapri/neuron-interaction": "1.x-dev",
         "league/commonmark": "^2.9",
         "neuron-core/neuron-ai": "^4.0",
         "symfony/tui": "^8.1.8",

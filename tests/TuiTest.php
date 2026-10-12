@@ -16,6 +16,9 @@ use NeuronAI\Providers\ProviderResponse;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Tools\Tool;
 use NeuronAI\Tools\ToolCall;
+use NeuronInteraction\Conversation;
+use NeuronInteraction\Session\SessionStore;
+use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Tui;
 use NeuronTui\View\MainView;
 use PHPUnit\Framework\TestCase;
@@ -214,9 +217,10 @@ final class TuiTest extends TestCase
         $agent = Agent::make()->setThreadId('existing')->setAiProvider($provider);
         $agent->getChatHistory()->addMessage(new UserMessage('Earlier question'));
         $agent->getChatHistory()->addMessage(new AssistantMessage('Earlier answer'));
+        $conversation = $this->conversation($agent);
         $stage = 0;
         $sawPartial = false;
-        $screen = $this->runApplication($agent, function (
+        $screen = $this->runApplication($conversation, function (
             VirtualTerminal $terminal,
             string $screen,
         ) use (&$stage, &$sawPartial): bool {
@@ -240,8 +244,8 @@ final class TuiTest extends TestCase
         self::assertTrue($sawPartial, 'The answer should appear before the stream completes.');
         self::assertStringContainsString('Second answer', $screen);
         $provider->assertCallCount(2);
-        self::assertSame('existing', $agent->getThreadId());
-        self::assertCount(6, $agent->getChatHistory()->getMessages());
+        self::assertSame($conversation->session()->getKey(), $conversation->agent()->getThreadId());
+        self::assertCount(6, $conversation->getMessages());
         self::assertSame('Earlier question', $provider->getRecorded()[0]->messages[0]->getContent());
     }
 
@@ -471,13 +475,24 @@ final class TuiTest extends TestCase
         });
     }
 
+    private function conversation(Agent $agent): Conversation
+    {
+        $messages = $agent->getThreadId() === null ? [] : $agent->getChatHistory()->getMessages();
+        $session = (new SessionStore(new InMemoryStorage(), 'test-user'))->create();
+        $conversation = new Conversation($agent, $session);
+        foreach ($messages as $message) {
+            $conversation->agent()->getChatHistory()->addMessage($message);
+        }
+        return $conversation;
+    }
+
     /**
      * @param Closure(VirtualTerminal, string): bool $step
      * @param Closure(MainView): void|null $configure
      * @param Closure(ScreenBuffer, string): void|null $verify
      */
     private function runApplication(
-        Agent $agent,
+        Agent|Conversation $agent,
         Closure $step,
         ?Closure $configure = null,
         ?Closure $verify = null,
@@ -505,7 +520,8 @@ final class TuiTest extends TestCase
         }
         $driver->method('isVirtual')->willReturn(false);
         $tui = new SymfonyTui(terminal: $driver);
-        $host = Tui::make($agent);
+        $conversation = $agent instanceof Conversation ? $agent : $this->conversation($agent);
+        $host = Tui::make($conversation);
         $view = (new ReflectionProperty(Tui::class, 'mainView'))->getValue($host);
         self::assertInstanceOf(MainView::class, $view);
         $configure?->__invoke($view);

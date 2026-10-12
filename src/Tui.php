@@ -5,15 +5,13 @@ declare(strict_types=1);
 namespace NeuronTui;
 
 use LogicException;
-use NeuronAI\Agent\Agent;
+use NeuronInteraction\Conversation;
 use NeuronTui\View\MainView;
 use NeuronTui\View\Theme;
 use RuntimeException;
 use Symfony\Component\Tui\Terminal\Terminal;
 use Symfony\Component\Tui\Tui as SymfonyTui;
 
-use function bin2hex;
-use function random_bytes;
 use function stream_isatty;
 
 use const STDIN;
@@ -25,19 +23,16 @@ final class Tui
     private SymfonyTui $tui;
     private bool $started = false;
 
-    private function __construct(private readonly Agent $agent)
+    private function __construct(private readonly Conversation $conversation)
     {
-        if ($this->agent->getThreadId() === null) {
-            $this->agent->setThreadId(bin2hex(random_bytes(16)));
-        }
         $this->mainView = new MainView();
         $this->tui = new SymfonyTui();
         $this->wire();
     }
 
-    public static function make(Agent $agent): self
+    public static function make(Conversation $conversation): self
     {
-        return new self($agent);
+        return new self($conversation);
     }
 
     public function setTitle(string $title): self
@@ -57,9 +52,9 @@ final class Tui
     private function wire(): void
     {
         $this->mainView->onInput(function (string $input): void {
-            (new TurnRunner($this->agent, $this->mainView, $this->tui))->run($input);
+            (new TurnRunner($this->conversation, $this->mainView, $this->tui))->run($input);
         });
-        $this->mainView->onHistorySync(fn(): array => $this->agent->getChatHistory()->getMessages());
+        $this->mainView->onHistorySync(fn(): array => $this->conversation->getDisplayMessages());
     }
 
     public function run(): void

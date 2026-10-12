@@ -6,6 +6,9 @@ use NeuronAI\Agent\Agent;
 use NeuronAI\HttpClient\Amp\AmpHttpClient;
 use NeuronAI\Providers\OpenAI\Responses\OpenAIResponses;
 use NeuronAI\Tools\Toolkits\FileSystem\FileSystemToolkit;
+use NeuronInteraction\Conversation;
+use NeuronInteraction\Session\SessionStore;
+use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Tui;
 use Symfony\Component\Dotenv\Dotenv;
 
@@ -29,7 +32,10 @@ $agent->setAiProvider(new OpenAIResponses(
     httpClient: new AmpHttpClient(),
 ));
 
-Tui::make($agent)
+$session = (new SessionStore(new InMemoryStorage(), 'local'))->create();
+$conversation = new Conversation($agent, $session);
+
+Tui::make($conversation)
     ->setTitle('Filesystem Agent')
     ->setDescription('Explore, read and edit files with Neuron AI')
     ->run();

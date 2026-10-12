@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace NeuronTui;
 
-use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
 use NeuronAI\Chat\Messages\Stream\Chunks\ToolCallChunk;
 use NeuronAI\Chat\Messages\Stream\Chunks\ToolResultChunk;
-use NeuronAI\Chat\Messages\UserMessage;
+use NeuronInteraction\Command\NotificationLevel;
+use NeuronInteraction\Conversation;
+use NeuronInteraction\Event\ExitRequest;
+use NeuronInteraction\Event\Notification;
+use NeuronInteraction\Event\SelectionRequest;
+use NeuronInteraction\Event\SessionChanged;
 use NeuronTui\View\MainView;
 use NeuronTui\View\MessageKind;
 use Revolt\EventLoop;
@@ -19,7 +23,7 @@ use Throwable;
 final class TurnRunner
 {
     public function __construct(
-        private readonly Agent $agent,
+        private readonly Conversation $conversation,
         private readonly MainView $view,
         private readonly SymfonyTui $tui,
     ) {}
@@ -37,7 +41,7 @@ final class TurnRunner
     {
         try {
             $this->tui->processRender();
-            $stream = $this->agent->stream(new UserMessage($input));
+            $stream = $this->conversation->sendInput($input);
             foreach ($stream as $chunk) {
                 if (!$this->tui->isRunning()) {
                     return;
@@ -49,6 +53,19 @@ final class TurnRunner
                 } elseif ($chunk instanceof ToolResultChunk) {
                     $this->view->showToolResult($chunk->tool);
                 }
+                if ($chunk instanceof Notification) {
+                    $this->view->notify(
+                        $chunk->text,
+                        $chunk->level === NotificationLevel::Error ? MessageKind::Error : MessageKind::Notice,
+                    );
+                } elseif ($chunk instanceof ExitRequest) {
+                    $this->view->stop();
+                    return;
+                } elseif ($chunk instanceof SessionChanged) {
+                    $this->view->syncHistory();
+                } elseif ($chunk instanceof SelectionRequest) {
+                    $this->view->notify('Interactive selections are not supported by this TUI.', MessageKind::Error);
+                }
                 $this->tui->processRender();
                 // Let terminal input and async providers progress between chunks.
                 $suspension = EventLoop::getSuspension();
@@ -58,7 +75,7 @@ final class TurnRunner
                     return;
                 }
             }
-            if ($stream->getReturn()->isInterrupted()) {
+            if ($stream->getReturn()?->isInterrupted()) {
                 $this->view->notify('Agent paused: approval or external tool results are required.');
             }
         } catch (Throwable $error) {
