@@ -51,8 +51,8 @@ final class ComposerView extends ContainerWidget
             'execute' => [Key::ENTER],
             'dismiss' => [Key::ESCAPE],
         ]);
-        $this->input->onChange(fn(ChangeEvent $event) => $this->commands->update($this->input->getText()));
-        $this->input->onRecall($this->commands->dismiss(...));
+        $this->input->onChange(fn(ChangeEvent $event) => $this->updateCommands());
+        $this->input->onRecall($this->dismissCommands(...));
         $this->status = (new TextWidget('✻ Ready'))->setStyle(new Style(color: Theme::MUTED));
         $this->working = (new WorkingView())->setStyle(new Style(hidden: true));
         $this->queueTitle = (new TextWidget(truncate: true))->setStyle(new Style(color: Theme::TEXT));
@@ -77,7 +77,7 @@ final class ComposerView extends ContainerWidget
         $hidden = $request !== null;
         $this->input->setStyle(new Style(color: Theme::SECONDARY, hidden: $hidden));
         $this->hint->setStyle(new Style(color: Theme::MUTED, hidden: $hidden));
-        $this->commands->dismiss();
+        $this->dismissCommands();
     }
 
     public function focusedInput(): ComposerInputView|InputWidget
@@ -104,7 +104,25 @@ final class ComposerView extends ContainerWidget
     public function onCommands(Closure $commands): void
     {
         $this->commands->onCommands($commands);
+        $this->updateCommands();
+    }
+
+    private function updateCommands(): void
+    {
         $this->commands->update($this->input->getText());
+        $this->updateStatus();
+    }
+
+    private function dismissCommands(): void
+    {
+        $this->commands->dismiss();
+        $this->updateStatus();
+    }
+
+    private function updateStatus(): void
+    {
+        $hidden = $this->working->getStyle()?->getHidden() === false || $this->commands->selectedName() !== null;
+        $this->status->setStyle(new Style(color: Theme::MUTED, hidden: $hidden));
     }
 
     /** @param Closure(): (list<UserMessage>|null) $history */
@@ -137,13 +155,13 @@ final class ComposerView extends ContainerWidget
         } elseif ($this->keys->matches($data, 'next')) {
             $this->commands->move(1);
         } elseif ($this->keys->matches($data, 'dismiss')) {
-            $this->commands->dismiss();
+            $this->dismissCommands();
         } elseif ($this->keys->matches($data, 'complete')) {
             $this->input->setText($name . ' ');
             $this->input->handleInput("\x1b[F");
         } elseif ($this->keys->matches($data, 'execute')) {
             $this->input->setText($name);
-            $this->commands->dismiss();
+            $this->dismissCommands();
             $this->input->handleInput($data);
         } else {
             return false;
@@ -186,6 +204,6 @@ final class ComposerView extends ContainerWidget
     {
         $this->working->stop();
         $this->working->setStyle(new Style(hidden: true));
-        $this->status->setStyle(new Style(color: Theme::MUTED, hidden: false));
+        $this->updateStatus();
     }
 }
