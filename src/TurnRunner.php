@@ -25,7 +25,7 @@ final class TurnRunner
 {
     public function __construct(
         private readonly Conversation $conversation,
-        private readonly MainView $view,
+        private readonly MainView $mainView,
         private readonly SymfonyTui $tui,
     ) {}
 
@@ -48,24 +48,24 @@ final class TurnRunner
                     return;
                 }
                 if ($chunk instanceof TextChunk) {
-                    $this->view->appendResponse($chunk->content);
+                    $this->mainView->appendResponse($chunk->content);
                 } elseif ($chunk instanceof ToolCallChunk) {
-                    $this->view->showToolCall($chunk->tool);
+                    $this->mainView->showToolCall($chunk->tool);
                 } elseif ($chunk instanceof ToolResultChunk) {
-                    $this->view->showToolResult($chunk->tool);
+                    $this->mainView->showToolResult($chunk->tool);
                 }
                 if ($chunk instanceof Notification) {
-                    $this->view->notify(
+                    $this->mainView->notify(
                         $chunk->text,
                         $chunk->level === NotificationLevel::Error ? MessageKind::Error : MessageKind::Notice,
                     );
                 } elseif ($chunk instanceof ExitRequest) {
-                    $this->view->stop();
+                    $this->mainView->stop();
                     return;
                 } elseif ($chunk instanceof SessionChanged) {
-                    $this->view->syncHistory();
+                    $this->mainView->syncHistory();
                 } elseif ($chunk instanceof SelectionRequest) {
-                    $this->view->showSelection($chunk);
+                    $this->mainView->showSelection($chunk);
                 }
                 $this->tui->processRender();
                 // Let terminal input and async providers progress between chunks.
@@ -77,12 +77,12 @@ final class TurnRunner
                 }
             }
             if ($stream->getReturn()?->isInterrupted()) {
-                $this->view->notify('Agent paused: approval or external tool results are required.');
+                $this->mainView->notify('Agent paused: approval or external tool results are required.');
             }
         } catch (Throwable $error) {
-            $this->view->notify($error->getMessage(), MessageKind::Error);
+            $this->mainView->notify($error->getMessage(), MessageKind::Error);
         } finally {
-            $this->view->finishTurn();
+            $this->mainView->finishTurn();
         }
     }
 }
