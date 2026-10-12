@@ -149,6 +149,10 @@ Ctrl+P/Ctrl+N for multiline inputs. Moving past the newest entry restores the
 draft. Editing a recalled input starts a new draft. Arrow keys keep their normal
 editing behavior in multiline inputs and their selection behavior in menus.
 
+Press Esc during a response in the advanced example to request a stop. The text
+received so far remains in the session. Esc first closes an open command menu or
+cancels a selection; press it with those closed to stop the response.
+
 Enable recall in your Host Application before creating the TUI:
 
 ```php

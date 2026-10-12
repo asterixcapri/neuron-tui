@@ -58,6 +58,7 @@ final class Tui
         $this->mainView->onCommands(fn(): array => $this->conversation->commands()->all());
         $this->mainView->onHistorySync(fn(): array => $this->conversation->getDisplayMessages());
         $this->mainView->onInputHistory(fn(): ?array => $this->conversation->inputHistory()?->list());
+        $this->mainView->onEscape(fn(): bool => $this->conversation->requestInterruption());
     }
 
     public function run(): void

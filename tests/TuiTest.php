@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronTui\Tests;
 
+use ArrayIterator;
 use Closure;
 use Generator;
 use NeuronAI\Agent\Agent;
@@ -12,6 +13,10 @@ use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\Stream\Chunks\StreamChunk;
 use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\UserMessage;
+use NeuronAI\HttpClient\HttpClientInterface;
+use NeuronAI\HttpClient\StoppableHttpClient;
+use NeuronAI\HttpClient\StreamInterface;
+use NeuronAI\Providers\OpenAI\Responses\OpenAIResponses;
 use NeuronAI\Providers\ProviderResponse;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Tools\Tool;
@@ -27,6 +32,7 @@ use NeuronInteraction\Command\SelectionOption;
 use NeuronInteraction\Conversation;
 use NeuronInteraction\Event\SelectionRequest;
 use NeuronInteraction\InputHistory\InputHistory;
+use NeuronInteraction\Interruption\StopSignal;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Tui;
@@ -41,16 +47,20 @@ use Symfony\Component\Tui\Terminal\TerminalInterface;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 use Symfony\Component\Tui\Tui as SymfonyTui;
 
+use function array_map;
 use function array_merge;
 use function count;
 use function explode;
 use function implode;
+use function json_encode;
 use function rtrim;
 use function str_contains;
 use function str_repeat;
 use function str_replace;
 use function strpos;
 use function trim;
+
+use const JSON_THROW_ON_ERROR;
 
 final class TuiTest extends TestCase
 {
@@ -431,6 +441,72 @@ final class TuiTest extends TestCase
         self::assertSame(6, $stage);
         self::assertStringContainsString('/theme — Change the theme', $screen);
         $provider->assertNothingSent();
+    }
+
+    public function testEscapeStopsTheProviderAndPreservesThePartialResponse(): void
+    {
+        $events = [
+            ['type' => 'response.output_item.added', 'item' => ['type' => 'message', 'id' => 'msg_1', 'content' => []]],
+            ['type' => 'response.output_text.delta', 'item_id' => 'msg_1', 'delta' => 'Partial answer'],
+            ['type' => 'response.output_text.delta', 'item_id' => 'msg_1', 'delta' => ' unwanted continuation'],
+            ['type' => 'response.completed', 'response' => []],
+        ];
+        $lines = array_map(static fn(array $event): string => 'data: ' . json_encode($event, JSON_THROW_ON_ERROR) . "\n", $events);
+        $reader = new ArrayIterator($lines);
+        $closed = false;
+        $native = $this->createStub(StreamInterface::class);
+        $native->method('eof')->willReturnCallback(static fn(): bool => !$reader->valid());
+        $native->method('readLine')->willReturnCallback(static function () use ($reader): string {
+            if (!$reader->valid()) {
+                return '';
+            }
+            $line = $reader->current();
+            $reader->next();
+            return $line;
+        });
+        $native->method('close')->willReturnCallback(static function () use (&$closed): void {
+            $closed = true;
+        });
+        $httpClient = $this->createStub(HttpClientInterface::class);
+        $httpClient->method('stream')->willReturn($native);
+        $signal = new StopSignal(new InMemoryStorage(), 'response');
+        $callback = $signal->stopCallback(onPoll: static function (): void {
+            // Let the terminal deliver Esc while the provider is streaming.
+            $suspension = EventLoop::getSuspension();
+            EventLoop::delay(0.003, static fn() => $suspension->resume());
+            $suspension->suspend();
+        }, pollInterval: 0);
+        $provider = new OpenAIResponses(
+            key: 'test-key',
+            model: 'test-model',
+            httpClient: new StoppableHttpClient($httpClient, $callback),
+        );
+        $conversation = $this->conversation(Agent::make()->setAiProvider($provider));
+        $conversation->setStopSignal($signal);
+        $stage = 0;
+
+        $screen = $this->runApplication($conversation, function (VirtualTerminal $terminal, string $screen) use (&$stage): bool {
+            if ($stage === 0) {
+                $terminal->simulateInput("Question\r");
+                $stage = 1;
+            } elseif ($stage === 1 && str_contains($screen, 'Partial answer')) {
+                $terminal->simulateInput("\x1b");
+                $stage = 2;
+            } elseif ($stage === 2 && str_contains($screen, 'Ready') && str_contains($screen, 'Response stopped.')) {
+                return true;
+            }
+            return false;
+        });
+
+        self::assertSame(2, $stage);
+        self::assertTrue($closed);
+        self::assertTrue($conversation->responseWasStopped());
+        self::assertStringNotContainsString('unwanted continuation', $screen);
+        $messages = $conversation->session()->getMessages();
+        self::assertCount(2, $messages);
+        self::assertSame('Partial answer', $messages[1]->getContent());
+        self::assertInstanceOf(AssistantMessage::class, $messages[1]);
+        self::assertSame(StoppableHttpClient::STOP_REASON, $messages[1]->stopReason());
     }
 
     public function testEscapeDismissesCommandMenuBeforeInterruptingATurn(): void

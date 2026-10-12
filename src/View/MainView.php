@@ -40,7 +40,7 @@ final class MainView extends ContainerWidget
     /** @var (Closure(): iterable<Message>)|null */
     private ?Closure $onHistorySync = null;
 
-    /** @var (Closure(): void)|null */
+    /** @var (Closure(): bool)|(Closure(): void)|null */
     private ?Closure $onEscape = null;
 
     private bool $busy = false;
@@ -191,7 +191,7 @@ final class MainView extends ContainerWidget
         $this->composer->onInputHistory($listener);
     }
 
-    /** @param Closure(): void $listener */
+    /** @param (Closure(): bool)|(Closure(): void) $listener */
     public function onEscape(Closure $listener): void
     {
         $this->onEscape = $listener;

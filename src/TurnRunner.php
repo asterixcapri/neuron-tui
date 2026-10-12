@@ -79,6 +79,9 @@ final class TurnRunner
             if ($stream->getReturn()?->isInterrupted()) {
                 $this->mainView->notify('Agent paused: approval or external tool results are required.');
             }
+            if ($this->conversation->responseWasStopped()) {
+                $this->mainView->notify('Response stopped.');
+            }
         } catch (Throwable $error) {
             $this->mainView->notify($error->getMessage(), MessageKind::Error);
         } finally {
