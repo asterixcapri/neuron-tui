@@ -5,9 +5,16 @@ declare(strict_types=1);
 namespace NeuronTui\View;
 
 use Closure;
+use NeuronInteraction\Command\CommandInput;
+use NeuronInteraction\Command\CommandInterface;
+use NeuronInteraction\Event\SelectionRequest;
+use Symfony\Component\Tui\Event\ChangeEvent;
 use Symfony\Component\Tui\Event\SubmitEvent;
+use Symfony\Component\Tui\Input\Key;
+use Symfony\Component\Tui\Input\Keybindings;
 use Symfony\Component\Tui\Style\Style;
 use Symfony\Component\Tui\Widget\ContainerWidget;
+use Symfony\Component\Tui\Widget\InputWidget;
 use Symfony\Component\Tui\Widget\TextWidget;
 use Symfony\Component\Tui\Widget\Util\StringUtils;
 
@@ -20,6 +27,10 @@ use function str_replace;
 final class ComposerView extends ContainerWidget
 {
     private readonly ComposerInputView $input;
+    private readonly CommandMenuView $commands;
+    private readonly SelectionView $selection;
+    private readonly TextWidget $hint;
+    private readonly Keybindings $keys;
     private readonly TextWidget $status;
     private readonly WorkingView $working;
     private readonly ContainerWidget $queue;
@@ -29,20 +40,94 @@ final class ComposerView extends ContainerWidget
     public function __construct()
     {
         $this->input = new ComposerInputView();
+        $this->commands = new CommandMenuView();
+        $this->selection = new SelectionView();
+        $this->keys = new Keybindings([
+            'previous' => [Key::UP],
+            'next' => [Key::DOWN],
+            'complete' => [Key::TAB],
+            'execute' => [Key::ENTER],
+            'dismiss' => [Key::ESCAPE],
+        ]);
+        $this->input->onChange(fn(ChangeEvent $event) => $this->commands->update($this->input->getText()));
         $this->status = (new TextWidget('✻ Ready'))->setStyle(new Style(color: Theme::MUTED));
         $this->working = (new WorkingView())->setStyle(new Style(hidden: true));
         $this->queueTitle = (new TextWidget(truncate: true))->setStyle(new Style(color: Theme::TEXT));
         $this->queueMessages = (new TextWidget(truncate: true))->setStyle(new Style(color: Theme::MUTED));
         $this->queue = (new ContainerWidget())->setStyle((new Style(hidden: true))->withPadding([1, 0]));
         $this->queue->add($this->queueTitle)->add($this->queueMessages);
-        $this->add($this->status)->add($this->working)->add($this->queue)->add($this->input);
-        $this->add((new TextWidget('Enter send · Shift+Enter newline · Ctrl+C exit', truncate: true))
-            ->setStyle(new Style(color: Theme::MUTED)));
+        $this->add($this->status)->add($this->working)->add($this->queue)
+            ->add($this->commands)->add($this->selection)->add($this->input);
+        $this->hint = (new TextWidget('Enter send · Shift+Enter newline · Ctrl+C exit', truncate: true))
+            ->setStyle(new Style(color: Theme::MUTED));
+        $this->add($this->hint);
     }
 
     public function input(): ComposerInputView
     {
         return $this->input;
+    }
+
+    public function showSelection(?SelectionRequest $request): void
+    {
+        $this->selection->show($request);
+        $hidden = $request !== null;
+        $this->input->setStyle(new Style(color: Theme::SECONDARY, hidden: $hidden));
+        $this->hint->setStyle(new Style(color: Theme::MUTED, hidden: $hidden));
+        $this->commands->dismiss();
+    }
+
+    public function focusedInput(): ComposerInputView|InputWidget
+    {
+        return $this->selection->getStyle()?->getHidden() === false ? $this->selection->search() : $this->input;
+    }
+
+    public function handleSelectionInput(string $data): void
+    {
+        $this->selection->handleInput($data);
+    }
+
+    public function moveSelection(int $direction): void
+    {
+        $this->selection->move($direction);
+    }
+
+    public function selectedInput(): ?CommandInput
+    {
+        return $this->selection->selectedInput();
+    }
+
+    /** @param Closure(): list<CommandInterface> $commands */
+    public function onCommands(Closure $commands): void
+    {
+        $this->commands->onCommands($commands);
+        $this->commands->update($this->input->getText());
+    }
+
+    public function handleCommandInput(string $data): bool
+    {
+        $name = $this->commands->selectedName();
+        if ($name === null) {
+            return false;
+        }
+        if ($this->keys->matches($data, 'previous')) {
+            $this->commands->move(-1);
+        } elseif ($this->keys->matches($data, 'next')) {
+            $this->commands->move(1);
+        } elseif ($this->keys->matches($data, 'dismiss')) {
+            $this->commands->dismiss();
+        } elseif ($this->keys->matches($data, 'complete')) {
+            $this->input->setText($name . ' ');
+            $this->input->handleInput("\x1b[F");
+        } elseif ($this->keys->matches($data, 'execute')) {
+            $this->input->setText($name);
+            $this->commands->dismiss();
+            $this->input->handleInput($data);
+        } else {
+            return false;
+        }
+        $this->getContext()?->requestRender();
+        return true;
     }
 
     /** @param Closure(SubmitEvent): void $listener */

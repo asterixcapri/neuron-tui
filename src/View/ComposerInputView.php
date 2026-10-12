@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace NeuronTui\View;
 
 use Symfony\Component\Tui\Ansi\AnsiUtils;
+use Symfony\Component\Tui\Event\ChangeEvent;
 use Symfony\Component\Tui\Render\RenderContext;
 use Symfony\Component\Tui\Style\Style;
 use Symfony\Component\Tui\Widget\EditorWidget;
@@ -20,6 +21,16 @@ final class ComposerInputView extends EditorWidget
     {
         parent::__construct();
         $this->setMinVisibleLines(1)->setMaxVisibleLines(5)->setStyle(new Style(color: Theme::SECONDARY));
+    }
+
+    public function setText(string $text): static
+    {
+        $changed = $text !== $this->getText();
+        parent::setText($text);
+        if ($changed) {
+            $this->dispatch(new ChangeEvent($this, $this->getText()));
+        }
+        return $this;
     }
 
     /** @return list<string> */

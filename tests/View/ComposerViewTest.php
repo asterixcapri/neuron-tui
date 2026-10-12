@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace NeuronTui\Tests\View;
 
+use NeuronInteraction\Command\HelpCommand;
 use NeuronTui\View\ComposerView;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
+use Symfony\Component\Tui\Event\SubmitEvent;
 use Symfony\Component\Tui\Render\RenderContext;
 use Symfony\Component\Tui\Render\Renderer;
 
@@ -16,6 +18,73 @@ use function str_repeat;
 
 final class ComposerViewTest extends TestCase
 {
+    public function testCommandMenuScrollsAndFitsNarrowTerminals(): void
+    {
+        $composer = new ComposerView();
+        $commands = [];
+        for ($index = 0; $index < 8; ++$index) {
+            $commands[] = new HelpCommand('/command-' . $index);
+        }
+        $composer->onCommands(static fn(): array => $commands);
+        $renderer = new Renderer();
+        $context = new RenderContext(30, 18);
+        $composer->input()->setText('/');
+        for ($index = 0; $index < 6; ++$index) {
+            self::assertTrue($composer->handleCommandInput("\x1b[B"));
+        }
+        $lines = $renderer->renderWidget($composer, $context);
+        foreach ($lines as $line) {
+            self::assertLessThanOrEqual(30, AnsiUtils::visibleWidth($line));
+        }
+        $screen = AnsiUtils::stripAnsiCodes(implode("\n", $lines));
+        self::assertStringNotContainsString('/command-0', $screen);
+        self::assertStringContainsString('❯ /command-6', $screen);
+        self::assertTrue($composer->handleCommandInput("\t"));
+        self::assertSame('/command-6 ', $composer->input()->getText());
+        self::assertFalse($composer->handleCommandInput("\x1b[B"));
+        $composer->input()->setText('/');
+        self::assertTrue($composer->handleCommandInput("\x1b[A"));
+        self::assertTrue($composer->handleCommandInput("\t"));
+        self::assertSame('/command-7 ', $composer->input()->getText());
+    }
+
+    public function testCommandArgumentsMultilineAndUnknownNamesKeepNormalSubmission(): void
+    {
+        $composer = new ComposerView();
+        $composer->onCommands(static fn(): array => [new HelpCommand()]);
+        $submitted = [];
+        $composer->onSubmit(function (SubmitEvent $event) use (&$submitted): void {
+            $submitted[] = $event->getValue();
+        });
+        foreach (['/unknown', '/help argument', "/help\nMore text", 'A /help message'] as $text) {
+            $composer->input()->setText($text);
+            self::assertFalse($composer->handleCommandInput("\r"));
+            $composer->input()->handleInput("\r");
+        }
+        self::assertSame(['/unknown', '/help argument', "/help\nMore text", 'A /help message'], $submitted);
+        $submitted = [];
+        $composer->input()->setText('/he');
+        self::assertTrue($composer->handleCommandInput("\r"));
+        self::assertSame(['/help'], $submitted);
+        self::assertFalse($composer->handleCommandInput("\r"));
+    }
+
+    public function testExactCommandNameWinsOverEarlierPrefixMatches(): void
+    {
+        $composer = new ComposerView();
+        $composer->onCommands(static fn(): array => [new HelpCommand('/helper'), new HelpCommand('/help')]);
+        $submitted = null;
+        $composer->onSubmit(function (SubmitEvent $event) use (&$submitted): void {
+            $submitted = $event->getValue();
+        });
+        $composer->input()->setText('/help');
+        self::assertTrue($composer->handleCommandInput("\r"));
+        self::assertSame('/help', $submitted);
+        $composer->onCommands(static fn(): array => []);
+        $composer->input()->setText('/');
+        self::assertFalse($composer->handleCommandInput("\r"));
+    }
+
     public function testQueuePreviewStaysCompactAndFitsANarrowTerminal(): void
     {
         $composer = new ComposerView();

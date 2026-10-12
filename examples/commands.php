@@ -1,0 +1,54 @@
+<?php
+
+declare(strict_types=1);
+
+use NeuronAI\Agent\Agent;
+use NeuronAI\HttpClient\Amp\AmpHttpClient;
+use NeuronAI\Providers\OpenAI\Responses\OpenAIResponses;
+use NeuronAI\Tools\Toolkits\FileSystem\FileSystemToolkit;
+use NeuronInteraction\Command\ClearCommand;
+use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Command\ExitCommand;
+use NeuronInteraction\Command\HelpCommand;
+use NeuronInteraction\Command\ResumeCommand;
+use NeuronInteraction\Conversation;
+use NeuronInteraction\Session\SessionStore;
+use NeuronInteraction\Storage\InMemoryStorage;
+use NeuronTui\Tui;
+use Symfony\Component\Dotenv\Dotenv;
+
+require __DIR__ . '/vendor/autoload.php';
+
+(new Dotenv())->bootEnv(__DIR__ . '/.env');
+
+$key = $_ENV['OPENAI_API_KEY'] ?? null;
+if (!\is_string($key) || \trim($key) === '') {
+    \fwrite(\STDERR, "Set OPENAI_API_KEY in examples/.env before running this example.\n");
+    exit(1);
+}
+
+$agent = Agent::make()
+    ->setThreadId('demo')
+    ->addTool(FileSystemToolkit::make(__DIR__));
+
+$agent->setAiProvider(new OpenAIResponses(
+    key: $key,
+    model: 'gpt-5.4-nano',
+    httpClient: new AmpHttpClient(),
+));
+
+$sessionStore = new SessionStore(new InMemoryStorage(), 'local');
+$session = $sessionStore->create();
+
+$conversation = new Conversation($agent, $session);
+$conversation->setCommands(new Commands(
+    new HelpCommand(),
+    new ClearCommand($sessionStore),
+    new ResumeCommand($sessionStore),
+    new ExitCommand(),
+));
+
+Tui::make($conversation)
+    ->setTitle('Filesystem Agent')
+    ->setDescription('Explore, read and edit files with Neuron AI')
+    ->run();

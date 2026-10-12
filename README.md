@@ -71,6 +71,37 @@ inputs through `Conversation::sendInput()`. The Host Application configures the
 session, commands and user message processors before passing the Conversation
 to the TUI. Each TUI instance can run once.
 
+## Slash commands
+
+Type `/` to show the commands registered on the Conversation, with their
+descriptions. Keep typing to filter by name. Use ↑/↓ to select, Tab to complete
+and add arguments, Enter to run the selected command, and Esc to close the menu
+while keeping the draft. The menu shows up to five commands and scrolls as you
+move the selection. Commands submitted during a turn join the input queue.
+
+Register commands before starting the TUI:
+
+```php
+use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Command\ExitCommand;
+use NeuronInteraction\Command\HelpCommand;
+
+$conversation->setCommands(new Commands(new HelpCommand(), new ExitCommand()));
+Tui::make($conversation)->run();
+```
+
+Custom implementations of `NeuronInteraction\Command\CommandInterface` appear
+in the same menu. The Host Application owns the command registry.
+
+Commands can emit a `SelectionRequest` to present options in place of the
+composer. The panel shows a framed search field and each option’s description
+below its label. Type to filter labels and descriptions; use ↑/↓ to choose,
+Enter to confirm or Esc to cancel. Confirmation
+submits a new `CommandInput` with the request's command and the option's original
+value; cancellation submits nothing. The draft is restored when the selector
+closes. Queued messages wait for the selection to be resolved, and the selected
+command runs before them. `/resume` uses this selector to reopen a stored session.
+
 ## Example
 
 From the repository root, install the example dependencies:
@@ -91,6 +122,12 @@ Then run:
 
 ```bash
 php examples/basic.php
+```
+
+For the same example with `/help`, `/clear`, `/resume` and `/exit` commands, run:
+
+```bash
+php examples/commands.php
 ```
 
 ## Development

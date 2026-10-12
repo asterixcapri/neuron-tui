@@ -32,6 +32,16 @@ final class Theme implements TerminalTheme
     {
         return new StyleSheet([
             ComposerInputView::class . '::frame' => new Style(color: self::BORDER),
+            CommandMenuView::class . '::selected' => new Style(color: self::ACCENT, bold: true),
+            CommandMenuView::class . '::name' => new Style(color: self::TEXT),
+            CommandMenuView::class . '::description' => new Style(color: self::MUTED),
+            SelectionView::class . '::separator' => new Style(color: self::ACCENT),
+            SelectionView::class . '::border' => new Style(color: self::BORDER),
+            SelectionView::class . '::search' => new Style(color: self::TEXT),
+            SelectionView::class . '::title' => new Style(color: self::ACCENT, bold: true),
+            SelectionView::class . '::selected' => new Style(color: self::ACCENT, bold: true),
+            SelectionView::class . '::label' => new Style(color: self::TEXT),
+            SelectionView::class . '::description' => new Style(color: self::MUTED),
             WorkingView::class . '::spinner' => new Style(color: self::ACCENT),
             WorkingView::class . '::message' => new Style(color: self::ACCENT),
             MarkdownWidget::class . '::heading' => new Style(color: self::ACCENT, bold: true),

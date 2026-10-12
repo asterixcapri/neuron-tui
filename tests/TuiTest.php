@@ -16,7 +16,15 @@ use NeuronAI\Providers\ProviderResponse;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Tools\Tool;
 use NeuronAI\Tools\ToolCall;
+use NeuronInteraction\Command\CommandContext;
+use NeuronInteraction\Command\CommandInput;
+use NeuronInteraction\Command\CommandInterface;
+use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Command\HelpCommand;
+use NeuronInteraction\Command\ResumeCommand;
+use NeuronInteraction\Command\SelectionOption;
 use NeuronInteraction\Conversation;
+use NeuronInteraction\Event\SelectionRequest;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Tui;
@@ -44,6 +52,376 @@ use function trim;
 
 final class TuiTest extends TestCase
 {
+    public function testSelectionSubmitsTheOpaqueValueAndPreservesTheDraft(): void
+    {
+        $provider = new FakeAIProvider();
+        $conversation = $this->conversation(Agent::make()->setAiProvider($provider));
+        $command = new class implements CommandInterface {
+            /** @var list<string> */
+            public array $received = [];
+
+            public function name(): string
+            {
+                return '/choose';
+            }
+
+            public function describe(): string
+            {
+                return 'Choose an option';
+            }
+
+            public function run(CommandContext $context, string $value): void
+            {
+                $this->received[] = $value;
+                if ($value === '') {
+                    $context->requestSelection(new SelectionRequest('/choose', 'Choose a language', [
+                        new SelectionOption('English', 'English'),
+                        new SelectionOption("  Italian\nwith spaces  ", 'Italian', 'Respond in Italian'),
+                    ], 'Pick the response language'));
+                } else {
+                    $context->notify('Choice applied');
+                }
+            }
+        };
+        $conversation->setCommands(new Commands($command));
+        $stage = 0;
+        $screen = $this->runApplication($conversation, function (
+            VirtualTerminal $terminal,
+            string $screen,
+        ) use (&$stage): bool {
+            if ($stage === 0) {
+                $terminal->simulateInput("/choose\rKeep my draft");
+                $stage = 1;
+            } elseif ($stage === 1 && str_contains($screen, 'Choose a language')) {
+                self::assertStringContainsString('Pick the response language', $screen);
+                self::assertStringContainsString('Respond in Italian', $screen);
+                self::assertStringNotContainsString('❯ Keep my draft', $screen);
+                $terminal->simulateInput("zzzz\r");
+                $stage = 2;
+            } elseif ($stage === 2 && str_contains($screen, 'No matching options.')) {
+                self::assertStringNotContainsString('Choice applied', $screen);
+                $terminal->simulateInput("\x15itali");
+                $stage = 3;
+            } elseif ($stage === 3 && str_contains($screen, '❯ Italian')) {
+                $terminal->simulateInput("\r");
+                $stage = 4;
+            } elseif ($stage === 4 && str_contains($screen, 'Choice applied') && str_contains($screen, 'Ready')) {
+                return true;
+            }
+            return false;
+        });
+        self::assertSame(4, $stage);
+        self::assertStringContainsString('❯ Keep my draft', $screen);
+        self::assertStringNotContainsString('Choose a language', $screen);
+        self::assertSame(['', "  Italian\nwith spaces  "], $command->received);
+        $provider->assertNothingSent();
+    }
+
+    public function testMultipleSelectionRequestsArePresentedInOrder(): void
+    {
+        $provider = new FakeAIProvider();
+        $conversation = $this->conversation(Agent::make()->setAiProvider($provider));
+        $command = new class implements CommandInterface {
+            /** @var list<string> */
+            public array $received = [];
+
+            public function name(): string
+            {
+                return '/choose';
+            }
+
+            public function describe(): string
+            {
+                return 'Choose two options';
+            }
+
+            public function run(CommandContext $context, string $value): void
+            {
+                $this->received[] = $value;
+                if ($value === '') {
+                    $context->requestSelection(new SelectionRequest('/choose', 'First choice', [
+                        new SelectionOption('first', 'First option'),
+                    ]));
+                    $context->requestSelection(new SelectionRequest('/choose', 'Second choice', [
+                        new SelectionOption('second', 'Second option'),
+                    ]));
+                } else {
+                    $context->notify('Applied ' . $value);
+                }
+            }
+        };
+        $conversation->setCommands(new Commands($command));
+        $stage = 0;
+        $this->runApplication($conversation, function (
+            VirtualTerminal $terminal,
+            string $screen,
+        ) use (&$stage): bool {
+            if ($stage === 0) {
+                $terminal->simulateInput("/choose\r");
+                $stage = 1;
+            } elseif ($stage === 1 && str_contains($screen, 'First choice')) {
+                $terminal->simulateInput("\r");
+                $stage = 2;
+            } elseif ($stage === 2 && str_contains($screen, 'Second choice')) {
+                $terminal->simulateInput("\r");
+                $stage = 3;
+            } elseif ($stage === 3 && str_contains($screen, 'Applied second') && str_contains($screen, 'Ready')) {
+                return true;
+            }
+            return false;
+        });
+        self::assertSame(3, $stage);
+        self::assertSame(['', 'first', 'second'], $command->received);
+        $provider->assertNothingSent();
+    }
+
+    public function testResumeSelectionChangesTheSessionAndRefreshesHistory(): void
+    {
+        $provider = new FakeAIProvider();
+        $agent = Agent::make()->setAiProvider($provider);
+        $store = new SessionStore(new InMemoryStorage(), 'test-user');
+        $saved = $store->create();
+        $saved->setTitle('Saved conversation');
+        $savedConversation = new Conversation($agent, $saved);
+        $savedConversation->agent()->getChatHistory()->addMessage(new UserMessage('Saved question'));
+        $savedConversation->agent()->getChatHistory()->addMessage(new AssistantMessage('Saved answer'));
+        $conversation = new Conversation($agent, $store->create());
+        $conversation->setCommands(new Commands(new ResumeCommand($store)));
+        $stage = 0;
+        $screen = $this->runApplication($conversation, function (
+            VirtualTerminal $terminal,
+            string $screen,
+        ) use (&$stage): bool {
+            if ($stage === 0) {
+                $terminal->simulateInput("/resume\r");
+                $stage = 1;
+            } elseif ($stage === 1 && str_contains($screen, 'Saved conversation')) {
+                self::assertStringContainsString('Sessions (1/1)', $screen);
+                $terminal->simulateInput("\r");
+                $stage = 2;
+            } elseif ($stage === 2 && str_contains($screen, 'Saved answer') && str_contains($screen, 'Ready')) {
+                return true;
+            }
+            return false;
+        });
+        self::assertSame(2, $stage);
+        self::assertSame($saved->getKey(), $conversation->session()->getKey());
+        self::assertStringContainsString('Saved question', $screen);
+        self::assertStringNotContainsString('Enter confirm', $screen);
+        $provider->assertNothingSent();
+    }
+
+    public function testSelectionResponsesRunBeforeQueuedMessages(): void
+    {
+        $received = new class {
+            /** @var list<string|CommandInput> */
+            public array $inputs = [];
+        };
+        $stage = 0;
+        $this->runApplication(
+            Agent::make()->setAiProvider(new FakeAIProvider()),
+            function (VirtualTerminal $terminal, string $screen) use (&$stage, $received): bool {
+                if ($stage === 0) {
+                    $terminal->simulateInput("Start\rQueued message\rDraft");
+                    $stage = 1;
+                } elseif ($stage === 1 && str_contains($screen, 'Choose something')) {
+                    self::assertSame(['Start'], $received->inputs);
+                    self::assertStringContainsString('↳ Queued message', $screen);
+                    $terminal->simulateInput("\r");
+                    $stage = 2;
+                } elseif ($stage === 2 && str_contains($screen, 'Queued turn finished') && str_contains($screen, 'Ready')) {
+                    self::assertCount(3, $received->inputs);
+                    self::assertInstanceOf(CommandInput::class, $received->inputs[1]);
+                    self::assertSame('/choose', $received->inputs[1]->identifier);
+                    self::assertSame('chosen value', $received->inputs[1]->value);
+                    self::assertSame('Queued message', $received->inputs[2]);
+                    self::assertStringContainsString('❯ Draft', $screen);
+                    return true;
+                }
+                return false;
+            },
+            function (MainView $view) use ($received): void {
+                $view->onInput(function (string|CommandInput $input) use ($view, $received): void {
+                    $received->inputs[] = $input;
+                    EventLoop::queue(function () use ($view, $input): void {
+                        if ($input === 'Start') {
+                            $view->showSelection(new SelectionRequest('/choose', 'Choose something', [
+                                new SelectionOption('chosen value', 'Choice'),
+                            ]));
+                        }
+                        if ($input === 'Queued message') {
+                            $view->appendResponse('Queued turn finished');
+                        }
+                        $view->finishTurn();
+                    });
+                });
+            },
+        );
+        self::assertSame(2, $stage);
+    }
+
+    public function testCancellingSelectionSubmitsNothingAndResumesQueuedMessages(): void
+    {
+        $received = [];
+        $stage = 0;
+        $this->runApplication(
+            Agent::make()->setAiProvider(new FakeAIProvider()),
+            function (VirtualTerminal $terminal, string $screen) use (&$stage, &$received): bool {
+                if ($stage === 0) {
+                    $terminal->simulateInput("Start\rQueued message\rDraft");
+                    $stage = 1;
+                } elseif ($stage === 1 && str_contains($screen, 'Choose something')) {
+                    self::assertSame(['Start'], $received);
+                    $terminal->simulateInput("\x1b");
+                    $stage = 2;
+                } elseif ($stage === 2 && str_contains($screen, 'Ready') && str_contains($screen, '❯ Draft')) {
+                    self::assertSame(['Start', 'Queued message'], $received);
+                    self::assertStringNotContainsString('Choose something', $screen);
+                    return true;
+                }
+                return false;
+            },
+            function (MainView $view) use (&$received): void {
+                $view->onInput(function (string|CommandInput $input) use ($view, &$received): void {
+                    $received[] = $input;
+                    EventLoop::queue(function () use ($view, $input): void {
+                        if ($input === 'Start') {
+                            $view->showSelection(new SelectionRequest('/choose', 'Choose something', [
+                                new SelectionOption('chosen value', 'Choice'),
+                            ]));
+                        }
+                        $view->finishTurn();
+                    });
+                });
+            },
+        );
+        self::assertSame(2, $stage);
+    }
+
+    public function testQuittingWithASelectionOpenDiscardsPendingMessages(): void
+    {
+        $received = [];
+        $stage = 0;
+        $this->runApplication(
+            Agent::make()->setAiProvider(new FakeAIProvider()),
+            function (VirtualTerminal $terminal, string $screen) use (&$stage): bool {
+                if ($stage === 0) {
+                    $terminal->simulateInput("Start\rQueued message\r");
+                    $stage = 1;
+                }
+                return str_contains($screen, 'Choose something');
+            },
+            function (MainView $view) use (&$received): void {
+                $view->onInput(function (string|CommandInput $input) use ($view, &$received): void {
+                    $received[] = $input;
+                    EventLoop::queue(function () use ($view): void {
+                        $view->showSelection(new SelectionRequest('/choose', 'Choose something', [
+                            new SelectionOption('value', 'Choice'),
+                        ]));
+                        $view->finishTurn();
+                    });
+                });
+            },
+        );
+        self::assertSame(['Start'], $received);
+    }
+
+    public function testCommandMenuFiltersCompletesAndExecutesRegisteredCommands(): void
+    {
+        $provider = new FakeAIProvider();
+        $conversation = $this->conversation(Agent::make()->setAiProvider($provider));
+        $command = new class implements CommandInterface {
+            public function name(): string
+            {
+                return '/theme';
+            }
+
+            public function describe(): string
+            {
+                return 'Change the theme';
+            }
+
+            public function run(CommandContext $context, string $value): void
+            {
+                $context->notify('Theme selected: ' . $value);
+            }
+        };
+        $conversation->setCommands(new Commands(new HelpCommand(), $command));
+        $stage = 0;
+        $screen = $this->runApplication($conversation, function (
+            VirtualTerminal $terminal,
+            string $screen,
+        ) use (&$stage): bool {
+            if ($stage === 0) {
+                $terminal->simulateInput('/');
+                $stage = 1;
+            } elseif ($stage === 1 && str_contains($screen, 'Change the theme')) {
+                self::assertStringContainsString('❯ /help', $screen);
+                self::assertStringContainsString('Lists what can be typed here.', $screen);
+                $terminal->simulateInput("\x1b[B");
+                $stage = 2;
+            } elseif ($stage === 2 && str_contains($screen, '❯ /theme')) {
+                $terminal->simulateInput("\t");
+                $stage = 3;
+            } elseif ($stage === 3 && str_contains($screen, '❯ /theme')
+                && !str_contains($screen, 'Change the theme')) {
+                $terminal->simulateInput("dark\r");
+                $stage = 4;
+            } elseif ($stage === 4 && str_contains($screen, 'Theme selected: dark')
+                && str_contains($screen, 'Ready')) {
+                $terminal->simulateInput('/he');
+                $stage = 5;
+            } elseif ($stage === 5 && str_contains($screen, 'Lists what can be typed here.')) {
+                self::assertStringNotContainsString('Change the theme', $screen);
+                $terminal->simulateInput("\r");
+                $stage = 6;
+            } elseif ($stage === 6 && str_contains($screen, '/help — Lists what can be typed here.')
+                && str_contains($screen, 'Ready')) {
+                return true;
+            }
+            return false;
+        });
+        self::assertSame(6, $stage);
+        self::assertStringContainsString('/theme — Change the theme', $screen);
+        $provider->assertNothingSent();
+    }
+
+    public function testEscapeDismissesCommandMenuBeforeInterruptingATurn(): void
+    {
+        $stage = 0;
+        $escapes = 0;
+        $this->runApplication(
+            Agent::make()->setAiProvider(new FakeAIProvider()),
+            function (VirtualTerminal $terminal, string $screen) use (&$stage): bool {
+                if ($stage === 0) {
+                    $terminal->simulateInput("Question\r/");
+                    $stage = 1;
+                } elseif ($stage === 1 && str_contains($screen, 'Lists what can be typed here.')) {
+                    $terminal->simulateInput("\x1b");
+                    $stage = 2;
+                } elseif ($stage === 2 && !str_contains($screen, 'Lists what can be typed here.')) {
+                    self::assertStringContainsString('Working', $screen);
+                    self::assertStringContainsString('❯ /', $screen);
+                    $terminal->simulateInput("\x1b");
+                    $stage = 3;
+                } elseif ($stage === 3 && str_contains($screen, 'Ready')) {
+                    return true;
+                }
+                return false;
+            },
+            function (MainView $view) use (&$escapes): void {
+                $view->onCommands(static fn(): array => [new HelpCommand()]);
+                $view->onInput(static function (string|CommandInput $input): void {});
+                $view->onEscape(function () use ($view, &$escapes): void {
+                    ++$escapes;
+                    $view->finishTurn();
+                });
+            },
+        );
+        self::assertSame(1, $escapes);
+        self::assertSame(3, $stage);
+    }
+
     public function testComposerGrowsForNewlinesAndSubmitsTheWholeMessage(): void
     {
         $provider = new FakeAIProvider(new AssistantMessage('Received both lines'));
@@ -142,7 +520,7 @@ final class TuiTest extends TestCase
 
             return false;
         }, function (MainView $view): void {
-            $view->onInput(function (string $input) use ($view): void {
+            $view->onInput(function (string|CommandInput $input) use ($view): void {
                 EventLoop::delay(0.3, $view->finishTurn(...));
             });
         });
@@ -195,7 +573,7 @@ final class TuiTest extends TestCase
             return false;
         }, function (MainView $host) use (&$view, &$received): void {
             $view = $host;
-            $host->onInput(function (string $input) use (&$received): void {
+            $host->onInput(function (string|CommandInput $input) use (&$received): void {
                 $received[] = $input;
             });
         });
@@ -436,7 +814,7 @@ final class TuiTest extends TestCase
                 return false;
             },
             function (MainView $host) use (&$received, &$escapes): void {
-                $host->onInput(function (string $input) use ($host, &$received): void {
+                $host->onInput(function (string|CommandInput $input) use ($host, &$received): void {
                     $received[] = $input;
                     $host->appendResponse('Custom answer');
                 });

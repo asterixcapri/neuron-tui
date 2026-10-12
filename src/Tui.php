@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace NeuronTui;
 
 use LogicException;
+use NeuronInteraction\Command\CommandInput;
 use NeuronInteraction\Conversation;
 use NeuronTui\View\MainView;
 use NeuronTui\View\Theme;
@@ -51,9 +52,10 @@ final class Tui
 
     private function wire(): void
     {
-        $this->mainView->onInput(function (string $input): void {
+        $this->mainView->onInput(function (string|CommandInput $input): void {
             (new TurnRunner($this->conversation, $this->mainView, $this->tui))->run($input);
         });
+        $this->mainView->onCommands(fn(): array => $this->conversation->commands()->all());
         $this->mainView->onHistorySync(fn(): array => $this->conversation->getDisplayMessages());
     }
 

@@ -7,6 +7,7 @@ namespace NeuronTui;
 use NeuronAI\Chat\Messages\Stream\Chunks\TextChunk;
 use NeuronAI\Chat\Messages\Stream\Chunks\ToolCallChunk;
 use NeuronAI\Chat\Messages\Stream\Chunks\ToolResultChunk;
+use NeuronInteraction\Command\CommandInput;
 use NeuronInteraction\Command\NotificationLevel;
 use NeuronInteraction\Conversation;
 use NeuronInteraction\Event\ExitRequest;
@@ -28,7 +29,7 @@ final class TurnRunner
         private readonly SymfonyTui $tui,
     ) {}
 
-    public function run(string $input): void
+    public function run(string|CommandInput $input): void
     {
         EventLoop::queue(function () use ($input): void {
             if ($this->tui->isRunning()) {
@@ -37,7 +38,7 @@ final class TurnRunner
         });
     }
 
-    private function doRun(string $input): void
+    private function doRun(string|CommandInput $input): void
     {
         try {
             $this->tui->processRender();
@@ -64,7 +65,7 @@ final class TurnRunner
                 } elseif ($chunk instanceof SessionChanged) {
                     $this->view->syncHistory();
                 } elseif ($chunk instanceof SelectionRequest) {
-                    $this->view->notify('Interactive selections are not supported by this TUI.', MessageKind::Error);
+                    $this->view->showSelection($chunk);
                 }
                 $this->tui->processRender();
                 // Let terminal input and async providers progress between chunks.
