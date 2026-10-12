@@ -14,6 +14,7 @@ use NeuronInteraction\Command\ResumeCommand;
 use NeuronInteraction\Conversation;
 use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Session\SessionStore;
+use NeuronInteraction\Session\SessionTitleGenerator;
 use NeuronInteraction\Storage\FileStorage;
 use NeuronTui\Tui;
 use Symfony\Component\Dotenv\Dotenv;
@@ -32,11 +33,13 @@ $agent = Agent::make()
     ->setThreadId('demo')
     ->addTool(FileSystemToolkit::make(__DIR__));
 
-$agent->setAiProvider(new OpenAIResponses(
+$aiProvider = new OpenAIResponses(
     key: $key,
     model: 'gpt-5.4-nano',
     httpClient: new AmpHttpClient(),
-));
+);
+
+$agent->setAiProvider($aiProvider);
 
 // FileStorage creates the directory and keeps sessions across application restarts.
 $storage = new FileStorage(__DIR__ . '/.storage');
@@ -45,6 +48,7 @@ $session = $sessionStore->create();
 
 $conversation = new Conversation($agent, $session);
 $conversation->setInputHistory(new InputHistory($storage));
+$conversation->setSessionTitleGenerator(new SessionTitleGenerator($aiProvider));
 $conversation->setCommands(new Commands(
     new HelpCommand(),
     new ClearCommand($sessionStore),
