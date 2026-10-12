@@ -99,6 +99,8 @@ final class MainView extends ContainerWidget
         $this->composer->input()->setText('');
         if ($this->busy) {
             $this->pending[] = $prompt;
+            $this->composer->setPendingMessages($this->pending);
+            $this->getContext()?->requestRender();
             return;
         }
         $this->beginTurn($prompt);
@@ -123,6 +125,7 @@ final class MainView extends ContainerWidget
     {
         $this->stopped = true;
         $this->pending = [];
+        $this->composer->setPendingMessages($this->pending);
         $this->getContext()?->stop();
     }
 
@@ -186,7 +189,9 @@ final class MainView extends ContainerWidget
         $this->composer->finishTurn();
         $this->busy = false;
         if (!$this->stopped && $this->pending !== []) {
-            $this->beginTurn(array_shift($this->pending));
+            $prompt = array_shift($this->pending);
+            $this->composer->setPendingMessages($this->pending);
+            $this->beginTurn($prompt);
         }
         $this->focus();
         $this->getContext()?->requestRender();

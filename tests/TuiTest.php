@@ -39,6 +39,7 @@ use function rtrim;
 use function str_contains;
 use function str_repeat;
 use function str_replace;
+use function strpos;
 use function trim;
 
 final class TuiTest extends TestCase
@@ -147,6 +148,60 @@ final class TuiTest extends TestCase
         });
     }
 
+    public function testQueuedMessagesRemainVisibleUntilTheirTurnStarts(): void
+    {
+        $stage = 0;
+        $received = [];
+        $view = null;
+        $this->runApplication(Agent::make()->setAiProvider(new FakeAIProvider()), function (
+            VirtualTerminal $terminal,
+            string $screen,
+        ) use (&$stage, &$received, &$view): bool {
+            self::assertInstanceOf(MainView::class, $view);
+            if ($stage === 0) {
+                $terminal->simulateInput("First input\r");
+                $stage = 1;
+            } elseif ($stage === 1 && str_contains($screen, 'Working')) {
+                $terminal->simulateInput("Second input\x1b[13;2uExtra line\rThird input\rUnsubmitted draft");
+                $stage = 2;
+            } elseif ($stage === 2 && str_contains($screen, 'Unsubmitted draft')) {
+                self::assertStringContainsString('• Messages queued for the next turns (2)', $screen);
+                self::assertStringContainsString('↳ Second input Extra line', $screen);
+                self::assertStringContainsString('↳ Third input', $screen);
+                self::assertLessThan(strpos($screen, '• Messages queued'), strpos($screen, 'Working'));
+                self::assertLessThan(strpos($screen, '❯ Unsubmitted draft'), strpos($screen, '↳ Third input'));
+                self::assertSame(['First input'], $received);
+                $view->appendResponse('First response');
+                $view->finishTurn();
+                $stage = 3;
+            } elseif ($stage === 3 && str_contains($screen, '❯ Second input')) {
+                self::assertStringContainsString('• Messages queued for the next turns (1)', $screen);
+                self::assertStringContainsString('↳ Third input', $screen);
+                self::assertStringNotContainsString('↳ Second input', $screen);
+                $view->appendResponse('Second response');
+                $view->finishTurn();
+                $stage = 4;
+            } elseif ($stage === 4 && str_contains($screen, '❯ Third input')) {
+                self::assertStringNotContainsString('• Messages queued', $screen);
+                $view->appendResponse('Third response');
+                $view->finishTurn();
+                $stage = 5;
+            } elseif ($stage === 5 && str_contains($screen, 'Ready')) {
+                self::assertStringNotContainsString('• Messages queued', $screen);
+                self::assertStringContainsString('❯ Unsubmitted draft', $screen);
+                self::assertSame(['First input', "Second input\nExtra line", 'Third input'], $received);
+                return true;
+            }
+            return false;
+        }, function (MainView $host) use (&$view, &$received): void {
+            $view = $host;
+            $host->onInput(function (string $input) use (&$received): void {
+                $received[] = $input;
+            });
+        });
+        self::assertSame(5, $stage);
+    }
+
     public function testGrowingHistoryQueuesMessagesInOrderAndPreservesTheDraft(): void
     {
         $answer = [];
@@ -200,6 +255,10 @@ final class TuiTest extends TestCase
             self::assertStringContainsString('Response line 80', $history);
             self::assertStringNotContainsString(
                 'Working',
+                AnsiUtils::stripAnsiCodes(implode("\n", $buffer->getScrollback())),
+            );
+            self::assertStringNotContainsString(
+                '• Messages queued',
                 AnsiUtils::stripAnsiCodes(implode("\n", $buffer->getScrollback())),
             );
             self::assertStringNotContainsString("\x1b[?1000h", $output);
