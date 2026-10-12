@@ -59,7 +59,7 @@ $conversation->setCommands(new Commands(
     new ExitCommand(),
 ));
 
-Tui::make($conversation)
+(new Tui($conversation))
     ->setFiglet("Neuron TUI")
     ->setTitle('Persistent filesystem agent')
     ->setDescription('Explore files with locally saved sessions, input history and interruptible responses')

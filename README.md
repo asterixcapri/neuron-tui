@@ -56,13 +56,13 @@ $agent = Agent::make()
 $session = (new SessionStore(new InMemoryStorage(), 'local'))->create();
 $conversation = new Conversation($agent, $session);
 
-Tui::make($conversation)->run();
+(new Tui($conversation))->run();
 ```
 
 Customize the header through fluent setters:
 
 ```php
-Tui::make($conversation)
+(new Tui($conversation))
     ->setTitle('Filesystem Agent')
     ->setDescription('Explore, read and edit files with Neuron AI')
     ->run();
@@ -71,7 +71,7 @@ Tui::make($conversation)
 Add a FIGlet banner above the title and description:
 
 ```php
-Tui::make($conversation)
+(new Tui($conversation))
     ->setFiglet('Neuron', 'small')
     ->setTitle('Filesystem Agent')
     ->setDescription('Explore, read and edit files with Neuron AI')
@@ -102,7 +102,7 @@ use NeuronInteraction\Command\ExitCommand;
 use NeuronInteraction\Command\HelpCommand;
 
 $conversation->setCommands(new Commands(new HelpCommand(), new ExitCommand()));
-Tui::make($conversation)->run();
+(new Tui($conversation))->run();
 ```
 
 Custom implementations of `NeuronInteraction\Command\CommandInterface` appear

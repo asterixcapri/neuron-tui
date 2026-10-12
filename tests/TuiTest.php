@@ -1109,7 +1109,7 @@ final class TuiTest extends TestCase
         $driver->method('isVirtual')->willReturn(false);
         $tui = new SymfonyTui(terminal: $driver);
         $conversation = $agent instanceof Conversation ? $agent : $this->conversation($agent);
-        $host = Tui::make($conversation);
+        $host = new Tui($conversation);
         $configureHost?->__invoke($host);
         $view = (new ReflectionProperty(Tui::class, 'mainView'))->getValue($host);
         self::assertInstanceOf(MainView::class, $view);

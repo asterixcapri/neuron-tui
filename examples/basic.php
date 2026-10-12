@@ -35,7 +35,7 @@ $agent->setAiProvider(new OpenAIResponses(
 $session = (new SessionStore(new InMemoryStorage(), 'local'))->create();
 $conversation = new Conversation($agent, $session);
 
-Tui::make($conversation)
+(new Tui($conversation))
     ->setFiglet("Neuron TUI")
     ->setTitle('Basic filesystem agent')
     ->setDescription('Explore, read and edit files in the examples directory')

@@ -24,16 +24,11 @@ final class Tui
     private SymfonyTui $tui;
     private bool $started = false;
 
-    private function __construct(private readonly Conversation $conversation)
+    public function __construct(private readonly Conversation $conversation)
     {
         $this->mainView = new MainView();
         $this->tui = new SymfonyTui();
         $this->wire();
-    }
-
-    public static function make(Conversation $conversation): self
-    {
-        return new self($conversation);
     }
 
     public function setTitle(string $title): self
