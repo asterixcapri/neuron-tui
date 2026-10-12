@@ -23,6 +23,7 @@ use Symfony\Component\Tui\Style\Style;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 use Symfony\Component\Tui\Tui as SymfonyTui;
 
+use function count;
 use function implode;
 use function rtrim;
 use function substr_count;
@@ -45,25 +46,25 @@ final class HistoryViewTest extends TestCase
         self::assertStringNotContainsString("\033[36m", $screen);
     }
 
-    public function testScrollingKeepsReadingPositionWhileResponseGrows(): void
+    public function testHistoryGrowsBeyondTheTerminalHeight(): void
     {
         $history = new HistoryView();
         $history->beginTurn('Question');
         $history->appendResponse("Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6");
         $renderer = new Renderer();
         $context = new RenderContext(40, 3);
-        $renderer->renderWidget($history, $context);
-        $history->scroll(3);
         $before = $renderer->renderWidget($history, $context);
         $history->appendResponse("\nLine 7\nLine 8");
-        self::assertSame($before, $renderer->renderWidget($history, $context));
-        $history->scroll(-100);
-        $latest = AnsiUtils::stripAnsiCodes(implode("\n", $renderer->renderWidget($history, $context)));
-        self::assertStringContainsString('Line 8', $latest);
-        $history->scroll(100);
-        self::assertStringContainsString('❯ Question', AnsiUtils::stripAnsiCodes(implode("\n", $renderer->renderWidget($history, $context))));
+        $after = $renderer->renderWidget($history, $context);
+        self::assertGreaterThan(count($before), count($after));
+        $text = AnsiUtils::stripAnsiCodes(implode("\n", $after));
+        self::assertStringContainsString('❯ Question', $text);
+        self::assertStringContainsString('Line 1', $text);
+        self::assertStringContainsString('Line 8', $text);
         $history->load([new UserMessage('New history')]);
-        self::assertStringContainsString('❯ New history', AnsiUtils::stripAnsiCodes(implode("\n", $renderer->renderWidget($history, $context))));
+        $text = AnsiUtils::stripAnsiCodes(implode("\n", $renderer->renderWidget($history, $context)));
+        self::assertStringContainsString('❯ New history', $text);
+        self::assertStringNotContainsString('Line 1', $text);
     }
 
     public function testAgentMarkdownIsRenderedDuringStreamingAndWhenLoaded(): void

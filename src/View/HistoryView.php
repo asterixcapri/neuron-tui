@@ -8,51 +8,31 @@ use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\ToolResultMessage;
 use NeuronAI\Tools\ToolCall;
-use Symfony\Component\Tui\Render\RenderContext;
-use Symfony\Component\Tui\Render\Renderer;
 use Symfony\Component\Tui\Style\Style;
-use Symfony\Component\Tui\Widget\AbstractWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
-use Symfony\Component\Tui\Widget\ParentInterface;
-use Symfony\Component\Tui\Widget\VerticallyExpandableInterface;
 
-use function array_fill;
-use function array_slice;
-use function array_values;
-use function count;
-use function max;
-use function min;
 use function spl_object_id;
 
-/** @internal */
-final class HistoryView extends AbstractWidget implements ParentInterface, VerticallyExpandableInterface
+/** @internal Growing History; the terminal owns its scrollback. */
+final class HistoryView extends ContainerWidget
 {
-    private readonly ContainerWidget $messages;
-    private readonly Renderer $renderer;
-    private bool $expanded = true;
     private ?MessageView $response = null;
-    private int $scrollOffset = 0;
-    private int $maxScrollOffset = 0;
-    private int $lineCount = 0;
 
     /** @var array<string, ToolView> */
     private array $tools = [];
 
     public function __construct()
     {
-        $this->messages = (new ContainerWidget())->setStyle(new Style(gap: 1));
-        $this->messages->setParent($this);
-        $this->renderer = new Renderer();
+        $this->setStyle(new Style(gap: 1));
+        $this->expandVertically(true);
     }
 
     /** @param iterable<Message> $history */
     public function load(iterable $history): void
     {
         $this->response = null;
-        $this->scrollOffset = 0;
-        $this->lineCount = 0;
         $this->tools = [];
-        $this->messages->clear();
+        $this->clear();
         foreach ($history as $message) {
             $content = $message->getContent();
             if ($content !== null && $content !== '') {
@@ -78,7 +58,6 @@ final class HistoryView extends AbstractWidget implements ParentInterface, Verti
 
     public function beginTurn(string $prompt): void
     {
-        $this->scrollOffset = 0;
         $this->append($prompt, MessageKind::User);
         $this->response = $this->append('', MessageKind::Agent);
     }
@@ -101,7 +80,7 @@ final class HistoryView extends AbstractWidget implements ParentInterface, Verti
         $key = $this->toolKey($tool);
         if (!isset($this->tools[$key])) {
             $this->tools[$key] = new ToolView($tool);
-            $this->messages->add($this->tools[$key]);
+            $this->add($this->tools[$key]);
         }
     }
 
@@ -109,21 +88,19 @@ final class HistoryView extends AbstractWidget implements ParentInterface, Verti
     {
         $this->finishTurn();
         $this->showToolCall($tool);
-        $key = $this->toolKey($tool);
-        $this->tools[$key]->complete($tool);
+        $this->tools[$this->toolKey($tool)]->complete($tool);
     }
 
     private function toolKey(ToolCall $tool): string
     {
         $id = $tool->getCallId();
-
         return $id !== null ? 'call:' . $id : 'object:' . spl_object_id($tool);
     }
 
     public function finishTurn(): void
     {
         if ($this->response !== null && $this->response->getText() === '') {
-            $this->messages->remove($this->response);
+            $this->remove($this->response);
         }
         $this->response = null;
     }
@@ -131,51 +108,7 @@ final class HistoryView extends AbstractWidget implements ParentInterface, Verti
     private function append(string $text, MessageKind $kind): MessageView
     {
         $widget = new MessageView($text, $kind);
-        $this->messages->add($widget);
-
+        $this->add($widget);
         return $widget;
-    }
-
-    /** @return array{ContainerWidget} */
-    public function all(): array
-    {
-        return [$this->messages];
-    }
-
-    public function expandVertically(bool $expand): static
-    {
-        $this->expanded = $expand;
-        $this->invalidate();
-
-        return $this;
-    }
-
-    public function isVerticallyExpanded(): bool
-    {
-        return $this->expanded;
-    }
-
-    public function scroll(int $lines): void
-    {
-        $this->scrollOffset = max(0, min($this->maxScrollOffset, $this->scrollOffset + $lines));
-        $this->invalidate();
-    }
-
-    /** @return list<string> */
-    public function render(RenderContext $context): array
-    {
-        $rows = max(1, $context->getRows());
-        $lines = $this->renderer->renderWidget($this->messages, $context);
-        $lineCount = count($lines);
-        if ($this->scrollOffset > 0) {
-            $this->scrollOffset += $lineCount - $this->lineCount;
-        }
-        $this->lineCount = $lineCount;
-        $this->maxScrollOffset = max(0, $lineCount - $rows);
-        $this->scrollOffset = max(0, min($this->maxScrollOffset, $this->scrollOffset));
-        $start = max(0, $lineCount - $rows - $this->scrollOffset);
-        $visible = array_values(array_slice($lines, $start, $rows));
-
-        return [...$visible, ...array_fill(0, max(0, $rows - count($visible)), '')];
     }
 }

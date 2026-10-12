@@ -16,7 +16,7 @@ use Symfony\Component\Tui\Style\Style;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 use Throwable;
 
-use function preg_match;
+use function array_shift;
 use function trim;
 
 /** @internal */
@@ -37,6 +37,10 @@ final class MainView extends ContainerWidget
     private ?Closure $onEscape = null;
 
     private bool $busy = false;
+    private bool $stopped = false;
+
+    /** @var list<string> */
+    private array $pending = [];
 
     public function __construct()
     {
@@ -77,19 +81,9 @@ final class MainView extends ContainerWidget
     public function handleInput(InputEvent $event): void
     {
         $data = $event->getData();
-        if (preg_match('/^\x1b\[<(\d+);\d+;\d+[Mm]$/', $data, $mouse) === 1) {
-            $button = (int) $mouse[1];
-            if (($button & ~28) === 64 || ($button & ~28) === 65) {
-                $this->history->scroll(($button & 1) === 0 ? 3 : -3);
-                $this->getContext()?->requestRender();
-            }
-            $event->stopPropagation();
-
-            return;
-        }
         if ($this->keys->matches($data, 'quit')) {
             $event->stopPropagation();
-            $this->getContext()?->stop();
+            $this->stop();
         } elseif ($this->keys->matches($data, 'stop') && $this->busy) {
             $this->onEscape?->__invoke();
             $event->stopPropagation();
@@ -98,17 +92,27 @@ final class MainView extends ContainerWidget
 
     private function submit(SubmitEvent $event): void
     {
-        if ($event->isBlank() || $this->busy || $this->onInput === null) {
+        if ($event->isBlank() || $this->stopped || $this->onInput === null) {
             return;
         }
         $prompt = trim($event->getValue());
+        $this->composer->input()->setText('');
+        if ($this->busy) {
+            $this->pending[] = $prompt;
+            return;
+        }
+        $this->beginTurn($prompt);
+    }
+
+    private function beginTurn(string $prompt): void
+    {
         $this->busy = true;
         $this->composer->beginTurn();
         $this->history->beginTurn($prompt);
         $this->getContext()?->requestRender();
 
         try {
-            ($this->onInput)($prompt);
+            $this->onInput?->__invoke($prompt);
         } catch (Throwable $error) {
             $this->notify($error->getMessage(), MessageKind::Error);
             $this->finishTurn();
@@ -117,6 +121,8 @@ final class MainView extends ContainerWidget
 
     public function stop(): void
     {
+        $this->stopped = true;
+        $this->pending = [];
         $this->getContext()?->stop();
     }
 
@@ -179,6 +185,9 @@ final class MainView extends ContainerWidget
         $this->history->finishTurn();
         $this->composer->finishTurn();
         $this->busy = false;
+        if (!$this->stopped && $this->pending !== []) {
+            $this->beginTurn(array_shift($this->pending));
+        }
         $this->focus();
         $this->getContext()?->requestRender();
     }

@@ -40,7 +40,6 @@ final class ComposerView extends ContainerWidget
 
     public function beginTurn(): void
     {
-        $this->input->setText('');
         $this->status->setStyle(new Style(color: Theme::MUTED, hidden: true));
         $this->working->setStyle(new Style(hidden: false));
         $this->working->start();

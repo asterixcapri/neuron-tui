@@ -4,7 +4,14 @@ A terminal interface for testing [Neuron AI](https://github.com/neuron-core/neur
 agents, built with [Symfony TUI](https://github.com/symfony/tui).
 
 The conversation appears above a multiline composer fixed at the bottom, with an
-animated working indicator immediately above the input.
+animated working indicator immediately above the input. History grows into the
+terminal's native scrollback. Scroll and select text with normal terminal
+gestures; the TUI does not capture the mouse. History and the composer share one
+Symfony widget tree and renderer.
+
+You can keep writing while the agent responds. Messages submitted during a turn
+are queued and run in order; an unsubmitted draft stays in the editor. The
+composer shows up to five lines, including wrapped text.
 
 ![Neuron TUI demo: conversation, Markdown rendering and a filesystem tool](docs/images/neuron-tui-demo.gif)
 

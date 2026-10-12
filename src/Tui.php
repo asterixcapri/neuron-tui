@@ -76,12 +76,10 @@ final class Tui
         $this->tui->addListener($this->mainView->handleInput(...));
         $this->mainView->focus();
         $this->mainView->syncHistory();
-        $terminal = $this->tui->getTerminal();
         try {
-            $terminal->write("\x1b[?1000h\x1b[?1006h");
             $this->tui->run();
         } finally {
-            $terminal->write("\x1b[?1006l\x1b[?1000l");
+            $this->mainView->stop();
         }
     }
 }

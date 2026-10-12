@@ -19,7 +19,7 @@ final class ComposerInputView extends EditorWidget
     public function __construct()
     {
         parent::__construct();
-        $this->setMinVisibleLines(1)->setStyle(new Style(color: Theme::SECONDARY));
+        $this->setMinVisibleLines(1)->setMaxVisibleLines(5)->setStyle(new Style(color: Theme::SECONDARY));
     }
 
     /** @return list<string> */

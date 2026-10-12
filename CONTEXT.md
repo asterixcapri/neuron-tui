@@ -41,7 +41,8 @@ _Avoid_: TUI, event loop, Agent
 **Turn**:
 One stretch of the conversation, from the moment a person's message is submitted
 to the Agent to the moment the Agent finishes responding. Text written during a
-Turn remains a draft until the person submits it after that Turn ends.
+Turn remains a draft until submitted. Messages submitted during a Turn are
+queued and start subsequent Turns in submission order.
 _Avoid_: Round, exchange, request
 
 **Working indicator**:

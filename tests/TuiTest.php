@@ -5,10 +5,14 @@ declare(strict_types=1);
 namespace NeuronTui\Tests;
 
 use Closure;
+use Generator;
 use NeuronAI\Agent\Agent;
 use NeuronAI\Chat\Messages\AssistantMessage;
+use NeuronAI\Chat\Messages\Message;
+use NeuronAI\Chat\Messages\Stream\Chunks\StreamChunk;
 use NeuronAI\Chat\Messages\ToolCallMessage;
 use NeuronAI\Chat\Messages\UserMessage;
+use NeuronAI\Providers\ProviderResponse;
 use NeuronAI\Testing\FakeAIProvider;
 use NeuronAI\Tools\Tool;
 use NeuronAI\Tools\ToolCall;
@@ -17,17 +21,21 @@ use NeuronTui\View\MainView;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
 use Revolt\EventLoop;
+use RuntimeException;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Terminal\ScreenBuffer;
+use Symfony\Component\Tui\Terminal\TerminalInterface;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 use Symfony\Component\Tui\Tui as SymfonyTui;
 
+use function array_merge;
 use function count;
 use function explode;
 use function implode;
 use function rtrim;
 use function str_contains;
 use function str_repeat;
+use function str_replace;
 use function trim;
 
 final class TuiTest extends TestCase
@@ -62,6 +70,30 @@ final class TuiTest extends TestCase
         $provider->assertCallCount(1);
     }
 
+    public function testLongDraftShowsFiveLinesAndSubmitsTheWholeMessage(): void
+    {
+        $prompt = "Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6\nLine 7\nLine 8";
+        $provider = new FakeAIProvider(new AssistantMessage('Received eight lines'));
+        $stage = 0;
+        $this->runApplication(Agent::make()->setAiProvider($provider), function (VirtualTerminal $terminal, string $screen) use ($prompt, &$stage): bool {
+            if ($stage === 0) {
+                $terminal->simulateInput(str_replace("\n", "\x1b[13;2u", $prompt));
+                $stage = 1;
+            } elseif ($stage === 1 && str_contains($screen, 'Line 8')) {
+                $lines = explode("\n", $screen);
+                self::assertSame('✻ Ready', rtrim($lines[31]));
+                self::assertStringStartsWith('❯', $lines[33]);
+                self::assertSame('  Line 8', rtrim($lines[37]));
+                self::assertStringStartsWith('Enter send', $lines[39]);
+                $terminal->simulateInput("\r");
+                $stage = 2;
+            }
+            return str_contains($screen, 'Received eight lines') && str_contains($screen, 'Ready');
+        });
+        $provider->assertCallCount(1);
+        self::assertSame($prompt, $provider->getRecorded()[0]->messages[0]->getContent());
+    }
+
     public function testWorkingIndicatorAnimatesAndReturnsToReady(): void
     {
         $agent = Agent::make()->setAiProvider(new FakeAIProvider());
@@ -80,7 +112,7 @@ final class TuiTest extends TestCase
             if (str_contains($lines[35], 'Working')) {
                 $frames[rtrim($lines[35])] = true;
                 if (!$draftSent) {
-                    $terminal->simulateInput("Next question\r");
+                    $terminal->simulateInput("Next question");
                     $draftSent = true;
                 } elseif (str_contains($lines[37], 'Next question')) {
                     $sawDraftWhileWorking = true;
@@ -102,41 +134,55 @@ final class TuiTest extends TestCase
         });
     }
 
-    public function testMouseWheelRevealsOlderMessagesAndKeepsComposerFixed(): void
+    public function testGrowingHistoryQueuesMessagesInOrderAndPreservesTheDraft(): void
     {
-        $agent = Agent::make()->setThreadId('mouse-scroll')->setAiProvider(new FakeAIProvider());
-        $lines = [];
-        for ($i = 1; $i <= 50; ++$i) {
-            $lines[] = 'History line ' . $i;
+        $answer = [];
+        for ($line = 1; $line <= 80; ++$line) {
+            $answer[] = "Response line {$line}";
         }
-        $agent->getChatHistory()->addMessage(new UserMessage('Previous question'));
-        $agent->getChatHistory()->addMessage(new AssistantMessage(implode("\n", $lines)));
-        $stage = 0;
-        $this->runApplication($agent, function (VirtualTerminal $terminal, string $screen) use (&$stage): bool {
-            $lines = explode("\n", $screen);
-            self::assertSame('❯', trim($lines[37]));
-            self::assertSame('✻ Ready', rtrim($lines[35]));
-            if ($stage === 0) {
-                self::assertStringNotContainsString('● History line 1', $screen);
-                self::assertStringContainsString('History line 50', $screen);
+        $provider = (new class (new AssistantMessage(implode("\n", $answer)), new AssistantMessage('Second response'), new AssistantMessage('Third response')) extends FakeAIProvider {
+            /** @return Generator<int, StreamChunk, mixed, ProviderResponse> */
+            protected function streamChunks(Message $response): Generator
+            {
+                $stream = parent::streamChunks($response);
+                foreach ($stream as $chunk) {
+                    $suspension = EventLoop::getSuspension();
+                    EventLoop::delay(0.005, static fn() => $suspension->resume());
+                    $suspension->suspend();
+                    yield $chunk;
+                }
+                return $stream->getReturn();
             }
-            if ($stage < 16) {
-                $terminal->simulateInput("\x1b[<64;10;10M");
-            } elseif ($stage === 16) {
-                self::assertStringContainsString('● History line 1', $screen);
-                self::assertStringNotContainsString('History line 50', $screen);
-                $terminal->simulateInput("\x1b[<65;10;10M");
-            } elseif ($stage < 32) {
-                $terminal->simulateInput("\x1b[<65;10;10M");
-            } else {
-                self::assertStringContainsString('History line 50', $screen);
-                self::assertStringNotContainsString('● History line 1', $screen);
+        })->setStreamChunkSize(80);
+        $stage = 0;
+        $this->runApplication(Agent::make()->setAiProvider($provider), function (VirtualTerminal $terminal, string $screen) use (&$stage): bool {
+            $lines = explode("\n", $screen);
+            self::assertStringStartsWith('❯', $lines[37], $screen);
+            self::assertStringStartsWith('Enter send', $lines[39], $screen);
+            if ($stage === 0) {
+                $terminal->simulateInput("Start\r");
+                $stage = 1;
+            } elseif ($stage === 1 && str_contains($screen, 'Response line 40')) {
+                $terminal->simulateInput("Second input\rThird input\rUnsubmitted draft");
+                $stage = 2;
+            }
+            if (str_contains($screen, 'Third response') && str_contains($screen, 'Ready')) {
+                self::assertSame('❯ Unsubmitted draft', rtrim($lines[37]));
                 return true;
             }
-            ++$stage;
-
             return false;
+        }, verify: static function (ScreenBuffer $buffer, string $output): void {
+            $history = AnsiUtils::stripAnsiCodes(implode("\n", array_merge($buffer->getScrollback(), $buffer->getLines())));
+            self::assertStringContainsString('Response line 1 ', $history);
+            self::assertStringContainsString('Response line 80', $history);
+            self::assertStringNotContainsString('Working', AnsiUtils::stripAnsiCodes(implode("\n", $buffer->getScrollback())));
+            self::assertStringNotContainsString("\x1b[?1000h", $output);
+            self::assertStringNotContainsString("\x1b[?1006h", $output);
         });
+        self::assertSame(2, $stage);
+        $provider->assertCallCount(3);
+        self::assertSame('Second input', $provider->getRecorded()[1]->messages[2]->getContent());
+        self::assertSame('Third input', $provider->getRecorded()[2]->messages[4]->getContent());
     }
 
     public function testStreamsAndContinuesTheSuppliedConversation(): void
@@ -220,7 +266,36 @@ final class TuiTest extends TestCase
         self::assertStringContainsString('Recovered', $screen);
     }
 
-    public function testCanQuitDuringStreamingWithoutSubmittingMoreMessages(): void
+    public function testQueuedMessageRunsAfterTheCurrentTurnFails(): void
+    {
+        $provider = new class (new AssistantMessage('Recovered queued turn')) extends FakeAIProvider {
+            private bool $failed = false;
+
+            /** @return Generator<int, StreamChunk, mixed, ProviderResponse> */
+            public function stream(Message ...$messages): Generator
+            {
+                if (!$this->failed) {
+                    $this->failed = true;
+                    throw new RuntimeException('First turn failed');
+                }
+                return parent::stream(...$messages);
+            }
+        };
+        $sent = false;
+        $screen = $this->runApplication(Agent::make()->setAiProvider($provider), function (VirtualTerminal $terminal, string $screen) use (&$sent): bool {
+            if (!$sent) {
+                $terminal->simulateInput("Fail\rQueued retry\r");
+                $sent = true;
+            }
+            return str_contains($screen, 'Recovered queued turn') && str_contains($screen, 'Ready');
+        });
+        self::assertStringContainsString('! First turn failed', $screen);
+        $provider->assertCallCount(1);
+        $messages = $provider->getRecorded()[0]->messages;
+        self::assertSame('Queued retry', $messages[count($messages) - 1]->getContent());
+    }
+
+    public function testQuittingDuringStreamingDiscardsQueuedMessages(): void
     {
         $provider = new FakeAIProvider(new AssistantMessage('Long answer to interrupt'));
         $sent = false;
@@ -345,7 +420,6 @@ final class TuiTest extends TestCase
                 self::assertSame('❯', trim($lines[15]));
                 self::assertStringStartsWith('❯', $lines[15]);
                 self::assertSame('Enter send · Shift+Enter newline · Ctrl+C exit', trim($lines[17]));
-                self::assertStringContainsString('Neuron TUI', $lines[0]);
                 if (str_contains($screen, 'Latest response') && !str_contains($screen, 'Working')) {
                     self::assertSame('✻ Ready', rtrim($lines[13]));
                     return true;
@@ -358,11 +432,18 @@ final class TuiTest extends TestCase
     /**
      * @param Closure(VirtualTerminal, string): bool $step
      * @param Closure(MainView): void|null $configure
+     * @param Closure(ScreenBuffer, string): void|null $verify
      */
-    private function runApplication(Agent $agent, Closure $step, ?Closure $configure = null): string
+    private function runApplication(Agent $agent, Closure $step, ?Closure $configure = null, ?Closure $verify = null): string
     {
         $terminal = new VirtualTerminal(100, 40);
-        $tui = new SymfonyTui(terminal: $terminal);
+        // Exercise the physical-terminal path: growing frames must reach scrollback.
+        $driver = $this->createStub(TerminalInterface::class);
+        foreach (['start', 'stop', 'write', 'getColumns', 'getRows', 'isKittyProtocolActive', 'moveBy', 'hideCursor', 'showCursor', 'clearLine', 'clearFromCursor', 'clearScreen', 'setTitle', 'bell'] as $method) {
+            $driver->method($method)->willReturnCallback($terminal->$method(...));
+        }
+        $driver->method('isVirtual')->willReturn(false);
+        $tui = new SymfonyTui(terminal: $driver);
         $host = Tui::make($agent);
         $view = (new ReflectionProperty(Tui::class, 'mainView'))->getValue($host);
         self::assertInstanceOf(MainView::class, $view);
@@ -374,14 +455,17 @@ final class TuiTest extends TestCase
         $buffer = new ScreenBuffer($columns, $rows);
         $lastScreen = '';
         $timedOut = false;
-        $poll = EventLoop::repeat(0.0001, function () use ($terminal, $tui, &$buffer, &$columns, &$rows, $step, &$lastScreen): void {
+        $output = '';
+        $poll = EventLoop::repeat(0.0001, function () use ($terminal, $tui, &$buffer, &$columns, &$rows, $step, &$lastScreen, &$output): void {
             if ($columns !== $terminal->getColumns() || $rows !== $terminal->getRows()) {
                 $columns = $terminal->getColumns();
                 $rows = $terminal->getRows();
                 $buffer = new ScreenBuffer($columns, $rows);
             }
             $tui->processRender();
-            $buffer->write($terminal->consumeOutput());
+            $frame = $terminal->consumeOutput();
+            $output .= $frame;
+            $buffer->write($frame);
             $lastScreen = AnsiUtils::stripAnsiCodes(implode("\n", $buffer->getLines()));
             if ($step($terminal, $lastScreen)) {
                 $terminal->simulateInput("\x03");
@@ -398,6 +482,7 @@ final class TuiTest extends TestCase
             EventLoop::cancel($timeout);
         }
         self::assertFalse($timedOut, $lastScreen);
+        $verify?->__invoke($buffer, $output);
 
         return $lastScreen;
     }
