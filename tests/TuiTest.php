@@ -20,11 +20,13 @@ use NeuronInteraction\Command\CommandContext;
 use NeuronInteraction\Command\CommandInput;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Command\Commands;
+use NeuronInteraction\Command\ExitCommand;
 use NeuronInteraction\Command\HelpCommand;
 use NeuronInteraction\Command\ResumeCommand;
 use NeuronInteraction\Command\SelectionOption;
 use NeuronInteraction\Conversation;
 use NeuronInteraction\Event\SelectionRequest;
+use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\InMemoryStorage;
 use NeuronTui\Tui;
@@ -52,6 +54,51 @@ use function trim;
 
 final class TuiTest extends TestCase
 {
+    public function testInputHistoryRecallsStoredCommandsAndRestoresTheDraft(): void
+    {
+        $storage = new InMemoryStorage();
+        $history = new InputHistory($storage);
+        $history->append(new UserMessage('Previous input'));
+        $history->append(new UserMessage('/help'));
+        $history->append(new UserMessage('/exit'));
+        $conversation = $this->conversation(Agent::make()->setAiProvider(new FakeAIProvider()));
+        $conversation->setInputHistory(new InputHistory($storage));
+        $conversation->setCommands(new Commands(new HelpCommand(), new ExitCommand()));
+        $stage = 0;
+        $this->runApplication($conversation, function (
+            VirtualTerminal $terminal,
+            string $screen,
+        ) use (&$stage): bool {
+            if ($stage === 0) {
+                $terminal->simulateInput("Draft\x1b[A");
+                $stage = 1;
+            } elseif ($stage === 1 && str_contains($screen, '❯ /exit')) {
+                $terminal->simulateInput("\x1b[A");
+                $stage = 2;
+            } elseif ($stage === 2 && str_contains($screen, '❯ /help')) {
+                $terminal->simulateInput("\r");
+                $stage = 3;
+            } elseif ($stage === 3 && str_contains($screen, 'Ready') && str_contains($screen, 'Lists what can be typed')) {
+                $terminal->simulateInput("New draft\x1b[A");
+                $stage = 4;
+            } elseif ($stage === 4 && str_contains($screen, '❯ /help')) {
+                $terminal->simulateInput("\x1b[A");
+                $stage = 5;
+            } elseif ($stage === 5 && str_contains($screen, '❯ /exit')) {
+                $terminal->simulateInput("\x1b[A\x1b[A");
+                $stage = 6;
+            } elseif ($stage === 6 && str_contains($screen, '❯ Previous input')) {
+                $terminal->simulateInput("\x1b[B\x1b[B\x1b[B\x1b[B");
+                $stage = 7;
+            } elseif ($stage === 7 && str_contains($screen, '❯ New draft')) {
+                return true;
+            }
+            return false;
+        });
+        self::assertSame(7, $stage);
+        self::assertCount(4, $history->list());
+    }
+
     public function testSelectionSubmitsTheOpaqueValueAndPreservesTheDraft(): void
     {
         $provider = new FakeAIProvider();

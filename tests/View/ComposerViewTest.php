@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace NeuronTui\Tests\View;
 
+use NeuronAI\Chat\Messages\UserMessage;
 use NeuronInteraction\Command\HelpCommand;
 use NeuronTui\View\ComposerView;
 use PHPUnit\Framework\TestCase;
@@ -18,6 +19,55 @@ use function str_repeat;
 
 final class ComposerViewTest extends TestCase
 {
+    public function testRepeatedUpRecallsCommandsPastExit(): void
+    {
+        $composer = new ComposerView();
+        $composer->onCommands(static fn(): array => [new HelpCommand(), new HelpCommand('/exit')]);
+        $composer->onInputHistory(static fn(): array => [new UserMessage('/help'), new UserMessage('/exit')]);
+        foreach (['/exit', '/help', '/help'] as $expected) {
+            if (!$composer->handleCommandInput("\x1b[A")) {
+                $composer->input()->handleInput("\x1b[A");
+            }
+            self::assertSame($expected, $composer->input()->getText());
+        }
+        foreach (['/exit', ''] as $expected) {
+            if (!$composer->handleCommandInput("\x1b[B")) {
+                $composer->input()->handleInput("\x1b[B");
+            }
+            self::assertSame($expected, $composer->input()->getText());
+        }
+    }
+
+    public function testEditingRecalledCommandsOpensCompletionAgain(): void
+    {
+        $composer = new ComposerView();
+        $composer->onCommands(static fn(): array => [new HelpCommand('/exit'), new HelpCommand('/extra')]);
+        $composer->onInputHistory(static fn(): array => [new UserMessage('/exit')]);
+        $composer->input()->handleInput("\x1b[A");
+        self::assertFalse($composer->handleCommandInput("\t"));
+        $composer->input()->handleInput("\x7f");
+        $composer->input()->handleInput("\x7f");
+        self::assertSame('/ex', $composer->input()->getText());
+        self::assertTrue($composer->handleCommandInput("\x1b[B"));
+        self::assertTrue($composer->handleCommandInput("\t"));
+        self::assertSame('/extra ', $composer->input()->getText());
+    }
+
+    public function testCommandMenuKeepsArrowPriorityWhenHistoryIsEnabled(): void
+    {
+        $composer = new ComposerView();
+        $composer->input()->onInputHistory(static fn(): array => ['Previous input']);
+        $composer->onCommands(static fn(): array => [new HelpCommand('/first'), new HelpCommand('/second')]);
+        $composer->input()->setText('/');
+        self::assertTrue($composer->handleCommandInput("\x1b[B"));
+        self::assertSame('/', $composer->input()->getText());
+        self::assertTrue($composer->handleCommandInput("\t"));
+        self::assertSame('/second ', $composer->input()->getText());
+        self::assertFalse($composer->handleCommandInput("\x1b[A"));
+        $composer->input()->handleInput("\x1b[A");
+        self::assertSame('Previous input', $composer->input()->getText());
+    }
+
     public function testCommandMenuScrollsAndFitsNarrowTerminals(): void
     {
         $composer = new ComposerView();

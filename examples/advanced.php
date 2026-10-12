@@ -12,6 +12,7 @@ use NeuronInteraction\Command\ExitCommand;
 use NeuronInteraction\Command\HelpCommand;
 use NeuronInteraction\Command\ResumeCommand;
 use NeuronInteraction\Conversation;
+use NeuronInteraction\InputHistory\InputHistory;
 use NeuronInteraction\Session\SessionStore;
 use NeuronInteraction\Storage\FileStorage;
 use NeuronTui\Tui;
@@ -43,6 +44,7 @@ $sessionStore = new SessionStore($storage, 'local');
 $session = $sessionStore->create();
 
 $conversation = new Conversation($agent, $session);
+$conversation->setInputHistory(new InputHistory($storage));
 $conversation->setCommands(new Commands(
     new HelpCommand(),
     new ClearCommand($sessionStore),

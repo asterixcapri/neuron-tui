@@ -141,6 +141,23 @@ automatically and ignored by Git. Each launch starts a new session. Use `/resume
 to reopen a saved conversation, including after restarting the example, or
 `/clear` to start a new session while keeping the previous one stored.
 
+The advanced example also saves input history in the same storage, shared across
+sessions and application restarts. Use ↑/↓ to recall single-line inputs, or
+Ctrl+P/Ctrl+N for multiline inputs. Moving past the newest entry restores the
+draft. Editing a recalled input starts a new draft. Arrow keys keep their normal
+editing behavior in multiline inputs and their selection behavior in menus.
+
+Enable recall in your Host Application before creating the TUI:
+
+```php
+use NeuronInteraction\InputHistory\InputHistory;
+
+$conversation->setInputHistory(new InputHistory($storage));
+```
+
+The composer recalls the text of stored inputs; attachments are not restored.
+Conversation records inputs when they are sent for execution, including commands.
+
 ## Development
 
 ```bash

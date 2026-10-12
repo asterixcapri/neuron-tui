@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace NeuronTui\View;
 
 use Closure;
+use NeuronAI\Chat\Messages\UserMessage;
 use NeuronInteraction\Command\CommandInput;
 use NeuronInteraction\Command\CommandInterface;
 use NeuronInteraction\Event\SelectionRequest;
@@ -22,6 +23,7 @@ use function array_slice;
 use function count;
 use function implode;
 use function str_replace;
+use function trim;
 
 /** @internal */
 final class ComposerView extends ContainerWidget
@@ -50,6 +52,7 @@ final class ComposerView extends ContainerWidget
             'dismiss' => [Key::ESCAPE],
         ]);
         $this->input->onChange(fn(ChangeEvent $event) => $this->commands->update($this->input->getText()));
+        $this->input->onRecall($this->commands->dismiss(...));
         $this->status = (new TextWidget('✻ Ready'))->setStyle(new Style(color: Theme::MUTED));
         $this->working = (new WorkingView())->setStyle(new Style(hidden: true));
         $this->queueTitle = (new TextWidget(truncate: true))->setStyle(new Style(color: Theme::TEXT));
@@ -102,6 +105,25 @@ final class ComposerView extends ContainerWidget
     {
         $this->commands->onCommands($commands);
         $this->commands->update($this->input->getText());
+    }
+
+    /** @param Closure(): (list<UserMessage>|null) $history */
+    public function onInputHistory(Closure $history): void
+    {
+        $this->input->onInputHistory(static function () use ($history): ?array {
+            $messages = $history();
+            if ($messages === null) {
+                return null;
+            }
+            $entries = [];
+            foreach ($messages as $message) {
+                $text = $message->getContent();
+                if ($text !== null && trim($text) !== '') {
+                    $entries[] = $text;
+                }
+            }
+            return $entries;
+        });
     }
 
     public function handleCommandInput(string $data): bool

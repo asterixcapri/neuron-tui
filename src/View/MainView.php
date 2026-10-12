@@ -7,6 +7,7 @@ namespace NeuronTui\View;
 use Closure;
 use LogicException;
 use NeuronAI\Chat\Messages\Message;
+use NeuronAI\Chat\Messages\UserMessage;
 use NeuronAI\Tools\ToolCall;
 use NeuronInteraction\Command\CommandInput;
 use NeuronInteraction\Command\CommandInterface;
@@ -182,6 +183,12 @@ final class MainView extends ContainerWidget
     public function onHistorySync(Closure $listener): void
     {
         $this->onHistorySync = $listener;
+    }
+
+    /** @param Closure(): (list<UserMessage>|null) $listener */
+    public function onInputHistory(Closure $listener): void
+    {
+        $this->composer->onInputHistory($listener);
     }
 
     /** @param Closure(): void $listener */
