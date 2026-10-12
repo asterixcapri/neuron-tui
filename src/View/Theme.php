@@ -54,7 +54,10 @@ final class Theme implements TerminalTheme
         $color = match ($tokenType) {
             TokenTypeEnum::KEYWORD, TokenTypeEnum::VALUE => self::ACCENT,
             TokenTypeEnum::TYPE => self::SUCCESS,
-            TokenTypeEnum::PROPERTY, TokenTypeEnum::VARIABLE, TokenTypeEnum::GENERIC, TokenTypeEnum::ATTRIBUTE => self::INFO,
+            TokenTypeEnum::PROPERTY,
+            TokenTypeEnum::VARIABLE,
+            TokenTypeEnum::GENERIC,
+            TokenTypeEnum::ATTRIBUTE => self::INFO,
             TokenTypeEnum::COMMENT => self::MUTED,
             default => self::TEXT,
         };

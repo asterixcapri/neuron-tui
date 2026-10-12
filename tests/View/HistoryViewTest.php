@@ -33,7 +33,10 @@ final class HistoryViewTest extends TestCase
     public function testMarkdownUsesTheSharedThemeInsideHistory(): void
     {
         $history = new HistoryView();
-        $history->load([new AssistantMessage("# Heading\n\n[Link](https://example.com) and `inline`\n\n> Quote\n\n- Item\n\n```php\necho 'hello'; // comment\n```")]);
+        $history->load([new AssistantMessage(
+            "# Heading\n\n[Link](https://example.com) and `inline`\n\n> Quote\n\n- Item\n\n"
+            . "```php\necho 'hello'; // comment\n```",
+        )]);
         $host = new SymfonyTui(terminal: new VirtualTerminal(80, 30), styleSheet: Theme::styleSheet());
         $host->add($history);
         $screen = implode("\n", (new Renderer(Theme::styleSheet()))->renderWidget($history, new RenderContext(80, 30)));
@@ -77,7 +80,10 @@ final class HistoryViewTest extends TestCase
         $live->appendResponse('**Hel');
         $renderer = new Renderer();
         $context = new RenderContext(40, 20);
-        self::assertStringContainsString('Hel', AnsiUtils::stripAnsiCodes(implode("\n", $renderer->renderWidget($live, $context))));
+        self::assertStringContainsString(
+            'Hel',
+            AnsiUtils::stripAnsiCodes(implode("\n", $renderer->renderWidget($live, $context))),
+        );
         $live->appendResponse("lo** with `code`\n\n- First item\n- Second item\n\n```php\necho 'Hi';\n```");
         $screen = implode("\n", $renderer->renderWidget($live, $context));
         self::assertSame(implode("\n", $renderer->renderWidget($stored, $context)), $screen);
@@ -145,7 +151,10 @@ final class HistoryViewTest extends TestCase
 
     public function testNestedToolParametersAndErrorsAreReadable(): void
     {
-        $call = new ToolCall('search', 'nested', ['query' => 'neuron', 'filters' => ['extensions' => ['php'], 'limit' => 10]]);
+        $call = new ToolCall('search', 'nested', [
+            'query' => 'neuron',
+            'filters' => ['extensions' => ['php'], 'limit' => 10],
+        ]);
         $history = new HistoryView();
         $history->showToolCall($call);
         $renderer = new Renderer();
@@ -188,7 +197,10 @@ final class HistoryViewTest extends TestCase
         $history->load([new SystemMessage('Rules')]);
         $history->notify('Information');
         $history->notify('Failed', MessageKind::Error);
-        $text = AnsiUtils::stripAnsiCodes(implode("\n", (new Renderer())->renderWidget($history, new RenderContext(60, 10))));
+        $text = AnsiUtils::stripAnsiCodes(implode(
+            "\n",
+            (new Renderer())->renderWidget($history, new RenderContext(60, 10)),
+        ));
         self::assertStringContainsString('· Rules', $text);
         self::assertStringContainsString('ℹ Information', $text);
         self::assertStringContainsString('! Failed', $text);
