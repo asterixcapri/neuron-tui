@@ -130,6 +130,17 @@ For the same example with `/help`, `/clear`, `/resume` and `/exit` commands, run
 php examples/commands.php
 ```
 
+For an advanced example with local session storage, run:
+
+```bash
+php examples/advanced.php
+```
+
+Sessions are saved as JSON files in `examples/.storage/`, which is created
+automatically and ignored by Git. Each launch starts a new session. Use `/resume`
+to reopen a saved conversation, including after restarting the example, or
+`/clear` to start a new session while keeping the previous one stored.
+
 ## Development
 
 ```bash
