@@ -492,7 +492,7 @@ final class TuiTest extends TestCase
                 $terminal->simulateInput("New question\r");
                 $stage = 1;
             } elseif ($stage === 1 && str_contains($screen, 'Working')) {
-                self::assertMatchesRegularExpression('/^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] Working…$/u', rtrim($lines[35]));
+                self::assertMatchesRegularExpression('/^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] Working \(0s\)$/u', rtrim($lines[35]));
                 $stage = 2;
             } elseif ($stage === 2 && str_contains($screen, 'Last response') && !str_contains($screen, 'Working')) {
                 self::assertSame('✻ Ready', rtrim($lines[35]));
