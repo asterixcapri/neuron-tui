@@ -16,6 +16,8 @@ use function implode;
 use function is_array;
 use function is_object;
 use function json_encode;
+use function mb_strlen;
+use function mb_substr;
 
 use const JSON_INVALID_UTF8_SUBSTITUTE;
 use const JSON_PARTIAL_OUTPUT_ON_ERROR;
@@ -26,6 +28,8 @@ use const JSON_UNESCAPED_UNICODE;
 /** @internal */
 final class ToolView extends ContainerWidget
 {
+    private const int MAX_ARGUMENT_CHARACTERS = 300;
+
     public function __construct(private readonly ToolCall $tool)
     {
         $this->display();
@@ -58,17 +62,26 @@ final class ToolView extends ContainerWidget
             foreach ($inputs as $name => $value) {
                 $parameters[] = StringUtils::stripControlBytes($name) . ': ' . $this->encode($value);
             }
-            $title .= $parameterStyle->apply('(' . implode(', ', $parameters) . ')');
+            $title .= $parameterStyle->apply('(' . $this->preview(implode(', ', $parameters)) . ')');
         }
         $this->add(new TextWidget($title));
         if ($nested) {
-            $this->add((new TextWidget($this->encode($inputs, pretty: true)))
+            $this->add((new TextWidget($this->preview($this->encode($inputs, pretty: true))))
                 ->setStyle(new Style(padding: new Padding(0, 0, 0, 2), color: Theme::SECONDARY)));
         }
         if ($error !== null) {
             $this->add((new TextWidget('└ ' . StringUtils::stripControlBytes($error)))
                 ->setStyle(new Style(padding: new Padding(0, 0, 0, 2), color: Theme::ERROR)));
         }
+    }
+
+    private function preview(string $arguments): string
+    {
+        if (mb_strlen($arguments, 'UTF-8') <= self::MAX_ARGUMENT_CHARACTERS) {
+            return $arguments;
+        }
+
+        return mb_substr($arguments, 0, self::MAX_ARGUMENT_CHARACTERS - 1, 'UTF-8') . '…';
     }
 
     private function encode(mixed $value, bool $pretty = false): string
