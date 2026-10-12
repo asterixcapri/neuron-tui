@@ -658,7 +658,8 @@ final class TuiTest extends TestCase
         ) use (&$stage): bool {
             $lines = explode("\n", $screen);
             self::assertStringStartsWith('❯', $lines[37], $screen);
-            self::assertStringStartsWith('Enter send', $lines[39], $screen);
+            $submit = str_contains($screen, 'Working') ? 'queue' : 'send';
+            self::assertStringStartsWith("Enter {$submit}", $lines[39], $screen);
             if ($stage === 0) {
                 $terminal->simulateInput("Start\r");
                 $stage = 1;
@@ -909,7 +910,8 @@ final class TuiTest extends TestCase
         $stage = 0;
         $this->runApplication($agent, function (VirtualTerminal $terminal, string $screen) use (&$stage): bool {
             $lines = explode("\n", $screen);
-            self::assertSame('Enter send · Shift+Enter newline · Ctrl+C exit', trim($lines[39]));
+            $submit = str_contains($screen, 'Working') ? 'queue' : 'send';
+            self::assertSame("Enter {$submit} · Shift+Enter newline · Ctrl+C exit", trim($lines[39]));
             self::assertSame('❯', trim($lines[37]));
             self::assertStringStartsWith('❯', $lines[37]);
             if ($stage === 0) {
@@ -949,7 +951,8 @@ final class TuiTest extends TestCase
                 self::assertCount(18, $lines);
                 self::assertSame('❯', trim($lines[15]));
                 self::assertStringStartsWith('❯', $lines[15]);
-                self::assertSame('Enter send · Shift+Enter newline · Ctrl+C exit', trim($lines[17]));
+                $submit = str_contains($screen, 'Working') ? 'queue' : 'send';
+                self::assertSame("Enter {$submit} · Shift+Enter newline · Ctrl+C exit", trim($lines[17]));
                 if (str_contains($screen, 'Latest response') && !str_contains($screen, 'Working')) {
                     self::assertSame('✻ Ready', rtrim($lines[13]));
                     return true;

@@ -76,7 +76,6 @@ final class ComposerView extends ContainerWidget
         $this->selection->show($request);
         $hidden = $request !== null;
         $this->input->setStyle(new Style(color: Theme::SECONDARY, hidden: $hidden));
-        $this->hint->setStyle(new Style(color: Theme::MUTED, hidden: $hidden));
         $this->dismissCommands();
     }
 
@@ -88,6 +87,7 @@ final class ComposerView extends ContainerWidget
     public function handleSelectionInput(string $data): void
     {
         $this->selection->handleInput($data);
+        $this->updateHint();
     }
 
     public function moveSelection(int $direction): void
@@ -123,6 +123,29 @@ final class ComposerView extends ContainerWidget
     {
         $hidden = $this->working->getStyle()?->getHidden() === false || $this->commands->selectedName() !== null;
         $this->status->setStyle(new Style(color: Theme::MUTED, hidden: $hidden));
+        $this->updateHint();
+    }
+
+    private function updateHint(): void
+    {
+        if ($this->selection->getStyle()?->getHidden() === false) {
+            $this->hint->setText($this->selection->selectedInput() === null
+                ? 'Type to search · Esc cancel · Ctrl+C exit'
+                : '↑/↓ choose · Enter confirm · Type to search · Esc cancel · Ctrl+C exit');
+            return;
+        }
+
+        $isWorking = $this->working->isRunning();
+        if ($this->commands->selectedName() !== null) {
+            $this->hint->setText($isWorking
+                ? '↑/↓ choose · Tab complete · Enter queue · Esc close · Ctrl+C exit'
+                : '↑/↓ choose · Tab complete · Enter run · Esc close · Ctrl+C exit');
+            return;
+        }
+
+        $this->hint->setText($isWorking
+            ? 'Enter queue · Shift+Enter newline · Ctrl+C exit'
+            : 'Enter send · Shift+Enter newline · Ctrl+C exit');
     }
 
     /** @param Closure(): (list<UserMessage>|null) $history */
@@ -195,9 +218,9 @@ final class ComposerView extends ContainerWidget
 
     public function beginTurn(): void
     {
-        $this->status->setStyle(new Style(color: Theme::MUTED, hidden: true));
         $this->working->setStyle(new Style(hidden: false));
         $this->working->start();
+        $this->updateStatus();
     }
 
     public function finishTurn(): void

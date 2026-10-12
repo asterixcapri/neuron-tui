@@ -12,6 +12,8 @@ Symfony widget tree and renderer.
 You can keep writing while the agent responds. Messages submitted during a turn
 are queued and run in order; an unsubmitted draft stays in the editor. The
 composer shows up to five lines, including wrapped text.
+The hint below it shows the available actions for command menus and selections,
+and changes from sending to queuing input while the agent is working.
 
 ![Neuron TUI demo: conversation, Markdown rendering and a filesystem tool](docs/images/neuron-tui-demo.gif)
 

@@ -168,11 +168,6 @@ final class SelectionView extends AbstractWidget implements ParentInterface
             $lines[] = $this->line('description', $indent . '  No matching options.', $columns);
             $lines[] = '';
         }
-        $lines[] = $this->line(
-            'description',
-            $indent . '↑/↓ choose · Enter confirm · Type to search · Esc cancel',
-            $columns,
-        );
         return $lines;
     }
 
