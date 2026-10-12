@@ -49,6 +49,7 @@ $conversation->setCommands(new Commands(
 ));
 
 Tui::make($conversation)
-    ->setTitle('Filesystem Agent')
-    ->setDescription('Explore, read and edit files with Neuron AI')
+    ->setFiglet("Neuron TUI")
+    ->setTitle('Filesystem agent with commands')
+    ->setDescription('Explore, read and edit files with built-in conversation commands')
     ->run();

@@ -36,6 +36,7 @@ $session = (new SessionStore(new InMemoryStorage(), 'local'))->create();
 $conversation = new Conversation($agent, $session);
 
 Tui::make($conversation)
-    ->setTitle('Filesystem Agent')
-    ->setDescription('Explore, read and edit files with Neuron AI')
+    ->setFiglet("Neuron TUI")
+    ->setTitle('Basic filesystem agent')
+    ->setDescription('Explore, read and edit files in the examples directory')
     ->run();

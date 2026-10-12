@@ -68,6 +68,19 @@ Tui::make($conversation)
     ->run();
 ```
 
+Add a FIGlet banner above the title and description:
+
+```php
+Tui::make($conversation)
+    ->setFiglet('Neuron', 'small')
+    ->setTitle('Filesystem Agent')
+    ->setDescription('Explore, read and edit files with Neuron AI')
+    ->run();
+```
+
+The font defaults to `standard`. Symfony TUI also includes `big`, `small`,
+`slant` and `mini`. Pass an empty string as the text to hide the banner.
+
 The TUI loads the Conversation's display history at startup and sends subsequent
 inputs through `Conversation::sendInput()`. The Host Application configures the
 session, commands and user message processors before passing the Conversation

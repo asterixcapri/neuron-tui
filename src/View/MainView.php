@@ -84,6 +84,12 @@ final class MainView extends ContainerWidget
         $this->getContext()?->requestRender();
     }
 
+    public function setFiglet(string $text, string $font = 'standard'): void
+    {
+        $this->header->setFiglet($text, $font);
+        $this->getContext()?->requestRender();
+    }
+
     public function syncHistory(): void
     {
         $this->history->load($this->onHistorySync === null ? [] : ($this->onHistorySync)());

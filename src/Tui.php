@@ -43,6 +43,13 @@ final class Tui
         return $this;
     }
 
+    public function setFiglet(string $text, string $font = 'standard'): self
+    {
+        $this->mainView->setFiglet($text, $font);
+
+        return $this;
+    }
+
     public function setDescription(string $description): self
     {
         $this->mainView->setDescription($description);

@@ -60,6 +60,7 @@ $conversation->setCommands(new Commands(
 ));
 
 Tui::make($conversation)
-    ->setTitle('Persistent Filesystem Agent')
-    ->setDescription('Sessions saved locally · /resume to reopen · /clear to start fresh · Esc to stop')
+    ->setFiglet("Neuron TUI")
+    ->setTitle('Persistent filesystem agent')
+    ->setDescription('Explore files with locally saved sessions, input history and interruptible responses')
     ->run();

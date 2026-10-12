@@ -46,6 +46,8 @@ use Symfony\Component\Tui\Terminal\ScreenBuffer;
 use Symfony\Component\Tui\Terminal\TerminalInterface;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 use Symfony\Component\Tui\Tui as SymfonyTui;
+use Symfony\Component\Tui\Widget\Figlet\FigletRenderer;
+use Symfony\Component\Tui\Widget\Figlet\FontRegistry;
 
 use function array_map;
 use function array_merge;
@@ -64,6 +66,27 @@ use const JSON_THROW_ON_ERROR;
 
 final class TuiTest extends TestCase
 {
+    public function testFigletBannerRendersAboveTheCustomHeader(): void
+    {
+        $banner = (new FigletRenderer((new FontRegistry())->get('small')))->render('Hi');
+        $screen = $this->runApplication(
+            Agent::make()->setAiProvider(new FakeAIProvider()),
+            static fn(VirtualTerminal $terminal, string $screen): bool => str_contains($screen, 'Banner description'),
+            configureHost: static function (Tui $host): void {
+                self::assertSame($host, $host->setFiglet('Hi', 'small'));
+                $host->setTitle('Banner title')->setDescription('Banner description');
+            },
+        );
+        $lines = explode("\n", $screen);
+        foreach ($banner as $index => $line) {
+            self::assertSame(rtrim($line), rtrim($lines[$index]));
+        }
+        self::assertSame('', rtrim($lines[count($banner)]));
+        self::assertSame('✳ Banner title', rtrim($lines[count($banner) + 1]));
+        self::assertSame('Banner description', rtrim($lines[count($banner) + 2]));
+        self::assertSame('❯', trim($lines[37]));
+    }
+
     public function testInputHistoryRecallsStoredCommandsAndRestoresTheDraft(): void
     {
         $storage = new InMemoryStorage();
@@ -1053,12 +1076,14 @@ final class TuiTest extends TestCase
      * @param Closure(VirtualTerminal, string): bool $step
      * @param Closure(MainView): void|null $configure
      * @param Closure(ScreenBuffer, string): void|null $verify
+     * @param Closure(Tui): void|null $configureHost
      */
     private function runApplication(
         Agent|Conversation $agent,
         Closure $step,
         ?Closure $configure = null,
         ?Closure $verify = null,
+        ?Closure $configureHost = null,
     ): string {
         $terminal = new VirtualTerminal(100, 40);
         // Exercise the physical-terminal path: growing frames must reach scrollback.
@@ -1085,6 +1110,7 @@ final class TuiTest extends TestCase
         $tui = new SymfonyTui(terminal: $driver);
         $conversation = $agent instanceof Conversation ? $agent : $this->conversation($agent);
         $host = Tui::make($conversation);
+        $configureHost?->__invoke($host);
         $view = (new ReflectionProperty(Tui::class, 'mainView'))->getValue($host);
         self::assertInstanceOf(MainView::class, $view);
         $configure?->__invoke($view);
