@@ -50,7 +50,7 @@ $agent->setAiProvider($aiProvider);
 
 $conversation = new Conversation($agent, $session);
 $conversation->setStopSignal($stopSignal);
-$conversation->setInputHistory(new InputHistory($storage));
+$conversation->setInputHistory(new InputHistory($storage, 'local'));
 $conversation->setSessionTitleGenerator(new SessionTitleGenerator($aiProvider));
 $conversation->setCommands(new Commands(
     new HelpCommand(),

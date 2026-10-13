@@ -156,8 +156,9 @@ automatically and ignored by Git. Each launch starts a new session. Use `/resume
 to reopen a saved conversation, including after restarting the example, or
 `/clear` to start a new session while keeping the previous one stored.
 
-The advanced example also saves input history in the same storage, shared across
-sessions and application restarts. Use ↑/↓ to recall single-line inputs, or
+The advanced example uses the same Storage and user ID for Sessions and input
+history. Inputs are shared across that user's sessions and application restarts,
+and remain isolated from other users. Use ↑/↓ to recall single-line inputs, or
 Ctrl+P/Ctrl+N for multiline inputs. Moving past the newest entry restores the
 draft. Editing a recalled input starts a new draft. Arrow keys keep their normal
 editing behavior in multiline inputs and their selection behavior in menus.
@@ -171,13 +172,27 @@ Enable recall in your Host Application before creating the TUI:
 ```php
 use NeuronInteraction\InputHistory\InputHistory;
 
-$conversation->setInputHistory(new InputHistory($storage));
+$conversation->setInputHistory(new InputHistory($storage, 'local'));
 ```
 
 The composer recalls the text of stored inputs; attachments are not restored.
 Conversation records inputs when they are sent for execution, including commands.
 
+FileStorage now keeps one JSON file per entry, including each message and input.
+The previous format is incompatible and is not migrated automatically.
+Input history has no automatic retention limit.
+
 ## Development
+
+Keep a Neuron Interaction checkout beside this repository at
+`../neuron-interaction`. The development and example Composer projects symlink
+that checkout, so both use the same Storage contract. After updating either
+Composer configuration, refresh the local dependencies:
+
+```bash
+composer update asterixcapri/neuron-interaction
+composer --working-dir=examples update asterixcapri/neuron-interaction asterixcapri/neuron-tui
+```
 
 ```bash
 composer install

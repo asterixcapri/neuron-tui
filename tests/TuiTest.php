@@ -90,12 +90,12 @@ final class TuiTest extends TestCase
     public function testInputHistoryRecallsStoredCommandsAndRestoresTheDraft(): void
     {
         $storage = new InMemoryStorage();
-        $history = new InputHistory($storage);
+        $history = new InputHistory($storage, 'test-user');
         $history->append(new UserMessage('Previous input'));
         $history->append(new UserMessage('/help'));
         $history->append(new UserMessage('/exit'));
         $conversation = $this->conversation(Agent::make()->setAiProvider(new FakeAIProvider()));
-        $conversation->setInputHistory(new InputHistory($storage));
+        $conversation->setInputHistory(new InputHistory($storage, 'test-user'));
         $conversation->setCommands(new Commands(new HelpCommand(), new ExitCommand()));
         $stage = 0;
         $this->runApplication($conversation, function (
