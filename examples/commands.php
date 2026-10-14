@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use NeuronAI\Agent\Agent;
+use NeuronAI\Chat\History\InMemoryMessageStore;
 use NeuronAI\HttpClient\Amp\AmpHttpClient;
 use NeuronAI\Providers\OpenAI\Responses\OpenAIResponses;
 use NeuronAI\Tools\Toolkits\FileSystem\FileSystemToolkit;
@@ -37,7 +38,7 @@ $agent->setAiProvider(new OpenAIResponses(
     httpClient: new AmpHttpClient(),
 ));
 
-$sessionStore = new SessionStore(new InMemoryStorage(), 'local');
+$sessionStore = new SessionStore(new InMemoryStorage(), new InMemoryMessageStore(), 'local');
 $session = $sessionStore->create();
 
 $conversation = new Conversation($agent, $session);

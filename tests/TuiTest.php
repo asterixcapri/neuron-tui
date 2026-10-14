@@ -8,6 +8,7 @@ use ArrayIterator;
 use Closure;
 use Generator;
 use NeuronAI\Agent\Agent;
+use NeuronAI\Chat\History\InMemoryMessageStore;
 use NeuronAI\Chat\Messages\AssistantMessage;
 use NeuronAI\Chat\Messages\Message;
 use NeuronAI\Chat\Messages\Stream\Chunks\StreamChunk;
@@ -257,14 +258,16 @@ final class TuiTest extends TestCase
 
     public function testResumeSelectionChangesTheSessionAndRefreshesHistory(): void
     {
+        $nativeMessages = new InMemoryMessageStore();
         $provider = new FakeAIProvider();
         $agent = Agent::make()->setAiProvider($provider);
-        $store = new SessionStore(new InMemoryStorage(), 'test-user');
+        $store = new SessionStore(new InMemoryStorage(), $nativeMessages, 'test-user');
         $saved = $store->create();
         $saved->setTitle('Saved conversation');
         $savedConversation = new Conversation($agent, $saved);
         $savedConversation->agent()->getChatHistory()->addMessage(new UserMessage('Saved question'));
         $savedConversation->agent()->getChatHistory()->addMessage(new AssistantMessage('Saved answer'));
+        $saved->registerUse();
         $conversation = new Conversation($agent, $store->create());
         $conversation->setCommands(new Commands(new ResumeCommand($store)));
         $stage = 0;
@@ -828,7 +831,7 @@ final class TuiTest extends TestCase
         self::assertTrue($sawPartial, 'The answer should appear before the stream completes.');
         self::assertStringContainsString('Second answer', $screen);
         $provider->assertCallCount(2);
-        self::assertSame($conversation->session()->getKey(), $conversation->agent()->getThreadId());
+        self::assertSame($conversation->session()->messageNamespace(), $conversation->agent()->getThreadId());
         self::assertCount(6, $conversation->getMessages());
         self::assertSame('Earlier question', $provider->getRecorded()[0]->messages[0]->getContent());
     }
@@ -1063,8 +1066,9 @@ final class TuiTest extends TestCase
 
     private function conversation(Agent $agent): Conversation
     {
+        $nativeMessages = new InMemoryMessageStore();
         $messages = $agent->getThreadId() === null ? [] : $agent->getChatHistory()->getMessages();
-        $session = (new SessionStore(new InMemoryStorage(), 'test-user'))->create();
+        $session = (new SessionStore(new InMemoryStorage(), $nativeMessages, 'test-user'))->create();
         $conversation = new Conversation($agent, $session);
         foreach ($messages as $message) {
             $conversation->agent()->getChatHistory()->addMessage($message);

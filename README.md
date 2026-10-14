@@ -39,6 +39,7 @@ Create a Conversation with a configured Neuron agent and a session:
 <?php
 
 use NeuronAI\Agent\Agent;
+use NeuronAI\Chat\History\InMemoryMessageStore;
 use NeuronAI\Providers\OpenAI\Responses\OpenAIResponses;
 use NeuronAI\Tools\Toolkits\FileSystem\FileSystemToolkit;
 use NeuronInteraction\Conversation;
@@ -53,7 +54,7 @@ $agent = Agent::make()
     ))
     ->addTool(FileSystemToolkit::make(__DIR__));
 
-$session = (new SessionStore(new InMemoryStorage(), 'local'))->create();
+$session = (new SessionStore(new InMemoryStorage(), new InMemoryMessageStore(), 'local'))->create();
 $conversation = new Conversation($agent, $session);
 
 (new Tui($conversation))->run();

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use NeuronAI\Agent\Agent;
+use NeuronAI\Chat\History\FileMessageStore;
 use NeuronAI\HttpClient\Amp\AmpHttpClient;
 use NeuronAI\HttpClient\StoppableHttpClient;
 use NeuronAI\Providers\OpenAI\Responses\OpenAIResponses;
@@ -32,7 +33,7 @@ if (!\is_string($key) || \trim($key) === '') {
 }
 
 $storage = new FileStorage(__DIR__ . '/.storage');
-$sessionStore = new SessionStore($storage, 'local');
+$sessionStore = new SessionStore($storage, new FileMessageStore(__DIR__ . '/.storage/messages'), 'local');
 $session = $sessionStore->create();
 $stopSignal = new StopSignal($storage, $session->getKey());
 
