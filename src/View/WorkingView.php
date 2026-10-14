@@ -10,6 +10,7 @@ use Symfony\Component\Tui\Widget\LoaderWidget;
 use function array_slice;
 use function array_values;
 use function hrtime;
+use function intdiv;
 use function max;
 
 /** @internal */
@@ -42,11 +43,23 @@ final class WorkingView extends LoaderWidget
         $now = hrtime(true) / 1e9;
         $this->elapsed += max(0.0, $deltaTime ?? $now - $this->lastTick);
         $this->lastTick = $now;
-        $message = 'Working (' . (int) $this->elapsed . 's)';
+        $message = 'Working (' . $this->elapsedTime() . ')';
         $changed = $message !== $this->getMessage();
         $this->setMessage($message);
 
         return parent::tick($deltaTime) || $changed;
+    }
+
+    private function elapsedTime(): string
+    {
+        $seconds = (int) $this->elapsed;
+        if ($seconds < 60) {
+            return $seconds . 's';
+        }
+        $minutes = intdiv($seconds, 60);
+        $remaining = $minutes % 60 . 'm ' . $seconds % 60 . 's';
+
+        return $minutes < 60 ? $remaining : intdiv($minutes, 60) . 'h ' . $remaining;
     }
 
     /** @return list<string> */
